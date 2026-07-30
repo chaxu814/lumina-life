@@ -1,0 +1,124 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build output ─────────────────────────────────────────────
+out/
+dist/
+_runtime/  # Electron 运行时文件（构建产物）
+build/
+*.tsbuildinfo
+
+# ── Runtime / Platform binaries (Electron, NOT for source repo) ──
+*.exe
+*.dll
+*.pak
+*.bin
+*.dat
+*.node
+*.so
+*.dylib
+locales/
+
+# ── Environment & Secrets ────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE & Editor ─────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+
+# ── OS files ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+*.lnk
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Runtime / Cache ──────────────────────────────────────────
+.cache/
+.tmp/
+*.cache
+
+# ── Debug / Diagnostic artifacts ─────────────────────────────
+collected/
+debug.log
+test_out.txt
+ctx_*.txt
+occurrences.txt
+temp_*.txt
+team_*.txt
+dev-output.txt
+*.verify_ok
+_check_*.py
+_find_*.py
+scripts/outputs/*.txt
+
+# ── Cleanup scripts (pre-open-source: remove or move to scripts/) ──
+fix_*.js
+check_*.js
+find_*.js
+read_*.js
+show_*.js
+search_*.js
+scan_*.js
+test_*.js
+merge*.js
+
+# ── Temp / generated ─────────────────────────────────────────
+electron.vite.config.*.mjs
+*.bak
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
+*.tmp
+
+# ── Coverage ─────────────────────────────────────────────────
+coverage/
+.coverage/
+*.lcov
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ── User Data (DO NOT COMMIT) ────────────────────────────────
+data/
+memory/
+workspaces/
+
+# ── TypeScript ───────────────────────────────────────────────
+*.tsbuildinfo
+dist-ts/
+
+# ── Screenshots / Images (user-generated) ────────────────────
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# ── Runtime config ──────────────────────────────────────────
+vk_swiftshader_icd.json
+
+# ── Electron packaged builds (keep app-update.yml) ──────────
+resources/app.asar
+resources/app.asar.unpacked/

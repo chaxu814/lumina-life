@@ -1,0 +1,724 @@
+// ============================================================
+// providerManager.ts — 统一 LLM Provider 配置管理器 (QwenPaw 风格)
+//
+// 设计参考 QwenPaw provider_manager.py + secret_store.py：
+//   ✅ 单一 JSON 文件存储所有供应商配置
+//   ✅ API Key 加密存储 (AES-256-CBC)
+//   ✅ Provider 定义与配置分离
+//   ✅ 统一 provider_id（前后端一致）
+//   ✅ 本地/云端一视同仁
+//   ✅ 首次运行时自动从 .env 迁移
+// ============================================================
+
+import * as fs from 'fs'
+import * as path from 'path'
+import * as crypto from 'crypto'
+
+// ═══════════════════════════════════════════════════════════
+// 类型定义
+// ═══════════════════════════════════════════════════════════
+
+export interface ProviderDefinition {
+  /** 唯一标识（前后端统一使用此 ID） */
+  id: string
+  /** 显示名称 */
+  name: string
+  /** 是否本地模型 */
+  isLocal: boolean
+  /** 默认 API 地址 */
+  defaultBaseUrl: string
+  /** 推荐默认模型 */
+  defaultModel: string
+  /** 是否需要 API Key */
+  requiresApiKey: boolean
+}
+
+export interface ProviderConfig {
+  baseUrl: string
+  apiKey: string        // 内存中为明文，磁盘上加密
+  model: string
+  enabled: boolean
+  timeout: number
+  maxContextTokens: number
+}
+
+export interface ProviderStore {
+  /** 当前选中的供应商 ID */
+  activeProviderId: string
+  /** 供应商配置字典 (key = provider id) */
+  providers: Record<string, ProviderConfig>
+}
+
+export interface ModelInfo {
+  id: string
+  multimodal?: boolean
+  vision?: boolean
+}
+
+export interface ConnectionTestResult {
+  success: boolean
+  latency?: number
+  error?: string
+}
+
+// ═══════════════════════════════════════════════════════════
+// 内置供应商定义（唯一来源）
+// ═══════════════════════════════════════════════════════════
+
+const BUILT_IN_PROVIDERS: ProviderDefinition[] = [
+  // ── 🏠 本地模型 ──
+  { id: 'lmstudio',    name: 'LM Studio',       isLocal: true,  defaultBaseUrl: 'http://127.0.0.1:1234/v1',    defaultModel: '',               requiresApiKey: false },
+  { id: 'ollama',      name: 'Ollama',           isLocal: true,  defaultBaseUrl: 'http://127.0.0.1:11434/v1',   defaultModel: 'qwen3:14b',     requiresApiKey: false },
+  // ── ☁️ 云端模型 ──
+  { id: 'deepseek',    name: 'DeepSeek',         isLocal: false, defaultBaseUrl: 'https://api.deepseek.com/v1',  defaultModel: 'deepseek-chat',  requiresApiKey: true },
+  { id: 'qwen',        name: '通义千问',         isLocal: false, defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus', requiresApiKey: true },
+  { id: 'openai',      name: 'OpenAI',           isLocal: false, defaultBaseUrl: 'https://api.openai.com/v1',    defaultModel: 'gpt-4o',        requiresApiKey: true },
+  { id: 'zhipu',       name: '智谱 GLM',         isLocal: false, defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-plus', requiresApiKey: true },
+  { id: 'siliconflow', name: '硅基流动',         isLocal: false, defaultBaseUrl: 'https://api.siliconflow.cn/v1', defaultModel: 'Qwen/Qwen3-235B-A22B', requiresApiKey: true },
+  // ── 🔧 自定义 ──
+  { id: 'custom',      name: '自定义端点',       isLocal: false, defaultBaseUrl: '',                             defaultModel: '',               requiresApiKey: false },
+]
+
+// ═══════════════════════════════════════════════════════════
+// 加密工具 (AES-256-CBC)
+// ═══════════════════════════════════════════════════════════
+
+const CIPHER_KEY = crypto.scryptSync('lumina-provider-key-v1', 'provider-salt', 32)
+const IV_LENGTH = 16
+
+function encryptApiKey(text: string): string {
+  if (!text) return ''
+  try {
+    const iv = crypto.randomBytes(IV_LENGTH)
+    const cipher = crypto.createCipheriv('aes-256-cbc', CIPHER_KEY, iv)
+    let enc = cipher.update(text, 'utf8', 'hex')
+    enc += cipher.final('hex')
+    return 'v1:' + iv.toString('hex') + ':' + enc
+  } catch {
+    return text
+  }
+}
+
+function decryptApiKey(encrypted: string): string {
+  if (!encrypted) return ''
+  try {
+    const parts = encrypted.split(':')
+    if (parts[0] !== 'v1' || parts.length < 3) return encrypted // 未加密或旧格式
+    const iv = Buffer.from(parts[1], 'hex')
+    const data = parts.slice(2).join(':')
+    const decipher = crypto.createDecipheriv('aes-256-cbc', CIPHER_KEY, iv)
+    let dec = decipher.update(data, 'hex', 'utf8')
+    dec += decipher.final('utf8')
+    return dec
+  } catch {
+    return encrypted
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ProviderManager
+// ═══════════════════════════════════════════════════════════
+
+export class ProviderManager {
+  private configPath: string
+  private store: ProviderStore = {
+    activeProviderId: '',
+    providers: {},
+  }
+  private initialized = false
+
+  constructor(configDir: string) {
+    this.configPath = path.join(configDir, 'lumina-providers.json')
+  }
+
+  // ── QwenPaw 兼容：从 agent.json 读取 active_model ─────────
+
+  /** 🆕 v14.0: 从 QwenPaw agent.json 加载 active_model（若有） */
+  private tryLoadFromQwenPawAgent(baseDir: string): boolean {
+    const agentId = process.env.LUMINA_AGENT_ID || 'lumina'
+    const agentJsonPath = path.join(baseDir, 'workspaces', agentId, 'agent.json')
+    if (!fs.existsSync(agentJsonPath)) return false
+
+    try {
+      const raw = JSON.parse(fs.readFileSync(agentJsonPath, 'utf-8'))
+      const activeModel = raw.active_model
+      if (!activeModel?.provider_id || !activeModel?.model) return false
+
+      const qpProviderId = activeModel.provider_id
+      const modelName = activeModel.model
+
+      // QwenPaw provider_id → Lumina provider_id 映射
+      const PROVIDER_MAP: Record<string, string> = {
+        'opencode': 'openai',     // 兼容 QwenPaw 用的 opencode
+        'deepseek': 'deepseek',
+        'qwen': 'qwen',
+        'openai': 'openai',
+        'ollama': 'ollama',
+        'lmstudio': 'lmstudio',
+        'zhipu': 'zhipu',
+        'siliconflow': 'siliconflow',
+      }
+
+      const luminaId = PROVIDER_MAP[qpProviderId] || qpProviderId
+      const def = this.getDefinition(luminaId)
+
+      // 如果有映射到已知 provider，自动填充配置
+      if (def) {
+        const existing = this.store.providers[luminaId]
+        if (!existing) {
+          this.store.providers[luminaId] = {
+            baseUrl: def.defaultBaseUrl,
+            apiKey: '',
+            model: modelName || def.defaultModel,
+            enabled: true,
+            timeout: 600,
+            maxContextTokens: 256000,
+          }
+        } else if (!existing.model) {
+          existing.model = modelName
+          existing.enabled = true
+        }
+
+        this.store.activeProviderId = luminaId
+        console.log(`[ProviderManager] 🔄 QwenPaw 兼容: 同步 active_model "${modelName}" → provider "${luminaId}"`)
+        return true
+      }
+
+      // 未识别的 provider_id → 作为自定义 provider
+      console.log(`[ProviderManager] ⚠️ QwenPaw provider_id "${qpProviderId}" 未映射到已知供应商，保留原配置`)
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  // ── 初始化 ───────────────────────────────────────────
+
+  async initialize(): Promise<void> {
+    if (this.initialized) return
+    this.initialized = true
+
+    // 优先从 QwenPaw agent.json 同步
+    const configDir = path.dirname(this.configPath)
+    const qpSynced = this.tryLoadFromQwenPawAgent(configDir)
+
+    if (!qpSynced) {
+      // 先尝试从磁盘加载自有配置
+      if (fs.existsSync(this.configPath)) {
+        try {
+          const raw = fs.readFileSync(this.configPath, 'utf-8')
+          this.store = JSON.parse(raw)
+          // 解密内存中的 API Key
+          for (const id of Object.keys(this.store.providers)) {
+            const cfg = this.store.providers[id]
+            if (cfg.apiKey) cfg.apiKey = decryptApiKey(cfg.apiKey)
+          }
+          console.log(`[ProviderManager] ✅ 已加载 ${Object.keys(this.store.providers).length} 个供应商配置`)
+          return
+        } catch (err) {
+          console.error('[ProviderManager] ⚠️ 配置解析失败，将重建:', err)
+        }
+      }
+
+      // 首次运行：从 .env 迁移
+      console.log('[ProviderManager] 🔄 首次运行，从 .env 迁移配置...')
+      this._migrateFromEnv()
+    }
+
+    this._save()
+  }
+
+  // ── 查询供应商定义 ──────────────────────────────────
+
+  getAllDefinitions(): ProviderDefinition[] {
+    return [...BUILT_IN_PROVIDERS]
+  }
+
+  getCloudDefinitions(): ProviderDefinition[] {
+    return BUILT_IN_PROVIDERS.filter(p => !p.isLocal && p.id !== 'custom')
+  }
+
+  getCustomDefinition(): ProviderDefinition | undefined {
+    return BUILT_IN_PROVIDERS.find(p => p.id === 'custom')
+  }
+
+  getDefinition(id: string): ProviderDefinition | undefined {
+    return BUILT_IN_PROVIDERS.find(p => p.id === id)
+  }
+
+  // ── 配置读写 ────────────────────────────────────────
+
+  /** 获取某供应商的当前配置（含默认值回退） */
+  getProviderConfig(id: string): ProviderConfig | null {
+    const def = this.getDefinition(id)
+    if (!def) return null
+
+    const saved = this.store.providers[id]
+    if (!saved) return null
+
+    return {
+      baseUrl: saved.baseUrl || def.defaultBaseUrl,
+      apiKey: saved.apiKey || '',
+      model: saved.model || def.defaultModel,
+      enabled: saved.enabled ? true : false,
+      timeout: saved.timeout || 600,
+      maxContextTokens: saved.maxContextTokens || 256000,
+    }
+  }
+
+  /** 获取所有供应商配置（含默认值） */
+  getAllProviderConfigs(): Record<string, ProviderConfig> {
+    const result: Record<string, ProviderConfig> = {}
+    for (const def of BUILT_IN_PROVIDERS) {
+      const saved = this.store.providers[def.id]
+      result[def.id] = {
+        baseUrl: saved?.baseUrl || def.defaultBaseUrl,
+        apiKey: saved?.apiKey || '',
+        model: saved?.model || def.defaultModel,
+        enabled: saved?.enabled || false,
+        timeout: saved?.timeout || 600,
+        maxContextTokens: saved?.maxContextTokens || 256000,
+      }
+    }
+    return result
+  }
+
+  /** 获取已启用（有有效配置）的供应商列表 */
+  getAvailableProviderIds(): string[] {
+    const result: string[] = []
+    for (const def of BUILT_IN_PROVIDERS) {
+      const cfg = this.store.providers[def.id]
+      if (def.requiresApiKey) {
+        // 云端：需要 baseUrl + apiKey
+        if (cfg?.baseUrl && cfg?.apiKey) result.push(def.id)
+      } else {
+        // 本地：只需要 baseUrl
+        if (cfg?.baseUrl || def.defaultBaseUrl) result.push(def.id)
+      }
+    }
+    return result
+  }
+
+  /** 保存某供应商的配置 */
+  setProviderConfig(id: string, config: Partial<ProviderConfig>): void {
+    const def = this.getDefinition(id)
+    if (!def) return
+
+    const existing = this.store.providers[id] || {
+      baseUrl: def.defaultBaseUrl,
+      apiKey: '',
+      model: def.defaultModel,
+      enabled: false,
+      timeout: 600,
+      maxContextTokens: 256000,
+    }
+
+    this.store.providers[id] = { ...existing, ...config }
+    this._save()
+    console.log(`[ProviderManager] 💾 已保存 "${id}" 配置`)
+
+    // 🔄 自动同步到 Team Agent（Yak / Recha / Lumina）
+    try {
+      const { getAgentConfig } = require('../agentConfig')
+      const ac = getAgentConfig()
+      ac.syncFromGlobalProvider()
+    } catch { /* providerManager 初始化可能早于 agentConfig，忽略 */ }
+  }
+
+  /** 批量保存供应商配置 */
+  setMultipleProviderConfigs(configs: Record<string, Partial<ProviderConfig>>): void {
+    for (const [id, cfg] of Object.entries(configs)) {
+      this.setProviderConfig(id, cfg)
+    }
+  }
+
+  // ── 当前激活供应商 ─────────────────────────────────
+
+  getActiveProviderId(): string {
+    return this.store.activeProviderId
+  }
+
+  setActiveProvider(id: string): void {
+    const def = this.getDefinition(id)
+    if (!def) return
+
+    // 确保该供应商至少有一个默认配置项
+    if (!this.store.providers[id]) {
+      this.store.providers[id] = {
+        baseUrl: def.defaultBaseUrl,
+        apiKey: '',
+        model: def.defaultModel,
+        enabled: true,
+        timeout: 600,
+        maxContextTokens: 256000,
+      }
+    } else {
+      this.store.providers[id].enabled = true
+    }
+
+    this.store.activeProviderId = id
+    this._save()
+    console.log(`[ProviderManager] 🔵 激活供应商: ${id}`)
+  }
+
+  /** 获取当前激活供应商的完整配置（快捷方式） */
+  getActiveConfig(): { definition: ProviderDefinition; config: ProviderConfig } | null {
+    const id = this.store.activeProviderId
+    if (!id) return null
+
+    const def = this.getDefinition(id)
+    const config = this.getProviderConfig(id)
+    if (!def || !config) return null
+
+    return { definition: def, config }
+  }
+
+  // ── 模型获取 ───────────────────────────────────────
+
+  async fetchModels(id: string): Promise<{ models: ModelInfo[]; error?: string }> {
+    const config = this.getProviderConfig(id)
+    if (!config) return { models: [], error: '供应商未配置' }
+
+    const baseUrl = config.baseUrl
+    const apiKey = config.apiKey
+
+    try {
+      switch (id) {
+        case 'lmstudio':
+          return await this._fetchLMStudioModels(baseUrl, apiKey)
+        case 'ollama':
+          return await this._fetchOllamaModels(baseUrl)
+        default:
+          return await this._fetchOpenAIModels(baseUrl, apiKey)
+      }
+    } catch (err: any) {
+      return { models: [], error: err.message }
+    }
+  }
+
+  // ── 连接测试 ───────────────────────────────────────
+
+  async testConnection(id: string): Promise<ConnectionTestResult> {
+    const config = this.getProviderConfig(id)
+    if (!config) return { success: false, error: '供应商未配置' }
+
+    // 本地模型不需要 model 也能测通（只需 server 在线）
+    if (!config.model && !this.getDefinition(id)?.isLocal) {
+      return { success: false, error: '请先选择模型' }
+    }
+
+    const startTime = Date.now()
+    try {
+      // 先试轻量 GET（/models 或 /health）避免触发模型加载
+      if (id === 'lmstudio' || id === 'ollama') {
+        const healthUrl = id === 'ollama'
+          ? config.baseUrl.replace(/\/v1\/?$/, '') + '/api/tags'
+          : config.baseUrl + '/models'
+
+        const resp = await fetch(healthUrl, {
+          headers: { 'Authorization': 'Bearer ' + (config.apiKey || '') },
+          signal: AbortSignal.timeout(5000),
+        })
+        if (resp.ok) {
+          return { success: true, latency: Date.now() - startTime }
+        }
+        // 回退到 chat completion 测试
+      }
+
+      // 标准 POST 测试
+      const resp = await fetch(config.baseUrl + '/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + (config.apiKey || ''),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: config.model || 'test',
+          messages: [{ role: 'user', content: 'Hi' }],
+          max_tokens: 5,
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      const latency = Date.now() - startTime
+
+      if (resp.ok) {
+        return { success: true, latency }
+      }
+
+      // 尝试读取具体错误
+      const errText = await resp.text().catch(() => '')
+      // 有些 LM Studio 没加载模型时返回 400，但 server 是在线的
+      if (id === 'lmstudio' && resp.status === 400) {
+        return { success: true, latency, error: '服务在线，但需先加载模型' }
+      }
+      return { success: false, error: `HTTP ${resp.status}: ${errText.slice(0, 200)}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+
+  // ── 持久化 ─────────────────────────────────────────
+
+  private _save(): void {
+    try {
+      const dir = path.dirname(this.configPath)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+      // 深拷贝并加密 API Key
+      const toSave: ProviderStore = {
+        activeProviderId: this.store.activeProviderId,
+        providers: {},
+      }
+      for (const [id, cfg] of Object.entries(this.store.providers)) {
+        toSave.providers[id] = {
+          ...cfg,
+          apiKey: cfg.apiKey ? encryptApiKey(cfg.apiKey) : '',
+        }
+      }
+
+      fs.writeFileSync(this.configPath, JSON.stringify(toSave, null, 2), 'utf-8')
+    } catch (err) {
+      console.error('[ProviderManager] ❌ 保存失败:', err)
+    }
+  }
+
+  // ── 从 .env 迁移（首次运行） ──────────────────────
+
+  private _migrateFromEnv(): void {
+    const envVars: Array<{ id: string; baseUrlVar: string; apiKeyVar: string }> = [
+      { id: 'deepseek',    baseUrlVar: 'DEEPSEEK_BASE_URL',    apiKeyVar: 'DEEPSEEK_API_KEY' },
+      { id: 'qwen',        baseUrlVar: 'QWEN_BASE_URL',        apiKeyVar: 'QWEN_API_KEY' },
+      { id: 'openai',      baseUrlVar: 'OPENAI_BASE_URL',      apiKeyVar: 'OPENAI_API_KEY' },
+      { id: 'zhipu',       baseUrlVar: 'ZHIPU_BASE_URL',       apiKeyVar: 'ZHIPU_API_KEY' },
+      { id: 'siliconflow', baseUrlVar: 'SILICONFLOW_BASE_URL', apiKeyVar: 'SILICONFLOW_API_KEY' },
+      { id: 'lmstudio',    baseUrlVar: 'LMSTUDIO_BASE_URL',    apiKeyVar: 'LMSTUDIO_API_KEY' },
+      { id: 'ollama',      baseUrlVar: 'OLLAMA_BASE_URL',      apiKeyVar: 'OLLAMA_API_KEY' },
+    ]
+
+    const defaultKey = process.env['LUMINA_DEFAULT_API_KEY'] || ''
+    let anyFound = false
+
+    for (const ev of envVars) {
+      const baseUrl = process.env[ev.baseUrlVar]
+      const apiKey = process.env[ev.apiKeyVar] || defaultKey
+
+      if (baseUrl) {
+        const def = this.getDefinition(ev.id)
+        this.store.providers[ev.id] = {
+          baseUrl,
+          apiKey: apiKey || '',
+          model: def?.defaultModel || '',
+          enabled: true,
+          timeout: 600,
+          maxContextTokens: 256000,
+        }
+        anyFound = true
+        console.log(`[ProviderManager] 🔄 从 .env 迁移: ${ev.id}`)
+      }
+    }
+
+    if (anyFound) {
+      // 设置首选供应商
+      const preferred = process.env['LUMINA_DEFAULT_PROVIDER'] || ''
+      if (preferred && this.store.providers[preferred]) {
+        this.store.activeProviderId = preferred
+      } else {
+        // 云端优先：deepseek > qwen > openai > zhipu > siliconflow
+        const cloudOrder = ['deepseek', 'qwen', 'openai', 'zhipu', 'siliconflow']
+        for (const pid of cloudOrder) {
+          if (this.store.providers[pid]) {
+            this.store.activeProviderId = pid
+            break
+          }
+        }
+        // 没有云端 → 选第一个本地
+        if (!this.store.activeProviderId) {
+          const localOrder = ['lmstudio', 'ollama']
+          for (const pid of localOrder) {
+            if (this.store.providers[pid]) {
+              this.store.activeProviderId = pid
+              break
+            }
+          }
+        }
+      }
+      console.log(`[ProviderManager] 🔵 激活供应商: ${this.store.activeProviderId}`)
+    } else {
+      console.log('[ProviderManager] ⚠️ .env 中未检测到已配置的供应商')
+    }
+  }
+
+  // ── 模型探测实现 ──────────────────────────────────
+
+  private async _fetchLMStudioModels(baseUrl: string, apiKey: string): Promise<{ models: ModelInfo[]; error?: string }> {
+    const errors: string[] = []
+
+    // 优先 GET /models
+    try {
+      const resp = await fetch(baseUrl + '/models', {
+        headers: { 'Authorization': 'Bearer ' + (apiKey || '') },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const raw = data.data || data
+        if (Array.isArray(raw)) {
+          const models = raw
+            .map((m: any) => ({ id: m.id || m.model || '', multimodal: false, vision: false }))
+            .filter((m: ModelInfo) => m.id)
+          if (models.length > 0) return { models }
+        }
+      }
+      errors.push(`GET /models → ${resp.status}`)
+    } catch (e: any) { errors.push(e.message) }
+
+    return { models: [{ id: '(LM Studio 连接成功，未加载模型)', multimodal: false, vision: false }], error: errors.join('; ') }
+  }
+
+  private async _fetchOllamaModels(baseUrl: string): Promise<{ models: ModelInfo[]; error?: string }> {
+    const ollamaBase = baseUrl.replace(/\/v1\/?$/, '')
+    const errors: string[] = []
+
+    // Ollama 原生 /api/tags
+    try {
+      const resp = await fetch(ollamaBase + '/api/tags', { signal: AbortSignal.timeout(10000) })
+      if (resp.ok) {
+        const data = await resp.json()
+        const models = (data.models || [])
+          .map((m: any) => ({ id: m.name || m.model || '', multimodal: false, vision: false }))
+          .filter((m: ModelInfo) => m.id)
+        if (models.length > 0) return { models }
+      }
+      errors.push(`/api/tags → ${resp.status}`)
+    } catch (e: any) { errors.push(e.message) }
+
+    // 回退 OpenAI 兼容
+    const fallback = await this._fetchOpenAIModels(baseUrl, '')
+    if (fallback.models.length > 0) return fallback
+    errors.push(...(fallback.error ? [fallback.error] : []))
+
+    return { models: [], error: errors.join('; ') }
+  }
+
+  private async _fetchOpenAIModels(baseUrl: string, apiKey: string): Promise<{ models: ModelInfo[]; error?: string }> {
+    try {
+      const resp = await fetch(baseUrl + '/models', {
+        headers: { 'Authorization': 'Bearer ' + (apiKey || '') },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const raw = data.data || data
+        if (Array.isArray(raw)) {
+          const models = raw
+            .map((m: any) => ({ id: m.id || m.model || '', multimodal: false, vision: false }))
+            .filter((m: ModelInfo) => m.id)
+          return { models }
+        }
+      }
+      return { models: [], error: `HTTP ${resp.status}` }
+    } catch (err: any) {
+      return { models: [], error: err.message }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 单例工厂
+// ═══════════════════════════════════════════════════════════
+
+let _instance: ProviderManager | null = null
+
+export function getProviderManager(configDir?: string): ProviderManager {
+  if (!_instance) {
+    const dir = configDir || (
+      // Electron 环境
+      (() => {
+        try { return require('electron').app.getPath('userData') }
+        catch { return process.cwd() }
+      })()
+    )
+    _instance = new ProviderManager(dir)
+  }
+  return _instance
+}
+
+// ═══════════════════════════════════════════════════════════
+// IPC 处理器注册 (在 main.ts 中调用)
+// ═══════════════════════════════════════════════════════════
+
+import { ipcMain } from 'electron'
+
+export function registerProviderIpc(): void {
+  const pm = getProviderManager()
+
+  // ── 获取所有供应商定义 ──────────────────────────
+  ipcMain.handle('provider:list', () => {
+    return { providers: pm.getAllDefinitions() }
+  })
+
+  // ── 获取所有供应商配置 ──────────────────────────
+  ipcMain.handle('provider:get-all', () => {
+    return {
+      activeProviderId: pm.getActiveProviderId(),
+      configs: pm.getAllProviderConfigs(),
+      availableIds: pm.getAvailableProviderIds(),
+    }
+  })
+
+  // ── 获取单个供应商配置 ──────────────────────────
+  ipcMain.handle('provider:get-config', (_event, id: string) => {
+    return { config: pm.getProviderConfig(id) }
+  })
+
+  // ── 保存供应商配置 ──────────────────────────────
+  ipcMain.handle('provider:save-config', (_event, id: string, config: Partial<ProviderConfig>) => {
+    try {
+      pm.setProviderConfig(id, config)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ── 批量保存供应商配置 ──────────────────────────
+  ipcMain.handle('provider:save-multiple', (_event, configs: Record<string, Partial<ProviderConfig>>) => {
+    try {
+      pm.setMultipleProviderConfigs(configs)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ── 激活供应商 ──────────────────────────────────
+  ipcMain.handle('provider:set-active', (_event, id: string) => {
+    try {
+      pm.setActiveProvider(id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ── 获取模型列表 ────────────────────────────────
+  ipcMain.handle('provider:fetch-models', async (_event, id: string) => {
+    try {
+      return await pm.fetchModels(id)
+    } catch (err: any) {
+      return { models: [], error: err.message }
+    }
+  })
+
+  // ── 测试连接 ────────────────────────────────────
+  ipcMain.handle('provider:test-connection', async (_event, id: string) => {
+    try {
+      return await pm.testConnection(id)
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  console.log('[ProviderManager] 📡 IPC 处理器已注册 (provider:*)')
+}

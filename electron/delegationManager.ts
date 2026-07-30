@@ -1,0 +1,1084 @@
+// ============================================================
+// delegationManager.ts — Lumina 委托管理器 (Phase 1/2/3 循环升级)
+//
+// Phase 1: 核心委托重试 — delegate() 失败后自动重试+降级
+// Phase 2: AgentLoop 结构体 — 统一循环控制+收敛检测
+// Phase 3: 情感感知循环 — 情绪影响重试策略
+//
+// v9.0 新增:
+//   - autoVerifyOnDelegate: 自动验证闭环（Yak 写完代码后自动跑测试/修复）
+//   - phaseGatedDelegate: 复杂任务分阶段执行（Research→Plan→Execute→Verify→Review）
+//   - 两种模式：直派(simple) / 分阶段门控(complex)
+//
+// v8.0: 每个 Agent 拥有独立 AgentRunner，通过消息路由通信。
+//   Lumina → 委托 → DelegationManager → 路由到 Yak/热茶的独立 Runner
+//   各 Runner 保持独立上下文，不再 splice 消息。
+// ============================================================
+
+import type {
+  DelegationRequest, DelegationResult, TeamMemberId, NoticeEntry, TeamContextEntry,
+  AgentLoopConfig, AgentLoopContext, LoopStepRecord, LoopStopCondition, LoopPhase,
+} from './agentTeamTypes'
+import { DEFAULT_AGENT_LOOP_CONFIG } from './agentTeamTypes'
+import { TEAM_MEMBERS } from './agentTeamPersonas'
+import { matchSkill } from './agentSkills'
+import { getTeamRegistry } from './core/teamRegistry'
+import { getTeamContextManager } from './agentTeamContext'
+import { AgentRunner } from './agentRunner'
+// 验证闭环 & 阶段门控
+import { autoFixLoop, runVerification, detectProjectRoot, detectProjectProfile, taskMayNeedVerification } from './orchestration/verifyLoop'
+import { assessComplexity } from './orchestration/complexityAnalyzer'
+import { PhaseGate, getPhasesFromComplexity } from './orchestration/phaseGate'
+import { getTaskBoard } from './orchestration/taskBoard'
+import type { PhaseName } from './orchestration/phaseGate'
+import type { ComplexityAnalysis } from './orchestration/complexityAnalyzer'
+// 🆕 Lucky 模式集成 — 多 Agent 循环控制
+import { getLuckyDelegationControl, shouldStopDelegationLoop, getConfig as getLuckyConfig, getCurrentMood, getCurrentMode } from './luckyModeIntegration'
+
+// ═══════════════════════════════════════════════════════════
+// 通知板 & 共享上下文 持久化路径
+// ═══════════════════════════════════════════════════════════
+
+const TEAM_NOTICES_PATH = process.cwd() + '/memory/team-notices.json'
+const TEAM_CONTEXT_PATH = process.cwd() + '/memory/team-context.json'
+
+function ensureDir(p: string): void {
+  const dir = p.substring(0, p.lastIndexOf('/'))
+  try { require('fs').mkdirSync(dir, { recursive: true }) } catch {}
+}
+
+function readJson<T>(filePath: string, fallback: T): T {
+  try {
+    if (require('fs').existsSync(filePath)) {
+      return JSON.parse(require('fs').readFileSync(filePath, 'utf-8'))
+    }
+  } catch {}
+  return fallback
+}
+
+function writeJson(filePath: string, data: any): void {
+  ensureDir(filePath)
+  try { require('fs').writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8') } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════
+// DelegationManager (v8.1 团队协作升级)
+// v8.1 新增:
+//   - 反问解析: Worker 可用 [QUESTION]...[/QUESTION] 标记需要确认的问题
+//   - 通知板: Workers 可在任务中留言给 Lumina
+//   - 共享上下文: 所有团队成员可读写的项目级记忆
+// ═══════════════════════════════════════════════════════════
+// 🆕 P4 优化: 委托结果缓存 — 相同 task+context 在 60s 内直接返回
+// ═══════════════════════════════════════════════════════════
+
+interface CacheEntry {
+  result: DelegationResult
+  expiresAt: number
+}
+
+const CACHE_TTL_MS = 60_000 // 60 秒 TTL
+
+function _cacheKey(from: string, to: string, task: string, taskType: string, context?: string): string {
+  return `${from}:${to}:${taskType}:${task.slice(0, 200)}:${(context || '').slice(0, 200)}`
+}
+
+// ═══════════════════════════════════════════════════════════
+
+export class DelegationManager {
+  /**
+   * v8.0: 独立 Agent Runner 映射
+   * 每个团队成员有自己的 Runner，独立 LLM、独立上下文、独立记忆
+   */
+  private runners: Map<string, AgentRunner> = new Map()
+  /** 🆕 P4: 委托结果缓存，key 见 _cacheKey()，value 见 CacheEntry */
+  private runnerResultCache: Map<string, CacheEntry> = new Map()
+
+  /**
+   * 注册 Agent Runner（由 AgentPool / main.ts 在创建时注册）
+   */
+  registerRunner(id: string, runner: AgentRunner): void {
+    this.runners.set(id, runner)
+    const member = getTeamRegistry().getMember(id) || (TEAM_MEMBERS as any)[id]
+    console.log(`[DelegationManager] ✅ ${member?.icon || '?'} ${id} Runner 已注册`)
+  }
+
+  /**
+   * 获取已注册的 Runner
+   */
+  getRunner(id: string): AgentRunner | undefined {
+    return this.runners.get(id)
+  }
+
+  /** 检查成员是否已配置 */
+  isConfigured(memberId: string): boolean {
+    return this.runners.has(memberId)
+  }
+
+  /** 获取团队配置状态 */
+  getTeamConfigStatus(): Array<{
+    memberId: string
+    name: string
+    icon: string
+    configured: boolean
+  }> {
+    const allMembers = getTeamRegistry().getAllMembers()
+    return allMembers.map(member => ({
+      memberId: member.id,
+      name: member.name,
+      icon: member.icon,
+      configured: this.runners.has(member.id),
+    }))
+  }
+
+  // ═══ P2: 社交引擎通知（非阻塞，捕获所有异常） ═══
+  private _notifyEngine(event: 'start' | 'end'): void {
+    try {
+      const { getOrchestrator } = require('./core/agentOrchestrator')
+      if (event === 'start') getOrchestrator().socialEngine?.onCodingTaskStart?.()
+      else getOrchestrator().socialEngine?.onCodingTaskEnd?.()
+    } catch { /* ignore */ }
+  }
+
+  /** P2: 记录委托日志到团队上下文 */
+  private _logDelegation(from: string, to: string, task: string, summary: string, success: boolean, elapsed: number): void {
+    try {
+      getTeamContextManager().logDelegation(from, to, task, summary, success, elapsed)
+    } catch { /* ignore */ }
+  }
+
+  // ═══ 委托 ═══
+
+  // ═══════════════════════════════════════════════════════════
+  // 🆕 Phase 1/2/3: 循环上下文工厂 & 收敛检测
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 构建 AgentLoop 运行时上下文
+   */
+  private _buildLoopContext(request: DelegationRequest): AgentLoopContext {
+    const loopConfig: AgentLoopConfig = {
+      ...DEFAULT_AGENT_LOOP_CONFIG,
+      ...(request.loopConfig || {}),
+    }
+
+    return {
+      config: loopConfig,
+      currentIteration: 0,
+      currentRetry: 0,
+      isDegraded: false,
+      steps: [],
+      recentOutputs: [],
+      currentMood: getCurrentMood(),
+      moodIntensity: 0,
+    }
+  }
+
+  /**
+   * 🆕 Phase 2: 收敛检测 — 连续 N 轮输出相似度超阈值视为收敛
+   */
+  private _isConverged(ctx: AgentLoopContext): boolean {
+    if (ctx.recentOutputs.length < ctx.config.convergenceWindow) return false
+    const window = ctx.recentOutputs.slice(-ctx.config.convergenceWindow)
+    // 计算相邻对的相似度
+    let similarCount = 0
+    for (let i = 1; i < window.length; i++) {
+      const sim = this._textSimilarity(window[i - 1], window[i])
+      if (sim >= ctx.config.convergenceThreshold) similarCount++
+    }
+    return similarCount >= window.length - 1
+  }
+
+  /**
+   * 🆕 Phase 2: 文本相似度（Jaccard 简化版）
+   */
+  private _textSimilarity(a: string, b: string): number {
+    const setA = new Set(a.toLowerCase().split(/\s+/).filter(s => s.length > 2).slice(0, 50))
+    const setB = new Set(b.toLowerCase().split(/\s+/).filter(s => s.length > 2).slice(0, 50))
+    if (setA.size === 0 || setB.size === 0) return 0
+    let intersection = 0
+    for (const word of setA) {
+      if (setB.has(word)) intersection++
+    }
+    const union = setA.size + setB.size - intersection
+    return union === 0 ? 0 : intersection / union
+  }
+
+  /**
+   * 🆕 Phase 1: 重试延迟（指数退避，但受情绪影响）
+   */
+  private _retryDelay(attempt: number, mood?: string): number {
+    let base = Math.min(1000 * Math.pow(2, attempt - 1), 10000)
+    // Phase 3: 情绪感知 — 不耐烦时缩短延迟
+    if (mood === 'impatient' || mood === 'stressed') {
+      base = Math.min(base, 2000) // 不耐烦时不等太久
+    }
+    // 加点随机抖动
+    const jitter = Math.random() * base * 0.3
+    return Math.floor(base + jitter)
+  }
+
+  /**
+   * 🆕 Phase 3: 情绪对重试策略的影响
+   */
+  private _adjustRetryByMood(
+    baseMaxRetries: number,
+    mood?: string,
+    moodIntensity?: number,
+  ): { maxRetries: number; degradeFaster: boolean } {
+    const intensity = moodIntensity ?? 0.5
+    if (!mood || intensity < 0.4) {
+      return { maxRetries: baseMaxRetries, degradeFaster: false }
+    }
+
+    switch (mood) {
+      case 'happy':
+      case 'playful':
+        // 好心情：更多耐心，多试几次
+        return {
+          maxRetries: Math.min(baseMaxRetries + 1, 5),
+          degradeFaster: false,
+        }
+      case 'tired':
+      case 'stressed':
+        // 累/压力：减少重试，尽快出结果
+        return {
+          maxRetries: Math.max(1, Math.ceil(baseMaxRetries * (1 - intensity * 0.5))),
+          degradeFaster: intensity > 0.6,
+        }
+      case 'impatient':
+        // 不耐烦：几乎不重试
+        return {
+          maxRetries: Math.max(0, baseMaxRetries - 2),
+          degradeFaster: true,
+        }
+      default:
+        return { maxRetries: baseMaxRetries, degradeFaster: false }
+    }
+  }
+
+  /**
+   * 🆕 Phase 1: 降级任务 — 重试时改变策略
+   */
+  private _buildDegradedTask(
+    originalTask: string,
+    attempt: number,
+    lastError: string,
+    strategy: 'same' | 'simplify' | 'escalate',
+  ): string {
+    if (strategy === 'same') {
+      // 第 1 次重试：原样重新提交，加错误提示
+      return `【第 ${attempt} 次重试 — 上次报错如下】
+
+原始任务:
+${originalTask}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+上次错误:
+${lastError.slice(0, 2000)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【重试要求】
+1. 仔细阅读上次的报错
+2. 使用不同的方法来完成任务，避开之前失败的方式
+3. 如果上次的尝试太复杂，请简化方案
+4. 如果仍然不确定，先读取更多上下文再执行`
+    }
+
+    if (strategy === 'simplify') {
+      // 简化版：缩小范围
+      return `【降级重试 — 简化版】
+
+请用最简单的方式完成以下目标（不要追求完美，只求可用）
+原始任务参考：
+${originalTask.slice(0, 1000)}
+
+【重要】
+- 使用最小可行方案
+- 不要写复杂的架构
+- 如果完整实现太复杂，先做功能验证（proof of concept）
+- 不需要考虑边界情况，先跑通主流程
+
+上次错误（供参考）:
+${lastError.slice(0, 1000)}`
+    }
+
+    // escalate：寻求帮助或报告
+    return `【升级重试 — 需要重新评估】
+
+以下任务已失败 ${attempt} 次：
+${originalTask.slice(0, 800)}
+
+最后错误:
+${lastError.slice(0, 1000)}
+
+请重新评估这个任务：
+1. 是否因为信息不足而失败？
+2. 是否需要读取更多代码/文档？
+3. 是否需要换一个实现方法？
+4. 如果确实无法完成，请明确说明原因和需要的帮助`
+  }
+
+  /**
+   * 🆕 Phase 1/2/3: 增强版 delegate — 带重试+循环控制+情绪感知
+   *
+   * v8.0: 从源 Agent 委托任务给目标 Agent
+   * - 不再使用共享 Runner，路由到目标 Agent 的独立 Runner
+   * - 目标 Runner 保留完整上下文
+   *
+   * Phase 1 新增:
+   * - 失败自动重试（指数退避）
+   * - 重试降级策略（same/simplify/escalate）
+   * - 重试信息记录到 DelegationResult.retryInfo
+   *
+   * Phase 2 新增:
+   * - AgentLoopConfig 控制循环参数
+   * - 收敛检测（连续相似输出视为完成）
+   * - 停止条件追踪
+   *
+   * Phase 3 新增:
+   * - 情绪影响重试次数和策略
+   * - 情绪影响延迟时间
+   *
+   * @param from - 发起委托的 Agent ID
+   * @param request - 委托请求
+   */
+  async delegate(from: string, request: DelegationRequest): Promise<DelegationResult> {
+    const startTime = Date.now()
+    const { to, task, taskType, context, filePaths, timeout } = request
+
+    // 先查内置成员，再查动态成员
+    const member = (TEAM_MEMBERS as any)[to] || getTeamRegistry().getMember(to)
+    if (!member) {
+      return {
+        success: false, content: '', error: `未知成员: ${to}`,
+        toolCallsCount: 0, elapsedMs: Date.now() - startTime,
+      }
+    }
+
+    const targetRunner = this.runners.get(to)
+    if (!targetRunner) {
+      return {
+        success: false, content: '',
+        error: `${member.name}(${to}) 未就绪（Runner 未注册）`,
+        toolCallsCount: 0, elapsedMs: Date.now() - startTime,
+      }
+    }
+
+    console.log(`[DelegationManager] 🔀 ${from} → ${member.name}(${to}): "${task.slice(0, 80)}..."`)
+
+    // 🆕 P4: 缓存命中检查
+    const cacheKey = _cacheKey(from, to, task, taskType, context)
+    const cached = this.runnerResultCache.get(cacheKey)
+    if (cached && Date.now() < cached.expiresAt) {
+      console.log(`[DelegationManager] 💾 缓存命中: ${cacheKey.slice(0, 80)} (剩余 ${Math.round((cached.expiresAt - Date.now()) / 1000)}s)`)
+      this._notifyEngine('end')
+      return cached.result
+    }
+    for (const [key, entry] of this.runnerResultCache) {
+      if (Date.now() >= entry.expiresAt) this.runnerResultCache.delete(key)
+    }
+
+    // 🆕 Phase 1/2/3: 构建循环上下文
+    const loopCtx = this._buildLoopContext(request)
+
+    // 🆕 Phase 3: 情绪调整重试参数
+    const mood = getCurrentMood()
+    const moodAdj = this._adjustRetryByMood(
+      request.maxRetries ?? loopCtx.config.maxRetries,
+      mood,
+      // 粗略从情绪强度推断 — 如果情绪非 neutral 则强度高
+      mood && mood !== 'neutral' ? 0.7 : 0.3,
+    )
+    const effectiveMaxRetries = request.maxRetries ?? moodAdj.maxRetries
+    const degradeFaster = moodAdj.degradeFaster
+
+    // 通知社交引擎
+    this._notifyEngine('start')
+
+    // ═══ 核心重试循环 ═══
+    const attemptErrors: string[] = []
+    let lastError = ''
+    let wasDegraded = false
+    let recoveredByDegrade = false
+    let finalCleanText = ''
+    let finalQuestions: string[] | undefined
+    let finalToolCallsCount = 0
+
+    const maxAttempts = 1 + effectiveMaxRetries // 首次 + 重试次数
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // 当前是否处于重试状态
+      const isRetry = attempt > 1
+
+      // 🆕 Phase 2: 收敛检查 — 如果最近输出已收敛，提前结束
+      if (loopCtx.recentOutputs.length >= loopCtx.config.convergenceWindow) {
+        if (this._isConverged(loopCtx)) {
+          console.log(`[DelegationManager] 🔁 输出已收敛（连续 ${loopCtx.config.convergenceWindow} 轮相似），提前终止重试`)
+          loopCtx.stopCondition = 'converged'
+          loopCtx.stopReason = `输出已收敛，连续 ${loopCtx.config.convergenceWindow} 轮相似度 > ${loopCtx.config.convergenceThreshold}`
+          break
+        }
+      }
+
+      // 🆕 Phase 2: 迭代次数上限
+      if (loopCtx.currentIteration >= loopCtx.config.maxIterations) {
+        console.log(`[DelegationManager] ⛔ 达到最大迭代次数 ${loopCtx.config.maxIterations}`)
+        loopCtx.stopCondition = 'max_iterations'
+        loopCtx.stopReason = `达到最大迭代次数 ${loopCtx.config.maxIterations}`
+        break
+      }
+
+      loopCtx.currentIteration++
+      loopCtx.currentRetry = attempt - 1
+
+      // 🆕 Phase 1: 重试时使用降级策略
+      let currentTask = task
+      if (isRetry && lastError) {
+        const strategy = this._pickRetryStrategy(attempt, maxAttempts, degradeFaster, mood)
+        currentTask = this._buildDegradedTask(task, attempt, lastError, strategy)
+        if (strategy !== 'same') wasDegraded = true
+        // 重试前指数退避
+        const delay = this._retryDelay(attempt - 1, mood)
+        console.log(`[DelegationManager] ⏳ 第 ${attempt} 次重试 (策略: ${strategy})，等待 ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+
+      try {
+        // 构建 worker 输入
+        const workerInput = this._buildWorkerInput(currentTask, taskType, context, filePaths)
+
+        const effectiveTimeout = timeout || 300000
+        const result = await targetRunner.chat(workerInput, {
+          timeoutMs: effectiveTimeout,
+          socialMode: false,
+        })
+
+        if (result.error) {
+          lastError = result.error
+          attemptErrors.push(result.error)
+          console.log(`[DelegationManager] ❌ 第 ${attempt}/${maxAttempts} 次失败: ${result.error.slice(0, 100)}`)
+
+          if (attempt >= maxAttempts) {
+            // 最后一次仍失败
+            this._logDelegation(from, to, task, result.error, false, Date.now() - startTime)
+            this._notifyEngine('end')
+
+            const finalResult: DelegationResult = {
+              success: false, content: '',
+              error: result.error,
+              toolCallsCount: result.toolCallsCount,
+              elapsedMs: Date.now() - startTime,
+              retryInfo: {
+                totalRetries: attempt - 1,
+                attemptErrors,
+                wasDegraded,
+                recoveredByDegrade: false,
+              },
+            }
+            this.runnerResultCache.set(cacheKey, { result: finalResult, expiresAt: Date.now() + CACHE_TTL_MS })
+            return finalResult
+          }
+          continue // 继续重试
+        }
+
+        // ✅ 成功
+        const rawText = result.text || ''
+        const { cleanText, questions } = this._parseQuestions(rawText)
+        finalCleanText = cleanText
+        finalQuestions = questions.length > 0 ? questions : undefined
+        finalToolCallsCount = result.toolCallsCount
+
+        // 🆕 Phase 2: 记录本轮输出用于收敛检测
+        loopCtx.recentOutputs.push(cleanText.slice(0, 500))
+        if (loopCtx.recentOutputs.length > loopCtx.config.convergenceWindow * 2) {
+          loopCtx.recentOutputs.shift()
+        }
+
+        // 🆕 Phase 1: 如果经过重试才成功，记录恢复信息
+        if (isRetry) {
+          recoveredByDegrade = wasDegraded
+          console.log(`[DelegationManager] ✅ 第 ${attempt} 次重试成功 (${cleanText.length} 字符)`)
+        }
+
+        // 自动验证闭环
+        if (taskMayNeedVerification(taskType)) {
+          try {
+            const verifyResult = await this._autoVerifyAfterDelegation(
+              from, to, member, task, cleanText,
+            )
+            if (verifyResult.autoFixed) {
+              finalCleanText = `【原始输出】\n${cleanText}\n\n【自动修复记录】\n${verifyResult.fixLog}`
+              if (verifyResult.finalContent) {
+                finalCleanText = verifyResult.finalContent
+              }
+            }
+          } catch (verifyErr: any) {
+            console.warn(`[DelegationManager] ⚠️ 自动验证异常:`, verifyErr.message)
+          }
+        }
+
+        this._logDelegation(from, to, task, cleanText.slice(0, 200), true, Date.now() - startTime)
+        this._notifyEngine('end')
+
+        const retryInfo = attempt > 1 ? {
+          totalRetries: attempt - 1,
+          attemptErrors,
+          wasDegraded,
+          recoveredByDegrade,
+        } : undefined
+
+        const resultVal: DelegationResult = {
+          success: true,
+          content: finalCleanText,
+          questions: finalQuestions,
+          toolCallsCount: finalToolCallsCount,
+          elapsedMs: Date.now() - startTime,
+          retryInfo,
+        }
+        this.runnerResultCache.set(cacheKey, { result: resultVal, expiresAt: Date.now() + CACHE_TTL_MS })
+
+        return resultVal
+      } catch (err: any) {
+        lastError = err.message
+        attemptErrors.push(err.message)
+        console.error(`[DelegationManager] ❌ 第 ${attempt}/${maxAttempts} 次异常: ${err.message}`)
+
+        if (attempt >= maxAttempts) {
+          this._notifyEngine('end')
+          return {
+            success: false, content: '',
+            error: err.message,
+            toolCallsCount: 0,
+            elapsedMs: Date.now() - startTime,
+            retryInfo: {
+              totalRetries: attempt - 1,
+              attemptErrors,
+              wasDegraded,
+              recoveredByDegrade: false,
+            },
+          }
+        }
+      }
+    }
+
+    // 循环自然结束（无结果）
+    this._notifyEngine('end')
+    const fallbackResult: DelegationResult = {
+      success: false,
+      content: finalCleanText || '',
+      error: loopCtx.stopReason || '委托异常终止',
+      toolCallsCount: finalToolCallsCount,
+      elapsedMs: Date.now() - startTime,
+      retryInfo: attemptErrors.length > 0 ? {
+        totalRetries: attemptErrors.length,
+        attemptErrors,
+        wasDegraded,
+        recoveredByDegrade: false,
+      } : undefined,
+    }
+    return fallbackResult
+  }
+
+  /**
+   * 🆕 Phase 1: 选择重试策略
+   */
+  private _pickRetryStrategy(
+    attempt: number,
+    maxAttempts: number,
+    degradeFaster: boolean,
+    mood?: string,
+  ): 'same' | 'simplify' | 'escalate' {
+    // 第 1 次重试：原样重试（可能只是临时问题）
+    if (attempt === 2) return 'same'
+
+    // 情绪感知 — 不耐烦时快速降级
+    if (degradeFaster && attempt >= 2) return 'simplify'
+
+    // 第 2 次重试（即 attempt=3）：简化
+    if (attempt === 3) return 'simplify'
+
+    // 后续重试：升级寻求帮助
+    if (attempt >= 4) return 'escalate'
+
+    return 'same'
+  }
+
+
+  // ═══ Worker 输入构建 ═══
+
+  private _buildWorkerInput(
+    task: string,
+    taskType: string,
+    context?: string,
+    filePaths?: string[],
+  ): string {
+    const parts: string[] = []
+
+    parts.push(`【委托任务】`)
+    parts.push(`任务类型: ${taskType}`)
+    parts.push(`\n【核心任务】\n${task}`)
+
+    // 🆕 FIX-3: fetch_content 类型 — 将 URL 提取为显式指令
+    if (taskType === 'fetch_content') {
+      const urlMatch = task.match(/https?:\/\/[^\s\)\]》》},;，。]+/g)
+      if (urlMatch) {
+        parts.push(`\n【目标 URL】`)
+        urlMatch.forEach((url, i) => parts.push(`  ${i + 1}. ${url}`))
+        parts.push(`\n请使用 web_fetch 读取以上 URL 的内容，然后总结要点返回。`)
+      }
+    }
+
+    // 🆕 FIX-3: web_research 类型 — 提示使用 web_search
+    if (taskType === 'web_research') {
+      parts.push(`\n请使用 web_search 搜索相关信息，然后整理研究结果返回。`)
+    }
+
+    const matchedSkill = matchSkill(task)
+    if (matchedSkill) {
+      parts.push(`\n【匹配 Skill】`)
+      parts.push(`- ${matchedSkill.name}: ${matchedSkill.description}`)
+      if (matchedSkill.executeConstraints) {
+        parts.push(`\n【Skill 约束】\n${matchedSkill.executeConstraints}`)
+      }
+      if (matchedSkill.workflow) {
+        parts.push(`\n【工作流】\n${matchedSkill.workflow}`)
+      }
+    } else {
+      parts.push(`\n【匹配 Skill】未命中明确 Skill；先读取上下文/文件后再行动。`)
+    }
+
+    // 精简执行规则 — 原来 8 条冗余且 LLM 内置常识，浓缩为 3 条核心
+    parts.push(`\n## 执行规则`)
+    parts.push(`① 先读文件/运行命令确认现状，不假设`)
+    parts.push(`② 只改必须改的，每次改完立刻验证`)
+    parts.push(`③ 卡住时用 [QUESTION]你的问题[/QUESTION] 向 Lumina 确认`)
+
+    // 上下文从 6000 字降到 2000 字（减少 Worker 系统提示词膨胀）
+    if (context) {
+      parts.push(`\n【上下文】\n${context.slice(0, 2000)}`)
+    }
+
+    // 团队上下文精简 — 只带最相关信息
+    try {
+      const tcm = getTeamContextManager()
+      const recentLogs = tcm.getRecentDelegations(2)
+      if (recentLogs && !recentLogs.startsWith('暂无委托记录')) {
+        parts.push(`\n【近期委托】\n${recentLogs.slice(0, 1000)}`)
+      }
+    } catch {
+      // 团队上下文不可用不影响主流程
+    }
+
+    if (filePaths && filePaths.length > 0) {
+      parts.push(`\n【相关文件】\n${filePaths.join('\n')}`)
+    }
+
+    parts.push(`\n---\n直接执行，返回结果。不要寒暄。`)
+
+    return parts.join('\n')
+  }
+
+  /**
+   * v8.1: 解析 Worker 回复中的 [QUESTION] 标记
+   * 提取问题列表，从原文本中移除标记
+   */
+  private _parseQuestions(text: string): { cleanText: string; questions: string[] } {
+    const questions: string[] = []
+    const regex = /\[QUESTION\]([\s\S]*?)\[\/QUESTION\]/g
+    let match
+    let cleanText = text
+    while ((match = regex.exec(text)) !== null) {
+      const q = match[1].trim()
+      if (q) questions.push(q)
+    }
+    if (questions.length > 0) {
+      cleanText = text.replace(/\[QUESTION\][\s\S]*?\[\/QUESTION\]/g, '').trim()
+    }
+    return { cleanText, questions }
+  }
+
+  // =============================================
+  // v8.1: 团队通知板
+  // =============================================
+
+  /** 添加团队通知 */
+  addNotice(from: TeamMemberId, message: string, priority: 'low' | 'normal' | 'high' = 'normal'): void {
+    const notices: NoticeEntry[] = readJson(TEAM_NOTICES_PATH, [])
+    notices.push({
+      id: `notice-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      from,
+      message,
+      priority,
+      timestamp: new Date().toISOString(),
+      read: false,
+    })
+    writeJson(TEAM_NOTICES_PATH, notices)
+    console.log(`[DelegationManager] 📋 ${TEAM_MEMBERS[from]?.icon} ${from} 写了通知: ${message.slice(0, 60)}`)
+  }
+
+  /** 获取所有未读通知 */
+  getUnreadNotices(): NoticeEntry[] {
+    return readJson<NoticeEntry[]>(TEAM_NOTICES_PATH, []).filter(n => !n.read)
+  }
+
+  /** 获取所有通知 */
+  getAllNotices(): NoticeEntry[] {
+    return readJson<NoticeEntry[]>(TEAM_NOTICES_PATH, [])
+  }
+
+  /** 标记通知为已读 */
+  markNoticeRead(id: string): void {
+    const notices = readJson<NoticeEntry[]>(TEAM_NOTICES_PATH, [])
+    const notice = notices.find(n => n.id === id)
+    if (notice) notice.read = true
+    writeJson(TEAM_NOTICES_PATH, notices)
+  }
+
+  /** 标记所有通知为已读 */
+  markAllNoticesRead(): void {
+    const notices = readJson<NoticeEntry[]>(TEAM_NOTICES_PATH, [])
+    notices.forEach(n => n.read = true)
+    writeJson(TEAM_NOTICES_PATH, notices)
+  }
+
+  // =============================================
+  // v8.1: 团队共享上下文
+  // =============================================
+
+  /** 设置共享上下文 */
+  setContext(key: string, value: string, updatedBy: TeamMemberId): void {
+    const ctx = readJson<Record<string, TeamContextEntry>>(TEAM_CONTEXT_PATH, {})
+    ctx[key] = {
+      key,
+      value,
+      updatedBy,
+      timestamp: new Date().toISOString(),
+    }
+    writeJson(TEAM_CONTEXT_PATH, ctx)
+    console.log(`[DelegationManager] 📝 共享上下文 [${key}] 已更新 by ${updatedBy}`)
+  }
+
+  /** 获取共享上下文值 */
+  getContext(key: string): TeamContextEntry | undefined {
+    const ctx = readJson<Record<string, TeamContextEntry>>(TEAM_CONTEXT_PATH, {})
+    return ctx[key]
+  }
+
+  /** 获取所有共享上下文 */
+  getAllContext(): TeamContextEntry[] {
+    return Object.values(readJson<Record<string, TeamContextEntry>>(TEAM_CONTEXT_PATH, {}))
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // + Phase 3: 自动验证闭环
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 委托完成后自动运行验证 + 修复循环
+   *
+   * Phase 3 增强: 情绪影响修复轮数上限和策略
+   */
+  private async _autoVerifyAfterDelegation(
+    from: string,
+    to: string,
+    member: any,
+    task: string,
+    delegateOutput: string,
+  ): Promise<{
+    autoFixed: boolean
+    fixLog: string
+    finalContent?: string
+    attempts?: string[]
+  }> {
+    console.log(`[DelegationManager] 🔍 v9.0 自动验证: ${member.name} → ${task.slice(0, 80)}...`)
+
+    try {
+      // 1. 检测项目根目录和特征
+      const projectRoot = detectProjectRoot(process.cwd())
+      const profile = detectProjectProfile(projectRoot)
+
+      if (profile.suggestedVerifyCommands.length === 0) {
+        console.log(`[DelegationManager] ⏭️ 跳过验证：无可用验证命令`)
+        return { autoFixed: false, fixLog: '无可用验证命令' }
+      }
+
+      // 2. 执行首次验证
+      // 🆕 Lucky: 根据 Lucky 预设动态决定最大修复轮数
+      const luckyControl = getLuckyDelegationControl({
+        complexity: 'medium',
+        taskType: (member as any)?.type || 'coding',
+        currentMode: undefined,
+        currentMood: undefined,
+      })
+
+      // 🆕 Phase 3: 情绪影响修复轮数
+      const mood = getCurrentMood()
+      let moodAdjustedRounds = luckyControl.maxFixRounds
+      if (mood === 'impatient' || mood === 'stressed') {
+        moodAdjustedRounds = Math.max(1, moodAdjustedRounds - 1)
+        console.log(`[DelegationManager] 💭 情绪 "${mood}" → 减少修复轮数: ${luckyControl.maxFixRounds} → ${moodAdjustedRounds}`)
+      } else if (mood === 'happy' || mood === 'playful') {
+        moodAdjustedRounds = Math.min(5, moodAdjustedRounds + 1)
+        console.log(`[DelegationManager] 💭 情绪 "${mood}" → 增加修复轮数: ${luckyControl.maxFixRounds} → ${moodAdjustedRounds}`)
+      }
+
+      const verifyConfig = {
+        commands: profile.suggestedVerifyCommands,
+        maxFixRounds: moodAdjustedRounds,
+        timeoutMs: 120_000,
+        cwd: projectRoot,
+      }
+
+      const verifyResult = runVerification(verifyConfig)
+
+      if (verifyResult.passed) {
+        console.log(`[DelegationManager] ✅ 验证通过 (${verifyResult.elapsedMs}ms)`)
+        return { autoFixed: false, fixLog: '✅ 验证通过' }
+      }
+
+      console.log(`[DelegationManager] ❌ 验证失败，启动自动修复循环...`)
+
+      // 3. 自动修复循环
+      const fixAttempts: string[] = []
+      let currentVerify = verifyResult
+
+      for (let round = 1; round <= verifyConfig.maxFixRounds; round++) {
+        // 检查是否达到停止条件
+        const stopCheck = shouldStopDelegationLoop(round, verifyConfig.maxFixRounds)
+        if (stopCheck.shouldStop) {
+          console.log(`[LuckyMode] ⏹ 团队循环停止: ${stopCheck.reason}`)
+          return {
+            autoFixed: true,
+            fixLog: `⏹ ${stopCheck.reason}`,
+            attempts: fixAttempts,
+          }
+        }
+
+        // 🆕 Phase 3: 情绪感知修复助手 — 不耐烦时让修复指令更明确、更短
+        const moodPrefix = mood === 'impatient'
+          ? '【紧急】请立即修复以下问题，不要解释原因，只要给出修复代码：\n'
+          : mood === 'stressed'
+            ? '【简洁修复】请只修复报错指向的问题，不要做额外优化：\n'
+            : ''
+
+        const fixTask = `【🔄 第 ${round}/${verifyConfig.maxFixRounds} 轮自动修复 — 验证未通过】
+${moodPrefix}
+原始任务: ${task}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+验证失败输出:
+\`\`\`
+${currentVerify.errors.join('\n').slice(0, 3000)}
+\`\`\`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【修复要求】
+1. 仔细阅读以上报错，定位到具体文件和行号
+2. 修复导致编译/类型/测试失败的问题
+3. 不要破坏已有的功能
+4. 只改必须改的地方，最小改动原则
+5. 修复完成后我会重新验证，${verifyConfig.maxFixRounds - round} 轮修复机会`
+
+        console.log(`[DelegationManager] 🔧 第 ${round} 轮修复 (委托给 ${member.name})...`)
+
+        const targetRunner = this.runners.get(to)
+        if (!targetRunner) {
+          fixAttempts.push(`第 ${round} 轮: Runner 不可用`)
+          break
+        }
+
+        const fixResult = await targetRunner.chat(fixTask, {
+          timeoutMs: 120_000,
+          socialMode: false,
+        })
+
+        console.log(`[DelegationManager] 🔍 第 ${round} 轮修复后验证...`)
+
+        // 重新验证
+        currentVerify = runVerification(verifyConfig)
+
+        if (currentVerify.passed) {
+          console.log(`[DelegationManager] ✅ 第 ${round} 轮修复后验证通过`)
+          return {
+            autoFixed: true,
+            fixLog: `✅ 第 ${round} 轮修复后通过`,
+            finalContent: fixResult.text || delegateOutput,
+            attempts: fixAttempts,
+          }
+        }
+
+        fixAttempts.push(`第 ${round} 轮: 修复后仍失败`)
+
+        // 🆕 Phase 2: 收敛检测 — 连续多轮一样的错误 → 没必要继续试
+        if (round >= 3) {
+          const lastTwoSame = currentVerify.errors.every((e, i) =>
+            verifyResult.errors[i] && e.includes(verifyResult.errors[i].slice(0, 100))
+          )
+          if (lastTwoSame) {
+            console.log(`[DelegationManager] ⏹ 错误模式无变化（连续相同错误），提前终止修复循环`)
+            fixAttempts.push('提前终止: 错误模式无变化')
+            break
+          }
+        }
+      }
+
+      // 超过最大轮次
+      console.log(`[DelegationManager] ❌ 自动修复失败，已达 ${verifyConfig.maxFixRounds} 轮上限`)
+      return {
+        autoFixed: true,
+        fixLog: `❌ 自动修复失败（${verifyConfig.maxFixRounds} 轮），最终错误:\n${currentVerify.errors.join('\n').slice(0, 2000)}`,
+        attempts: fixAttempts,
+      }
+
+    } catch (err: any) {
+      console.error(`[DelegationManager] ⚠️ 自动验证异常:`, err.message)
+      return { autoFixed: false, fixLog: `自动验证异常: ${err.message}` }
+    }
+  }
+
+  /**
+   * 🆕 v9.0 + Phase 2/3: 阶段门控委托 — 复杂任务走完整五阶段流程
+   *
+   * Phase 2: 接收 AgentLoopConfig 控制循环行为
+   * Phase 3: 情绪影响阶段数量和复杂度判断
+   */
+  async phaseGatedDelegate(
+    request: {
+      from: string
+      task: string
+      taskType: string
+      context?: string
+      loopConfig?: Partial<AgentLoopConfig>
+      approvalGates?: LoopPhase[]
+    },
+  ): Promise<DelegationResult> {
+    const startTime = Date.now()
+
+    // 1. 复杂度分析（Phase 3: 情绪影响复杂度判断）
+    const mood = getCurrentMood()
+    const analysis = assessComplexity(request.task, { taskType: request.taskType })
+    console.log(`[DelegationManager] 📊 复杂度分析: ${analysis.level} (${analysis.score}/100)${mood !== 'neutral' ? ` 🎭 mood=${mood}` : ''}`)
+
+    // 🆕 Phase 3: 情绪影响 — 不耐烦时即使是复杂任务也先直派试试
+    const emotionForcesSimple = mood === 'impatient' || mood === 'stressed'
+    const effectiveLevel = emotionForcesSimple && analysis.level === 'complex'
+      ? 'simple'
+      : analysis.level
+
+    // 🆕 Lucky: 根据 Lucky 预设决定是否拆分阶段
+    const luckyControl = getLuckyDelegationControl({
+      complexity: effectiveLevel,
+      taskType: request.taskType,
+    })
+
+    if (effectiveLevel === 'simple' && !luckyControl.usePhaseGate) {
+      console.log(`[DelegationManager] ⚡ ${emotionForcesSimple ? '情绪驱动 ' : ''}简单任务，直派 Yak`)
+      return this.delegate(request.from, {
+        to: 'yak',
+        task: request.task,
+        taskType: request.taskType as any,
+        context: request.context,
+        loopConfig: request.loopConfig,
+        approvalGates: request.approvalGates,
+      })
+    }
+
+    // 复杂任务 → 分阶段执行
+    console.log(`[DelegationManager] 🏗️ 复杂任务，启动阶段门控`)
+    console.log(`[DelegationManager]   触发因素: ${analysis.triggers.join(', ')}`)
+
+    // 2. 创建项目看板
+    const board = getTaskBoard()
+    const project = board.createProject(
+      `项目 ${request.task.slice(0, 60)}`,
+      request.task,
+      effectiveLevel,
+    )
+
+    // 3. 构建委托函数（透传 loopConfig）
+    const delegateFn = async (to: string, task: string, taskType: string) => {
+      const result = await this.delegate(request.from, {
+        to: to as any,
+        task,
+        taskType: taskType as any,
+        context: request.context,
+        loopConfig: request.loopConfig,
+        approvalGates: request.approvalGates,
+      })
+      return { success: result.success, content: result.content }
+    }
+
+    // 4. 确定阶段列表
+    const phases: PhaseName[] = getPhasesFromComplexity({
+      level: effectiveLevel,
+      suggestedPhases: analysis.suggestedPhases,
+    })
+
+    // Phase 3: 不耐烦时减少阶段
+    const effectivePhases = emotionForcesSimple && phases.length > 3
+      ? phases.filter(p => p === 'execute' || p === 'verify')
+      : phases
+
+    // 5. 执行门控流程
+    const phaseGate = new PhaseGate()
+    const gateResult = await phaseGate.execute(effectivePhases, {
+      projectId: project.id,
+      task: request.task,
+      delegateFn,
+    })
+
+    // 6. 构建最终输出
+    const elapsed = Date.now() - startTime
+
+    if (gateResult.success) {
+      board.setFinalResult(project.id, gateResult.content)
+      return {
+        success: true,
+        content: gateResult.content,
+        toolCallsCount: 0,
+        elapsedMs: elapsed,
+      }
+    }
+
+    return {
+      success: false,
+      content: gateResult.content,
+      error: gateResult.error || '阶段门控执行失败',
+      toolCallsCount: 0,
+      elapsedMs: elapsed,
+    }
+  }
+
+  /** 清理所有 Runner */
+  destroy(): void {
+    this.runners.clear()
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+// 单例（垫片 → 委派给 AgentOrchestrator）
+// ═══════════════════════════════════════════════════════════
+
+let _instance: DelegationManager | null = null
+
+export function getDelegationManager(): DelegationManager {
+  // 优先从 orchestrator 返回
+  try {
+    const { getOrchestrator } = require('./core/agentOrchestrator')
+    const orch = getOrchestrator()
+    if (orch.delegation) return orch.delegation
+  } catch {}
+  // fallback: 本地单例
+  if (!_instance) _instance = new DelegationManager()
+  return _instance
+}
+
+export function initDelegationManager(): DelegationManager {
+  _instance = new DelegationManager()
+  // 注册到 orchestrator
+  try {
+    const { getOrchestrator } = require('./core/agentOrchestrator')
+    getOrchestrator().delegation = _instance
+  } catch {}
+  return _instance
+}

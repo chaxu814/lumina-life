@@ -1,0 +1,140 @@
+{
+  "name": "lumina-life",
+  "version": "1.0.0",
+  "description": "Lumina Life 1.0 — 有生命的 AI 桌宠 · Electron 版 · 多 Agent 团队协作 · 开源 (AGPL-3.0 OR Apache-2.0)",
+  "author": "Lumina Life Team <dev@lumina-life.app>",
+  "license": "(AGPL-3.0 OR Apache-2.0)",
+  "main": "out/main/index.js",
+  "bin": {
+    "lumina": "./lumina.js"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack:win": "electron-vite build && electron-builder --win --x64",
+    "pack:mac": "electron-vite build && electron-builder --mac --x64 --arm64",
+    "pack:linux": "electron-vite build && electron-builder --linux --x64",
+    "pack:all": "electron-vite build && electron-builder --win --x64 --mac --x64 --arm64 --linux --x64",
+    "lint": "eslint electron/ src/ tests/ --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint electron/ src/ tests/ --ext .ts,.tsx,.js,.jsx --fix",
+    "typecheck": "tsc --noEmit --strict",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "electron --no-sandbox out/main/index.js --cli",
+    "api": "electron --no-sandbox out/main/index.js --api",
+    "api:dev": "cross-env LUMINA_API_ENABLED=1 LUMINA_API_PORT=3456 electron --no-sandbox out/main/index.js",
+    "doctor": "electron --no-sandbox out/main/index.js --cli doctor",
+    "chat": "electron --no-sandbox out/main/index.js --cli chat"
+  },
+  "build": {
+    "appId": "com.lumina.desktop-pet",
+    "productName": "Lumina Life",
+    "copyright": "Copyright © 2026 Lumina Life",
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "public/models",
+        "to": "models"
+      },
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
+    "files": [
+      "out/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Lumina Life"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Utility",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "lumina-life",
+      "repo": "lumina-life"
+    }
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.19",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.4.0",
+    "electron": "^40.10.1",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^3.1.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.6",
+    "eslint": "^9.10.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0"
+  },
+  "dependencies": {
+    "@unocss/preset-uno": "^66.7.5",
+    "@unocss/transformer-directives": "^66.7.5",
+    "adm-zip": "^0.5.17",
+    "better-sqlite3": "^12.10.0",
+    "clsx": "^2.1.0",
+    "cross-env": "^7.0.3",
+    "dotenv": "^17.3.1",
+    "electron-updater": "^6.8.3",
+    "i18next": "^26.3.3",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "lucide-react": "^0.400.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-i18next": "^17.0.8",
+    "screenshot-desktop": "^1.15.4",
+    "unocss": "^66.7.5",
+    "zustand": "^5.0.8"
+  }
+}
