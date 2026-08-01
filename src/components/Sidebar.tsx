@@ -129,24 +129,11 @@ const sections: { label: string; items: NavItem[] }[] = [
   { label: '主要', items: [
     { id: 'chat', label: '聊天', Icon: IconMessageCircle },
     { id: 'mail', label: '邮件', Icon: IconMail },
-    { id: 'settings', label: '设置', Icon: IconSettings },
-  ]},
-  { label: '管理', items: [
-    { id: 'more', label: '更多设置', Icon: IconSettings },
-    { id: 'plugins', label: '📦 插件面板', Icon: IconStar },
     { id: 'news', label: '📡 新闻', Icon: IconStar },
-  ]},
-  { label: '个人', items: [
     { id: 'profile', label: '个性化', Icon: IconUser },
-    { id: 'dream', label: '梦境', Icon: IconStar },
-    { id: 'bookmarks', label: '收藏夹', Icon: IconStar },
-  ]},
-  { label: '扩展', items: [
-    { id: 'knowledge', label: '知识库', Icon: IconStar },
-    { id: 'reality', label: '真人秀', Icon: IconGlobe },
-    { id: 'skilldev', label: '技能开发', Icon: IconZap },
-    { id: 'social', label: '社区', Icon: IconGlobe },
-    { id: 'familytree', label: '家谱', Icon: IconStar },
+    { id: 'teamcommunity', label: 'Lumina团队社区', Icon: IconUser },
+    { id: 'settings', label: '设置', Icon: IconSettings },
+    { id: 'more', label: '更多设置', Icon: IconSettings },
     { id: 'deepresearch', label: '深度调研', Icon: IconGlobe },
     { id: 'skillmarket', label: '技能商店', Icon: IconZap },
   ]},
@@ -311,7 +298,6 @@ export default function Sidebar() {
 
       {sections.map((section) => (
         <div key={section.label} className="sidebar-section">
-          <div className="sidebar-label">{section.label}</div>
           {section.items.map((item) => {
             const isActive = activePanel === item.id
             return (

@@ -6,7 +6,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { showToast } from '../components/Toast'  // 🆕 Lucky 场景感知 Toast
 
-export type PanelType = 'chat' | 'mail' | 'settings' | 'agent' | 'security' | 'skills' | 'usage' | 'diagnostics' | 'tasks' | 'bridge' | 'profile' | 'bookmarks' | 'knowledge' | 'skillmarket' | 'deepresearch' | 'dream' | 'reality' | 'skilldev' | 'social' | 'familytree' | 'testcoverage' | 'news' | 'team' | 'plugins' | 'more'
+export type PanelType = 'chat' | 'mail' | 'settings' | 'agent' | 'security' | 'skills' | 'usage' | 'diagnostics' | 'tasks' | 'bridge' | 'profile' | 'bookmarks' | 'knowledge' | 'skillmarket' | 'deepresearch' | 'dream' | 'reality' | 'skilldev' | 'social' | 'familytree' | 'testcoverage' | 'news' | 'team' | 'plugins' | 'more' | 'teamcommunity'
 
 export interface ChatMessage {
   id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number

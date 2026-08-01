@@ -14,7 +14,7 @@ import { mcpManager } from '../tools/impl/mcp'
 // v6.0: MultiAgentOrchestrator 已删除，使用独立 Agent 配置 + 委托管理器
 import { getAgentConfig, type AgentId } from '../agentConfig'
 import { getDelegationManager } from '../delegationManager'
-import { getMails, markRead, markAllRead, deleteMail, getUnreadCount, getTotalCount, onMailChange } from '../mailStore'
+import { getMails, markRead, markAllRead, deleteMail, getUnreadCount, getTotalCount, onMailChange, getArchivedMails, restoreMail, purgeArchivedMail } from '../mailStore'
 import { initTeamSocialEngine } from './teamIpc'
 import { fetchWithRetry } from '../llmRetry'
 import type { AgentRunConfig, AgentEvent } from '../tools/types'
@@ -593,6 +593,19 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('mail:delete', async (_event, mailId: string) => {
     return { ok: deleteMail(mailId) }
+  })
+
+  // v2.8: 归档邮件 — 删除的邮件先进归档，可恢复
+  ipcMain.handle('mail:archived-list', async () => {
+    return { mails: getArchivedMails() }
+  })
+
+  ipcMain.handle('mail:restore', async (_event, mailId: string) => {
+    return { ok: restoreMail(mailId) }
+  })
+
+  ipcMain.handle('mail:purge-archived', async (_event, mailId: string) => {
+    return { ok: purgeArchivedMail(mailId) }
   })
 
   ipcMain.handle('mail:unread-count', async () => {

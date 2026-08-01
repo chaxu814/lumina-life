@@ -9,12 +9,14 @@ interface Mail {
   read: boolean
   createdAt: number
   readAt?: number
+  deletedAt?: number  // v2.8: 归档时间（归档视图用）
 }
 
-type FilterMode = 'all' | 'unread' | 'important'
+type FilterMode = 'all' | 'unread' | 'important' | 'archive'
 
 export default function MailPanel() {
   const [mails, setMails] = useState<Mail[]>([])
+  const [archived, setArchived] = useState<Mail[]>([])
   const [unread, setUnread] = useState(0)
   const [total, setTotal] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -24,7 +26,10 @@ export default function MailPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const result = await window.luminaAPI.mailList('all')
+      const [result, archiveResult] = await Promise.all([
+        window.luminaAPI.mailList('all'),
+        window.luminaAPI.mailArchivedList(),
+      ])
       // 检测新邮件（之前不存在的 ID）
       setMails(prev => {
         const prevIds = new Set(prev.map(m => m.id))
@@ -35,6 +40,7 @@ export default function MailPanel() {
         }
         return result.mails
       })
+      setArchived(archiveResult.mails)
       setUnread(result.unread)
       setTotal(result.total)
     } catch (err) {
@@ -61,6 +67,8 @@ export default function MailPanel() {
   }
 
   const handleDelete = async (mailId: string) => {
+    // v2.8: 删除=软删除（进归档），加确认防误触
+    if (!window.confirm('确定删除这封邮件吗？可随时从「归档」中恢复。')) return
     await window.luminaAPI.mailDelete(mailId)
     if (expandedId === mailId) setExpandedId(null)
     refresh()
@@ -68,9 +76,25 @@ export default function MailPanel() {
 
   const handleDeleteAllRead = async () => {
     const readMails = mails.filter(m => m.read)
+    if (readMails.length === 0) return
+    const ok = window.confirm(
+      `确定删除 ${readMails.length} 封已读邮件吗？\n\n删除的邮件会移入「归档」，可随时恢复。`
+    )
+    if (!ok) return
     for (const m of readMails) {
       await window.luminaAPI.mailDelete(m.id)
     }
+    refresh()
+  }
+
+  const handleRestore = async (mailId: string) => {
+    await window.luminaAPI.mailRestore(mailId)
+    refresh()
+  }
+
+  const handlePurgeArchived = async (mailId: string) => {
+    if (!window.confirm('确定永久删除这封归档邮件吗？此操作不可恢复。')) return
+    await window.luminaAPI.mailPurgeArchived(mailId)
     refresh()
   }
 
@@ -148,6 +172,7 @@ export default function MailPanel() {
               { key: 'all' as FilterMode, label: '全部' },
               { key: 'unread' as FilterMode, label: `未读 ${unread}` },
               { key: 'important' as FilterMode, label: `重要 ${importantCount}` },
+              { key: 'archive' as FilterMode, label: `🗄 归档 ${archived.length}` },
             ]).map(tab => (
               <button key={tab.key}
                 onClick={() => setFilter(tab.key)}
@@ -184,10 +209,11 @@ export default function MailPanel() {
               <IconCheck size={11} /> 全部已读
             </button>
           )}
-          {readCount > 0 && (
+          {readCount > 0 && filter !== 'archive' && (
             <button className="btn btn-ghost btn-xs" onClick={handleDeleteAllRead}
-              style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
-              <IconTrash size={11} /> 清空已读
+              style={{ fontSize: 11, color: 'var(--danger-500)' }}
+              title="删除所有已读邮件（移入归档，可恢复）">
+              <IconTrash size={11} /> 删除已读
             </button>
           )}
         </div>
@@ -197,6 +223,49 @@ export default function MailPanel() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
         {loading ? (
           <EmptyState icon="⏳" text="加载中…" />
+        ) : filter === 'archive' ? (
+          archived.length === 0 ? (
+            <EmptyState icon="🗄" text="归档为空"
+              hint="删除的邮件会移入这里，可随时恢复，不再丢失" />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {archived.map((mail) => (
+                <div key={mail.id}
+                  style={{
+                    background: 'var(--surface-0)',
+                    border: '1px dashed var(--border-light)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '10px 14px',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                  <span style={{ fontSize: 16, opacity: 0.5 }}>🗄</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: 500,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {mail.subject}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      删除于 {formatTime(mail.deletedAt ?? mail.createdAt)}
+                    </div>
+                  </div>
+                  <button className="btn btn-ghost btn-xs"
+                    onClick={() => handleRestore(mail.id)}
+                    title="恢复到收件箱"
+                    style={{ fontSize: 11, color: 'var(--accent-600)' }}>
+                    恢复
+                  </button>
+                  <button className="btn btn-ghost btn-xs"
+                    onClick={() => handlePurgeArchived(mail.id)}
+                    title="永久删除（不可恢复）"
+                    style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
+                    彻底删除
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         ) : filteredMails.length === 0 ? (
           filter !== 'all' ? (
             <EmptyState icon="📭" text="没有匹配的邮件"

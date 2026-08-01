@@ -169,7 +169,8 @@ export function incrementIteration() {
 
 export async function loadFromBackend() {
   try {
-    const config = await window.luminaAPI?.luckyModeLoadConfig?.()
+    // 🐛 修复：preload 导出的是 luckyModeGetConfig，不是 luckyModeLoadConfig
+    const config = await window.luminaAPI?.luckyModeGetConfig?.()
     if (config) {
       _state = {
         ..._state,

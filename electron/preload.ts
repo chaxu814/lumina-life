@@ -507,6 +507,16 @@ const api = {
   mailDelete: (id: string) =>
     ipcRenderer.invoke('mail:delete', id) as Promise<void>,
 
+  // v2.8: 归档邮件 — 删除的邮件可在此恢复，历史不再丢失
+  mailArchivedList: () =>
+    ipcRenderer.invoke('mail:archived-list') as Promise<any>,
+
+  mailRestore: (id: string) =>
+    ipcRenderer.invoke('mail:restore', id) as Promise<{ ok: boolean }>,
+
+  mailPurgeArchived: (id: string) =>
+    ipcRenderer.invoke('mail:purge-archived', id) as Promise<{ ok: boolean }>,
+
   mailUnreadCount: () =>
     ipcRenderer.invoke('mail:unread-count') as Promise<number>,
 

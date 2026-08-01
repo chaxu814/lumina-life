@@ -1152,7 +1152,16 @@ export class AgentRunner {
     // 🔧 FIX-1: 确保 system prompt（人格+指令+工具说明）始终在消息最开头
     //   必须在 PreSearch 之前执行，否则 PreSearch 插入的 system 消息会
     //   让后续的 initSystemPrompt() 条件判断跳过执行
-    if (this.messages.length === 0 || this.messages[0]?.role !== 'system') {
+    // 🔧 2026-07-31: 群聊主回复修复 — 历史第一条是 system 欢迎消息时会误跳过注入，
+    //   导致身份/工具说明/群聊覆盖指令全部丢失（搜索不行 + 失忆开场白）。
+    //   现在：只要 messages[0] 不是"我们自己注入的 system prompt"（含 ## 自定义指令 /
+    //   ## 📢 群聊模式指令 标记），就强制 initSystemPrompt() —— 它内部会替换 messages[0]，
+    //   不会重复叠加。
+    const firstIsOurSystem = this.messages[0]?.role === 'system'
+      && typeof this.messages[0]?.content === 'string'
+      && (this.messages[0].content.includes('## 自定义指令')
+        || this.messages[0].content.includes('## 📢 群聊模式指令'))
+    if (this.messages.length === 0 || !firstIsOurSystem) {
       this.initSystemPrompt()
     }
 
@@ -1277,7 +1286,12 @@ export class AgentRunner {
         //   本地模型（Ollama/LM Studio/GGUF）不支持 function calling 的 tool role，
         //   使用 tool role 会导致空回复。云端模型（OpenAI/Claude/GLM/DeepSeek等）支持。
         const baseUrl_ = (this.config.baseUrl || '').toLowerCase()
-        const isLocalModel = baseUrl_.includes('localhost') || baseUrl_.includes('127.0.0.1') || baseUrl_.includes('0.0.0.0')
+        // 🔧 2026-07-31: 必须与 callLLM 的 isLocalModel 判断保持完全一致！
+        //   之前这里缺 192.168. → LM Studio 局域网 (127.0.0.1) 被误判为"云端"，
+        //   走 tool_call+tool role 注入；而 callLLM 又把 192.168. 判为"本地"把 tool 转 user，
+        //   导致发给模型的序列变成「伪造的未闭合 tool_calls + user 工具结果」畸形结构，
+        //   Qwen 等模型无法理解 → 空回复 → "无法生成有效回复"（搜索时必现）。
+        const isLocalModel = baseUrl_.includes('localhost') || baseUrl_.includes('127.0.0.1') || baseUrl_.includes('0.0.0.0') || baseUrl_.includes('192.168.')
 
         if (!isLocalModel) {
           // ── 云端模型：tool_call + tool role（标准函数调用格式） ──

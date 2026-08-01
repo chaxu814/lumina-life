@@ -218,10 +218,14 @@ declare global {
       cronSyncAll: (entries: Array<{ name: string; schedule: string; action: string; enabled: boolean }>) => Promise<{ ok: boolean; count?: number; error?: string }>
 
       // 📬 Agent 邮件 (v2.6)
-      mailList: (filter?: 'unread' | 'all') => Promise<{ mails: Array<{ id: string; subject: string; body: string; priority: string; read: boolean; createdAt: number; readAt?: number }>; unread: number; total: number }>
+      mailList: (filter?: 'unread' | 'all') => Promise<{ mails: Array<{ id: string; subject: string; body: string; priority: string; read: boolean; createdAt: number; readAt?: number; deletedAt?: number }>; unread: number; total: number }>
       mailMarkRead: (mailId: string) => Promise<{ ok: boolean; count?: number }>
       mailDelete: (mailId: string) => Promise<{ ok: boolean }>
       mailUnreadCount: () => Promise<{ count: number }>
+      // v2.8: 归档邮件（软删除，可恢复）
+      mailArchivedList: () => Promise<{ mails: Array<{ id: string; subject: string; body: string; priority: string; read: boolean; createdAt: number; readAt?: number; deletedAt?: number }> }>
+      mailRestore: (mailId: string) => Promise<{ ok: boolean }>
+      mailPurgeArchived: (mailId: string) => Promise<{ ok: boolean }>
       onMailChanged: (callback: (data: { unread: number; total: number }) => void) => () => void
 
       // Agent 朋友圈/Moments

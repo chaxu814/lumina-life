@@ -15,11 +15,6 @@ const SIDEBAR_ITEMS = [
   { id: 'appearance', icon: '🎨', label: '外观' },
   { id: 'push', icon: '📱', label: '推送' },
   { id: 'channels', icon: '🔗', label: '渠道' },
-  { id: 'agentPool', icon: '🏊', label: 'Agent' },
-  { id: 'routing', icon: '🧭', label: '路由' },
-  { id: 'access', icon: '🛡️', label: '权限' },
-  { id: 'modes', icon: '🎭', label: '模式' },
-  { id: 'workflow', icon: '📋', label: '工作流' },
   { id: 'security', icon: '🛡️', label: '安全中心' },
   { id: 'tasks', icon: '⏰', label: '定时任务' },
   { id: 'pet', icon: '🐱', label: '桌宠' },
@@ -224,7 +219,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             {activeSection === 'appearance' && <SettingsAppearance />}
             {activeSection === 'push' && <SettingsPush />}
             {activeSection === 'pet' && <SettingsPet />}
-            {(activeSection === 'channels' || activeSection === 'agentPool' || activeSection === 'routing' || activeSection === 'access' || activeSection === 'modes' || activeSection === 'workflow' || activeSection === 'security' || activeSection === 'tasks') && (
+            {(activeSection === 'channels' || activeSection === 'security' || activeSection === 'tasks') && (
               <SettingsPanel embedded activeTab={activeSection} onNotice={null} />
             )}
           </div>

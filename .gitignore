@@ -122,3 +122,13 @@ vk_swiftshader_icd.json
 # ── Electron packaged builds (keep app-update.yml) ──────────
 resources/app.asar
 resources/app.asar.unpacked/
+
+# ── Dev workspace files (NOT for public repo) ───────────────
+/MEMORY.md
+/PROFILE.md
+/SOUL_LUMINA.md
+/SOUL_RECHA.md
+/SOUL_YAK.md
+/AGENTS.md
+/docs/archive/
+/scripts/archive/

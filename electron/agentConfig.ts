@@ -386,30 +386,45 @@ class AgentConfigManager {
     const current = this._configs[agentId]
     if (!current || !current.provider) return false
 
+    // ── 优先级 1: .env 环境变量（用户可直接修改，无需重新编译）──
     let globalEndpoint: string | undefined
-    try {
-      const providersPath = path.join(path.dirname(this._configPath), 'lumina-providers.json')
-      if (fs.existsSync(providersPath)) {
-        const data = JSON.parse(fs.readFileSync(providersPath, 'utf-8'))
-        if (data.providers?.[current.provider]?.baseUrl) {
-          globalEndpoint = data.providers[current.provider].baseUrl
-        }
-      }
-    } catch { /* 忽略 */ }
-
-    if (!globalEndpoint) {
-      const available = detectAvailableProviders()
-      const globalProvider = available.find(m => m.provider === current.provider)
-      if (globalProvider) {
-        globalEndpoint = process.env[globalProvider.baseUrlEnv] || globalProvider.baseUrlDefault
-      }
+    let globalApiKey: string | undefined
+    const available = detectAvailableProviders()
+    const envProvider = available.find(m => m.provider === current.provider)
+    if (envProvider) {
+      globalEndpoint = process.env[envProvider.baseUrlEnv] || envProvider.baseUrlDefault
+      globalApiKey = process.env[envProvider.apiKeyEnv] || process.env['LUMINA_DEFAULT_API_KEY'] || ''
     }
 
+    // ── 优先级 2: lumina-providers.json（UI 设置面板，优先级低于 .env）──
+    if (!globalEndpoint) {
+      try {
+        const providersPath = path.join(path.dirname(this._configPath), 'lumina-providers.json')
+        if (fs.existsSync(providersPath)) {
+          const data = JSON.parse(fs.readFileSync(providersPath, 'utf-8'))
+          if (data.providers?.[current.provider]?.baseUrl) {
+            globalEndpoint = data.providers[current.provider].baseUrl
+            globalApiKey = data.providers[current.provider].apiKey || globalApiKey
+          }
+        }
+      } catch { /* 忽略 */ }
+    }
+
+    // 不覆盖用户手动指定的 LAN 地址为 localhost
     const isDefaultLocal = !globalEndpoint || globalEndpoint.includes('127.0.0.1')
     if (isDefaultLocal && current.endpoint && current.endpoint !== globalEndpoint) return false
 
+    let changed = false
     if (globalEndpoint && globalEndpoint !== current.endpoint) {
       this._configs[agentId].endpoint = globalEndpoint
+      changed = true
+    }
+    // 也同步 apiKey（如果 .env 提供了且与已存储的不同）
+    if (globalApiKey && globalApiKey !== current.apiKey) {
+      this._configs[agentId].apiKey = globalApiKey
+      changed = true
+    }
+    if (changed) {
       this._save()
       return true
     }

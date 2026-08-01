@@ -1,6 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
-import GamificationPanel from '../components/GamificationPanel'
 
 const GENDER_OPTIONS = [
   { value: 'male', label: '♂ 男', emoji: '♂️' },
@@ -185,20 +184,9 @@ function CropModal({ src, onDone, onCancel }: {
 export default function ProfilePanel() {
   const profile = useStore(s => s.profile)
   const setProfile = useStore(s => s.setProfile)
-  const profileTab = useStore(s => s.profileTab)
-  const setProfileTab = useStore(s => s.setProfileTab)
   const [tagInput, setTagInput] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [cropSrc, setCropSrc] = useState<string | null>(null)
-  // tab 切换 — 使用 store 中的 profileTab 作为默认值
-  const [activeTab, setActiveTab] = useState<'profile' | 'achievements'>(profileTab)
-
-  // 监听 store 中 profileTab 变更（来自 ⭐ 徽章点击）
-  useEffect(() => {
-    if (profileTab !== activeTab) {
-      setActiveTab(profileTab)
-    }
-  }, [profileTab])
 
   // 持久化头像加载检测 - 如果 base64 损坏则清除
   useEffect(() => {
@@ -246,34 +234,6 @@ export default function ProfilePanel() {
 
   return (
     <div style={{ padding: 20, height: '100%', overflowY: 'auto' }}>
-      {/* 🆕 v3.0: Tab 切换 */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border-light)' }}>
-        <button onClick={() => setActiveTab('profile')}
-          style={{
-            padding: '8px 16px', border: 'none', background: 'transparent',
-            fontSize: 14, fontWeight: activeTab === 'profile' ? 700 : 400,
-            color: activeTab === 'profile' ? 'var(--text-primary)' : 'var(--text-secondary)',
-            borderBottom: activeTab === 'profile' ? '2px solid #3b82f6' : '2px solid transparent',
-            cursor: 'pointer', transition: 'all 0.15s',
-          }}>
-          🎨 个性化
-        </button>
-        <button onClick={() => setActiveTab('achievements')}
-          style={{
-            padding: '8px 16px', border: 'none', background: 'transparent',
-            fontSize: 14, fontWeight: activeTab === 'achievements' ? 700 : 400,
-            color: activeTab === 'achievements' ? 'var(--text-primary)' : 'var(--text-secondary)',
-            borderBottom: activeTab === 'achievements' ? '2px solid #f59e0b' : '2px solid transparent',
-            cursor: 'pointer', transition: 'all 0.15s',
-          }}>
-          ⭐ 成就与等级
-        </button>
-      </div>
-
-      {activeTab === 'achievements' ? (
-        <GamificationPanel />
-      ) : (
-        <>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>🎨 个性化</h2>
 
       {/* ═══ 头像 ═══ */}
@@ -422,8 +382,6 @@ export default function ProfilePanel() {
           ))}
         </div>
       </div>
-        </>
-      )}
     </div>
   )
 }

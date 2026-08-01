@@ -52,6 +52,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
   })
   const [showSettings, setShowSettings] = useState(false)
   const loadedRef = useRef(false)
+  const userChangedRef = useRef(false)
 
   // 初始加载
   useEffect(() => {
@@ -62,6 +63,9 @@ export function useLuckyMode(): UseLuckyModeReturn {
       try {
         const savedConfig = await (window as any).luminaAPI?.luckyModeGetConfig?.()
         if (savedConfig) {
+          // 🐛 v3.7.2: 如果用户已经手动切换过预设，忽略异步加载结果避免覆盖
+          if (userChangedRef.current) return
+
           setSettingsState(savedConfig)
           setPresetState(savedConfig.preset)
           setRuntime((prev: LuckyRuntimeInfo) => ({
@@ -79,6 +83,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
   // 监听自定义事件（跨面板同步）
   useEffect(() => {
     const handler = (e: CustomEvent) => {
+      userChangedRef.current = true
       if (e.detail?.preset) setPresetState(e.detail.preset)
       if (e.detail?.runtime) setRuntime(e.detail.runtime)
     }
@@ -93,6 +98,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
   }
 
   const setPreset = useCallback((p: LuckyModePreset) => {
+    userChangedRef.current = true
     setPresetState(p)
     setRuntime((prev: LuckyRuntimeInfo) => ({
       ...prev,
@@ -118,6 +124,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
   }, [settings, preset, runtime])
 
   const saveSettings = useCallback((s: LuckySettingsConfig) => {
+    userChangedRef.current = true
     setSettingsState(s)
     setPresetState(s.preset)
     setRuntime((prev: LuckyRuntimeInfo) => ({

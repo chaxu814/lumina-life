@@ -15,6 +15,9 @@ import SkillDevPanel from './panels/SkillDevPanel'  // 📦 v3.0: 技能 SDK
 import SocialPanel from './panels/SocialPanel'  // 🌐 v3.0: 跨用户社交
 import FamilyTreePanel from './panels/FamilyTreePanel'  // 🌳 v3.0: Agent 家谱
 import MoreSettingsPanel from './panels/MoreSettingsPanel'  // ⚙️ v1.0: 更多设置
+import MoreSettingsModal from './components/MoreSettingsModal'  // ⚙️ v1.0: 更多设置弹窗
+import TeamCommunityModal from './components/TeamCommunityModal'  // 👥 v1.0: 团队社区弹窗
+import PersonalModal from './components/PersonalModal'  // 👤 v1.0: 个性化弹窗
 import NewsPanel from './panels/NewsPanel'  // 🆕 v1.1: 新闻早报
 import TeamPanel from './panels/TeamPanel'  // 🆕 v1.0: AI 小团队面板
 import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8.1: 插件面板
@@ -257,13 +260,25 @@ export default function App() {
             <div style={{ display: activePanel === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
               <ChatPanel />
             </div>
-            {activePanel !== 'chat' && activePanel !== 'settings' && <Panel />}
+            {activePanel !== 'chat' && activePanel !== 'settings' && activePanel !== 'teamcommunity' && activePanel !== 'more' && activePanel !== 'profile' && <Panel />}
           </main>
         </div>
       </ModeTransition>
       {/* 设置弹窗 — 覆盖在所有内容之上 */}
       {activePanel === 'settings' && (
         <SettingsModal open onClose={() => setActivePanel('chat')} />
+      )}
+      {/* Lumina团队社区弹窗 — 覆盖在所有内容之上 */}
+      {activePanel === 'teamcommunity' && (
+        <TeamCommunityModal open onClose={() => setActivePanel('chat')} />
+      )}
+      {/* 更多设置弹窗 — 覆盖在所有内容之上 */}
+      {activePanel === 'more' && (
+        <MoreSettingsModal open onClose={() => setActivePanel('chat')} />
+      )}
+      {/* 个性化弹窗 — 覆盖在所有内容之上 */}
+      {activePanel === 'profile' && (
+        <PersonalModal open onClose={() => setActivePanel('chat')} />
       )}
     </div>
   )
