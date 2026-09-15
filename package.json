@@ -1,7 +1,7 @@
 {
   "name": "lumina-life",
-  "version": "1.0.0",
-  "description": "Lumina Life 1.0 — 有生命的 AI 桌宠 · Electron 版 · 多 Agent 团队协作 · 开源 (AGPL-3.0 OR Apache-2.0)",
+  "version": "0.1.0",
+  "description": "Lumina Life — 有生命的 AI 桌宠：Electron 多 Agent 团队协作 · 开源（AGPL-3.0 OR Apache-2.0）",
   "author": "Lumina Life Team <dev@lumina-life.app>",
   "license": "(AGPL-3.0 OR Apache-2.0)",
   "main": "out/main/index.js",
