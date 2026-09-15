@@ -164,6 +164,9 @@ export class ChannelManager {
       case 'discord':
         adapter = await this.createDiscordAdapter(cfg)
         break
+      case 'openclaw':
+        adapter = await this.createOpenClawAdapter(cfg)
+        break
       default:
         console.warn(`[ChannelManager] 不支持的渠道类型: ${cfg.type}`)
         return false
@@ -244,6 +247,18 @@ export class ChannelManager {
       return new DiscordAdapter()
     } catch {
       console.warn('[ChannelManager] Discord 适配器未找到')
+      return undefined
+    }
+  }
+
+  private async createOpenClawAdapter(cfg: ChannelConfig): Promise<ChannelAdapter | undefined> {
+    try {
+      const { OpenClawAdapter } = await import('./adapters/openclaw')
+      const adapter = new OpenClawAdapter()
+      const ok = await adapter.init(cfg)
+      return ok ? adapter : undefined
+    } catch (err) {
+      console.warn('[ChannelManager] OpenClaw 适配器启动失败（不影响其它渠道）:', err)
       return undefined
     }
   }

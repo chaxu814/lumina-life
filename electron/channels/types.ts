@@ -3,7 +3,7 @@
 // ============================================================
 
 /** 渠道平台类型 */
-export type ChannelType = 'dingtalk' | 'wechat' | 'slack' | 'telegram' | 'qq' | 'discord' | 'custom'
+export type ChannelType = 'dingtalk' | 'wechat' | 'slack' | 'telegram' | 'qq' | 'discord' | 'openclaw' | 'custom'
 
 /** 渠道消息 */
 export interface ChannelMessage {

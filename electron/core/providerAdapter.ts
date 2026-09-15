@@ -201,7 +201,7 @@ export function identifyProvider(baseUrl: string): ProviderKind {
   if (url.includes('api.openai') || url.includes('openai.com')) return 'openai'
   if (url.includes('anthropic') || url.includes('claude')) return 'anthropic'
   if (url.includes('deepseek')) return 'deepseek'
-  if (url.includes('ollama') || url.includes('localhost:11434')) return 'ollama'
+  if (url.includes('ollama') || url.includes(':11434')) return 'ollama' // 兼容 127.0.0.1:11434 等等价写法
   if (url.includes('localhost') || url.includes('127.0.0.1')) return 'lmstudio'
   if (url.includes('dashscope')) return 'dashscope'
   if (url.includes('siliconflow')) return 'siliconflow'
