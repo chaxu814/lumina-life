@@ -10,7 +10,8 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build:pet-life": "esbuild electron/pet/life/runtime.ts --bundle --format=iife --global-name=LuminaLife --charset=utf8 --outfile=electron/pet/assets/pet-life.js",
+  "build": "npm run build:pet-life && electron-vite build",
     "preview": "electron-vite preview",
     "pack:win": "electron-vite build && electron-builder --win --x64",
     "pack:mac": "electron-vite build && electron-builder --mac --x64 --arm64",

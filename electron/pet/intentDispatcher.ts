@@ -22,9 +22,103 @@
 import { ipcMain, desktopCapturer } from 'electron'
 import { sendPetCommand, getPetConfig, getPetRecentEvents, getPetLastInteraction, isPetEnabled, getPetPrefs, tryPetOperate, resolvePetBrainConfig, createPetLLM } from './petWindow'
 import { PetEmotionFusion } from './emotionFusion'
+import { getMemoryStore } from '../memory/memoryStore'
+import { buildPetMemoryContext } from './petMemoryBridge'
+import { tickDrives, applyInteraction, behaviorUrges, dominantUrge, DEFAULT_DRIVES, type DriveState, type InteractionKind } from './life/drives'
+import { safePerformance } from './life/performanceDsl'
 
 // 🫀 连续情绪融合单例：LLM 每帧输出的离散 mood 经此平滑，避免情绪瞬切（详见 emotionFusion.ts）
 const petEmotion = new PetEmotionFusion()
+
+// ═══════════════════════════════════════════════════════════
+// 🫀 v0.2 生命感：内驱力 / 长期记忆 / 表演 DSL
+// ═══════════════════════════════════════════════════════════
+
+let petDrives: DriveState = { ...DEFAULT_DRIVES }
+let lastDriveTs = Date.now()
+
+function currentMoodLabel(): string {
+  try { return petEmotion.get().label } catch { return '平静 😐' }
+}
+
+/** 读取长期记忆注入文本（任何失败都安全降级为空，绝不阻塞主链路） */
+function petMemorySnippet(): string {
+  try {
+    return buildPetMemoryContext(getMemoryStore(), { maxFacts: 6, maxSummaries: 2 }).snippet
+  } catch { return '' }
+}
+
+/** 推进内驱力；kind=本次互动类型，hadInteraction=这段时间是否有人理它 */
+function advanceDrives(kind?: InteractionKind, hadInteraction?: boolean): void {
+  try {
+    const now = new Date()
+    const dtMin = Math.min(180, Math.max(0, (Date.now() - lastDriveTs) / 60000))
+    petDrives = tickDrives(petDrives, {
+      dtMin, hourOfDay: now.getHours(), sleeping: false,
+      hadInteraction: hadInteraction ?? !!kind,
+    })
+    if (kind) petDrives = applyInteraction(petDrives, kind)
+    lastDriveTs = Date.now()
+  } catch { /* 内驱力异常不影响主链路 */ }
+}
+
+const URGE_LABEL: Record<string, string> = {
+  seekAttention: '有点想被你关注、想撒娇',
+  rest: '精力偏低、有点困',
+  explore: '好奇心上来了、想东张西望',
+  play: '有活力、想玩想动',
+  calmCompanion: '安心、想安静陪着你',
+}
+
+/** 自主心跳用：当前最强内在倾向的自然语言提示 */
+function driveUrgeHint(): string {
+  try {
+    const top = dominantUrge(behaviorUrges(petDrives), 0.05)
+    return URGE_LABEL[top] ? `你当下的内在状态：${URGE_LABEL[top]}。让行为与此自然呼应，但不要把这句状态直接念出来。` : ''
+  } catch { return '' }
+}
+
+/** LLM 不可用时由内驱力指导本地行为，而非纯随机 */
+function urgeToLocalIntent(): PetIntent {
+  let k = 'calmCompanion'
+  try { k = dominantUrge(behaviorUrges(petDrives), 0.1) } catch { /* noop */ }
+  switch (k) {
+    case 'rest':
+      return Math.random() < 0.5 ? { action: 'sleep', mood: '疲惫 😩', speech: '打个小盹儿喵…' } : { action: 'idle', mood: '疲惫 😩' }
+    case 'seekAttention':
+      return { action: Math.random() < 0.5 ? 'wave' : 'say', mood: '开心 😊', speech: Math.random() < 0.5 ? '陪陪我嘛喵~' : '在忙什么呀？' }
+    case 'explore':
+      return Math.random() < 0.5 ? { action: 'walk', dir: Math.random() < 0.5 ? -1 : 1 } : { action: 'emote', motion: 0 }
+    case 'play':
+      return { action: 'emote', mood: '开心 😊' }
+    default:
+      return Math.random() < 0.5 ? { action: 'blink' } : { action: 'idle' }
+  }
+}
+
+/** 表演 DSL 白名单指引（与 pet-life.js / performanceDsl 对齐） */
+const PERFORMANCE_GUIDE = `（可选）你还可以给 "performance" 字段做更细腻的表演：
+{"expression":"开心|难过|生气|惊讶|害羞|思考|困倦","gaze":{"target":"user|left|right|up|down"},"gesture":"wave|nod|shake|think|clap|dance|happy|surprised|shrug|tilt|spread_hands|point|look_around|bounce|sad|angry","headTilt":-1到1,"effect":"heart|sparkle|stars|aura|heal","durationMs":300到6000}
+规则：主动作仍用 action 表达，performance 只补充表情/视线/特效，不要与 action 重复同一个手势；effect 要应景且克制（被夸/治愈用 heart/heal，兴奋用 sparkle/stars）；平时不必给 performance。`
+
+/** 组装给大脑的「记忆 + 当前情绪 + 内驱力 + 表演能力」增强上下文 */
+function lifeContextBlock(opts?: { urge?: boolean }): string {
+  const parts: string[] = []
+  const mem = petMemorySnippet()
+  if (mem) parts.push(mem)
+  parts.push(`你此刻的情绪是「${currentMoodLabel()}」，请保持情绪连贯，不要无理由突变。`)
+  if (opts?.urge) { const u = driveUrgeHint(); if (u) parts.push(u) }
+  parts.push(PERFORMANCE_GUIDE)
+  return '\n' + parts.join('\n')
+}
+
+/** 出口前清洗表演指令：非法/越界字段直接丢弃，绝不让不可信结构到达渲染层 */
+function sanitizePerformance(intent: PetIntent): void {
+  if (intent.performance === undefined) return
+  const cmd = safePerformance(intent.performance)
+  if (cmd) intent.performance = cmd
+  else delete intent.performance
+}
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -39,6 +133,7 @@ export interface PetIntent {
   times?: number
   duration?: number
   cu?: { type?: string; params?: Record<string, any> }  // 猫爪模式：电脑操作
+  performance?: unknown  // 🎭 v0.2 高层表演指令（表情/视线/手势/特效），出口前经白名单校验
 }
 
 export interface PetChatResult {
@@ -68,7 +163,7 @@ function buildIntentPrompt(): string {
   const operateLine = operateOn
     ? `\nLumina Pet Handling 已开启：当用户明确要求操作电脑时，可额外输出 "cu" 字段，如 {"action":"operate","cu":{"type":"open_app","params":{"app":"notepad"}}}（type 仅限 open_app/keypress/type/wait）。`
     : `\nLumina Pet Handling 未开启：不要输出 operate/cu，用户要操作电脑时用 speech 撒娇说还没拿到权限喵。`
-  return INTENT_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + operateLine
+  return INTENT_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + operateLine + lifeContextBlock()
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -175,6 +270,7 @@ export function dispatchIntent(intent: PetIntent): boolean {
   if (recentIntents.length > 6) recentIntents.shift()
   // 连续情绪融合：LLM 逐帧离散 mood 经平滑后再下发，避免上一句笑下一句哭的硬切
   if (intent.mood) intent.mood = petEmotion.next(intent.mood).label
+  sanitizePerformance(intent) // v0.2：表演 DSL 白名单清洗
   // 猫爪模式：电脑操作在主进程执行（权限门控），结果回播台词
   if (intent.action === 'operate' && intent.cu) {
     tryPetOperate(intent.cu).then(res => {
@@ -194,6 +290,7 @@ export function dispatchIntent(intent: PetIntent): boolean {
  */
 export async function petChat(userText: string): Promise<PetChatResult> {
   const text = (userText || '').trim()
+  advanceDrives('chat') // v0.2：用户主动说话，满足社交需求
   if (!text) {
     const intent = localIntent('你好')
     dispatchIntent(intent)
@@ -270,6 +367,7 @@ export async function petAutonomyTick(opts?: { screenshot?: boolean }): Promise<
   const evts = getPetRecentEvents()
   const recent = evts.length ? evts.map(e => e.type).slice(-8).join(',') : '无'
   const myRecent = recentIntents.length ? recentIntents.map(i => i.action).join(',') : '无'
+  advanceDrives(undefined, idleMin < 2) // v0.2：内驱力随时间/是否被理会自然消长
   let userContent = `当前：周${week} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}；近期互动：${recent}；距上次互动 ${idleMin} 分钟；你最近做过：${myRecent}（别重复，保持自然连贯）。请决定你的下一个行为。`
 
   // 重度模式附加屏幕快照（多模态）
@@ -286,7 +384,7 @@ export async function petAutonomyTick(opts?: { screenshot?: boolean }): Promise<
     const cfg = resolvePetBrainConfig()
     if (cfg) {
       const provider = createPetLLM(cfg)
-      const sysContent = AUTONOMY_SYSTEM_PROMPT + (PERSONA_TONES[getPetPrefs().persona || ''] || '')
+      const sysContent = AUTONOMY_SYSTEM_PROMPT + (PERSONA_TONES[getPetPrefs().persona || ''] || '') + lifeContextBlock({ urge: true })
       let res = await provider.call({
         messages: [
           { role: 'system', content: sysContent },
@@ -327,7 +425,7 @@ export async function petAutonomyTick(opts?: { screenshot?: boolean }): Promise<
     { action: 'think' },
     { action: 'idle' },
   ]
-  const intent = pool[Math.floor(Math.random() * pool.length)]
+  const intent = Math.random() < 0.85 ? urgeToLocalIntent() : pool[Math.floor(Math.random() * pool.length)]
   dispatchIntent(intent)
   return { ok: true, intent, source: 'fallback' }
 }

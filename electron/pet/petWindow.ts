@@ -11,6 +11,7 @@
 // ============================================================
 
 import { BrowserWindow, app, screen, ipcMain, desktopCapturer } from 'electron'
+import { registerLifeServicesIpc, decideScreenCapture, rememberScreenEpisode } from './lifeServices'
 import * as path from 'path'
 import * as fs from 'fs'
 import { getAgentConfig } from '../agentConfig'
@@ -145,6 +146,12 @@ export interface PetPrefs {
   micDevice?: string          // 麦克风设备 ID
   playbackDevice?: string     // 播放设备 ID
   ttsEngine?: 'edge-tts' | 'indextts'  // TTS 引擎选择
+  life?: {                    // v0.2 生命感增强开关（隐私默认保守）
+    screenGate?: boolean      // 屏幕感知节流（dHash 帧差，稳定画面不问 VLM，省 token）
+    presence?: boolean        // 摄像头在场感知（默认关，需显式授权、仅本地、指示灯）
+    wakeWord?: boolean        // 唤醒词门控（默认关，连续聆听时才生效）
+    fullDuplex?: boolean      // 全双工实时对话（默认关，依赖流式 STT/TTS 适配）
+  }
   catpaw?: {                  // Lumina Pet Handling（电脑权限）
     master?: boolean; kbm?: boolean; browser?: boolean; perception?: boolean; hud?: boolean
     desktop?: boolean; plugins?: boolean
@@ -171,6 +178,7 @@ const DEFAULT_PREFS: PetPrefs = {
   autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
   screenShare: false, voiceRecognition: false, micDevice: '', playbackDevice: '',
   ttsEngine: 'edge-tts',
+  life: { screenGate: true, presence: false, wakeWord: false, fullDuplex: false },
   catpaw: { master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false },
   secretary: {
     enabled: true, minIntervalSec: 45,
@@ -182,6 +190,7 @@ export function getPetPrefs(): PetPrefs {
   const merged = {
     ...DEFAULT_PREFS, ...saved,
     catpaw: { ...DEFAULT_PREFS.catpaw, ...(saved.catpaw || {}) },
+    life: { ...DEFAULT_PREFS.life, ...(saved.life || {}) },
     secretary: {
       ...DEFAULT_PREFS.secretary, ...(saved.secretary || {}),
       sources: { ...DEFAULT_PREFS.secretary!.sources, ...((saved.secretary || {}).sources || {}) },
@@ -197,6 +206,7 @@ export function updatePetPrefs(patch: Partial<PetPrefs>): PetPrefs {
   const next: PetPrefs = {
     ...cur, ...patch,
     catpaw: { ...cur.catpaw, ...(patch.catpaw || {}) },
+    life: { ...cur.life, ...(patch.life || {}) },
     secretary: {
       ...cur.secretary, ...(patch.secretary || {}),
       sources: { ...(cur.secretary?.sources || {}), ...((patch.secretary || {}).sources || {}) },
@@ -1010,6 +1020,7 @@ export function updatePetConfig(partial: Partial<PetConfig>, mainWin?: BrowserWi
  *   pet:command     → (channel)                主进程 → 桌宠命令
  */
 export function registerPetIpc(): void {
+  registerLifeServicesIpc() // 🫀 v0.2：模型库 / 屏幕节流 / 在场 / 唤醒 / 全双工 IPC
   // ── 开关 ────────────────────────────────────────
   ipcMain.handle('pet:toggle', (_e, enable: boolean) => {
     try {
@@ -1195,6 +1206,14 @@ export function registerPetIpc(): void {
       const src = sources[0]
       if (!src) return { ok: true, skipped: true }
       const dataUrl = src.thumbnail.toDataURL()
+      // 🫀 v0.2 屏幕节流：dHash 帧差 + 场景切换 + 低频兜底，稳定画面不花钱问 VLM
+      let sceneInfo: any = null
+      try { sceneInfo = await detectScene() } catch { sceneInfo = null }
+      let decision: any = null
+      if (getPetPrefs().life?.screenGate !== false) {
+        decision = decideScreenCapture(src.thumbnail, sceneInfo?.windowTitle || null, sceneInfo?.processName || null, Date.now())
+        if (!decision.capture) return { ok: true, skipped: true, reason: 'stable', scene: decision.scene, change: decision.change }
+      }
       console.log('[Pet] perception tick: 已截屏，size=', src.thumbnail.getSize())
       // 用已配置 LLM 做多模态分析；纯文本模型/调用失败时降级为"活动窗口标题文本观察"
       try {
@@ -1214,7 +1233,7 @@ export function registerPetIpc(): void {
           // 视觉失败 → 纯文本：用活动窗口标题做轻量观察，保证开了"屏幕感知"就一定有反应
           if (!speech) {
             let titleLine = ''
-            try { const sc = await detectScene(); if (sc?.windowTitle) titleLine = `用户当前活动窗口："${String(sc.windowTitle).slice(0, 80)}"（进程 ${sc.processName || '未知'}）。` } catch {}
+            try { if (sceneInfo?.windowTitle) titleLine = `用户当前活动窗口："${String(sceneInfo.windowTitle).slice(0, 80)}"（进程 ${sceneInfo.processName || '未知'}）。` } catch {}
             res = await provider.call({
               messages: [
                 { role: 'system', content: '你是桌宠 Lumina。你看不到屏幕截图，只知道用户的活动窗口。用一句 20 字以内、可爱自然的话轻量搭话或关心，只输出 JSON：{"speech":"..."}' },
@@ -1224,7 +1243,11 @@ export function registerPetIpc(): void {
             } as any)
             try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') speech = obj.speech } catch {}
           }
-          if (speech) { sendPetCommand({ type: 'say', text: speech }); return { ok: true, speech } }
+          if (speech) {
+          sendPetCommand({ type: 'say', text: speech })
+          if (decision) rememberScreenEpisode(decision.scene, sceneInfo?.windowTitle || null, speech)
+          return { ok: true, speech }
+        }
         }
       } catch (e) {
         console.warn('[Pet] perception LLM 分析失败:', (e as Error)?.message || e)

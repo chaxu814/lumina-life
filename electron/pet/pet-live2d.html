@@ -456,6 +456,7 @@
 <script src="assets/libs/core.min.js"></script>
 <script src="assets/libs/live2d.min.js"></script>
 <script src="assets/libs/index.min.js"></script>
+<script src="assets/pet-life.js"></script>
 </head>
 <body>
 <div id="pet-container">
@@ -671,6 +672,81 @@ const EMOTION_PARAM = {
 
 function setParam(id, v) { try { model.internalModel.coreModel.setParameterValueById(id, v); } catch (e) {} }
 
+/* ── 🫀 v0.2 生命表演引擎（pet-life.js）：统一情绪软组织 / 五元音口型 / 分层微表情 / 表演 DSL ──
+   引擎每帧只接管现有 focus/idle/motion 没有驱动的「软组织」（眉、嘴角、眼笑、五元音、脸颊、肩）；
+   头角 / 眼球 / 眼开闭 / 身体角度仍走原有 focusController 与 motion3，互不打架。 */
+let lifeEngine = null;
+let _speechAnalyser = null, _speechBuf = null;
+const LIFE_SOFT_PARAMS = new Set([
+  'ParamBrowLY','ParamBrowRY','ParamBrowLX','ParamBrowRX','ParamBrowLAngle','ParamBrowRAngle','ParamBrowLForm','ParamBrowRForm',
+  'ParamEyeLSmile','ParamEyeRSmile',
+  'ParamA','ParamI','ParamU','ParamE','ParamO','ParamMouthUp','ParamMouthDown','ParamMouthAngry',
+  'ParamCheek','ParamLeftShoulderUp','ParamRightShoulderUp'
+]);
+const LIFE_EFFECT_PARAMS = {
+  heart: ['ParamHeartMissOn','ParamHeartBackMissOn'],
+  sparkle: ['ParamHeartLightOn'], stars: ['ParamHeartLightOn'],
+  aura: ['ParamAuraOn'], heal: ['ParamHeartHealOn'],
+  smoke: ['ParamSmokeOn'], ink: ['ParamInkDropOn'], rabbit: ['ParamRabbitAppearance']
+};
+function initLifeEngine() {
+  try {
+    if (window.LuminaLife && window.LuminaLife.PetPerformanceEngine) {
+      lifeEngine = new window.LuminaLife.PetPerformanceEngine();
+      lifeEngine.setBlinkEnabled(false); // 眨眼交给模型 idle motion / 现有 doBlink
+      if (state && state.mood) lifeEngine.setMood(state.mood, performance.now());
+      console.log('[PetLife] 表演引擎已初始化');
+    } else {
+      console.warn('[PetLife] pet-life.js 未加载，软组织表演不可用');
+    }
+  } catch (e) { console.warn('[PetLife] 引擎初始化失败:', e); }
+}
+function lifeFrame(now) {
+  if (!lifeEngine || !model) return;
+  try {
+    if (_speechAnalyser && _speechBuf) {
+      _speechAnalyser.getByteTimeDomainData(_speechBuf);
+      let sum = 0;
+      for (let i = 0; i < _speechBuf.length; i++) { const x = (_speechBuf[i] - 128) / 128; sum += x * x; }
+      const rms = Math.sqrt(sum / _speechBuf.length);
+      lifeEngine.setSpeechLevel(rms > 0.02 ? Math.min(1, rms * 2.4) : 0);
+    }
+    const patches = lifeEngine.update(now);
+    for (const p of patches) if (LIFE_SOFT_PARAMS.has(p.id)) setParam(p.id, p.value);
+  } catch (e) {}
+}
+function _lifeGesture(name) {
+  switch (name) {
+    case 'wave': doWave(); break;
+    case 'nod': doNod(2); break;
+    case 'shake': doShake(2); break;
+    case 'think': doThink(); break;
+    case 'clap': doClap(); break;
+    case 'dance': doDance(); break;
+    case 'happy': doHappy(); break;
+    case 'surprised': doSurprised(); break;
+    case 'sleep': setSleep(); break;
+    case 'wake': setWake(); break;
+    case 'walk': walk(1); break;
+    case 'idle': resetPoseParams(); break;
+    default: return false;
+  }
+  return true;
+}
+function lifePerform(dsl) {
+  if (!lifeEngine || !dsl) return;
+  try {
+    const hints = lifeEngine.perform(dsl, performance.now());
+    if (hints.gesture && hints.builtin && _lifeGesture(hints.gesture)) markActionBusy(1800);
+    if (hints.effect) {
+      const ids = LIFE_EFFECT_PARAMS[hints.effect.name] || [];
+      const dur = 1600;
+      ids.forEach(id => { setParam(id, hints.effect.amount); setTimeout(() => setParam(id, 0), dur); });
+    }
+    if (hints.motion) { try { playBuiltinMotion(hints.motion, 0); markActionBusy(1800); } catch (e) {} }
+  } catch (e) {}
+}
+
 /* ── 👀 注视系统：回归 pixi-live2d-display 标准链路（对齐 N.E.K.O 的 model.focus 与 AIRI 的柔和幅度/空闲眼动）──
    不再用 setParam 覆盖眼球和头，而是把鼠标方向交给 model.focus → FocusController 做带加减速、
    帧率无关的惯性插值 → Cubism InternalModel 每帧用 addParameterValueById 把“同一个焦点”叠加到
@@ -811,6 +887,7 @@ function positionToolbar() {
 function applyEmotion(label) {
   const cfg = EMOTION_PARAM[label] || EMOTION_PARAM['平静 😐'];
   state.mood = label;
+  try { if (lifeEngine) lifeEngine.setMood(label, performance.now()); } catch (e) {}
   setParam('ParamAngleX', cfg.angleX);
   setParam('ParamAngleZ', cfg.angleZ);
   setParam('ParamEyeLOpen', cfg.eye);
@@ -1011,7 +1088,7 @@ async function speakTts(text) {
           const bytes = new Uint8Array(hex.length / 2);
           for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
           const blob = new Blob([bytes], { type: 'audio/wav' });
-          playAudioDataUrl(URL.createObjectURL(blob));
+          playAudioDataUrl(URL.createObjectURL(blob), text);
           return;
         }
       }
@@ -1022,10 +1099,10 @@ async function speakTts(text) {
 
   // Edge-TTS（默认/降级）
   ipc.invoke('edge-tts:speak', { text }).then(res => {
-    if (res && res.audio) playAudioDataUrl(res.audio);
+    if (res && res.audio) playAudioDataUrl(res.audio, text);
   }).catch(() => {});
 }
-function playAudioDataUrl(url) {
+function playAudioDataUrl(url, text) {
   try {
     _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const ctx = _audioCtx;
@@ -1039,7 +1116,18 @@ function playAudioDataUrl(url) {
         pan.pan.value = Math.max(-0.8, Math.min(0.8, (model.x / innerWidth) * 2 - 1));
         gain.connect(pan); out = pan;
       }
-      out.connect(ctx.destination); src.start();
+      out.connect(ctx.destination);
+      // 👄 v0.2 五元音口型：文本给元音形状，Analyser 实时电平给张度，结束自动闭嘴
+      try {
+        if (lifeEngine) lifeEngine.speak(text || '', performance.now());
+        const an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an);
+        _speechAnalyser = an; _speechBuf = new Uint8Array(an.fftSize);
+        src.onended = function () {
+          if (_speechAnalyser === an) { _speechAnalyser = null; _speechBuf = null; }
+          try { if (lifeEngine) lifeEngine.stopSpeak(performance.now()); } catch (e) {}
+        };
+      } catch (e) {}
+      src.start();
     }).catch(() => {});
   } catch (e) {}
 }
@@ -1312,6 +1400,8 @@ function execIntent(it) {
   if (!it || !it.action) return;
   // 统一应用情绪
   if (it.mood) applyEmotion(it.mood);
+  // 🎭 v0.2：大脑可给高层表演指令（表情/视线/手势/特效），由生命引擎安全解析
+  if (it.performance) lifePerform(it.performance);
   const hasSpeech = it.speech && String(it.speech).trim();
   switch (it.action) {
     case 'walk':
@@ -1381,6 +1471,10 @@ function execIntent(it) {
       doBlink();
       if (hasSpeech) say(it.speech);
       break;
+    case 'perform':
+        lifePerform(it.performance);
+        if (hasSpeech) say(it.speech);
+        break;
     case 'idle':
       state.walking = false; resetPoseParams();
       break;
@@ -1429,6 +1523,7 @@ function startRenderLoop() {
   app.ticker.add((dt) => {
     tickTweens();
     if (!model) return;
+    lifeFrame(performance.now()); // 🫀 v0.2 软组织微表情/五元音口型每帧驱动
     // 🔒 锁定时强制固定位置（禁止任何移动，包括走路/浮动）
     if (state.locked) {
       model.x = state.lockedX; model.y = state.lockedY; state.walking = false;
@@ -2188,6 +2283,9 @@ function buildSettingsMain() {
         <option value="Mao" selected>🌈 虹色 Mao</option>
       </select>
     </div>
+    <div class="nk-row">
+      <button id="sp-model-import" style="width:100%;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,.28);background:rgba(120,180,255,.28);color:#fff;cursor:pointer;font-size:13px;">📥 导入 Live2D 模型（.model3.json）</button>
+    </div>
     <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">模型大小</span><span class="nk-val" id="sp-scale-val">${Math.round(userScale * 100)}%</span></div>
       <input type="range" class="nk-slider" id="sp-scale" min="40" max="160" step="5" value="${Math.round(userScale * 100)}">
@@ -2341,13 +2439,34 @@ function bindSettingsPanel() {
     say(e.target.value === 'indextts' ? '已切换到 IndexTTS 语音喵~' : '已切换到 Edge TTS 语音喵~');
   };
   const mdlSel = $('sp-model-select');
-  if (mdlSel) mdlSel.onchange = e => {
-    if (HAS_IPC) {
-      ipc.invoke('pet:set-model', e.target.value).then(() => {
-        say('换装中…喵');
-        setTimeout(() => location.reload(), 600);
+  function refreshModelList(current) {
+    if (!HAS_IPC || !mdlSel) return;
+    ipc.invoke('pet:models:list').then(r => {
+      if (!r || !r.ok || !Array.isArray(r.models)) return;
+      mdlSel.innerHTML = '';
+      r.models.forEach(m => {
+        const o = document.createElement('option');
+        o.value = m.id; o.textContent = (m.builtin ? '🌈 ' : '✨ ') + m.name;
+        const curId = current ? current.id : (r.current && r.current.id);
+        if (curId === m.id) o.selected = true;
+        mdlSel.appendChild(o);
       });
-    }
+    }).catch(() => {});
+  }
+  refreshModelList(null);
+  if (mdlSel) mdlSel.onchange = e => {
+    if (!HAS_IPC) return;
+    ipc.invoke('pet:models:select', { id: e.target.value }).then(() => {
+      say('换装中…喵'); setTimeout(() => location.reload(), 600);
+    }).catch(() => {});
+  };
+  const importBtn = $('sp-model-import');
+  if (importBtn) importBtn.onclick = () => {
+    if (!HAS_IPC) return;
+    ipc.invoke('pet:models:import').then(r => {
+      if (r && r.ok) { say('模型导入成功喵~在列表里选它就换装！'); refreshModelList(r.model); }
+      else if (r && !r.canceled) say('导入失败喵：' + (r.error || '未知错误'));
+    }).catch(() => say('导入失败喵…'));
   };
   const sc = $('sp-scale');
   if (sc) {
@@ -2636,14 +2755,16 @@ async function boot() {
   startRenderLoop();
   reportProgress(35, '正在读取配置…');
   const MODEL_PATHS = { Mao: 'assets/Mao/mao_pro.model3.json' };
-  const candidates = [MODEL_PATHS.Mao];
+  let currentModel = { id: 'Mao', name: 'Mao', url: MODEL_PATHS.Mao };
+  if (HAS_IPC) { try { const cm = await ipc.invoke('pet:models:current'); if (cm && cm.url) currentModel = cm; } catch (e) {} }
+  const candidates = [currentModel.url, MODEL_PATHS.Mao];
   let loaded = false;
   reportProgress(50, '正在加载 Live2D 模型…');
   for (const src of candidates) {
     try {
       model = await Live2DModel.from(src, { autoInteract: false, autoFocus: false });
       loaded = true;
-      state.name = 'Mao';
+      state.name = (src === currentModel.url ? currentModel.name : 'Mao') || 'Mao';
       break;
     } catch (e) { console.warn('[Pet] 模型加载失败，尝试下一个:', src, e); }
   }
@@ -2674,6 +2795,7 @@ async function boot() {
 
   // 🎬 检测模型内置动作组 & 表情，启动空闲动作循环
   initMotionSystem();
+  initLifeEngine(); // 🫀 v0.2
 
   if (HAS_IPC) {
     ipc.invoke('pet:config').then(cfg => {
