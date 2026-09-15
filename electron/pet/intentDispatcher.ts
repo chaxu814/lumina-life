@@ -21,6 +21,10 @@
 
 import { ipcMain, desktopCapturer } from 'electron'
 import { sendPetCommand, getPetConfig, getPetRecentEvents, getPetLastInteraction, isPetEnabled, getPetPrefs, tryPetOperate, resolvePetBrainConfig, createPetLLM } from './petWindow'
+import { PetEmotionFusion } from './emotionFusion'
+
+// 🫀 连续情绪融合单例：LLM 每帧输出的离散 mood 经此平滑，避免情绪瞬切（详见 emotionFusion.ts）
+const petEmotion = new PetEmotionFusion()
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -169,6 +173,8 @@ const recentIntents: Array<{ action: string; speech?: string; ts: number }> = []
 export function dispatchIntent(intent: PetIntent): boolean {
   recentIntents.push({ action: intent.action, speech: intent.speech, ts: Date.now() })
   if (recentIntents.length > 6) recentIntents.shift()
+  // 连续情绪融合：LLM 逐帧离散 mood 经平滑后再下发，避免上一句笑下一句哭的硬切
+  if (intent.mood) intent.mood = petEmotion.next(intent.mood).label
   // 猫爪模式：电脑操作在主进程执行（权限门控），结果回播台词
   if (intent.action === 'operate' && intent.cu) {
     tryPetOperate(intent.cu).then(res => {
