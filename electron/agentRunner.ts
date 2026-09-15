@@ -79,6 +79,7 @@ import {
   detectedContextCache as _detectedContextCache,
   KNOWN_MODEL_WINDOWS as _KNOWN_MODEL_WINDOWS,
 } from './core/agentUtils'
+import { cleanToolNoiseText } from './agent/toolNoise'
 
 registerAllTools()
 
@@ -104,60 +105,7 @@ export function clearModelToolBlacklist(_model?: string): void {
   // 不再需要清除全局黑名单（黑名单已移除）
   // 保留此导出以避免现有调用报错
 }
-
-// ═══════════════════════════════════════════════════════════
-// 工具调用噪声过滤器 — 从 LLM 输出中剔除工具调用描述
-//   借鉴 QwenPaw: 思考过程（reasoning）和最终回复（reply）严格分离。
-//   工具调用信息属于思考面板，不应出现在用户看到的气泡内容中。
-// ═══════════════════════════════════════════════════════════
-
-/** 匹配 LLM 在文本中嵌入的工具调用描述 */
-const TOOL_NOISE_PATTERNS = [
-  // "我将使用 web_search 搜索..." 模式
-  /(?:我将|我来|我会|让我|我来试试)(?:使用|调用|通过|用)\s*(?:web_search|browser|file_read|file_write|shell_exec|git_\w+|memory_\w+)\s*(?:工具|技能)?[^。！？\n]{0,50}[。！？]?\s*/gi,
-  // "<tool_call>...</tool_call>" XML格式
-  /<tool_call>[\s\S]*?<\/tool_call>/gi,
-  // "让我换个更精准的关键词搜索" 等意图句式（输出的是"我要搜"的描述，不是实际工具调用）
-  /(?:让我|我来|我先|我去)\s*换[^。！？\n]{0,50}(?:搜索|查找|查询|检索)[：:：]?\s*/gi,
-  // 直接 <web_search>...</web_search> 等工具标记（没有外层 <tool_call>）
-  /<(web_search|browser_use|file_read|file_write|shell_exec|memory_save|memory_get)>[\s\S]*?<\/\1>/gi,
-  // 括号参数风格 <web_search(query="...")>（兼容未闭合 >）
-  /<\w+\s*\([^)]*\)\s*>/gi,
-  // 🆕 2026-07-12: 额外防护 — <web_search ...> <browser_use ...> 等未闭合标签（如 <web_search(query="xxx" engine="baidu")>）
-  /<(\w+)(?:\s[^>]*)?>[\s\S]*?<\/\1>/gi,
-  /<(web_search|browser_use|shell_exec)\s[^>]*>/gi,
-  // "正在搜索..." / "正在浏览..." 等中间状态描述
-  /(?:正在|开始)\s*(?:搜索|浏览|读取|写入|执行|调用|查询|分析|处理)\s*[。！？\n]?\s*/gi,
-  // "搜索结果显示..." / "根据搜索结果..." 元描述
-  /(?:根据|基于|按照)\s*(?:搜索结果|Bing搜索|Google搜索|百度搜索|网页内容|浏览结果)\s*[，,]\s*/gi,
-  // 孤立的工具名行
-  /^\s*(?:web_search|browser_use|file_read|file_write|shell_exec)\s*[：:]\s*$/gim,
-]
-
-/**
- * 清理 LLM 输出中的工具调用噪声文本
- * 这些内容本应由思考面板展示，不应出现在用户可见的气泡中
- */
-function cleanToolNoiseText(text: string): string {
-  let cleaned = text
-  for (const pattern of TOOL_NOISE_PATTERNS) {
-    cleaned = cleaned.replace(pattern, '')
-  }
-  // 清理多余的空行（超过 2 个连续换行 → 2 个）
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
-  // 去除首尾空白
-  cleaned = cleaned.trim()
-  // 安全兜底 — 如果清理后为空但原文不为空，保留原文
-  //   防止 TOOL_NOISE_PATTERNS 过度匹配导致合法回复被误删
-  // 原文全是 tool_call XML 标签时→不还原（否则 raw XML 泄漏到气泡）
-  if (!cleaned && text.trim()) {
-    if (/^<tool_call>[\s\S]*<\/tool_call>\s*$/i.test(text.trim())) {
-      return ''
-    }
-    return text.trim()
-  }
-  return cleaned
-}
+// 工具调用噪声过滤器已抽取到 ./agent/toolNoise（cleanToolNoiseText，行为保持不变）
 
 // ═══════════════════════════════════════════════════════════
 // XML 格式 Tool Call 解析器
@@ -1514,7 +1462,7 @@ private summarizer: ConversationSummarizer | null = null
         //   使用 tool role 会导致空回复。云端模型（OpenAI/Claude/GLM/DeepSeek等）支持。
         const baseUrl_ = (this.config.baseUrl || '').toLowerCase()
         // 🔧 2026-07-31: 必须与 callLLM 的 isLocalModel 判断保持完全一致！
-        //   之前这里缺 192.168. → LM Studio 局域网 (127.0.0.1) 被误判为"云端"，
+        //   之前这里缺 192.168. 网段判断 → LM Studio 局域网地址被误判为"云端"，
         //   走 tool_call+tool role 注入；而 callLLM 又把 192.168. 判为"本地"把 tool 转 user，
         //   导致发给模型的序列变成「伪造的未闭合 tool_calls + user 工具结果」畸形结构，
         //   Qwen 等模型无法理解 → 空回复 → "无法生成有效回复"（搜索时必现）。
