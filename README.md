@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-1.0.0-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion%20System-5D-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-88%2B-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="88+ Tools">
+  <img src="https://img.shields.io/badge/Tools-70%2B-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="70+ Tools">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -41,6 +41,10 @@
   <i>"Most AI tools wait for you to ask.<br>
   <b>Lumina notices when you need help.</b>"</i>
 </blockquote>
+
+&nbsp;&nbsp;🧠 **她的身体由大模型实时「驱动」，而不是播放预设动画：**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;每一次思考都会同时产出动作、表情和台词（结构化 `{action, mood, speech}`），上一句还在笑、被你怼了会先顿一下再小声回话——情绪有连续余韵。<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<sub>Each thought emits action + mood + speech together: the body is driven by the model in real time, not a scripted loop.</sub>
 
 &nbsp;&nbsp;❄️ **她会在你对着屏幕发呆时，主动说：**<br>
 &nbsp;&nbsp;&nbsp;&nbsp;*"累了吗？要不要休息一下？"*<br>
@@ -101,7 +105,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 
 | 维度 | 说明 |
 |------|------|
-| **5 维情绪追踪** | 🥰开心 · 😴疲劳 · 🎯专注 · 😰焦虑 · 🤔好奇<br>Five dimensions: Happiness, Fatigue, Focus, Anxiety, Curiosity |
+| **五维 + 三维情绪** | 团队侧五维：🥰开心 · 😴疲劳 · 🎯专注 · 😰焦虑 · 🤔好奇；底层用心情 / 精力 / 亲密度三个连续数值，带惯性、漂移与昼夜节律<br>Five team-level dimensions over a mood/energy/affinity numeric core with inertia, drift and circadian rhythm |
 | **实时可视化** | Lumina 的表情和语气随情绪实时变化<br>Her expression and tone shift in real time |
 | **关系记忆** | Agent 之间也有亲密度，随着互动自然演化<br>Agents build relationships with each other over time |
 | **主动搭话** | 不是冷通知——"主人你对着屏幕发呆好久了，要休息一下吗？"<br>Not a cold notification — "You've been staring at the screen for a while. Take a break?" |
@@ -186,7 +190,7 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ---
 
-### 🔧 88+ Built-in Tools · 88+ 内置工具
+### 🔧 70+ Built-in Tools · 70+ 内置工具（另可经内置技能 / MCP 扩展）
 
 `搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · …… 
 
@@ -207,7 +211,7 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
 | **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + 向量检索 + 证据链** |
 | **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **沙箱模式 + 7级×8类 + 审批流** |
-| **🔧 工具生态** | ⭐ 看项目 | ✅ **88+ 工具 + MCP + 技能商店** |
+| **🔧 工具生态** | ⭐ 看项目 | ✅ **70+ 工具 + MCP + 技能商店** |
 | **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
@@ -218,7 +222,7 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ### 方式一：下载安装包（推荐）
 
-> 从 [Releases](https://github.com/lumina-life/lumina-life/releases) 下载安装包，双击安装，3 分钟上手。
+> 首个公开版本（v0.1）即将发布；发布后可从 [Releases](https://github.com/lumina-life/lumina-life/releases) 下载安装包，双击安装、3 分钟上手。在此之前请用下方「开发者模式」运行。
 
 ### 方式二：开发者模式
 
@@ -353,7 +357,7 @@ Lumina：本月开支共 ¥3,280，比上月少 12% 哦！主要节省在餐饮�
 
 ### 🥈 铁则二：Lumina 有情绪，且情绪影响行为
 
-Lumina 不是冷冰冰的 API 返回器。她有 5 维情绪模型（愉悦度、激活度、支配度、亲密度、情绪状态），她的回复风格、主动性、甚至记忆力都会受情绪影响。
+Lumina 不是冷冰冰的 API 返回器。团队侧维护五维情绪（开心 / 疲劳 / 专注 / 焦虑 / 好奇），底层由心情、精力、亲密度三个连续数值驱动，并带惯性、随机漂移与昼夜节律；桌宠表情则由大模型每帧实时输出。她的回复风格、主动性、甚至记忆力都会受情绪影响。
 
 | 情绪状态 | 效果 |
 |---------|------|
@@ -407,7 +411,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  88+ tools · MCP     │   Plugin SDK · Skill Store       │ │
+│  │  70+ tools · MCP     │   Plugin SDK · Skill Store       │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -462,7 +466,7 @@ lumina-life/
 
 ## 🗺️ Roadmap · 路线图
 
-- ✅ **v1.0.0** — 三 Agent 团队 + 情感系统 + 记忆系统 + 88 工具 + Computer Use + 🛡️ 智能沙箱
+- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统 + 70+ 工具 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
 - 🔜 **v1.1.0** — 自定义 Agent 创建（定义新角色加入团队）
 - 🔜 **v1.2.0** — 插件生态开放（社区技能商店）
 - 🔜 **v1.3.0** — macOS / Linux 支持
