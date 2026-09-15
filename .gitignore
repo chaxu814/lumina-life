@@ -132,3 +132,22 @@ resources/app.asar.unpacked/
 /AGENTS.md
 /docs/archive/
 /scripts/archive/
+
+# ── Local agent/debug scratch (pre-open-source hygiene) ─────
+.tmp-diag/
+.cowork-temp/
+userData/
+*.before_*_fix
+*.before_perception_fix
+.tmp-*/
+
+# ── Local agent runtime configs: contain API keys / LAN endpoints, NEVER commit ──
+agents/
+
+# ── Pet prototype scratch (standalone POC, not part of the shipping tree) ──
+pet-poc/
+
+# ── Runtime-generated local state ──
+/lumina-quests.json
+electron/MEMORY.md
+
