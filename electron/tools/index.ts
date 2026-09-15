@@ -6,11 +6,12 @@
 
 import { registerTool, getToolNames, validateToolRegistry } from './registry'
 import { skillToToolDef, executeSkill, BUILTIN_SKILLS, getSkill } from './skillSystem'
-// 语音工具 (Whisper + ONNX)
+// 语音工具 (Whisper + ONNX + TTS)
 import {
   toolVoiceTranscribe,
   toolVoiceRecord,
   toolVoiceStatus,
+  toolVoiceSpeak,
 } from './impl/whisper'
 
 // Shell
@@ -43,10 +44,11 @@ import { todoDef, todo } from './impl/todo'
 import { cronDef, cronSchedule, cronListDef, cronList, cronCancelDef, cronCancel } from './impl/cron'
 // Browser
 import { browserDef, browserHandler } from './impl/browser'
+import { browserCDPDef, browserCDPHandler } from './impl/browser_cdp'
 // Git
 import { gitStatusDef, gitStatus, gitCommitDef, gitCommit, gitLogDef, gitLog, gitDiffDef, gitDiff } from './impl/git'
 // System / Image
-import { screenshotDef, screenshot, clipboardGetDef, clipboardGet, clipboardSetDef, clipboardSet } from './impl/image'
+import { screenshotDef, screenshot, clipboardGetDef, clipboardGet, clipboardSetDef, clipboardSet, imageGenerateDef, imageGenerate } from './impl/image'
 import { systemInfoDef, systemInfo, processListDef, processList, notificationDef, notification, openFileDef, openFile } from './impl/system'
 // OCR / Desktop (v2.3)
 import {
@@ -91,6 +93,8 @@ import { webFetchDef, webFetch } from './impl/webFetch'
 import { hearingDefs } from './impl/hearingTools'
 // 主动对话工具
 import { proactiveDefs } from './impl/proactiveTools'
+// 🆕 Daily Paper 工具
+import { dailyPaperDef, dailyPaperHandler } from './impl/dailyPaper'
 // 🆕 Computer Use (v2.5)
 import {
   desktopSeeDef, desktopSee,
@@ -108,6 +112,13 @@ import {
 } from './impl/mailTools'
 // 内容收集器
 import { contentCollectorDef, contentCollector } from './impl/contentCollector'
+// Creator 简化版 (Phase 3)
+import {
+  creatorOutlineDef, creatorOutlineHandler,
+  creatorGenerateDef, creatorGenerateHandler,
+  creatorExportDef, creatorExportHandler,
+  creatorEnrichDef, creatorEnrichHandler,
+} from './impl/creator'
 
 // 回忆书对话
 import { memoryChatSearchDef, memoryChatSearch } from './impl/memoryChatSearch'
@@ -176,6 +187,8 @@ export function registerAllTools(): void {
 
   // Browser
   registerTool(browserDef, browserHandler)
+  // 🆕 CDP Browser Control (Phase 3)
+  registerTool(browserCDPDef, browserCDPHandler)
 
   // Git
   registerTool(gitStatusDef, gitStatus)
@@ -193,6 +206,8 @@ export function registerAllTools(): void {
   registerTool(screenshotDef, screenshot)
   registerTool(clipboardGetDef, clipboardGet)
   registerTool(clipboardSetDef, clipboardSet)
+  // 🆕 Image Generation (Phase 3)
+  registerTool(imageGenerateDef, imageGenerate)
 
   // OCR / Desktop (v2.3)
   registerTool(ocrDef, ocr)
@@ -228,10 +243,16 @@ export function registerAllTools(): void {
     registerTool(def.def, def.handler)
   }
 
+  // 🆕 Voice Speak (Phase 3)
+  registerTool(toolVoiceSpeak, async (args: any) => toolVoiceSpeak.handler!(args))
+
   // 主动对话 (2 工具)
   for (const def of proactiveDefs) {
     registerTool(def.def, def.handler)
   }
+
+  // 🆕 Daily Paper (1 工具)
+  registerTool(dailyPaperDef, dailyPaperHandler)
 
   // 🆕 Computer Use (v2.5) — 屏幕理解 + 自动操作
   registerTool(desktopSeeDef, desktopSee)
@@ -292,6 +313,12 @@ export function registerAllTools(): void {
   registerTool(memoryChatSearchDef, memoryChatSearch)
   // 时光胶囊 (⑨)
   registerTool(timeCapsuleDef, timeCapsule)
+
+  // 🆕 Creator 简化版 (Phase 3)
+  registerTool(creatorOutlineDef, creatorOutlineHandler)
+  registerTool(creatorGenerateDef, creatorGenerateHandler)
+  registerTool(creatorExportDef, creatorExportHandler)
+  registerTool(creatorEnrichDef, creatorEnrichHandler)
 
   // ── 反幻觉工具：注册 LLM 经常自创的工具名，返回重定向提示 (ok:true 防止无限重试) ──
   // Phase C: Deep Research 工具

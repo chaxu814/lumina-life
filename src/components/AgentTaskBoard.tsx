@@ -7,6 +7,8 @@
 import React, { useState, useMemo } from 'react'
 import { useStore } from '../stores/appStore'
 import { useLLMPanels, AGENTS, type AgentTask } from '../chat/chatShared'
+import { useLoopStore } from '../stores/loopStore'
+import { cronMatches } from '../services/loopPersist'
 
 export default function AgentTaskBoard() {
   const llmState = useLLMPanels()
@@ -15,7 +17,7 @@ export default function AgentTaskBoard() {
   const conversations = useStore(s => s.conversations)
   const tokenUsage = useStore(s => s.tokenUsage)
   const toolTraces = useStore(s => s.toolTraces)
-  const [filter, setFilter] = useState<'all' | 'lumina' | 'recha' | 'yak'>('all')
+  const [filter, setFilter] = useState<'all' | 'lumina' | 'recha' | 'yak' | 'loop'>('all')
 
   const realTasks = useMemo<AgentTask[]>(() => {
     const now = Date.now()
@@ -156,9 +158,58 @@ export default function AgentTaskBoard() {
   }, [realTasks, llmTasks])
 
   const filteredTasks = useMemo(
-    () => (filter === 'all' ? allTasks : allTasks.filter(t => t.agentId === filter)),
+    () => (filter === 'all' || filter === 'loop' ? allTasks : allTasks.filter(t => t.agentId === filter)),
     [allTasks, filter]
   )
+
+  // ── Loop 相关 ──────────────────────────────────────
+  const loopTasks = useLoopStore(s => s.tasks)
+  const loopEngine = useLoopStore(s => s.engine)
+  const isLoopFilter = filter === 'loop'
+
+  /** 计算下次执行的可读文本 */
+  const nextRunText = (loop: typeof loopTasks[0]): string => {
+    const status = loop.status
+    if (status === 'paused') return '⏸ 已暂停'
+    if (status === 'done') return '⏹ 已停止'
+    if (status === 'configuring' || status === 'reviewing') return '⏳ 待确认'
+    // running — 找第一个 enabled 触发器估算
+    const trg = loop.triggers.find(t => t.enabled)
+    if (!trg) return '—'
+    if (trg.type === 'message') return '💬 由消息触发'
+    if (trg.type === 'api_event') return '📡 由事件触发'
+    const intervalMs = trg.type === 'interval' ? (trg.config?.intervalMs || 0) : 0
+    const schedule = trg.type === 'cron' ? String(trg.config?.schedule || '') : ''
+    const lastRun = loop.lastRunAt || loop.createdAt
+    if (intervalMs > 0 && lastRun) {
+      const next = new Date(lastRun + intervalMs)
+      const diffMs = next.getTime() - Date.now()
+      if (diffMs <= 0) return '🟢 立即可触发'
+      const mins = Math.round(diffMs / 60000)
+      if (mins < 60) return `${mins}分钟后`
+      return `${(mins / 60).toFixed(1)}小时后`
+    }
+    if (schedule) {
+      // 扫描未来 48 小时找下次命中
+      const now = new Date()
+      for (let i = 1; i <= 48 * 60; i++) {
+        const t = new Date(now.getTime() + i * 60000)
+        if (cronMatches(schedule, t)) {
+          const diffMs = t.getTime() - Date.now()
+          const mins = Math.round(diffMs / 60000)
+          if (mins < 60) return `${mins}分钟后`
+          return `${(mins / 60).toFixed(1)}小时后`
+        }
+      }
+      return `⏰ cron: ${schedule}`
+    }
+    return '—'
+  }
+
+  const fmtLoopTime = (ts?: number) => {
+    if (!ts) return '—'
+    return new Date(ts).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
 
   // ═══════════════════════════════════════════════════════════
   // Render
@@ -169,6 +220,7 @@ export default function AgentTaskBoard() {
     { key: 'lumina', label: 'Lumina', icon: '\uD83D\uDC31' },
     { key: 'recha', label: 'Recha', icon: '\uD83C\uDF75' },
     { key: 'yak', label: 'Yak', icon: '\uD83D\uDCCA' },
+    { key: 'loop', label: 'Loop', icon: '\uD83D\uDD01' },
   ]
 
   return (
@@ -198,7 +250,7 @@ export default function AgentTaskBoard() {
         ))}
       </div>
 
-      {filteredTasks.length === 0 && (
+      {filteredTasks.length === 0 && !isLoopFilter && (
         <div style={{
           textAlign: 'center', color: '#d1d5db', fontSize: 12, padding: '32px 0',
         }}>
@@ -206,7 +258,138 @@ export default function AgentTaskBoard() {
         </div>
       )}
 
-      {filteredTasks.map(task => {
+      {/* ═══════════════════════════════════════════════════════
+          Loop 视图（自驱任务看板）
+          ═══════════════════════════════════════════════════════ */}
+      {isLoopFilter && (
+        <>
+          {loopTasks.length === 0 && (
+            <div style={{
+              textAlign: 'center', color: '#d1d5db', fontSize: 12, padding: '32px 0',
+            }}>
+              暂无 Loop 任务。在聊天中说「帮我每天做…」自动创建，或在角色面板配置预设。
+            </div>
+          )}
+
+          {loopTasks.map(loop => {
+            const total = loop.subtasks.length
+            const done = loop.progress.completed.length
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0
+            const statusColor =
+              loop.status === 'running' ? '#10b981' :
+              loop.status === 'paused' ? '#f59e0b' :
+              loop.status === 'reviewing' ? '#3b82f6' :
+              loop.status === 'done' ? '#9ca3af' : '#a78bfa'
+            const statusLabel =
+              loop.status === 'running' ? '🟢 运行中' :
+              loop.status === 'paused' ? '⏸ 暂停' :
+              loop.status === 'reviewing' ? '👀 待确认' :
+              loop.status === 'configuring' ? '⚙️ 拆解中' : '⏹ 已停止'
+            const lastOutput = loop.outputs[loop.outputs.length - 1]
+            const isRunning = loop.status === 'running'
+
+            return (
+              <div key={loop.id} style={{
+                background: 'var(--surface-0)', borderRadius: 8, padding: '10px 12px',
+                border: '1px solid var(--border-light)', marginBottom: 8,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              }}>
+                {/* 头部：标题 + 状态 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 20 }}>🔁</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {loop.goal}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                      {statusLabel} · 已运行 {loop.runCount} 轮 · 创建于 {fmtLoopTime(loop.createdAt)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 进度条 */}
+                <div style={{
+                  height: 4, borderRadius: 2, background: 'var(--border-light)',
+                  marginBottom: 6, overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 2,
+                    background: statusColor,
+                    width: `${pct}%`,
+                    transition: 'width 0.5s ease',
+                  }} />
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  子任务 {done}/{total} · 下次：{nextRunText(loop)}
+                </div>
+
+                {/* 最近一轮产出（折叠预览） */}
+                {lastOutput && (
+                  <div style={{
+                    background: 'var(--surface-50)', borderRadius: 6, padding: '6px 8px',
+                    fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6,
+                    maxHeight: 60, overflow: 'hidden', lineHeight: 1.5,
+                    whiteSpace: 'pre-line',
+                  }}>
+                    📋 最新产出（{fmtLoopTime(lastOutput.time)}）：
+                    {'\n'}{lastOutput.content.slice(0, 150)}{lastOutput.content.length > 150 ? '…' : ''}
+                  </div>
+                )}
+
+                {/* 操作按钮 */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {loop.status === 'reviewing' && (
+                    <button onClick={() => { void loopEngine.confirmLoop(loop.id) }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer',
+                      }}>✅ 确认启动</button>
+                  )}
+                  {isRunning && (
+                    <button onClick={() => { void loopEngine.pauseLoop(loop.id) }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11,
+                        background: 'var(--surface-50)', border: '1px solid var(--border-light)', cursor: 'pointer',
+                      }}>⏸ 暂停</button>
+                  )}
+                  {loop.status === 'paused' && (
+                    <button onClick={() => { void loopEngine.resumeLoop(loop.id) }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11,
+                        background: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe', cursor: 'pointer',
+                      }}>▶️ 继续</button>
+                  )}
+                  {isRunning && (
+                    <button onClick={() => { void loopEngine.runCycle(loop.id) }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11,
+                        background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', cursor: 'pointer',
+                      }}>⚡ 立即执行</button>
+                  )}
+                  {isRunning && (
+                    <button onClick={() => { void loopEngine.stopLoop(loop.id) }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6, fontSize: 11,
+                        background: 'var(--surface-50)', border: '1px solid var(--border-light)', cursor: 'pointer',
+                      }}>⏹ 停止</button>
+                  )}
+                  <button onClick={() => { void loopEngine.removeLoop(loop.id) }}
+                    style={{
+                      padding: '3px 10px', borderRadius: 6, fontSize: 11,
+                      background: 'var(--surface-50)', border: '1px solid var(--border-light)',
+                      cursor: 'pointer', marginLeft: 'auto', color: '#dc2626',
+                    }}>🗑 删除</button>
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+          原有 Agent 视图（Lumina / Recha / Yak 任务）
+          ═══════════════════════════════════════════════════════ */}
+      {!isLoopFilter && filteredTasks.map(task => {
         const agent = AGENTS.find(a => a.id === task.agentId)
         const statusColor =
           task.status === 'done' ? '#10b981' :

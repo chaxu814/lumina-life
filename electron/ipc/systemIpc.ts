@@ -1418,7 +1418,7 @@ ipcMain.handle('news:collect', async () => {
             userInterests = scheduler.getConfig().interests
           }
         } catch {}
-        const filtered = await filterWithLLM(newItems, llmCall, { interests: userInterests })
+        const filtered = await filterWithLLM(newItems, llmCall, { interests: userInterests, maxItems: 20, minScore: 50 })
         items = filtered.map(f => f.item)
       } catch (e) {
         console.warn('[news:collect] LLM 筛选失败，使用热度降级:', e)
@@ -1575,7 +1575,7 @@ ipcMain.handle('news:collect-and-push', async () => {
 ipcMain.handle('news:fetch-quotes', async () => {
   try {
     // 复用 newsCollector 里的 collectEastMoney
-    const { DEFAULT_STOCK_WATCHLIST, StockQuote, parseEastMoneyQuote } = await import('../tools/impl/newsCollector')
+    const { DEFAULT_STOCK_WATCHLIST, parseEastMoneyQuote } = await import('../tools/impl/newsCollector')
     const { httpGet } = await import('../tools/utils/httpClient')
 
     const codes = DEFAULT_STOCK_WATCHLIST

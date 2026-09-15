@@ -7,6 +7,9 @@ import { ipcMain, app } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import { getMemoryStore, MemoryVectorStore } from '../memory/memoryStore'
+import { getSessionManager, type SessionData } from '../sessionManager'
+import { MessageHistory, isMultimodalMessage, extractMultimodalText, type MultimodalContentItem } from '../msgHistory'
+import { ScrollContext } from '../memory/scrollContext'
 
 const configPath = join(app.getPath('userData'), 'lumina-config.json')
 const memoryPath = join(app.getPath('userData'), 'lumina-memory.db')
@@ -205,18 +208,145 @@ export function registerMemoryIpc(): void {
     return { ok: success, mode: vectorStore.embeddingMode }
   })
 
+  ipcMain.handle('memory:enable-embedding-server', async (_event, params: {
+    url?: string
+  }) => {
+    const success = await vectorStore.enableEmbeddingServer(params.url)
+    if (success) {
+      saveConfig({ ...loadConfig(), embedding: { provider: 'embedding_server', url: params.url } })
+    }
+    return { ok: success, mode: vectorStore.embeddingMode }
+  })
+
   ipcMain.handle('memory:embedding-status', async () => ({
     mode: vectorStore.embeddingMode,
+    config: vectorStore.getEmbeddingConfig(),
   }))
 
-  // v2.5: 自动从配置恢复 embedding 设置
+  // 🆕 Embedding 热更新
+  ipcMain.handle('memory:update-embedding', async (_event, params: {
+    mode?: 'ollama' | 'embedding_server' | 'tfidf' | 'none'
+    ollamaUrl?: string
+    ollamaModel?: string
+    embeddingServerUrl?: string
+  }) => {
+    try {
+      if (params.mode === 'ollama' && params.ollamaUrl) {
+        await vectorStore.enableOllamaEmbedding(params.ollamaUrl, params.ollamaModel)
+      } else if (params.mode === 'embedding_server' && params.embeddingServerUrl) {
+        await vectorStore.enableEmbeddingServer(params.embeddingServerUrl)
+      }
+      
+      // 更新配置
+      const config = loadConfig()
+      config.embedding = {
+        provider: params.mode || 'tfidf',
+        url: params.ollamaUrl || params.embeddingServerUrl || '',
+        model: params.ollamaModel || '',
+      }
+      saveConfig(config)
+      
+      return { ok: true, mode: vectorStore.embeddingMode }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // ─── v2.5: Rerank 配置 ───────────────────────────
+
+  ipcMain.handle('memory:enable-rerank', async (_event, params: {
+    url?: string; model?: string; topK?: number
+  }) => {
+    const success = await vectorStore.enableRerank(params.url, params.model, params.topK)
+    if (success) {
+      saveConfig({ ...loadConfig(), rerank: { enabled: true, url: params.url, model: params.model, topK: params.topK } })
+    }
+    return { ok: success, status: vectorStore.rerankStatus }
+  })
+
+  ipcMain.handle('memory:rerank-status', async () => ({
+    ...vectorStore.rerankStatus,
+  }))
+
+  // v2.5: 自动从配置恢复 rerank 设置
   const savedConfig = loadConfig()
-  if (savedConfig.embedding?.provider === 'ollama') {
-    vectorStore.enableOllamaEmbedding(
-      savedConfig.embedding.url || 'http://localhost:11434',
-      savedConfig.embedding.model || 'nomic-embed-text'
+  if (savedConfig.rerank?.enabled) {
+    vectorStore.enableRerank(
+      savedConfig.rerank.url || 'http://localhost:11434',
+      savedConfig.rerank.model || 'bge-reranker-v2-m3',
+      savedConfig.rerank.topK || 10
     ).then(success => {
-      if (success) console.log('[MemoryIpc] ✅ 已从配置恢复 Ollama embedding')
+      if (success) console.log('[MemoryIpc] ✅ 已从配置恢复 Rerank')
     })
   }
+
+  // ─── v2.6: 成对 Q&A 检索 ──────────────────────────
+
+  // 全局 SessionManager 和 MessageHistory 实例
+  const sessionManager = getSessionManager()
+  const scrollContext = new ScrollContext()
+
+  /**
+   * 从指定会话加载消息并构建 MessageHistory
+   */
+  function loadHistoryForSession(sessionId: string): MessageHistory | null {
+    const session = sessionManager.loadSession(sessionId)
+    if (!session || !session.messages) return null
+
+    const history = new MessageHistory(session.messages, scrollContext)
+    return history
+  }
+
+  /**
+   * 从当前活跃会话加载消息
+   */
+  function loadCurrentHistory(): MessageHistory | null {
+    // 获取最近活跃的会话
+    const sessions = sessionManager.listSessions({ limit: 1 })
+    if (sessions.length === 0) return null
+    return loadHistoryForSession(sessions[0].id)
+  }
+
+  // Q&A 检索 — 按会话 ID
+  ipcMain.handle('memory:qa-search', async (_event, params: {
+    sessionId?: string
+    query?: string
+    limit?: number
+  }) => {
+    try {
+      const history = params.sessionId ? loadHistoryForSession(params.sessionId) : loadCurrentHistory()
+      if (!history) {
+        return { ok: false, error: '未找到会话历史', pairs: [] }
+      }
+
+      const pairs = params.query ? history.findQAPairs(params.query, params.limit || 10) : history.getAllQAPairs(params.limit || 50)
+      return { ok: true, pairs }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message, pairs: [] }
+    }
+  })
+
+  // Q&A 检索 — 获取所有会话的问答对
+  ipcMain.handle('memory:qa-all', async (_event, params: { limit?: number }) => {
+    try {
+      const sessions = sessionManager.listSessions({ limit: 50 })
+      const allPairs: Array<{ question: string; answer: string; sessionId: string; timestamp?: number }> = []
+
+      for (const session of sessions) {
+        const history = loadHistoryForSession(session.id)
+        if (history) {
+          const pairs = history.getAllQAPairs(params.limit || 20)
+          for (const pair of pairs) {
+            allPairs.push({ ...pair, sessionId: session.id })
+          }
+        }
+      }
+
+      // 按时间倒序
+      allPairs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+      return { ok: true, pairs: allPairs.slice(0, params.limit || 100) }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message, pairs: [] }
+    }
+  })
 }

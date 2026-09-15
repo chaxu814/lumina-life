@@ -29,6 +29,15 @@ export interface DynamicMemberRegistration {
   triggers?: string[]
   /** 注册时间 */
   registeredAt: string
+  /** ACP 配置 */
+  acpConfig?: {
+    url: string
+    apiKey: string
+    model: string
+    systemPrompt: string
+    temperature: number
+    maxTokens: number
+  }
 }
 
 /** 团队事件负载 */

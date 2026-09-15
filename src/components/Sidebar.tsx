@@ -1,14 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore, type PanelType } from '../stores/appStore'
 import {
   IconMessageCircle, IconMail, IconSettings,
-  IconZap, IconGlobe, IconUser, IconStar,
+  IconZap, IconGlobe, IconUser, IconStar, IconHeart,
 } from './Icons'
-import {
-  getEmotion, getNamedEmotion, getAgentStatus, getStatusLabel,
-  onEmotionChange, type AgentEmotion, type EmotionLabel, type AgentStatus,
-} from '../services/agentEmotion'
-import type { StatusLabel } from '../services/agentEmotion'
 import TeamLiveFeed from './TeamLiveFeed'  // 🆕 v1.0: 团队直播小窗
 
 // Sidebar XP 游戏化进度条组件
@@ -119,6 +114,62 @@ function GamificationProgressBar() {
   )
 }
 
+// ─── 桌宠快捷开关：放在左侧栏 ───
+function PetSidebarToggle() {
+  const [petRunning, setPetRunning] = useState(false)
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const status = await (window as any).luminaAPI?.petStatus?.()
+        setPetRunning(!!status)
+      } catch {}
+    })()
+    // 主进程状态广播：开关即时同步，无需额外点击刷新
+    const unsub = (window as any).luminaAPI?.onPetState?.((running: boolean) => {
+      setPetRunning(!!running)
+    })
+    return () => { unsub?.() }
+  }, [])
+  const toggle = async () => {
+    const next = !petRunning
+    try {
+      const res = await (window as any).luminaAPI?.petToggle?.(next)
+      if (res?.ok) setPetRunning(next)
+    } catch {}
+  }
+  return (
+    <button
+      onClick={toggle}
+      title={petRunning ? '关闭 Lumina Virtual Pet' : '开启 Lumina Virtual Pet'}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px',
+        margin: '0 6px 4px', background: 'var(--surface-100)',
+        borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)',
+        cursor: 'pointer', userSelect: 'none',
+      }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>🐾 Lumina Virtual Pet</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: petRunning ? '#10b981' : 'var(--text-disabled, #9ca3af)' }}>
+            {petRunning ? '运行中' : '已关闭'}
+          </span>
+          <div style={{
+            width: 32, height: 18, borderRadius: 9,
+            background: petRunning ? 'var(--accent-500, #ec4899)' : 'rgba(0,0,0,0.12)',
+            position: 'relative', transition: 'background .2s',
+          }}>
+            <div style={{
+              position: 'absolute', top: 2, width: 14, height: 14, borderRadius: 7,
+              background: '#fff', transition: 'left .2s',
+              left: petRunning ? 16 : 2, boxShadow: '0 1px 3px rgba(0,0,0,.3)',
+            }} />
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ─── 导航项类型 ───
 
 interface NavItem {
@@ -136,142 +187,11 @@ const sections: { label: string; items: NavItem[] }[] = [
     { id: 'more', label: '更多设置', Icon: IconSettings },
     { id: 'deepresearch', label: '深度调研', Icon: IconGlobe },
     { id: 'skillmarket', label: '技能商店', Icon: IconZap },
+
   ]},
 ]
 
-// ─── Agent 元数据 ──────────────────────────────────────
-const AGENT_META: Record<string, { id: string; name: string; icon: string; color: string }> = {
-  lumina: { id: 'lumina', name: 'Lumina', icon: '🐱', color: '#FF6B6B' },
-  recha:  { id: 'recha',  name: '热茶',   icon: '🍵', color: '#448AFF' },
-  yak:    { id: 'yak',    name: 'Yak',    icon: '📊', color: '#43A047' },
-}
-const SIDEBAR_AGENTS = ['lumina', 'recha', 'yak']
-
-// ─── 单 Agent 状态行 ─────────────────────────────────────
-function AgentStatusRow({
-  agentId, meta, emotion, label, status, statusLabel,
-}: {
-  agentId: string
-  meta: typeof AGENT_META['lumina']
-  emotion: AgentEmotion
-  label: EmotionLabel
-  status: AgentStatus
-  statusLabel: StatusLabel
-}) {
-  // 情绪值 → 横向进度条宽度
-  const moodPct = ((emotion.mood + 1) / 2 * 100).toFixed(0)
-  const energyPct = (emotion.energy * 100).toFixed(0)
-  const statusColor = statusLabel.color
-
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 6px', borderRadius: 6,
-      background: `${label.color}10`,
-      border: `1px solid ${label.color}18`,
-      fontSize: 12, lineHeight: 1.3,
-      width: '100%',
-    }}>
-      {/* 状态点 */}
-      <div style={{
-        width: 8, height: 8, borderRadius: 4,
-        background: statusColor,
-        boxShadow: `0 0 8px ${statusColor}88`,
-        flexShrink: 0,
-      }} title={statusLabel.label} />
-      {/* 图标 */}
-      <span style={{ fontSize: 15, flexShrink: 0 }}>{meta.icon}</span>
-      {/* 名称 */}
-      <span style={{ fontWeight: 700, color: meta.color, flexShrink: 0, fontSize: 12 }}>
-        {meta.name}
-      </span>
-      {/* 情绪标签 */}
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 2,
-        padding: '0 5px', borderRadius: 8,
-        background: `${label.color}18`,
-        border: `1px solid ${label.color}25`,
-        fontSize: 10, fontWeight: 600, color: label.color,
-        whiteSpace: 'nowrap', flexShrink: 0,
-      }}>
-        {label.icon} {label.label}
-      </span>
-      {/* 弹性空间 */}
-      <div style={{ flex: 1 }} />
-      {/* 微能量条（2px 高细条） */}
-      <div style={{
-        width: 28, height: 3, borderRadius: 2,
-        background: 'var(--border-light)',
-        overflow: 'hidden', flexShrink: 0,
-      }}>
-        <div style={{
-          width: `${energyPct}%`, height: '100%',
-          borderRadius: 2,
-          background: `linear-gradient(90deg, ${statusColor}88, ${statusColor})`,
-          transition: 'width 0.4s ease',
-        }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── 团队状态面板 ───────────────────────────────────────
-function TeamStatusPanel() {
-  const [, setTick] = useState(0)
-  const forceUpdate = useCallback(() => setTick(t => t + 1), [])
-
-  useEffect(() => {
-    const unsub = onEmotionChange(() => forceUpdate())
-    // 同时监听状态变更（setAgentStatus 触发的是 DOM 事件）
-    const onStatus = () => forceUpdate()
-    window.addEventListener('agent:status-changed', onStatus)
-    window.addEventListener('agent:emotion-manual', onStatus)
-    window.addEventListener('agent:emotion-auto', onStatus)
-    return () => {
-      unsub()
-      window.removeEventListener('agent:status-changed', onStatus)
-      window.removeEventListener('agent:emotion-manual', onStatus)
-      window.removeEventListener('agent:emotion-auto', onStatus)
-    }
-  }, [forceUpdate])
-
-  return (
-    <div style={{
-      marginBottom: 6, padding: '8px 6px 6px',
-      background: 'var(--surface-100)',
-      borderRadius: 'var(--radius-md)',
-      border: '1px solid var(--border-light)',
-    }}>
-      {/* 标题 */}
-      <div style={{
-        fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)',
-        letterSpacing: 1, textTransform: 'uppercase',
-        padding: '0 2px 5px',
-        display: 'flex', alignItems: 'center', gap: 4,
-      }}>
-        <span>🤖 团队状态</span>
-      </div>
-      {/* Agent 列表（垂直排列） */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {SIDEBAR_AGENTS.map(id => {
-          const meta = AGENT_META[id]
-          if (!meta) return null
-          const emotion = getEmotion(id)
-          const label = getNamedEmotion(id)
-          const status = getAgentStatus(id) as AgentStatus
-          const statusLabel = getStatusLabel(status)
-          return (
-            <AgentStatusRow key={id}
-              agentId={id} meta={meta}
-              emotion={emotion} label={label}
-              status={status} statusLabel={statusLabel}
-            />
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+// 🆕 团队状态已移至 TopBar 顶部栏显示
 
 // ═══════════════════════════════════════════════════════════
 // 主组件
@@ -289,12 +209,21 @@ export default function Sidebar() {
     return cleanup
   }, [])
 
+  // 🆕 窄屏自适应：DevTools 打开或简约模式时只显示图标
+  const compactMode = useStore((s) => s.compactMode)
+  const [devtoolsOpen, setDevtoolsOpen] = useState(false)
+  useEffect(() => {
+    const api = (window as any).luminaAPI
+    if (!api?.onDevToolsChanged) return
+    return api.onDevToolsChanged((opened: boolean) => setDevtoolsOpen(opened))
+  }, [])
+  const compact = compactMode || devtoolsOpen
+
   return (
-    <nav className="sidebar">
+    <nav className={`sidebar${compact ? ' sidebar-compact' : ''}`}>
       {/* 滚动内容区 — TeamLiveFeed 和 footer 始终固定底部 */}
       <div className="sidebar-scroll">
-      {/* ═══ 团队状态 ═══ */}
-      <TeamStatusPanel />
+      {/* 🆕 团队状态已移至 TopBar 顶部栏显示 */}
 
       {sections.map((section) => (
         <div key={section.label} className="sidebar-section">
@@ -306,7 +235,7 @@ export default function Sidebar() {
                 onClick={() => setActivePanel(item.id)}
                 style={{ position: 'relative' }}>
                 <item.Icon size={18} />
-                <span>{item.label}</span>
+                {!compact && <span>{item.label}</span>}
                 {/* 未读邮件角标 */}
                 {item.id === 'mail' && mailUnread > 0 && (
                   <span style={{
@@ -334,17 +263,20 @@ export default function Sidebar() {
         </div>
       ))}
 
+      {/* 🐱 桌宠快捷开关（左侧栏） */}
+      <PetSidebarToggle />
+
         {/* spacer pushes everything below to the bottom */}
         <div className="sidebar-spacer" />
       </div>  {/* closes sidebar-scroll */}
 
       {/* 🆕 v1.0: 团队直播小窗 — 始终在底部可见 */}
-      <TeamLiveFeed />
+      {!compact && <TeamLiveFeed />}
 
       {/* 🆕 v3.1: XP 进度条（游戏化青铜档） */}
-      <GamificationProgressBar />
+      {!compact && <GamificationProgressBar />}
 
-      <div className="sidebar-footer">
+      {!compact && <div className="sidebar-footer">
         <div className="sidebar-footer-box">
           <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Lumina Life 1.0</span>
         </div>
@@ -380,7 +312,7 @@ export default function Sidebar() {
             开发者工具
           </button>
         </div>
-      </div>
+      </div>}
     </nav>
   )
 }

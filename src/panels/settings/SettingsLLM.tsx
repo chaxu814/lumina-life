@@ -81,6 +81,7 @@ export default function SettingsLLM() {
   const [llmMsg, setLlmMsg] = useState('')
   const [fetchingModels, setFetchingModels] = useState(false)
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; multimodal?: boolean; vision?: boolean }> | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [savingProvider, setSavingProvider] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
@@ -100,7 +101,7 @@ export default function SettingsLLM() {
   const commitContextWindow = () => {
     if (ctxDraft === null) return
     const n = parseInt(ctxDraft, 10)
-    if (!isNaN(n) && n >= 0 && n <= 1048576) setLLMConfig({ contextWindow: n })
+    if (!isNaN(n) && n >= 0 && n <= 2_097_152) setLLMConfig({ contextWindow: n })
     setCtxDraft(null)
   }
 
@@ -108,6 +109,7 @@ export default function SettingsLLM() {
   const [agentLlmConfigs, setAgentLlmConfigs] = useState<Record<string, any>>({})
   const [teamFetchingModel, setTeamFetchingModel] = useState<string | null>(null)
   const [teamAvailableModels, setTeamAvailableModels] = useState<Record<string, Array<{ id: string; multimodal?: boolean; vision?: boolean }>>>({})
+  const [teamFetchError, setTeamFetchError] = useState<Record<string, string>>({})
   const [teamShowModelPicker, setTeamShowModelPicker] = useState<string | null>(null)
   const [teamAdvancedOpen, setTeamAdvancedOpen] = useState<Record<string, boolean>>({})
   const [teamShowApiKey, setTeamShowApiKey] = useState<Record<string, boolean>>({})
@@ -155,6 +157,25 @@ export default function SettingsLLM() {
         baseUrl, apiKey: apiKey || '', model, enabled: true, timeout: 600, maxContextTokens: 256000,
       })
       await window.luminaAPI?.providerSetActive?.(provider)
+
+      // 刷新前端缓存，避免界面仍显示旧值
+      try {
+        const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
+        if (r?.configs) setAgentLlmConfigs(r.configs)
+        const all = await window.luminaAPI?.providerGetAll?.()
+        if (all?.activeProviderId) {
+          const active = all.configs[all.activeProviderId]
+          if (active) {
+            useStore.getState().setLLMConfig({
+              provider: all.activeProviderId,
+              baseUrl: active.baseUrl || '',
+              apiKey: active.apiKey || '',
+              model: active.model || '',
+            })
+          }
+        }
+      } catch { /* 刷新失败不影响保存成功提示 */ }
+
       setLlmOnline(true); setLlmChecked(true)
       setNotice(`✅ 供应商配置已保存 (${provider})`)
     } catch (e: any) { setNotice('❌ 保存失败: ' + (e.message || e)) }
@@ -167,17 +188,24 @@ export default function SettingsLLM() {
     if (!baseUrl) return
     setShowModelPicker(true)
     setAvailableModels(null)
+    setFetchError(null)
     setFetchingModels(true)
+    let lastError = ''
     try {
+      // 优先走 provider 系统；传入界面当前填写的地址/密钥（无需先保存）
       if (window.luminaAPI?.providerFetchModels && provider) {
-        const res = await window.luminaAPI.providerFetchModels(provider)
+        const res = await window.luminaAPI.providerFetchModels(provider, { baseUrl, apiKey: apiKey || '' })
         if (res?.models && res.models.length > 0) { setAvailableModels(res.models); setFetchingModels(false); return }
+        if (res?.error) lastError = res.error
       }
-    } catch {}
+    } catch (e: any) { lastError = e.message || String(e) }
     try {
+      // 回退：llm:fetchModels（内置 LM Studio/Ollama 多端点识别）
       const res = await window.luminaAPI?.llmFetchModels?.({ baseUrl, apiKey: apiKey || '' })
-      if (res?.models) setAvailableModels(res.models)
-    } catch {}
+      if (res?.models && res.models.length > 0) { setAvailableModels(res.models); setFetchingModels(false); return }
+      if (res?.error) lastError = res.error || lastError
+    } catch (e: any) { lastError = lastError || e.message || String(e) }
+    setFetchError(lastError || '获取模型列表失败，请检查 API 地址和密钥')
     setFetchingModels(false)
   }
 
@@ -187,11 +215,18 @@ export default function SettingsLLM() {
     if (!cfg?.endpoint) return
     setTeamShowModelPicker(agentId)
     setTeamAvailableModels(prev => ({ ...prev, [agentId]: null as any }))
+    setTeamFetchError(prev => ({ ...prev, [agentId]: '' }))
     setTeamFetchingModel(agentId)
     try {
       const res = await window.luminaAPI?.llmFetchModels?.({ baseUrl: cfg.endpoint, apiKey: cfg.apiKey || '' })
-      if (res?.models) setTeamAvailableModels(prev => ({ ...prev, [agentId]: res.models }))
-    } catch {}
+      if (res?.models && res.models.length > 0) {
+        setTeamAvailableModels(prev => ({ ...prev, [agentId]: res.models }))
+      } else {
+        setTeamFetchError(prev => ({ ...prev, [agentId]: res?.error || '未获取到模型' }))
+      }
+    } catch (e: any) {
+      setTeamFetchError(prev => ({ ...prev, [agentId]: e.message || '获取模型列表失败' }))
+    }
     setTeamFetchingModel(null)
   }
 
@@ -208,6 +243,7 @@ export default function SettingsLLM() {
         endpoint: cfg.endpoint || llmConfig.baseUrl,
         apiKey: cfg.apiKey || llmConfig.apiKey,
         timeout: cfg.timeout || 600,
+        maxContextTokens: cfg.maxContextTokens || 262144,
       })
       if (res && res.success === false) { setNotice('❌ 保存失败: ' + (res.error || '后端未知错误')); return }
       const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
@@ -220,7 +256,7 @@ export default function SettingsLLM() {
      RENDER
      ══════════════════════════════════════ */
   const inputS = {
-    width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12,
+    width: '100%', height: 32, padding: '7px 10px', borderRadius: 6, fontSize: 12,
     border: '1.5px solid var(--border-light)', outline: 'none',
     background: 'var(--surface-0)', color: 'var(--text-primary)',
     boxSizing: 'border-box' as const, transition: 'border-color 0.15s',
@@ -341,14 +377,15 @@ export default function SettingsLLM() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <div style={{ flex: 1, position: 'relative' }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>模型</label>
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
                   <input style={{ flex: 1, ...inputS }} value={llmConfig.model}
                     onChange={e => setLLMConfig({ model: e.target.value })}
                     placeholder="gpt-4o" />
                   {llmConfig.baseUrl && (
                     <button onClick={fetchModels} disabled={fetchingModels}
                       style={{
-                        padding: '6px 10px', borderRadius: 6, fontSize: 11,
+                        padding: '0 12px', height: 32, borderRadius: 6, fontSize: 12,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                         cursor: fetchingModels ? 'wait' : 'pointer',
                         border: '1px solid var(--border-light)', background: 'var(--surface-0)',
                         color: 'var(--text-secondary)', whiteSpace: 'nowrap',
@@ -363,6 +400,7 @@ export default function SettingsLLM() {
                   onSelect={(m) => setLLMConfig({ model: m })}
                   onClose={() => setShowModelPicker(false)} isFetching={fetchingModels}
                   baseUrl={llmConfig.baseUrl} apiKey={llmConfig.apiKey}
+                  error={fetchError}
                   onTestConnection={async (modelId) => {
                     const { baseUrl, apiKey } = useStore.getState().llmConfig
                     try {
@@ -373,7 +411,7 @@ export default function SettingsLLM() {
                   }}
                 />
               </div>
-              <div style={{ flex: '0 0 100px' }}>
+              <div style={{ flex: '0 0 110px' }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>温度</label>
                 <input style={{ ...inputS }} type="number" min="0" max="2" step="0.1"
                   value={llmConfig.temperature ?? 0.7}
@@ -398,13 +436,16 @@ export default function SettingsLLM() {
                     onChange={e => setCtxDraft(e.target.value)}
                     onBlur={commitContextWindow}
                     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>
+                    0=自动检测 · 常用: 131072(128K) / 262144(256K) / 1048576(1M)
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* 操作栏 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <SettingBtn variant="success" onClick={saveProviderToBackend} disabled={savingProvider} loading={savingProvider}>
               💾 保存配置
             </SettingBtn>
@@ -596,6 +637,7 @@ export default function SettingsLLM() {
                         onClose={() => setTeamShowModelPicker(null)}
                         isFetching={teamFetchingModel === agent.id}
                         baseUrl={cfg.endpoint} apiKey={cfg.apiKey}
+                        error={teamFetchError[agent.id] || null}
                         onTestConnection={async (modelId) => {
                           try {
                             const res = await window.luminaAPI?.llmTestConnection?.({ baseUrl: cfg.endpoint, apiKey: cfg.apiKey || '', model: modelId })
@@ -638,8 +680,8 @@ export default function SettingsLLM() {
                         <div>
                           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>最大输出 (tokens)</div>
                           <input type="number" min="1" max="524288" style={{ width: '100%', padding: '5px 8px', borderRadius: 5, fontSize: 11, border: '1.5px solid var(--border-light)', outline: 'none', background: 'var(--surface-0)', boxSizing: 'border-box' }}
-                            value={cfg.maxTokens ?? 4096}
-                            onChange={e => setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: { ...cfg, maxTokens: Math.min(parseInt(e.target.value) || 4096, 524288) } }))} />
+                            value={cfg.maxContextTokens ?? 262144}
+                            onChange={e => setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: { ...cfg, maxContextTokens: Math.min(parseInt(e.target.value) || 262144, 1048576) } }))} />
                         </div>
                         <div>
                           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>上下文窗口</div>

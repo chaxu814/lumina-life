@@ -18,6 +18,10 @@
 // 热搜感知流程:
 //   获取B站/微博热搜 → LLM评估与用户相关性 → 生成搭话
 //   "今天热搜上有XX事件，你有关注吗？"
+//
+// 🆕 Daily Paper 流程:
+//   获取arXiv论文 → LLM筛选与摘要 → 生成每日论文推送
+//   "今日arXiv精选: XX论文，简述..."
 // ============================================================
 
 import { EventEmitter } from 'events'
@@ -29,16 +33,20 @@ import https from 'https'
 import http from 'http'
 import screenshot from 'screenshot-desktop'
 import { Notification } from 'electron'
+import { stripMarkdown } from './utils/stripMarkdown'
 import { globalEventBus, BusEvents } from './eventBus'
 import { postObservation, postThought } from './moments/autoPoster'  // 🌸 v2.10
+import { hasTodayMomentWithKeyword } from './moments/momentsStore'  // 🔧 v2.12: 每日去重
 import { llmCoordinator, PRIORITY } from './llmCoordinator'  // 🆕 v2.18: 智能 LLM 调度
 import { getUsageStats } from './usageStats'  // 📊 v3.0: 使用数据统计
+import { getAgentConfig } from './agentConfig'  // 配置访问
+import { collectAll, type NewsItem } from './tools/impl/newsCollector'  // 🆕 Daily Paper
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
 // ═══════════════════════════════════════════════════════════
 
-export type TriggerType = 'time' | 'idle' | 'event' | 'opportunity' | 'screen_watch' | 'hot_topic' | 'personal_rhythm'
+export type TriggerType = 'time' | 'idle' | 'event' | 'opportunity' | 'screen_watch' | 'hot_topic' | 'personal_rhythm' | 'daily_paper'
 
 export interface ProactiveTrigger {
   id: string
@@ -78,6 +86,10 @@ export interface ProactiveConfig {
   screenWatchEnabled: boolean
   /** 🆕 是否启用热搜感知 */
   hotTopicEnabled: boolean
+  /** 🆕 Daily Paper 检查间隔 (秒)，默认 86400 (24小时) */
+  dailyPaperIntervalSeconds: number
+  /** 🆕 是否启用 Daily Paper */
+  dailyPaperEnabled: boolean
   /** 🔔 v2.9/v6.x: 是否启用 Windows 弹窗通知 */
   notificationsEnabled: boolean
 }
@@ -94,7 +106,7 @@ function safeNotify(title: string, body: string, icon?: string): void {
       notify.requestPermission(() => { /* noop */ })
     }
 
-    const n = new Notification({ title, body, icon, silent: false })
+    const n = new Notification({ title: stripMarkdown(title), body: stripMarkdown(body), icon, silent: false })
     n.on('click', () => {
       try {
         // 优先使用应用主窗口单例，避免 getMainWindow  thinly 问题
@@ -505,6 +517,102 @@ async function evaluateHotTopics(topics: HotTopic[]): Promise<string | null> {
 }
 
 // ═══════════════════════════════════════════════════════════
+// 🆕 Daily Paper 模块
+// ═══════════════════════════════════════════════════════════
+
+interface Paper {
+  title: string
+  source: string
+  url: string
+  summary: string
+}
+
+/** 获取arXiv论文列表 (复用newsCollector) */
+async function fetchArxivPapers(): Promise<Paper[]> {
+  try {
+    const items = await collectAll({ arxiv: true, rss: false, baidu: false })
+    return items
+      .filter((item: NewsItem) => item.category === 'paper')
+      .slice(0, 15)
+      .map((item: NewsItem) => ({
+        title: item.title,
+        source: item.source,
+        url: item.url,
+        summary: item.summary.slice(0, 300),
+      }))
+  } catch {
+    return []
+  }
+}
+
+/** LLM 评估论文并生成每日精选摘要 */
+async function evaluateDailyPapers(papers: Paper[]): Promise<string | null> {
+  if (papers.length === 0) return null
+
+  try {
+    const cfg = getLLMConfig()
+    if (!cfg) return 'LLM配置未初始化'
+    const url = new URL(cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions')
+    const isHttps = url.protocol === 'https:'
+    const transport = isHttps ? https : http
+
+    const paperList = papers.map(p => `- [${p.source}] ${p.title}\n  ${p.summary}\n  ${p.url}`).join('\n\n')
+
+    const body = JSON.stringify({
+      model: process.env.LLM_SMALL_MODEL || cfg.model,
+      messages: [
+        {
+          role: 'system',
+          content: `你是 Lumina 桌面助手。以下是今日 arXiv 论文列表。请：
+1. 挑选 1-2 篇最有趣、最值得关注的论文
+2. 用一句话总结每篇论文的核心贡献
+3. 生成一句自然的搭话，像朋友分享新发现一样
+4. 如果论文都很晦涩，返回 {"skip": true}
+
+输出 JSON: {"message": "搭话内容", "papers": [{"title": "论文标题", "summary": "一句话总结", "url": "链接"}]}`,
+        },
+        { role: 'user', content: `今日 arXiv 论文精选:\n${paperList}` },
+      ],
+      max_tokens: 400,
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
+    })
+
+    return new Promise((resolve) => {
+      const req = transport.request({
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cfg.apiKey}`,
+          'Content-Length': Buffer.byteLength(body).toString(),
+        },
+        timeout: 15000,
+      }, (res) => {
+        let data = ''
+        res.on('data', (c) => (data += c))
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data)
+            const content = json.choices?.[0]?.message?.content || '{}'
+            const parsed = JSON.parse(content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim())
+            resolve(parsed.skip ? null : (parsed.message || null))
+          } catch { resolve(null) }
+        })
+      })
+      req.on('error', () => resolve(null))
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+      req.write(body)
+      req.end()
+    })
+  } catch {
+    return null
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // 默认触发策略
 // ═══════════════════════════════════════════════════════════
 
@@ -595,6 +703,15 @@ const DEFAULT_TRIGGERS: ProactiveTrigger[] = [
     cooldown: 7200,
     priority: 4,
   },
+  {
+    id: 'daily-paper',
+    type: 'daily_paper',
+    condition: '0 8 * * *',
+    template: '',
+    enabled: true,
+    cooldown: 86400,
+    priority: 7,
+  },
 
   // ── 🆕 屏幕感知 ──────────────────────────────
   {
@@ -664,18 +781,19 @@ const DEFAULT_TRIGGERS: ProactiveTrigger[] = [
 // ═══════════════════════════════════════════════════════════
 
 const TIME_TEMPLATES: Record<string, string> = {
-  'startup-greeting': '欢迎回来！👋 Lumina 已就绪~',
-  'morning-greeting': '早上好！🌅 新的一天开始啦~ 今天有什么计划吗？',
-  'noon-reminder': '已经中午了哦！记得吃午饭~ 🍱',
-  'afternoon-break': '下午茶时间~ ☕ 工作累了吧？要不要休息一下？',
-  'evening-wrapup': '傍晚啦~ 🌆 今天过得怎么样？',
-  'night-reminder': '夜深了~ 💤 早点休息，明天见！',
-  'idle-10min': '你已经一会儿没理我了... 在忙什么呢？😊',
-  'idle-30min': '好久不见啦~ 💭 我还在这里陪着你的',
-  'long-session': '你已经连续使用好久了，注意休息眼睛哦~ 👀',
-  'personal-rhythm-lunch': '到饭点啦！今天中午想吃什么？🍜',
-  'personal-rhythm-coffee': '下午茶时间到！☕ 起来活动一下？',
-  'opportunity-after-chat': '想了一下，觉得刚才的话题挺有意思的~',
+  'startup-greeting': '嗨，又见面啦~ ✨',
+  'morning-greeting': '早上好呀~ 🌤️ 今天天气不错呢，要不要出去走走？',
+  'noon-reminder': '肚子咕咕叫了~ 🍚 该吃饭啦',
+  'afternoon-break': '下午困了吗~ ☕ 起来活动活动？',
+  'evening-wrapup': '今天过得怎么样呀~ 🌆 有没有什么开心的事？',
+  'night-reminder': '夜深了~ 💤 别太拼了，早点休息',
+  'idle-10min': '嘿，在忙啥呢~ 😊 我在这等你',
+  'idle-30min': '好久不见啦~ 💭 我还在这儿陪着你',
+  'long-session': '你已经连续用了好久了~ 👀 起来伸个懒腰？',
+  'personal-rhythm-lunch': '到饭点啦！🍜 今天中午吃什么呀？',
+  'personal-rhythm-coffee': '下午茶时间到~ ☕ 要不要来杯咖啡？',
+  'opportunity-after-chat': '刚才聊的话题挺有意思的~ 🤔 我想了想……',
+  'daily-paper': '今日arXiv精选，来看看有没有感兴趣的研究方向 📚',
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -695,6 +813,8 @@ export class ProactiveEngine extends EventEmitter {
   private dailyResetTimer: ReturnType<typeof setInterval> | null = null
   private isScreenWatchRunning = false
   private isHotTopicRunning = false
+  private isDailyPaperRunning = false
+  private dailyPaperTimer: ReturnType<typeof setInterval> | null = null
   private rhythmTimer: ReturnType<typeof setInterval> | null = null
 
   // 作息学习 + 机会感知
@@ -719,6 +839,8 @@ export class ProactiveEngine extends EventEmitter {
       hotTopicIntervalSeconds: 1800,
       screenWatchEnabled: true,         // 🔧 v3.9: 默认开启
       hotTopicEnabled: true,            // 🔧 v3.9: 默认开启
+      dailyPaperIntervalSeconds: 86400, // 🆕 Daily Paper 24小时间隔
+      dailyPaperEnabled: true,          // 🆕 默认开启
       notificationsEnabled: true,       // 🔧 v3.9.1: 默认开启Windows通知
       ...config,
     }
@@ -822,6 +944,18 @@ export class ProactiveEngine extends EventEmitter {
     // 作息学习 (每30分钟检查一次)
     this.rhythmTimer = setInterval(() => this.runPersonalRhythm(), 30 * 60000)
 
+    // 🆕 Daily Paper 监控 (每日一次)
+    const dailyPaperTrigger = this.triggers.find(t => t.id === 'daily-paper')
+    if (this.config.dailyPaperEnabled && dailyPaperTrigger) {
+      dailyPaperTrigger.enabled = true
+      this.dailyPaperTimer = setInterval(
+        () => this.runDailyPaperCheck(),
+        this.config.dailyPaperIntervalSeconds * 1000
+      )
+      // 首次延迟10秒执行
+      setTimeout(() => this.runDailyPaperCheck(), 10000)
+    }
+
     // 机会感知 (监听聊天间隙)
     this.startOpportunityCheck()
 
@@ -829,6 +963,7 @@ export class ProactiveEngine extends EventEmitter {
     const extraInfo = [
       this.config.screenWatchEnabled ? '屏幕感知' : '',
       this.config.hotTopicEnabled ? '热搜感知' : '',
+      this.config.dailyPaperEnabled ? 'Daily Paper' : '',
     ].filter(Boolean).join('+')
     console.log(`[ProactiveEngine] 已启动 (${enabledCount} 个触发器${extraInfo ? ', ' + extraInfo : ''})`)
   }
@@ -842,12 +977,14 @@ export class ProactiveEngine extends EventEmitter {
     if (this.hotTopicTimer) clearInterval(this.hotTopicTimer)
     if (this.dailyResetTimer) clearInterval(this.dailyResetTimer)
     if (this.rhythmTimer) clearInterval(this.rhythmTimer)
+    if (this.dailyPaperTimer) clearInterval(this.dailyPaperTimer)
     this.stopOpportunityCheck()
     this.checkTimer = null
     this.screenWatchTimer = null
     this.hotTopicTimer = null
     this.dailyResetTimer = null
     this.rhythmTimer = null
+    this.dailyPaperTimer = null
   }
 
   /**
@@ -864,6 +1001,10 @@ export class ProactiveEngine extends EventEmitter {
     if (partial.hotTopicEnabled !== undefined) {
       const t = this.triggers.find(t => t.id === 'hot-topic')
       if (t) t.enabled = partial.hotTopicEnabled
+    }
+    if (partial.dailyPaperEnabled !== undefined) {
+      const t = this.triggers.find(t => t.id === 'daily-paper')
+      if (t) t.enabled = partial.dailyPaperEnabled
     }
     this.saveTriggersToFile()
     this.stop()
@@ -933,6 +1074,35 @@ export class ProactiveEngine extends EventEmitter {
     } finally {
       this.isHotTopicRunning = false
       llmCoordinator.releasePermission('Proactive.HotTopic')
+    }
+  }
+
+  // ── 🆕 Daily Paper ──────────────────────────────────────
+
+  private async runDailyPaperCheck(): Promise<void> {
+    if (this.isDailyPaperRunning) return
+    if (this.dailyCount >= this.config.maxDailyProactive) return
+    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) return
+    if (!llmCoordinator.requestPermission('Proactive.DailyPaper', PRIORITY.PROACTIVE)) return
+
+    this.isDailyPaperRunning = true
+    try {
+      const papers = await collectAll({ arxiv: true, rss: false, baidu: false })
+      
+      // 筛选 paper 类别
+      const paperItems = papers.filter((p: NewsItem) => p.category === 'paper')
+      if (paperItems.length === 0) return
+
+      const message = await evaluateDailyPapers(paperItems.slice(0, 10))
+      if (message) {
+        const trigger = this.triggers.find(t => t.id === 'daily-paper')
+        if (trigger) this.activateWithMessage(trigger, message)
+      }
+    } catch (err) {
+      console.error('[ProactiveEngine] Daily Paper 检查异常:', err)
+    } finally {
+      this.isDailyPaperRunning = false
+      llmCoordinator.releasePermission('Proactive.DailyPaper')
     }
   }
 
@@ -1043,10 +1213,11 @@ export class ProactiveEngine extends EventEmitter {
     if (idx === -1) return false
     this.triggers[idx] = { ...this.triggers[idx], ...updates }
     this.saveTriggersToFile()
-    // 如果切换了屏幕感知/热搜感知，同步到 config 并热重启
-    if (id === 'screen-watch' || id === 'hot-topic') {
+    // 如果切换了屏幕感知/热搜感知/Daily Paper，同步到 config 并热重启
+    if (id === 'screen-watch' || id === 'hot-topic' || id === 'daily-paper') {
       if (id === 'screen-watch') this.config.screenWatchEnabled = !!updates.enabled
       if (id === 'hot-topic') this.config.hotTopicEnabled = !!updates.enabled
+      if (id === 'daily-paper') this.config.dailyPaperEnabled = !!updates.enabled
       this.stop()
       this.start()
     }
@@ -1156,6 +1327,9 @@ export class ProactiveEngine extends EventEmitter {
         case 'opportunity':
           // 机会触发由 runOpportunityCheck() 独立处理
           break
+        case 'daily_paper':
+          // Daily Paper 由 runDailyPaperCheck() 独立处理
+          break
         // event / screen_watch / hot_topic 在外部触发
       }
     }
@@ -1164,7 +1338,7 @@ export class ProactiveEngine extends EventEmitter {
   private activate(trigger: ProactiveTrigger): void {
     // 启动问候使用 LLM 动态生成（异步，先发回退后更新）
     if (trigger.id === 'startup-greeting') {
-      const fallback = TIME_TEMPLATES[trigger.id] || 'Lumina 已就绪~'
+      const fallback = this.getStartupFallbackMessage()
       this.activateWithMessage(trigger, fallback)
       // 异步调 LLM 生成更个性化的问候，成功后替换
       this.polishStartupGreeting(trigger)
@@ -1173,6 +1347,29 @@ export class ProactiveEngine extends EventEmitter {
     // 优先使用 LLM 生成消息，回退到模板
     const message = trigger.template || TIME_TEMPLATES[trigger.id] || ''
     this.activateWithMessage(trigger, message)
+  }
+
+  /** 🔧 v2.12: 根据时间段生成不同的启动问候（不再千篇一律） */
+  private getStartupFallbackMessage(): string {
+    const hour = new Date().getHours()
+    const dayOfWeek = new Date().getDay()
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+
+    if (hour >= 0 && hour < 6) {
+      return isWeekend ? '这么晚还没睡呀？🌙 我也陪你~' : '又熬夜了？💡 我在这陪着你'
+    } else if (hour >= 6 && hour < 9) {
+      return isWeekend ? '周末睡到自然醒~ ☀️ 今天打算干嘛呀？' : '早安！☀️ 新的一天，加油！'
+    } else if (hour >= 9 && hour < 12) {
+      return isWeekend ? '上午好~ 🌤️ 周末惬意呀' : '上午好~ 🌤️ 今天有什么计划？'
+    } else if (hour >= 12 && hour < 14) {
+      return '中午啦~ 🍚 记得吃饭哦'
+    } else if (hour >= 14 && hour < 17) {
+      return isWeekend ? '下午茶时间~ ☕ 要不要出去走走？' : '下午好~ ☕ 下午茶时间到'
+    } else if (hour >= 17 && hour < 20) {
+      return isWeekend ? '傍晚好~ 🌆 今天过得怎么样？' : '下班啦~ 🌆 辛苦了！'
+    } else {
+      return isWeekend ? '晚上好~ 🌙 周末晚上放松一下~' : '晚上好~ 🌙 今天辛苦了！'
+    }
   }
 
   /** 🔧 v3.9: LLM 动态生成启动问候 */
@@ -1191,12 +1388,14 @@ export class ProactiveEngine extends EventEmitter {
       const timeOfDay = hour < 6 ? '凌晨' : hour < 12 ? '上午' : hour < 14 ? '中午' : hour < 18 ? '下午' : '晚上'
       const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()]
 
-      const prompt = `你是 Lumina，用户的 AI 桌面宠物助手。现在应用刚启动，请用一句自然温暖的问候语欢迎用户。
+      const prompt = `你是 Lumina，用户的 AI 桌面宠物助手。现在应用刚启动，请用一句自然温暖的问候语。
 要求：
 - 考虑现在是${timeOfDay}，周${dayOfWeek}
-- 语气像朋友一样自然，不要太正式
+- 语气像朋友一样自然，像人类发朋友圈一样随意、有个性
 - 15-30字，带1个emoji
+- 可以聊天气、心情、小趣事，不要每次都重复"已就绪""欢迎回来"
 - 如果周末可以轻松一点，工作日可以鼓励一下
+- 随机从这些风格里选一种：分享心情、聊天气、说个小观察、问用户近况
 - 直接输出问候语，不要加引号`
 
       const url = new URL(cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions')
@@ -1206,7 +1405,7 @@ export class ProactiveEngine extends EventEmitter {
       const body = JSON.stringify({
         model: process.env.LLM_SMALL_MODEL || cfg.model,
         messages: [
-          { role: 'system', content: '你是 Lumina，一个温暖可爱的 AI 助手。' },
+          { role: 'system', content: '你是 Lumina，一个温暖可爱的 AI 助手。说话风格像朋友发朋友圈一样自然随意。' },
           { role: 'user', content: prompt },
         ],
         max_tokens: 100,
@@ -1289,8 +1488,18 @@ export class ProactiveEngine extends EventEmitter {
       const agentId = 'lumina'
       const agentName = 'Lumina'
       const content = message.slice(0, 200)
-      if (trigger.type === 'screen_watch' || trigger.type === 'hot_topic') {
+
+      // 🔧 v2.12: 启动问候每天只发一次朋友圈，避免刷屏
+      if (trigger.id === 'startup-greeting') {
+        if (hasTodayMomentWithKeyword(agentId, '欢迎回来') || hasTodayMomentWithKeyword(agentId, '已就绪')) {
+          console.log('[ProactiveEngine] 启动问候今日已发过朋友圈，跳过')
+        } else {
+          postThought(agentId, agentName, content)
+        }
+      } else if (trigger.type === 'screen_watch' || trigger.type === 'hot_topic') {
         postObservation(agentId, agentName, content, '👀')
+      } else if (trigger.type === 'daily_paper') {
+        postThought(agentId, agentName, content)
       } else {
         postThought(agentId, agentName, content)
       }
@@ -1386,7 +1595,7 @@ export class ProactiveEngine extends EventEmitter {
     } catch { /* 非 Windows 环境，忽略 */ }
 
     return {
-      running: this.checkTimer !== null || this.screenWatchTimer !== null || this.hotTopicTimer !== null,
+      running: this.checkTimer !== null || this.screenWatchTimer !== null || this.hotTopicTimer !== null || this.dailyPaperTimer !== null,
       triggers: this.triggers.map(t => ({
         id: t.id,
         type: t.type,
@@ -1405,8 +1614,10 @@ export class ProactiveEngine extends EventEmitter {
         useLlmPolish: this.config.useLlmPolish,
         screenWatchIntervalSeconds: this.config.screenWatchIntervalSeconds,
         hotTopicIntervalSeconds: this.config.hotTopicIntervalSeconds,
+        dailyPaperIntervalSeconds: this.config.dailyPaperIntervalSeconds,
         screenWatchEnabled: this.config.screenWatchEnabled,
         hotTopicEnabled: this.config.hotTopicEnabled,
+        dailyPaperEnabled: this.config.dailyPaperEnabled,
         notificationsEnabled: this.config.notificationsEnabled,
       },
       dailyCount: this.dailyCount,
@@ -1424,6 +1635,18 @@ export class ProactiveEngine extends EventEmitter {
   setNotify(enabled: boolean): void {
     this.config.notificationsEnabled = enabled
     this.saveTriggersToFile()
+  }
+
+  /**
+   * 🔧 v6.x: 设置是否开启 Daily Paper
+   */
+  setDailyPaperEnabled(enabled: boolean): void {
+    this.config.dailyPaperEnabled = enabled
+    const t = this.triggers.find(t => t.id === 'daily-paper')
+    if (t) t.enabled = enabled
+    this.saveTriggersToFile()
+    this.stop()
+    this.start()
   }
 
   /**

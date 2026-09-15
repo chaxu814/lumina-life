@@ -49,7 +49,7 @@ jobs:
 
       - name: TypeScript type check
         run: npx tsc --noEmit
-        continue-on-error: true  # 类型检查作为参考，不阻断CI
+        # 主类型检查为合入门禁：tsc 必须零错误（严格模式检查仍保留在 lint job 作为参考）
 
       - name: Run tests
         run: npx vitest run --reporter=verbose

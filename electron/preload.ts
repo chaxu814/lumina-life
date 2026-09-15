@@ -63,6 +63,7 @@ export interface AgentEvent {
 
 export interface AgentChatResult {
   content: string
+  compactedContext?: string
   toolCalls?: Array<{ tool: string; args: any; result: any }>
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
 }
@@ -155,9 +156,9 @@ const api = {
   providerSetActive: (id: string) =>
     ipcRenderer.invoke('provider:set-active', id) as Promise<{ success: boolean; error?: string }>,
 
-  /** 获取模型列表 */
-  providerFetchModels: (id: string) =>
-    ipcRenderer.invoke('provider:fetch-models', id) as Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>,
+  /** 获取模型列表（可传界面当前填写的地址/密钥，无需先保存） */
+  providerFetchModels: (id: string, override?: { baseUrl?: string; apiKey?: string }) =>
+    ipcRenderer.invoke('provider:fetch-models', id, override) as Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>,
 
   /** 测试连接 */
   providerTestConnection: (id: string) =>
@@ -268,7 +269,7 @@ const api = {
 
   // ─── Agent API ──────────────────────────────────────────
   /** 发送消息给 Agent (多轮工具调用) */
-  agentChat: (params: { text: string; config: AgentRunConfig; conversationHistory?: Array<{ role: string; content: string }> }) =>
+  agentChat: (params: { text: string; config: AgentRunConfig; sessionId?: string; compactedContext?: string; conversationHistory?: Array<{ role: string; content: string }> }) =>
     ipcRenderer.invoke('agent:chat', params) as Promise<AgentChatResult>,
 
   /** 中止 Agent 运行 */
@@ -373,6 +374,13 @@ const api = {
   // 同步 cron 任务到主进程
   cronSyncAll: (entries: Array<{ name: string; schedule: string; action: string; enabled: boolean }>) =>
     ipcRenderer.invoke('cron:sync-all', entries) as Promise<{ ok: boolean; count?: number; error?: string }>,
+
+  // ─── Loop 持久化 (Phase 4) ──────────────────────────────
+  loopDataRead: () =>
+    ipcRenderer.invoke('loop:data:read') as Promise<Record<string, any>>,
+
+  loopDataWrite: (data: Record<string, any>) =>
+    ipcRenderer.invoke('loop:data:write', data) as Promise<{ ok: boolean }>,
 
   // ─── 事件监听 ──────────────────────────────────────────
   onTokenUsage: (callback: (data: any) => void) => {
@@ -648,6 +656,13 @@ const api = {
     ipcRenderer.invoke('window:toggle-dev-tools') as Promise<void>
   },
 
+  /** 监听开发者工具开关状态 */
+  onDevToolsChanged: (callback: (opened: boolean) => void) => {
+    const handler = (_event: any, opened: boolean) => callback(opened)
+    ipcRenderer.on('window:devtools-changed', handler)
+    return () => ipcRenderer.removeListener('window:devtools-changed', handler)
+  },
+
   /** 主动引擎状态 */
   proactiveStatus: () =>
     ipcRenderer.invoke('proactive:status') as Promise<any>,
@@ -758,6 +773,54 @@ const api = {
   petStatus: () => ipcRenderer.invoke('pet:status'),
   petConfig: () => ipcRenderer.invoke('pet:config'),
   petUpdateConfig: (config: any) => ipcRenderer.invoke('pet:update-config', config),
+  petSettings: (cfg: any) => ipcRenderer.invoke('pet:settings', cfg),
+  petTestIntent: (intent: any) => ipcRenderer.invoke('pet:test-intent', intent),
+  petGetModel: () => ipcRenderer.invoke('pet:get-model'),
+  petPrefs: () => ipcRenderer.invoke('pet:prefs'),
+  petUpdatePrefs: (patch: any) => ipcRenderer.invoke('pet:update-prefs', patch),
+  petOpenSettings: () => ipcRenderer.invoke('pet:open-settings'),
+  petOpenOnboarding: () => ipcRenderer.invoke('pet:open-onboarding'),
+  /** 监听桌宠开关状态广播（主进程 toggle 时推送） */
+  onPetState: (callback: (running: boolean) => void) => {
+    const handler = (_event: any, running: boolean) => callback(running)
+    ipcRenderer.on('pet:state', handler)
+    return () => { ipcRenderer.removeListener('pet:state', handler) }
+  },
+  /** 监听桌宠启动进度（0-100 + 阶段文字） */
+  onPetStartupProgress: (callback: (progress: number, stage: string) => void) => {
+    const handler = (_event: any, data: { progress: number; stage: string }) => callback(data.progress, data.stage)
+    ipcRenderer.on('pet:startup-progress', handler)
+    return () => { ipcRenderer.removeListener('pet:startup-progress', handler) }
+  },
+  /** 桌宠 → 主窗口：发送同步消息 */
+  petSyncSend: (text: string) => ipcRenderer.send('pet:sync-send', { text }),
+  /** 主窗口 → 桌宠：发送 Agent 回复 */
+  petSyncReply: (text: string, role: string) => ipcRenderer.send('pet:sync-reply', { text, role }),
+  /** 主窗口 → 桌宠：发送历史记录 */
+  petSendHistory: (messages: Array<{ role: string; content: string }>) => ipcRenderer.send('pet:sync-history-reply', messages),
+  /** 桌宠 → 主窗口：请求历史聊天记录 */
+  petRequestHistory: () => ipcRenderer.send('pet:sync-history-request'),
+  /** 主窗口 → 主进程：回传桌宠请求的朋友圈/剧场/日报数据 */
+  lifeProvideData: (payload: { reqId: string; items: Array<{ title: string; body?: string; meta?: string; icon?: string }> }) =>
+    ipcRenderer.send('life:data-response', payload),
+  /** 主窗口监听桌宠发来的同步消息 */
+  onPetSyncMessage: (callback: (data: { text: string; from: string }) => void) => {
+    const handler = (_event: any, data: { text: string; from: string }) => callback(data)
+    ipcRenderer.on('pet:sync-message', handler)
+    return () => { ipcRenderer.removeListener('pet:sync-message', handler) }
+  },
+  /** 主窗口监听桌宠请求历史记录 */
+  onPetHistoryRequest: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('pet:sync-history-request', handler)
+    return () => { ipcRenderer.removeListener('pet:sync-history-request', handler) }
+  },
+  /** 桌宠监听历史记录回复 */
+  onPetHistoryReply: (callback: (messages: Array<{ role: string; content: string }>) => void) => {
+    const handler = (_event: any, messages: Array<{ role: string; content: string }>) => callback(messages)
+    ipcRenderer.on('pet:sync-history-reply', handler)
+    return () => { ipcRenderer.removeListener('pet:sync-history-reply', handler) }
+  },
   /** 监听桌宠事件（点击/双击/闲时等） */
   onPetEvent: (callback: (event: any) => void) => {
     const handler = (_event: any, evt: any) => callback(evt)
@@ -978,6 +1041,10 @@ const api = {
   sandboxGetAgentDir: (agentId: string) => ipcRenderer.invoke('sandbox:agent-dir', agentId) as Promise<{ sandboxDir: string }>,
   sandboxUpdateAgent: (agentId: string, patch: any) => ipcRenderer.invoke('sandbox:update-agent', agentId, patch) as Promise<{ ok: boolean }>,
   sandboxCheckPath: (agentId: string, filePath: string, operation: string) => ipcRenderer.invoke('sandbox:check-path', agentId, filePath, operation) as Promise<any>,
+
+  // 🆕 v9.2: 文件文本提取 — PDF/DOCX/XLSX/PPTX 提取纯文本，供群聊附件使用
+  fileExtractText: (filePath: string) => ipcRenderer.invoke('file:extract-text', filePath) as Promise<{ text?: string; error?: string }>,
+  fileExtractTextFromBuffer: (ext: string, buffer: number[]) => ipcRenderer.invoke('file:extract-text-buffer', ext, buffer) as Promise<{ text?: string; error?: string }>,
 }
 
 contextBridge.exposeInMainWorld('luminaAPI', api)

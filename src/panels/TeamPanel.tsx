@@ -3,7 +3,7 @@
 // v9.3: + 动态团队管理（TeamRegistry 集成）
 // ============================================================
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 
 type AgentActivity = 'sleeping' | 'waking' | 'working' | 'social' | 'idle' | 'resting' | 'analyzing' | 'coding' | 'caring'
 
@@ -49,6 +49,7 @@ const AGENTS: AgentDef[] = [
 export default function TeamPanel() {
   const hour = new Date().getHours()
   const [dynamicAgents, setDynamicAgents] = useState<DynamicAgent[]>([])
+  const [emotions, setEmotions] = useState<Record<string, any>>({})
   // 新增成员表单
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState({ id: '', name: '', icon: '🤖', description: '', capabilities: '', triggers: '' })
@@ -63,11 +64,17 @@ export default function TeamPanel() {
   const [acpMembers, setAcpMembers] = useState<any[]>([])
 
   // 加载动态成员
-  const loadDynamic = async () => {
+    const loadDynamic = async () => {
     try {
       const api = (window as any).luminaAPI
       const members = await api.teamListMembers?.() || []
       setDynamicAgents(members.filter((m: any) => !m.isBuiltIn))
+      // 🔧 P2: 加载情绪数据
+      try {
+        const emotionData = await api.teamEmotions?.()
+        if (emotionData?.emotions) setEmotions(emotionData.emotions)
+      } catch {}
+      // 加载 ACP 成员
       // 加载 ACP 成员
       const acpResult = await api.acpList?.()
       if (acpResult?.ok) setAcpMembers(acpResult.dynamic || [])
@@ -158,10 +165,33 @@ export default function TeamPanel() {
     else alert(result?.error || '移除失败')
   }
 
+  
+  // 🔧 P2: 获取 Agent 情绪
+  const getEmotion = (agentId: string) => {
+    return emotions[agentId] || { mood: 0.3, energy: 0.7, affinity: 0.5, label: '平静' }
+  }
+
+  // 🔧 P2: 获取情绪颜色
+  const getEmotionColor = (mood: number) => {
+    if (mood > 0.6) return '#10b981' // 绿色 - 开心
+    if (mood > 0.2) return '#3b82f6' // 蓝色 - 不错
+    if (mood > -0.3) return '#f59e0b' // 黄色 - 一般
+    return '#ef4444' // 红色 - 低落
+  }
+
+  // 🔧 P2: 获取情绪 emoji
+  const getEmotionEmoji = (mood: number) => {
+    if (mood > 0.6) return '😄'
+    if (mood > 0.2) return '😊'
+    if (mood > -0.3) return '😐'
+    if (mood > -0.6) return '😔'
+    return '😢'
+  }
+
   // ── 渲染 ──
 
   return (
-    <div style={{ padding: 16, height: '100%', overflowY: 'auto', background: '#fafafa' }}>
+    <div style={{ padding: 16, height: '100%', overflowY: 'auto', background: 'var(--surface-50)' }}>
       <h3 style={{ marginBottom: 4, fontSize: 16 }}>👥 AI 小团队</h3>
       <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 16 }}>
         v2.7.1: 团队功能已迁移到聊天面板的「团队群聊」中。
@@ -181,6 +211,9 @@ export default function TeamPanel() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, color: agent.color }}>{agent.name}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{agent.archetypeLabel}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {getEmotionEmoji(getEmotion(agent.id).mood)} {getEmotion(agent.id).label || '平静'}
+                  </div>
                 </div>
                 <div style={{
                   fontSize: 10, padding: '2px 8px', borderRadius: 10,
@@ -277,10 +310,11 @@ export default function TeamPanel() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span>{agent.icon || '🤖'}</span>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{agent.name}</span>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>@{agent.id}</span>
-                </div>
+                    <span>{agent.icon || '🤖'}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{agent.name}</span>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>@{agent.id}</span>
+                    <span style={{ fontSize: 12 }}>{getEmotionEmoji(getEmotion(agent.id).mood)}</span>
+                  </div>
                 <button
                   onClick={() => handleUnregister(agent.id)}
                   style={{

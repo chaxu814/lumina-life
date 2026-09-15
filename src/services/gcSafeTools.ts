@@ -53,14 +53,20 @@ export interface TeamSecurityConfig {
   allowBrowser: boolean
   /** 是否允许团队 agent 写入/修改文件 */
   allowFileWrite: boolean
+  /** 是否允许团队 agent 控制桌面（屏幕理解/鼠标/键盘） */
+  allowDesktop: boolean
+  /** 是否允许团队 agent 使用剪贴板 */
+  allowClipboard: boolean
 }
 
-/** 默认安全配置：允许编程（文件写入+Shell，仅高风险需审批） */
+/** 默认安全配置：允许编程+桌面控制+剪贴板，仅高风险需审批 */
 export const DEFAULT_TEAM_SECURITY: TeamSecurityConfig = {
   level: 'high_only',
   allowShell: true,
   allowBrowser: true,
-  allowFileWrite: true,  // 🔧 v3.6: 团队 Agent 默认允许写文件（编程是核心功能）
+  allowFileWrite: true,
+  allowDesktop: true,   // 🆕 v9.0: 团队 Agent 默认允许桌面控制
+  allowClipboard: true, // 🆕 v9.0: 团队 Agent 默认允许剪贴板
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -75,8 +81,6 @@ const SYSTEM_TOOLS = [
   'notification',       // 系统通知
   'open_file',          // 打开文件
   'screenshot',         // 截屏
-  'clipboard_get',      // 读取剪贴板
-  'clipboard_set',      // 写入剪贴板
 ]
 
 /** 桌面控制类（高危） */
@@ -192,12 +196,6 @@ export function getDisabledTools(config: TeamSecurityConfig): string[] {
   disabled.push(...PRIVACY_TOOLS)
   disabled.push(...BEHAVIOR_TOOLS)
 
-  // 始终禁用：桌面控制（除非用户明确开启）
-  disabled.push(...DESKTOP_TOOLS)
-
-  // 始终禁用：Git（团队 agent 不应动版本控制）
-  disabled.push(...GIT_TOOLS)
-
   // 根据安全配置决定
   if (!config.allowShell) {
     disabled.push(...SYSTEM_TOOLS)
@@ -213,6 +211,16 @@ export function getDisabledTools(config: TeamSecurityConfig): string[] {
 
   if (!config.allowBrowser) {
     disabled.push(...BROWSER_TOOLS)
+  }
+
+  // 🆕 v9.0: 桌面控制可配置（之前始终禁用）
+  if (!config.allowDesktop) {
+    disabled.push(...DESKTOP_TOOLS)
+  }
+
+  // 🆕 v9.0: 剪贴板可配置（之前始终禁用）
+  if (!config.allowClipboard) {
+    disabled.push('clipboard_get', 'clipboard_set')
   }
 
   return disabled
@@ -269,6 +277,25 @@ export function getAvailableTools(config: TeamSecurityConfig): ToolInfo[] {
     )
   }
 
+  // 🆕 v9.0: 桌面控制工具
+  if (config.allowDesktop) {
+    tools.push(
+      { name: 'desktop_see',     desc: '理解屏幕内容',      icon: '👁️',  category: '桌面' },
+      { name: 'desktop_click',   desc: '点击屏幕坐标',      icon: '🖱️',  category: '桌面' },
+      { name: 'desktop_type',    desc: '屏幕输入文字',       icon: '⌨️',  category: '桌面' },
+      { name: 'keyboard_press',  desc: '按下键盘按键',       icon: '🎹',  category: '桌面' },
+      { name: 'keyboard_type',   desc: '键盘输入文字',       icon: '⌨️',  category: '桌面' },
+    )
+  }
+
+  // 🆕 v9.0: 剪贴板工具
+  if (config.allowClipboard) {
+    tools.push(
+      { name: 'clipboard_get',   desc: '读取剪贴板',        icon: '📋',  category: '系统' },
+      { name: 'clipboard_set',   desc: '写入剪贴板',        icon: '📋',  category: '系统' },
+    )
+  }
+
   // 团队协作工具（始终可用）
   tools.push(
     { name: 'delegate_to',       desc: '委托任务给队友',    icon: '🤝',  category: '团队' },
@@ -307,6 +334,15 @@ export function getToolNotification(toolName: string, args: Record<string, any>)
     shell_exec: (a) => `💻 正在执行命令：${(a.command || a.cmd || '').slice(0, 50)}`,
     open_file: (a) => `📂 正在打开：${(a.target || a.path || a.filePath || '').slice(0, 40)}`,
     screenshot: () => `📸 正在截图...`,
+    // 🆕 v9.0: 桌面控制
+    desktop_see: () => `👁️ 正在查看屏幕内容...`,
+    desktop_click: (a) => `🖱️ 正在点击屏幕坐标 (${a.x || '?'}, ${a.y || '?'})`,
+    desktop_type: (a) => `⌨️ 正在屏幕输入：${(a.text || '').slice(0, 30)}`,
+    keyboard_press: (a) => `🎹 正在按键：${a.key || '?'}`,
+    keyboard_type: (a) => `⌨️ 正在键盘输入：${(a.text || '').slice(0, 30)}`,
+    // 🆕 v9.0: 剪贴板
+    clipboard_get: () => `📋 正在读取剪贴板...`,
+    clipboard_set: (a) => `📋 正在写入剪贴板：${(a.text || '').slice(0, 30)}`,
     // 信息
     weather: () => '🌤️ 正在查询天气...',
     datetime: () => '🕐 正在确认时间...',
@@ -328,6 +364,110 @@ export function getToolNotification(toolName: string, args: Record<string, any>)
 }
 
 // ═══════════════════════════════════════════════════════════
+// 🧠 智能工具分配 — 根据用户意图动态决定启用哪些工具
+// ═══════════════════════════════════════════════════════════
+
+export type ToolCategory =
+  | 'general'      // 通用对话（默认，所有工具可用）
+  | 'file'         // 有文件附件
+  | 'math'         // 纯数学/推理
+  | 'search'       // 网络搜索
+  | 'shell'        // 系统命令
+  | 'desktop'      // 桌面控制
+  | 'clipboard'    // 剪贴板
+  | 'memory'       // 记忆
+  | 'team'         // 团队协作
+  | 'info'         // 信息查询
+
+/** 工具意图 */
+export interface ToolIntent {
+  categories: ToolCategory[]
+  isPureReasoning: boolean
+}
+
+/** 群聊工具信息 */
+export interface GCToolInfo {
+  name: string
+  description: string
+  category: ToolCategory
+  dangerous: boolean
+}
+
+/**
+ * 🧠 智能意图检测 — 分析用户消息和附件
+ *
+ * 设计原则（v9.1 重写）：
+ * 1. 默认 general — 所有工具可用，不要轻易剥夺 LLM 的能力
+ * 2. 只有明确有附件时才标记 file
+ * 3. 不做关键词匹配 — 学习领域太广，无法穷举
+ * 4. 让 LLM 自己决定用什么工具
+ */
+export function detectToolIntent(userMessage: string, hasAttachments?: boolean): ToolIntent {
+  if (hasAttachments) {
+    return { categories: ['general', 'file'], isPureReasoning: false }
+  }
+  // 默认：通用模式，所有工具可用
+  return { categories: ['general'], isPureReasoning: false }
+}
+
+/**
+ * 根据意图返回可用工具列表（过滤掉不需要的）
+ */
+export function getToolsForIntent(
+  config: TeamSecurityConfig,
+  intent: ToolIntent,
+): ToolInfo[] {
+  const allTools = getAvailableTools(config)
+
+  if (intent.isPureReasoning) {
+    // 纯推理 — 不提供任何工具
+    return []
+  }
+
+  // general → 保留所有允许的工具
+  if (intent.categories.includes('general')) {
+    return allTools
+  }
+
+  // 按分类过滤
+  const categoryMap: Record<ToolCategory, string[]> = {
+    math: [],
+    search: ['web_search', 'web_fetch', 'browser', 'open_file'],
+    file: ['file_list', 'file_read', 'file_write', 'file_edit', 'open_file'],
+    shell: ['shell_exec', 'open_file'],
+    desktop: ['desktop_see', 'desktop_click', 'desktop_type', 'keyboard_press', 'keyboard_type'],
+    clipboard: ['clipboard_get', 'clipboard_set'],
+    memory: ['memory_search', 'memory_get', 'memory_save', 'memory_save_v2', 'memory_search_v2'],
+    team: ['delegate_to', 'query_teammate', 'ask_teammate', 'skill_run'],
+    info: ['weather', 'datetime'],
+    general: [],
+  }
+
+  const allowedTools = new Set<string>()
+  intent.categories.forEach(cat => {
+    (categoryMap[cat] || []).forEach(t => allowedTools.add(t))
+  })
+
+  return allTools.filter(t => allowedTools.has(t.name))
+}
+
+/**
+ * 根据意图生成工具提示词
+ * v9.1: 简化 — 几乎所有场景都用完整工具提示，只有纯数学才精简
+ */
+export function getGCToolsPromptForIntent(
+  config?: TeamSecurityConfig,
+  intent?: ToolIntent,
+): string {
+  // 通用模式（默认）→ 使用完整工具提示
+  if (!intent || intent.categories.includes('general') || !intent.isPureReasoning) {
+    return getGCToolsPrompt(config)
+  }
+  // 纯数学推理 → 精简提示，但仍保留搜索能力
+  return '【💡 推理/数学模式 — 直接分析并回答问题。如果需要搜索相关定理、公式或数据，可以使用 web_search。你也可以使用 file_read 查看用户上传的文件。】'
+}
+
+// ═══════════════════════════════════════════════════════════
 // 群聊 System Prompt 的工具说明（显式参数+示例）
 // ═══════════════════════════════════════════════════════════
 
@@ -339,6 +479,7 @@ export function getGCToolsPrompt(config?: TeamSecurityConfig): string {
   lines.push(``)
   lines.push(`⚠️ 重要：当用户叫你「查阅」「搜索」「查一下」「找资料」时，你必须用 web_search + web_fetch 去搜索，不要凭记忆回答。`)
   lines.push(`⚠️ 重要：如果你需要实时信息，直接输出 <web_search(query="你的搜索关键词")> 让系统执行搜索，不要说"让我查一下"而不执行。`)
+  lines.push(`⚠️ 重要：数学计算、知识问答、翻译、写作等不需要工具，直接回答即可。不要对这些场景调用 shell_exec 或任何工具。`)
   lines.push(``)
 
   // ── 打开东西（最高频操作）──
@@ -377,8 +518,31 @@ export function getGCToolsPrompt(config?: TeamSecurityConfig): string {
   if (cfg.allowShell) {
     lines.push(`💻 系统命令：【仅用于 open_file 做不到的事！】`)
     lines.push(`  - shell_exec(command="命令")  → 执行终端命令`)
+    lines.push(`    例：shell_exec(command="pip install requests")  → 安装 Python 包`)
+    lines.push(`    例：shell_exec(command="npm install -g openclaw")  → 安装 npm 包`)
+    lines.push(`    例：shell_exec(command="winget install Git.Git")  → 用 winget 安装软件`)
     lines.push(`    ⚠️ 绝不用来打开文件/文件夹/URL — 用 open_file 代替！`)
     lines.push(`  - screenshot()                 → 截屏`)
+    lines.push(``)
+  }
+
+  // ── 桌面控制 ──
+  if (cfg.allowDesktop) {
+    lines.push(`🖥️ 桌面控制：【可直接操作电脑屏幕和输入设备】`)
+    lines.push(`  - desktop_see()                  → 理解当前屏幕内容`)
+    lines.push(`  - desktop_click(x=数字, y=数字)  → 点击屏幕坐标`)
+    lines.push(`  - desktop_type(text="内容")      → 在当前焦点输入文字`)
+    lines.push(`  - keyboard_press(key="按键")     → 按下键盘按键（如 Enter、Tab）`)
+    lines.push(`  - keyboard_type(text="内容")     → 键盘输入文字`)
+    lines.push(`    例：desktop_see() → desktop_click(x=100, y=200) → 操作屏幕上的元素`)
+    lines.push(``)
+  }
+
+  // ── 剪贴板 ──
+  if (cfg.allowClipboard) {
+    lines.push(`📋 剪贴板：`)
+    lines.push(`  - clipboard_get()              → 读取剪贴板内容`)
+    lines.push(`  - clipboard_set(text="内容")   → 写入剪贴板`)
     lines.push(``)
   }
 
@@ -410,7 +574,8 @@ export function getGCToolsPrompt(config?: TeamSecurityConfig): string {
   lines.push(`  5. shell_exec 仅用于：npm/pip安装、构建编译、运行脚本`)
   lines.push(`  6. 路径支持正斜杠：C:/Users/xxx/Desktop 和 C:\\Users\\xxx\\Desktop 都行`)
   lines.push(`  7. 用完工具拿到结果后，用你的语气总结给用户（简短自然）`)
-  lines.push(`  8. ⚠️ 你可以操控电脑！用工具去做，不要说"我无法做到"`)
+  lines.push(`  8. ⚠️ 能直接回答的问题（数学计算、知识问答、翻译、写作、闲聊）→ 直接回答，不要调用任何工具`)
+  lines.push(`  9. ⚠️ 只有用户明确要求操作电脑、或你需要搜索/读文件/执行命令时才用工具`)
 
   return lines.join('\n')
 }

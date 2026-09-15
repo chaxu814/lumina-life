@@ -13,6 +13,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import { getAgentConfig } from '../agentConfig'
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
@@ -69,6 +70,8 @@ const BUILT_IN_PROVIDERS: ProviderDefinition[] = [
   // ── 🏠 本地模型 ──
   { id: 'lmstudio',    name: 'LM Studio',       isLocal: true,  defaultBaseUrl: 'http://127.0.0.1:1234/v1',    defaultModel: '',               requiresApiKey: false },
   { id: 'ollama',      name: 'Ollama',           isLocal: true,  defaultBaseUrl: 'http://127.0.0.1:11434/v1',   defaultModel: 'qwen3:14b',     requiresApiKey: false },
+  // ── 🎁 免费 ──
+  { id: 'opencode-zen', name: 'OpenCode Zen (免费)', isLocal: false, defaultBaseUrl: 'https://opencode.ai/zen/v1', defaultModel: 'deepseek-v4-flash-free', requiresApiKey: false },
   // ── ☁️ 云端模型 ──
   { id: 'deepseek',    name: 'DeepSeek',         isLocal: false, defaultBaseUrl: 'https://api.deepseek.com/v1',  defaultModel: 'deepseek-chat',  requiresApiKey: true },
   { id: 'qwen',        name: '通义千问',         isLocal: false, defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus', requiresApiKey: true },
@@ -319,10 +322,14 @@ export class ProviderManager {
 
     // 🔄 自动同步到 Team Agent（Yak / Recha / Lumina）
     try {
-      const { getAgentConfig } = require('../agentConfig')
       const ac = getAgentConfig()
-      ac.syncFromGlobalProvider()
-    } catch { /* providerManager 初始化可能早于 agentConfig，忽略 */ }
+      const synced = ac.syncFromGlobalProvider()
+      if (!synced) {
+        console.warn(`[ProviderManager] ⚠️ 保存 "${id}" 后同步到 Team Agent 失败，请检查 lumina-providers.json 与 agent-llm-configs.json 是否在同一目录`)
+      }
+    } catch (err) {
+      console.warn('[ProviderManager] ⚠️ 保存后同步异常:', err)
+    }
   }
 
   /** 批量保存供应商配置 */
@@ -359,6 +366,19 @@ export class ProviderManager {
     this.store.activeProviderId = id
     this._save()
     console.log(`[ProviderManager] 🔵 激活供应商: ${id}`)
+
+    // 🔄 激活新供应商后，同步配置到全部 Team Agent
+    try {
+      const ac = getAgentConfig()
+      const synced = ac.syncFromGlobalProvider()
+      if (synced) {
+        console.log(`[ProviderManager] ✅ 激活供应商后已同步到 Team Agent`)
+      } else {
+        console.warn(`[ProviderManager] ⚠️ 激活供应商后同步失败，请检查 lumina-providers.json 是否存在且有效`)
+      }
+    } catch (err) {
+      console.warn('[ProviderManager] ⚠️ 激活供应商后同步异常:', err)
+    }
   }
 
   /** 获取当前激活供应商的完整配置（快捷方式） */
@@ -375,12 +395,13 @@ export class ProviderManager {
 
   // ── 模型获取 ───────────────────────────────────────
 
-  async fetchModels(id: string): Promise<{ models: ModelInfo[]; error?: string }> {
+  async fetchModels(id: string, override?: { baseUrl?: string; apiKey?: string }): Promise<{ models: ModelInfo[]; error?: string }> {
     const config = this.getProviderConfig(id)
     if (!config) return { models: [], error: '供应商未配置' }
 
-    const baseUrl = config.baseUrl
-    const apiKey = config.apiKey
+    // 🔧 优先使用界面当前填写的地址/密钥（未点保存也能正确获取列表）
+    const baseUrl = override?.baseUrl?.trim() || config.baseUrl
+    const apiKey = override?.apiKey ?? config.apiKey
 
     try {
       switch (id) {
@@ -554,7 +575,7 @@ export class ProviderManager {
   private async _fetchLMStudioModels(baseUrl: string, apiKey: string): Promise<{ models: ModelInfo[]; error?: string }> {
     const errors: string[] = []
 
-    // 优先 GET /models
+    // 优先 GET /models（LM Studio 会返回所有已下载的模型，无论是否已加载）
     try {
       const resp = await fetch(baseUrl + '/models', {
         headers: { 'Authorization': 'Bearer ' + (apiKey || '') },
@@ -568,12 +589,15 @@ export class ProviderManager {
             .map((m: any) => ({ id: m.id || m.model || '', multimodal: false, vision: false }))
             .filter((m: ModelInfo) => m.id)
           if (models.length > 0) return { models }
+          // 🔧 连接正常但列表为空：不再返回伪模型条目，如实报告原因
+          return { models: [], error: 'LM Studio 已连接，但模型列表为空 — 请先在 LM Studio 中下载并加载模型' }
         }
+        return { models: [], error: 'LM Studio 返回了无法解析的模型列表格式' }
       }
-      errors.push(`GET /models → ${resp.status}`)
+      errors.push(`GET /models → HTTP ${resp.status}`)
     } catch (e: any) { errors.push(e.message) }
 
-    return { models: [{ id: '(LM Studio 连接成功，未加载模型)', multimodal: false, vision: false }], error: errors.join('; ') }
+    return { models: [], error: `无法从 LM Studio 获取模型列表 (${errors.join('; ')})，请确认服务地址正确且 Server 已启动` }
   }
 
   private async _fetchOllamaModels(baseUrl: string): Promise<{ models: ModelInfo[]; error?: string }> {
@@ -703,9 +727,9 @@ export function registerProviderIpc(): void {
   })
 
   // ── 获取模型列表 ────────────────────────────────
-  ipcMain.handle('provider:fetch-models', async (_event, id: string) => {
+  ipcMain.handle('provider:fetch-models', async (_event, id: string, override?: { baseUrl?: string; apiKey?: string }) => {
     try {
-      return await pm.fetchModels(id)
+      return await pm.fetchModels(id, override)
     } catch (err: any) {
       return { models: [], error: err.message }
     }

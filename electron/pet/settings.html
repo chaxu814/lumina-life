@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Lumina 桌宠设置</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #1a1c2e 0%, #2d3148 100%);
+    color: #e6e8ff; min-height: 100vh; padding: 18px;
+  }
+  .card {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 14px 18px; margin-bottom: 12px; backdrop-filter: blur(10px);
+  }
+  .card h2 { font-size: 13px; letter-spacing: .12em; color: #8b8faa; margin-bottom: 8px; }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; gap: 12px; }
+  .row label { font-size: 13px; color: #cdd0ee; flex: 1; }
+  .row .hint { display: block; font-size: 11px; color: #6b7194; margin-top: 2px; }
+  select, input[type="range"] {
+    background: rgba(0,0,0,0.25); color: #e6e8ff; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 5px 8px; outline: none;
+  }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 140px; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.12);
+    padding: 0; border: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: linear-gradient(135deg, #7c6ff7, #9d8fff);
+    cursor: pointer; border: 2px solid rgba(255,255,255,0.3);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: linear-gradient(135deg, #7c6ff7, #9d8fff);
+    cursor: pointer; border: 2px solid rgba(255,255,255,0.3);
+  }
+  .switch { position: relative; display: inline-block; width: 44px; height: 25px; flex: none !important; cursor: pointer; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch .slider { position: absolute; cursor: pointer; inset: 0; background: rgba(255,255,255,0.15); transition: background .3s cubic-bezier(.4,0,.2,1), box-shadow .3s; border-radius: 25px; border: 1px solid rgba(255,255,255,0.08); }
+  .switch .slider:before { position: absolute; content: ""; height: 19px; width: 19px; left: 2px; bottom: 2px; background: #fff; transition: transform .3s cubic-bezier(.34,1.56,.64,1); border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  .switch input:checked + .slider { background: linear-gradient(135deg, #7c6ff7, #9d8fff); border-color: transparent; box-shadow: 0 0 8px rgba(124,111,247,0.35); }
+  .switch input:checked + .slider:before { transform: translateX(19px); }
+  .value { font-size: 11px; color: #8b8faa; min-width: 50px; text-align: right; }
+  .actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  button {
+    flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.06); color: #e6e8ff; cursor: pointer; font-size: 12px; min-width: 80px;
+  }
+  button.primary { background: #7c6ff7; border-color: #7c6ff7; }
+  button:hover { filter: brightness(1.1); }
+  .checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+  .checklist label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #cdd0ee; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>🎨 外观</h2>
+    <div class="row"><label>模型</label>
+      <select id="model"><option value="Mao">虹色 Mao</option></select>
+    </div>
+    <div class="row"><label>缩放</label>
+      <input id="scale" type="range" min="40" max="160" value="100" /><span id="scaleVal" class="value">100%</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🖱️ 交互</h2>
+    <div class="row"><label>锁定位置<span class="hint">锁定后桌宠不会自主移动</span></label>
+      <label class="switch"><input id="locked" type="checkbox" /><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🧠 自主行为</h2>
+    <div class="row"><label>自主级别<span class="hint">off 关闭 / 轻度 60s / 重度 30s+截屏</span></label>
+      <select id="autoBehavior"><option value="off">关闭</option><option value="light">轻度</option><option value="heavy">重度</option></select>
+    </div>
+    <div class="row"><label>主动搭话</label>
+      <label class="switch"><input id="proactive" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>凝神模式<span class="hint">你专注其他窗口时不打扰</span></label>
+      <label class="switch"><input id="focusMode" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>隐私模式<span class="hint">不截屏、不记录屏幕内容</span></label>
+      <label class="switch"><input id="privacyMode" type="checkbox" /><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💬 对话设置</h2>
+    <div class="checklist">
+      <label><input type="checkbox" id="bubbles" /> 表情气泡</label>
+      <label><input type="checkbox" id="neko" /> 猫猫音效</label>
+      <label><input type="checkbox" id="interrupt" /> 允许打断</label>
+      <label><input type="checkbox" id="mergeMsg" /> 合并消息</label>
+      <label><input type="checkbox" id="naturalExpr" /> 自然表达</label>
+      <label><input type="checkbox" id="autoTransform" /> 自动变猫</label>
+    </div>
+    <div class="row" style="margin-top:8px;"><label>回复长度上限</label>
+      <input id="maxtok" type="range" min="50" max="500" step="10" value="300" /><span id="maxtokVal" class="value">300</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎞️ 动画设置</h2>
+    <div class="checklist">
+      <label><input type="checkbox" id="mtrack" /> 跟踪鼠标</label>
+      <label><input type="checkbox" id="fstrack" /> 全屏跟踪</label>
+      <label><input type="checkbox" id="dropFx" /> 掉券动画与音效</label>
+      <label><input type="checkbox" id="breath" /> 呼吸动画</label>
+    </div>
+    <div class="row" style="margin-top:8px;"><label>帧率</label>
+      <select id="fps"><option value="30">30</option><option value="60">60</option><option value="0" selected>无限制 (VSync)</option></select>
+    </div>
+    <div class="row"><label>画质<span class="hint">低画质更省性能（重开桌宠生效）</span></label>
+      <select id="quality"><option value="high" selected>高</option><option value="low">低</option></select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🔊 声音</h2>
+    <div class="row"><label>AI 语音<span class="hint">朗读 AI 回复台词</span></label>
+      <label class="switch"><input id="voice" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>TTS 引擎</label>
+      <select id="ttsEngine">
+        <option value="edge-tts">Edge TTS</option>
+        <option value="indextts">IndexTTS-2.5</option>
+      </select>
+    </div>
+    <div class="row"><label>扬声器音量</label>
+      <input id="volume" type="range" min="0" max="100" value="100" /><span id="volumeVal" class="value">100%</span>
+    </div>
+    <div class="row"><label>空间音频<span class="hint">按模型位置左右声像</span></label>
+      <label class="switch"><input id="spatial" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>语音识别</label>
+      <label class="switch"><input id="voiceRecog" type="checkbox" /><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🐾 Lumina Pet Handling（电脑权限）</h2>
+    <div class="row"><label>总开关<span class="hint">开启后 Lumina 才能获得电脑操作权限</span></label>
+      <label class="switch"><input id="cpMaster" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>键鼠控制<span class="hint">允许点击、输入、按键、滚动</span></label>
+      <label class="switch"><input id="cpKbm" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>浏览器控制<span class="hint">允许打开和操作浏览器</span></label>
+      <label class="switch"><input id="cpBrowser" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>屏幕感知<span class="hint">截屏理解你在做什么，主动搭话</span></label>
+      <label class="switch"><input id="cpPerception" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>显示悬浮窗<span class="hint">模型脚下显示名称标签</span></label>
+      <label class="switch"><input id="cpHud" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>专属桌面<span class="hint">为 Lumina 创建独立虚拟桌面（Win10/11）</span></label>
+      <label class="switch"><input id="cpDesktop" type="checkbox" /><span class="slider"></span></label>
+    </div>
+    <div class="row"><label>应用开发<span class="hint">开启插件开发模式，加载 JS 插件</span></label>
+      <label class="switch"><input id="cpPlugins" type="checkbox" /><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎭 角色设置</h2>
+    <div class="row"><label>当前人格</label><span id="personaNow" class="value">默认猫娘</span></div>
+    <div class="actions"><button id="persona">重新选择初始人格</button></div>
+  </div>
+
+  <div class="card">
+    <h2>🎬 动作测试</h2>
+    <div class="actions">
+      <button data-action="wave">👋 挥手</button>
+      <button data-action="nod">🙂 点头</button>
+      <button data-action="shake">🤨 摇头</button>
+      <button data-action="think">💭 思考</button>
+      <button data-action="happy">🎉 开心</button>
+      <button data-action="sad">😢 难过</button>
+      <button data-action="angry">😤 生气</button>
+      <button data-action="surprised">😲 惊讶</button>
+      <button data-action="dance">💃 跳舞</button>
+      <button data-action="clap">👏 鼓掌</button>
+      <button data-action="blink">😉 眨眼</button>
+      <button data-action="sleep">😴 睡觉</button>
+      <button data-action="wake">☀️ 醒来</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="save">保存外观设置</button>
+    <button id="reset">恢复默认</button>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let ipc = null;
+  try { ipc = require('electron').ipcRenderer; } catch (e) {}
+
+  const PERSONA_NAMES = { '': '默认猫娘', bingruo: '病弱妹妹', zhixin: '知心姐姐', dushe: '毒舌学妹', shadiao: '沙雕网友' };
+
+  function livePref(patch) { if (ipc) ipc.invoke('pet:update-prefs', patch).catch(() => {}); }
+  const bindSwitch = (id, fn) => { $(id).addEventListener('change', () => fn($(id).checked)); };
+
+  bindSwitch('proactive', v => livePref({ proactive: v }));
+  bindSwitch('bubbles', v => livePref({ bubbles: v }));
+  bindSwitch('neko', v => livePref({ nekoSounds: v }));
+  bindSwitch('interrupt', v => livePref({ allowInterrupt: v }));
+  bindSwitch('mergeMsg', v => livePref({ mergeMessages: v }));
+  bindSwitch('naturalExpr', v => livePref({ naturalExpression: v }));
+  bindSwitch('autoTransform', v => livePref({ autoTransform: v }));
+  bindSwitch('focusMode', v => livePref({ focusMode: v }));
+  bindSwitch('privacyMode', v => livePref({ privacyMode: v }));
+  bindSwitch('mtrack', v => livePref({ mouseTrack: v }));
+  bindSwitch('fstrack', v => livePref({ fullscreenTrack: v }));
+  bindSwitch('dropFx', v => livePref({ dropEffects: v }));
+  bindSwitch('breath', v => livePref({ breathing: v }));
+  bindSwitch('voice', v => livePref({ voiceOn: v }));
+  bindSwitch('spatial', v => livePref({ spatial: v }));
+  bindSwitch('voiceRecog', v => livePref({ voiceRecognition: v }));
+  bindSwitch('locked', v => { if (ipc) ipc.invoke('pet:send-command', { type: 'set-locked', value: v }); });
+  bindSwitch('cpMaster', v => livePref({ catpaw: { master: v } }));
+  bindSwitch('cpKbm', v => livePref({ catpaw: { kbm: v } }));
+  bindSwitch('cpBrowser', v => livePref({ catpaw: { browser: v } }));
+  bindSwitch('cpPerception', v => livePref({ catpaw: { perception: v } }));
+  bindSwitch('cpHud', v => livePref({ catpaw: { hud: v } }));
+  bindSwitch('cpDesktop', v => {
+    livePref({ catpaw: { desktop: v } });
+    if (ipc) ipc.invoke('pet:virtual-desktop', { enable: v }).catch(() => {});
+  });
+  bindSwitch('cpPlugins', v => livePref({ catpaw: { plugins: v } }));
+
+  $('fps').addEventListener('change', () => livePref({ fps: Number($('fps').value) }));
+  $('quality').addEventListener('change', () => livePref({ quality: $('quality').value }));
+  $('ttsEngine').addEventListener('change', () => livePref({ ttsEngine: $('ttsEngine').value }));
+  $('maxtok').oninput = () => { $('maxtokVal').textContent = $('maxtok').value; };
+  $('maxtok').addEventListener('change', () => livePref({ maxTokens: Number($('maxtok').value) }));
+  $('volume').oninput = () => { $('volumeVal').textContent = $('volume').value + '%'; };
+  $('volume').addEventListener('change', () => livePref({ volume: Number($('volume').value) }));
+  $('scale').oninput = () => {
+    $('scaleVal').textContent = $('scale').value + '%';
+    if (ipc) ipc.invoke('pet:send-command', { type: 'set-scale', value: Number($('scale').value) / 100 });
+  };
+  $('scale').onchange = () => {
+    if (ipc) ipc.invoke('pet:settings', { scale: Number($('scale').value) / 100 });
+  };
+  $('model').addEventListener('change', () => {
+    if (ipc) ipc.invoke('pet:set-model', $('model').value);
+  });
+  $('autoBehavior').addEventListener('change', () => { if (ipc) ipc.invoke('pet:settings', { auto: $('autoBehavior').value }); });
+  $('persona').addEventListener('click', () => { if (ipc) ipc.invoke('pet:open-onboarding'); });
+
+  (async () => {
+    if (!ipc) return;
+    try {
+      const model = await ipc.invoke('pet:get-model');
+      if (model) $('model').value = model;
+      const cfg = await ipc.invoke('pet:config');
+      if (cfg) {
+        if (cfg.auto === 'off' || cfg.auto === 'light' || cfg.auto === 'heavy') $('autoBehavior').value = cfg.auto;
+        if (typeof cfg.scale === 'number') { $('scale').value = Math.round(cfg.scale * 100); $('scaleVal').textContent = $('scale').value + '%'; }
+      }
+      const p = await ipc.invoke('pet:prefs');
+      if (p) {
+        $('proactive').checked = p.proactive !== false;
+        $('bubbles').checked = p.bubbles !== false;
+        $('neko').checked = p.nekoSounds !== false;
+        $('interrupt').checked = p.allowInterrupt !== false;
+        $('mergeMsg').checked = !!p.mergeMessages;
+        $('naturalExpr').checked = p.naturalExpression !== false;
+        $('autoTransform').checked = p.autoTransform !== false;
+        $('focusMode').checked = p.focusMode !== false;
+        $('privacyMode').checked = !!p.privacyMode;
+        $('mtrack').checked = p.mouseTrack !== false;
+        $('fstrack').checked = !!p.fullscreenTrack;
+        $('dropFx').checked = p.dropEffects !== false;
+        $('breath').checked = !!p.breathing;
+        $('voice').checked = !!p.voiceOn;
+        $('spatial').checked = p.spatial !== false;
+        $('voiceRecog').checked = !!p.voiceRecognition;
+        $('ttsEngine').value = p.ttsEngine === 'indextts' ? 'indextts' : 'edge-tts';
+        $('maxtok').value = p.maxTokens || 300; $('maxtokVal').textContent = $('maxtok').value;
+        $('volume').value = p.volume == null ? 100 : p.volume; $('volumeVal').textContent = $('volume').value + '%';
+        $('fps').value = String(p.fps == null ? 0 : p.fps);
+        $('quality').value = p.quality === 'low' ? 'low' : 'high';
+        const cp = p.catpaw || {};
+        $('cpMaster').checked = !!cp.master; $('cpKbm').checked = !!cp.kbm; $('cpBrowser').checked = !!cp.browser;
+        $('cpPerception').checked = cp.perception !== false; $('cpHud').checked = cp.hud !== false;
+        $('cpDesktop').checked = !!cp.desktop; $('cpPlugins').checked = !!cp.plugins;
+        $('personaNow').textContent = PERSONA_NAMES[p.persona || ''] || '默认猫娘';
+      }
+    } catch (e) { console.warn('[pet-settings] 读取配置失败:', e); }
+  })();
+
+  $('save').onclick = async () => {
+    const cfg = { model: $('model').value, scale: Number($('scale').value) / 100 };
+    try {
+      if (ipc) await ipc.invoke('pet:settings', cfg);
+      alert('已保存喵~');
+    } catch (e) { alert('保存失败：' + (e && e.message ? e.message : String(e))); }
+  };
+  $('reset').onclick = () => {
+    if (ipc) ipc.invoke('pet:update-prefs', {
+      bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
+      mouseTrack: true, fullscreenTrack: false, fps: 0, quality: 'high', voiceOn: false, volume: 100, spatial: true,
+      breathing: false, hoverFade: false, dropEffects: true, naturalExpression: true, autoTransform: true,
+      mergeMessages: false, focusMode: true, privacyMode: false, voiceRecognition: false, ttsEngine: 'edge-tts',
+      catpaw: { master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false },
+    });
+    $('model').value = 'Mao'; $('scale').value = 100; $('scaleVal').textContent = '100%';
+    $('autoBehavior').value = 'light';
+  };
+  document.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.onclick = async () => {
+      const intent = { action: btn.dataset.action, mood: '开心 😊', speech: btn.textContent.trim() + '喵~' };
+      try { if (ipc) await ipc.invoke('pet:test-intent', intent); } catch (e) { console.error(e); }
+    };
+  });
+</script>
+</body>
+</html>

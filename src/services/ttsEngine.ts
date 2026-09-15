@@ -5,19 +5,28 @@
 // 不再通过 IPC 传输 base64，彻底消除编码/解码问题。
 // ============================================================
 
-export type TTSEngine = 'edge-tts' | 'gpt-sovits'
+export type TTSEngine = 'edge-tts' | 'gpt-sovits' | 'indextts'
 
 export interface TTSConfig {
   engine: TTSEngine
   voice?: string
   speed?: number
   volume?: number
+  enabled?: boolean
   sovits?: {
     apiUrl: string
     refAudioPath?: string
     refText?: string
     refLanguage?: 'zh' | 'en' | 'ja'
     targetLanguage?: 'zh' | 'en' | 'ja'
+  }
+  indextts?: {
+    apiUrl?: string
+    port?: number
+    refAudioPath?: string
+    lang?: 'ZH' | 'EN' | 'JA' | 'ES' | 'AR'
+    emotion?: string
+    durationFactor?: number
   }
 }
 
@@ -98,10 +107,19 @@ export class TTSEngineService {
   // ═══════════════════════════════════════════════════════
 
   async speak(options: TTSSpeakOptions): Promise<TTSSpeakResult> {
+    // TTS 总开关
+    if (this.config.enabled === false) {
+      return { engine: 'none', error: undefined }
+    }
+
     const engine = options.engine || this.config.engine
 
     if (engine === 'edge-tts') {
       return this.speakEdgeTTS(options)
+    }
+
+    if (engine === 'indextts') {
+      return this.speakIndexTTS(options)
     }
 
     if (engine === 'gpt-sovits' && this.config.sovits) {
@@ -202,6 +220,86 @@ export class TTSEngineService {
     this.playAudio(blobUrl, options.volume ?? this.config.volume ?? 1.0)
 
     return { engine: 'edge-tts' }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // IndexTTS-2.5 — 本地 GPU 语音克隆
+  // ═══════════════════════════════════════════════════════
+
+  private getIndexTtsUrl(): string {
+    const cfg = this.config.indextts
+    const port = cfg?.port || 18927
+    const base = cfg?.apiUrl || `http://127.0.0.1:${port}`
+    return base.replace(/\/+$/, '')
+  }
+
+  async indexTtsHealth(): Promise<{ ok: boolean; detail: string }> {
+    try {
+      const res = await fetch(`${this.getIndexTtsUrl()}/health`, {
+        signal: AbortSignal.timeout(2000),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.ready) return { ok: true, detail: 'IndexTTS-2.5 就绪' }
+        return { ok: false, detail: data.error || '模型加载中…' }
+      }
+      return { ok: false, detail: `服务返回: ${res.status}` }
+    } catch (err: any) {
+      return { ok: false, detail: `IndexTTS 服务未运行: ${err.message}` }
+    }
+  }
+
+  private async speakIndexTTS(options: TTSSpeakOptions): Promise<TTSSpeakResult> {
+    const cfg = this.config.indextts || {}
+    const url = `${this.getIndexTtsUrl()}/tts`
+
+    const body: any = {
+      text: options.text,
+      lang: cfg.lang || 'ZH',
+      ref_audio: cfg.refAudioPath || '',
+      duration_factor: cfg.durationFactor ?? (options.speed ?? this.config.speed ?? 1.0),
+    }
+    if (cfg.emotion) body.emotion = cfg.emotion
+
+    try {
+      const ctrl = new AbortController()
+      const timeoutId = setTimeout(() => ctrl.abort(), 60000) // IndexTTS 首次推理可能较慢
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        return { error: `IndexTTS 返回 ${res.status}: ${errData.error || ''}`, engine: 'indextts' }
+      }
+
+      const data = await res.json()
+      if (data.error) return { error: data.error, engine: 'indextts' }
+
+      const hexStr = typeof data.audio === 'string' ? data.audio : ''
+      if (!hexStr) return { error: 'IndexTTS 未返回音频数据', engine: 'indextts' }
+
+      // hex → ArrayBuffer → Blob (WAV)
+      const wavBytes = new Uint8Array(hexStr.length / 2)
+      for (let i = 0; i < wavBytes.length; i++) {
+        wavBytes[i] = parseInt(hexStr.substr(i * 2, 2), 16)
+      }
+      const blob = new Blob([wavBytes], { type: 'audio/wav' })
+      const blobUrl = URL.createObjectURL(blob)
+      this.playAudio(blobUrl, options.volume ?? this.config.volume ?? 1.0)
+
+      return { engine: 'indextts' }
+    } catch (err: any) {
+      const errMsg = err.name === 'AbortError'
+        ? 'IndexTTS 推理超时（首次加载模型可能需要 30 秒以上）'
+        : `IndexTTS 连接失败: ${err.message}`
+      this._onError?.(errMsg)
+      return { error: errMsg, engine: 'indextts' }
+    }
   }
 
   // ═══════════════════════════════════════════════════════

@@ -58,7 +58,7 @@ function error(msg: string) {
 
 /** 查找可用的 Python 可执行文件 */
 async function findPython(): Promise<string> {
-  const candidates = ['python3', 'python']
+  const candidates = ['python3', 'py', 'python']
   for (const bin of candidates) {
     try {
       const { execSync } = require('child_process')

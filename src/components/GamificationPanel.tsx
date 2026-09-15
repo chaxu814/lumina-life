@@ -228,20 +228,23 @@ export default function GamificationPanel() {
     try {
       const api = (window as any).luminaAPI
       if (!api?.gamificationStats) return
-      const stats = await api.gamificationStats()
+      const res = await api.gamificationStats()
+      // 后端返回 { ok, data: {...} }，需解包 .data
+      const stats = res?.data ?? res
       if (stats) {
         setGamification({
-          level: stats.level,
-          totalXp: stats.totalXp,
-          todayXp: stats.todayXp,
-          title: stats.title,
-          progress: stats.progress,
+          level: stats.level ?? 1,
+          totalXp: stats.totalXp ?? 0,
+          todayXp: stats.todayXp ?? 0,
+          title: stats.title ?? '初见',
+          progress: stats.progress ?? 0,
           unlockedAchievements: stats.unlockedAchievements || [],
         })
       }
       // 加载每日任务
       if (api.gamificationQuests) {
-        const q = await api.gamificationQuests()
+        const qr = await api.gamificationQuests()
+        const q = qr?.data ?? qr
         if (q?.quests) setQuests(q)
       }
     } catch (e) {
@@ -308,7 +311,7 @@ export default function GamificationPanel() {
     return () => unsubs.forEach(f => typeof f === 'function' && f())
   }, [])
 
-  const {level,currentXp,nextLevelXp,progress}=xpProgress(gamification.totalXp)
+  const {level,currentXp,nextLevelXp,progress}=xpProgress(gamification.totalXp ?? 0)
   const title=getTitle(level)
   const tier=getTier(level)
 

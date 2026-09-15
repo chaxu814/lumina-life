@@ -13,7 +13,10 @@ export interface ToolParamSchema {
 export interface ToolDef {
   name: string
   description: string
-  params: Record<string, ToolParamSchema>
+  category?: string
+  params?: Record<string, ToolParamSchema>
+  parameters?: Record<string, any>  // JSON Schema 格式
+  handler?: (...args: any[]) => Promise<any>
   toolsets: string[]
   dangerous?: boolean
   blockedInChild?: boolean
@@ -41,7 +44,8 @@ export interface LLMToolCall {
 
 export interface AgentMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  // v10.9: 支持多模态 — content 可以是字符串或 OpenAI Vision 格式的数组
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
   tool_calls?: LLMToolCall[]
   tool_call_id?: string
   name?: string
@@ -77,6 +81,8 @@ export interface AgentRunConfig {
   trackReasoning?: boolean
   /** 🆕 v15.0: 说出来模式 — 让 Agent 在搜索/工具调用时说出思考过程，而非安静执行 */
   verbalizeThinking?: boolean
+  /** 🆕 陪伴会话（如 Live2D 桌宠）：关闭"问句自动联网预搜索"，闲聊/身份问题不再被强制搜索；模型仍可自行调用 web_search */
+  noAutoSearch?: boolean
 }
 
 export type AgentEvent =
@@ -91,5 +97,5 @@ export type AgentEvent =
   | { type: 'approval:pending'; toolName: string; requestId: string; approvalType?: string; timeout?: number; args?: Record<string, any>; summary?: string }
   | { type: 'approval:resolved'; requestId: string; decision: string }
   | { type: 'memory_summary'; summary: string }
-  | { type: 'token_update'; totalTokens: number; delta: number; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } }
+  | { type: 'token_update'; totalTokens: number; delta: number; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }; promptTokens?: number; contextWindow?: number }
   | { type: 'incremental_tool'; toolCall: LLMToolCall }

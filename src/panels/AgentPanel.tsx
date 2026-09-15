@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../stores/appStore'
 import { IconPlus, IconCheck } from '../components/Icons'
+import RoleConfigPanel from '../components/RoleConfigPanel'
 
 const DEFAULT_PERSONAS = [
   { id: 'lumina', name: 'Lumina', desc: '默认桌宠人格 — 温柔活泼', icon: '🐱', systemPrompt: '你是 Lumina，温柔活泼的 AI 桌宠伙伴。' },
@@ -22,6 +23,7 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
   const skillConfig = useStore((s) => s.skillConfig)
 
   const [showNewPersona, setShowNewPersona] = useState(false)
+  const [showRoleConfig, setShowRoleConfig] = useState(false)
   const [newPersona, setNewPersona] = useState({ name: '', desc: '', icon: '🤖', systemPrompt: '' })
 
   const allPersonas = [...DEFAULT_PERSONAS, ...agentConfig.customPersonas]
@@ -52,6 +54,20 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       <div className="card-grid">
+        {/* ═══════════ 创建专攻 Agent ═══════════ */}
+        <div className="card" style={{ gridColumn: '1 / -1' }}>
+          <div className="card-header">
+            <span style={{ fontSize: 16 }}>🧬</span>
+            <span className="card-title">创建专攻 Agent</span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 8 }}>
+              选择角色模板 → AI 生成配置 → 微调 → 一键激活
+            </span>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowRoleConfig(true)}>
+            <IconPlus size={14} /> 创建专攻 Agent
+          </button>
+        </div>
+
         {/* ═══════════ 人格选择 ═══════════ */}
         <div className="card" style={{ gridColumn: '1 / -1' }}>
           <div className="card-header">
@@ -175,6 +191,18 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
             placeholder="留空则使用当前人格的默认提示词。在此输入可定制 Agent 的回复风格、能力边界、安全规则等。" />
         </div>
       </div>
+
+      {/* 专攻 Agent 创建向导 */}
+      {showRoleConfig && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: 'var(--surface-0)', borderRadius: 'var(--radius-xl)',
+            padding: 24, maxWidth: 640, width: '100%', maxHeight: '80vh', overflow: 'auto',
+            border: '1px solid var(--border-light)' }}>
+            <RoleConfigPanel onClose={() => setShowRoleConfig(false)} />
+          </div>
+        </div>
+      )}
     </>
   )
 

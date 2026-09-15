@@ -6,6 +6,8 @@
 // ============================================================
 
 import { globalEventBus, BusEvents } from '../eventBus'
+// 静态导入（打包后动态 require 路径解析不到）
+import { getEmotionXpMultiplier } from './emotionBridge'
 
 // ═══════════════════════════════════════════════════════════
 // XP 规则
@@ -143,7 +145,6 @@ class XpManager {
       ? emotionMultiplier
       : (() => {
           try {
-            const { getEmotionXpMultiplier } = require('./emotionBridge')
             return getEmotionXpMultiplier()
           } catch { return 1.0 }
         })()

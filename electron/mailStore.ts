@@ -9,6 +9,7 @@ import { app, Notification } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { join } from 'path'
+import { stripMarkdown } from './utils/stripMarkdown'
 
 export interface AgentMail {
   id: string
@@ -249,7 +250,7 @@ export function sendMail(subject: string, body: string, priority: 'normal' | 'im
   // Windows 系统通知
   if (Notification.isSupported()) {
     try {
-      const n = new Notification({ title, body: summary, urgency: isImportant ? 'critical' : 'normal' })
+      const n = new Notification({ title: stripMarkdown(title), body: stripMarkdown(summary), urgency: isImportant ? 'critical' : 'normal' })
       n.on('click', () => {/* 点击通知时不做特殊处理，用户自行打开 APP 查看 */})
       n.show()
     } catch (e) {

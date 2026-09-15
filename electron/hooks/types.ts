@@ -7,7 +7,9 @@
 //   - onError / onCompaction
 // ============================================================
 
-import type { AgentRunConfig, AgentEvent, LLMToolCall } from '../tools/types'
+import type { AgentMessage, AgentRunConfig, AgentEvent, LLMToolCall } from '../tools/types'
+
+export type { AgentMessage, AgentRunConfig, AgentEvent, LLMToolCall }
 
 export type HookPriority = 'highest' | 'high' | 'normal' | 'low' | 'lowest'
 
@@ -19,7 +21,7 @@ export interface HookContext {
   /** 当前 turn 计数 */
   turnCount: number
   /** 消息历史 */
-  messages: Array<{ role: string; content: string }>
+  messages: AgentMessage[]
   /** 任意附加数据 */
   extra?: Record<string, unknown>
 }
@@ -29,7 +31,7 @@ export interface BeforeReasoningInput {
   /** 当前用户输入 */
   userInput: string
   /** 将被发送的完整消息数组 (可修改) */
-  messages: Array<{ role: string; content: string; tool_calls?: unknown[] }>
+  messages: AgentMessage[]
   /** 将被附加的工具定义 */
   tools?: unknown[]
   /** 请求体 (可修改) */

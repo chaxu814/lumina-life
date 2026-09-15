@@ -58,7 +58,7 @@ export interface GCMsg {
   /** v3.0: 思考过程步骤（可折叠展示） */
   thinkingSteps?: ThinkingStep[]
   /** v8.1: 附件列表（用户上传的文件，气泡下方单独展示） */
-  attachments?: { name: string; size: number; text?: string }[]
+  attachments?: { name: string; size: number; text?: string; imageDataUrl?: string }[]
   _animDone?: boolean
 }
 

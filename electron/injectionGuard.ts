@@ -6,6 +6,15 @@
 
 import type { AgentMessage, LLMToolCall, ToolCall } from './tools/types'
 
+/** 将 AgentMessage content 安全转为字符串 */
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
+
 // ═══════════════════════════════════════════════════════════
 // 类型
 // ═══════════════════════════════════════════════════════════
@@ -297,7 +306,7 @@ export class InjectionGuard {
 
     for (const msg of messages) {
       if (msg.role === 'user') {
-        const { report } = this.sanitizeUserInput(msg.content)
+        const { report } = this.sanitizeUserInput(toText(msg.content))
         if (!report.clean) {
           threats.push(...report.detections)
         }

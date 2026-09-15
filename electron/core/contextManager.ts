@@ -8,6 +8,15 @@
 import type { AgentMessage, AgentRunConfig } from '../tools/types'
 import { getMemoryStore } from '../memory/memoryStore'
 
+/** 将 AgentMessage content 安全转为字符串 */
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
+
 // ═══════════════════════════════════════════════════════════
 // 上下文窗口检测
 // ═══════════════════════════════════════════════════════════
@@ -118,7 +127,7 @@ export function persistConversationHistory(
       const toolCalls = (msg as any).tool_calls
         ? JSON.stringify((msg as any).tool_calls)
         : undefined
-      store.addConversation(sessionId, msg.role, msg.content || '', toolCalls)
+      store.addConversation(sessionId, msg.role, toText(msg.content), toolCalls)
       newIndex = i
     }
     return newIndex

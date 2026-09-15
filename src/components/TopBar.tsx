@@ -1,27 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import { getPersona } from '../data/personas'
 import { IconSmile, IconWifi, IconWifiOff } from './Icons'
 import ModeIndicator from './ModeIndicator'  // 🆕 v2.0: 场景模式指示器
-
-// 快速切换用的供应商列表
-const QUICK_PROVIDERS = [
-  // 🆕 免费 API（无需 API Key，开箱即用）
-  { id: 'opencode-zen', label: '🎯 OpenCode Zen', nameCn: 'OpenCode Zen (免费)', url: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free' },
-  { id: 'lmstudio', label: '🧠 LM Studio', nameCn: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '' },
-  { id: 'openai', label: '☁️ OpenAI', nameCn: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  { id: 'deepseek', label: '☁️ DeepSeek', nameCn: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { id: 'qwen', label: '☁️ 通义千问', nameCn: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-  { id: 'custom', label: '⚙️ 自定义', nameCn: '自定义', url: '', model: '' },
-]
-
-function findProviderLabel(provider: string): string {
-  for (const p of QUICK_PROVIDERS) {
-    if (p.id === provider || provider === p.nameCn || provider.includes(p.id)) return p.label
-  }
-  return provider || 'LLM'
-}
+import {
+  getEmotion, getNamedEmotion, setEmotion, getAgentStatus, getStatusLabel,
+  onEmotionChange, type AgentStatus,
+} from '../services/agentEmotion'
 
 export default function TopBar() {
   const { t, i18n } = useTranslation()
@@ -43,13 +29,6 @@ export default function TopBar() {
   const gamification = useStore((s) => s.gamification)
   const setProfileTab = useStore((s) => s.setProfileTab)
 
-  // 🔥 LLM 快速切换下拉
-  const [showProviderMenu, setShowProviderMenu] = useState(false)
-  const providerMenuRef = useRef<HTMLDivElement>(null)
-  const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
-  const [providerModels, setProviderModels] = useState<Record<string, Array<{ id: string }>>>({})
-  const [providerLoading, setProviderLoading] = useState<Record<string, boolean>>({})
-
   // 🔥 生成完毕动画
   const [showDone, setShowDone] = useState(false)
   const prevProcessing = useRef(isProcessing)
@@ -62,21 +41,14 @@ export default function TopBar() {
     prevProcessing.current = isProcessing
   }, [isProcessing, activePanel])
 
-  // 点击外部关闭下拉
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (providerMenuRef.current && !providerMenuRef.current.contains(e.target as Node)) {
-        setShowProviderMenu(false)
-        setExpandedProvider(null)
-      }
-    }
-    if (showProviderMenu) document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showProviderMenu])
-
   // 🔥 实时消息数
   const activeConv = conversations.find((c) => c.id === activeConversationId)
   const msgCount = activeConv?.messages.filter((m) => m.role !== 'system').length || 0
+
+  // 🎭 情绪自定义弹窗
+  const [emotionPickerAgent, setEmotionPickerAgent] = useState<string | null>(null)
+  const [emotionPickerPos, setEmotionPickerPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [emotionLocalTick, setEmotionLocalTick] = useState(0)
 
   // ?? 启动时不自检了，syncProviderFromBackend 会负责检测并设在线状态
   // 用户可手动点击 LLM 状态指示器触发 checkLLMHealth
@@ -135,42 +107,50 @@ export default function TopBar() {
     setLlmChecked(true)
   }
 
-  // 🔥 获取供应商模型列表（缓存 + 加载状态）
-  const fetchModelsForProvider = async (providerId: string) => {
-    if (providerModels[providerId]?.length) return
-    const pInfo = QUICK_PROVIDERS.find(p => p.id === providerId)
-    if (!pInfo) return
-
-    const store = useStore.getState()
-    // 优先使用用户已保存的配置中的 baseUrl，否则用默认 URL
-    const savedCfg = store.providerConfigs?.[pInfo.nameCn || pInfo.label]
-    // 如果用户当前的 llmConfig.baseUrl 与当前 provider 匹配（如 LM Studio 的 :1234 端口），
-    // 则使用用户实际配的 URL 而非硬编码的默认 URL，实现数据同步
-    const currentBase = store.llmConfig.baseUrl
-    const isLmStudioMatch = providerId === 'lmstudio' && currentBase && (currentBase.includes(':1234') || currentBase.includes('/v1'))
-    const isCurrentMatch = isLmStudioMatch
-    const baseUrl = savedCfg?.baseUrl || (isCurrentMatch ? currentBase : (providerId === 'custom' ? currentBase : pInfo.url))
-    const apiKey = savedCfg?.apiKey || store.llmConfig.apiKey || ''
-
-    setProviderLoading(prev => ({ ...prev, [providerId]: true }))
-    try {
-      const r = await window.luminaAPI.llmFetchModels({ baseUrl, apiKey })
-      if (!r.error && r.models) {
-        setProviderModels(prev => ({ ...prev, [providerId]: r.models }))
-      }
-    } catch {}
-    setProviderLoading(prev => ({ ...prev, [providerId]: false }))
-  }
-
   // 🔥 当前人格
   const persona = getPersona(activePersona, agentConfig.customPersonas)
   const personaLabel = persona ? `${persona.icon} ${persona.name}` : '🐱 Lumina'
+
+  // 🆕 团队状态（从 Sidebar 搬过来）
+  const [, setTick] = useState(0)
+  const forceUpdate = useCallback(() => setTick(t => t + 1), [])
+  useEffect(() => {
+    const unsub = onEmotionChange(() => forceUpdate())
+    const onStatus = () => forceUpdate()
+    window.addEventListener('agent:status-changed', onStatus)
+    window.addEventListener('agent:emotion-manual', onStatus)
+    window.addEventListener('agent:emotion-auto', onStatus)
+    return () => {
+      unsub()
+      window.removeEventListener('agent:status-changed', onStatus)
+      window.removeEventListener('agent:emotion-manual', onStatus)
+      window.removeEventListener('agent:emotion-auto', onStatus)
+    }
+  }, [forceUpdate])
+
+  // Agent 元数据
+  const AGENT_META: Record<string, { id: string; name: string; icon: string; color: string }> = {
+    lumina: { id: 'lumina', name: 'Lumina', icon: '🐱', color: '#FF6B6B' },
+    recha:  { id: 'recha',  name: '热茶',   icon: '🍵', color: '#448AFF' },
+    yak:    { id: 'yak',    name: 'Yak',    icon: '📊', color: '#43A047' },
+  }
+  const TEAM_AGENTS = ['lumina', 'recha', 'yak']
 
   const handleMinimize = () => window.luminaAPI?.windowMinimize()
   const handleMaximize = () => window.luminaAPI?.windowMaximize()
   const handleClose = () => window.luminaAPI?.windowClose()
 
   const formatTokens = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)
+
+  // 🆕 DevTools 紧凑模式（DevTools 打开 OR 简约模式）
+  const compactMode = useStore(s => s.compactMode)
+  const [devtoolsOpen, setDevtoolsOpen] = useState(false)
+  const compact = compactMode || devtoolsOpen
+  useEffect(() => {
+    const api = (window as any).luminaAPI
+    if (!api?.onDevToolsChanged) return
+    return api.onDevToolsChanged((opened: boolean) => setDevtoolsOpen(opened))
+  }, [])
 
   return (
     <header className="topbar">
@@ -207,8 +187,8 @@ export default function TopBar() {
         {/* 🆕 v2.0: 场景模式指示器 */}
         <ModeIndicator />
 
-        {/* 🆕 v2.0: 🛡️ 沙箱状态指示器 */}
-        <div
+        {/* 🆕 v2.0: 🛡️ 沙箱状态指示器 — compact 隐藏 */}
+        {!compact && <div
           onClick={() => window.luminaAPI?.navigatePanel?.('security')}
           style={{
             display: 'flex', alignItems: 'center', gap: 4,
@@ -226,276 +206,99 @@ export default function TopBar() {
         >
           <span style={{ fontSize: 12, lineHeight: 1 }}>🛡️</span>
           <span>沙箱</span>
-        </div>
-
-        {/* 当前人格 */}
-        <div className="topbar-stat" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
+        </div>}
+        {!compact && <div className="topbar-stat" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
           <span style={{ fontSize: 12 }}>{personaLabel}</span>
-        </div>
+        </div>}
 
-        {/* Token 用量 */}
+        {/* 🆕 团队状态（名字+情绪上下对齐） */}
+        <div style={{
+          display: 'flex', gap: compact ? 0 : 2,
+          padding: compact ? '2px 6px' : '2px 8px', borderRadius: 8,
+          background: 'var(--surface-100)',
+          border: '1px solid var(--border-light)',
+          transition: 'all 0.2s',
+        }}>
+          {/* Agent 列表：名字 + 情绪标签上下对齐 */}
+          <div style={{ display: 'flex', gap: compact ? 4 : 8, alignItems: 'flex-start' }}>
+            {TEAM_AGENTS.map(id => {
+              const meta = AGENT_META[id]
+              if (!meta) return null
+              const status = getAgentStatus(id) as AgentStatus
+              const statusLabel = getStatusLabel(status)
+              const statusColor = statusLabel.color
+              const label = getNamedEmotion(id)
+              if (compact) {
+                return (
+                  <div key={id} style={{
+                    display: 'flex', alignItems: 'center', gap: 2,
+                    fontSize: 10,
+                  }} title={`${meta.name}: ${statusLabel.label}`}>
+                    <div style={{
+                      width: 5, height: 5, borderRadius: 3,
+                      background: statusColor,
+                      boxShadow: `0 0 6px ${statusColor}66`,
+                    }} />
+                    <span style={{ fontSize: 11 }}>{meta.icon}</span>
+                  </div>
+                )
+              }
+              return (
+                <div key={id} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+                }} title={`${meta.name}: ${statusLabel.label}`}>
+                  {/* 名字行：状态点 + 图标 + 名字 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11 }}>
+                    <div style={{
+                      width: 6, height: 6, borderRadius: 3,
+                      background: statusColor,
+                      boxShadow: `0 0 6px ${statusColor}66`,
+                    }} />
+                    <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                    <span style={{ fontWeight: 700, color: meta.color }}>{meta.name}</span>
+                  </div>
+                  {/* 情绪行 — 点击可自定义 */}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                      setEmotionPickerAgent(id)
+                      setEmotionPickerPos({ x: rect.left, y: rect.bottom + 6 })
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 1,
+                      padding: '1px 6px', borderRadius: 6,
+                      background: `${label.color}18`,
+                      border: `1px solid ${label.color}25`,
+                      fontWeight: 600, color: label.color, fontSize: 10,
+                      whiteSpace: 'nowrap', cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${label.color}30` }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${label.color}18` }}
+                    title={`${meta.name}：点击自定义情绪`}
+                  >
+                    {label.icon} {label.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
         <div className="topbar-stat" style={{ cursor: 'pointer' }}
           onClick={() => window.luminaAPI?.navigatePanel?.('usage')} title={t('topbar.usage_title')}>
           <span style={{ fontSize: 11 }}>📊</span>
           <span>{formatTokens(tokenUsage.today)} {t('topbar.tokens')}</span>
         </div>
 
-        {/* 消息数 */}
-        <div className="topbar-stat">
+        {/* 消息数 — compact 隐藏 */}
+        {!compact && <div className="topbar-stat">
           <IconSmile size={14} />
           <span>{msgCount} {t('topbar.messages')}</span>
-        </div>
+        </div>}
       </div>
 
       <div className="topbar-right">
-        {/* 🆕 v3.0: 等级 + 成就徽章 */}
-        <div
-          onClick={() => {
-            setProfileTab('achievements')
-            window.luminaAPI?.navigatePanel?.('profile')
-          }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '2px 8px', borderRadius: 12,
-            background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-            color: '#fff', fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', marginRight: 4, userSelect: 'none',
-            boxShadow: '0 1px 3px rgba(245,158,11,0.3)',
-            transition: 'transform 0.15s, box-shadow 0.15s',
-          }}
-          title={`Lv.${gamification.level} ${gamification.title} · ${gamification.unlockedAchievements.length} 成就`}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(245,158,11,0.4)' }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(245,158,11,0.3)' }}
-        >
-          <span>⭐ Lv.{gamification.level}</span>
-          {gamification.unlockedAchievements.length > 0 && (
-            <span style={{ fontSize: 9, opacity: 0.9 }}>🏆{gamification.unlockedAchievements.length}</span>
-          )}
-        </div>
-
-        {/* ════════════════════════════════════════════════
-             快速 LLM 切换（右上角，QwenPaw 风格）
-             点击按钮 → 弹出供应商列表（带动画）
-             点击供应商行 → 展开该供应商的模型列表
-             点击模型 → 立即切换（setLLMConfig）
-             ════════════════════════════════════════════════ */}
-        <div ref={providerMenuRef}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
-            fontSize: 11, color: 'var(--text-primary)', marginRight: 4,
-            position: 'relative', userSelect: 'none',
-            background: showProviderMenu ? '#f3f4f6' : 'transparent',
-            transition: 'background 0.15s',
-          }}
-          onClick={() => {
-            setShowProviderMenu(v => !v)
-            if (!showProviderMenu) setExpandedProvider(null)
-          }}>
-          <span>{findProviderLabel(llmConfig.provider)}</span>
-          <span style={{ fontSize: 11, marginLeft: 2, opacity: 0.4 }}>·</span>
-          <span style={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.6 }}>
-            {llmConfig.model || '—'}
-          </span>
-          <span style={{
-            fontSize: 8, opacity: 0.5, marginLeft: 2,
-            transition: 'transform 0.2s',
-            transform: showProviderMenu ? 'rotate(180deg)' : 'none',
-          }}>▾</span>
-
-          {/* ───── 下拉菜单 ───── */}
-          {showProviderMenu && (
-            <div onClick={e => e.stopPropagation()}
-              style={{
-              position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 1000,
-              background: 'var(--surface-0)', border: '1px solid var(--border-light)', borderRadius: 8,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.14)', minWidth: 240, maxWidth: 300,
-              padding: 4, maxHeight: 400, overflowY: 'auto',
-              animation: 'fadeInDown 0.18s ease-out',
-            }}>
-              {/* ──── 🎯 免费模型（单独区域，不与付费混在一起） ──── */}
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase',
-                letterSpacing: '1px', padding: '6px 10px 2px',
-              }}>
-                🎯 免费（开箱即用）
-              </div>
-              {QUICK_PROVIDERS.filter(p => p.id === 'opencode-zen').map(p => {
-                const active = p.id === llmConfig.provider || llmConfig.provider === p.nameCn
-                const isExpanded = expandedProvider === p.id
-
-                // 免费模型列表硬编码，不调 API，确保只出现免费模型
-                const FREE_MODELS: Record<string, Array<{ id: string; label: string }>> = {
-                  'opencode-zen': [
-                    { id: 'deepseek-v4-flash-free', label: 'DeepSeek V4 Flash Free' },
-                  ],
-                }
-                const models = FREE_MODELS[p.id] || []
-
-                return (
-                  <div key={p.id}>
-                    <div
-                      onClick={() => {
-                        const next = isExpanded ? null : p.id
-                        setExpandedProvider(next)
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '8px 10px', borderRadius: 5, cursor: 'pointer',
-                        background: active ? '#f0fdf4' : 'transparent',
-                        color: active ? '#16a34a' : '#374151',
-                        fontWeight: active ? 600 : 400,
-                        fontSize: 12,
-                        transition: 'background 0.12s',
-                      }}
-                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#f9fafb' }}
-                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
-                      <span style={{ flex: 1 }}>{p.label}</span>
-                      <span style={{
-                        fontSize: 8, fontWeight: 700, background: '#22c55e', color: '#fff',
-                        borderRadius: 4, padding: '0 5px', lineHeight: '16px', marginRight: 4,
-                      }}>免费</span>
-                      {active && <span style={{ fontSize: 9, color: '#16a34a' }}>●</span>}
-                      <span style={{
-                        fontSize: 8, opacity: 0.35,
-                        transition: 'transform 0.2s',
-                        transform: isExpanded ? 'rotate(90deg)' : 'none',
-                      }}>▶</span>
-                    </div>
-                    {isExpanded && (
-                      <div style={{ paddingLeft: 24, paddingBottom: 4, animation: 'fadeIn 0.12s ease-out' }}>
-                        {models.map(m => (
-                          <div key={m.id} onClick={() => {
-                            const store = useStore.getState()
-                            switchLLMProvider(p.nameCn || p.label, p.url, m.id)
-                            store.setLLMConfig({ model: m.id })
-                            // 免费 API 自动填入匿名 Key
-                            if (p.id === 'opencode-zen') {
-                              store.setLLMConfig({ apiKey: 'public' })
-                            }
-                            setShowProviderMenu(false)
-                            setExpandedProvider(null)
-                          }}
-                            style={{
-                              padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
-                              fontSize: 10, color: 'var(--text-secondary)',
-                              background: active && llmConfig.model === m.id ? '#f0fdf4' : 'transparent',
-                              fontWeight: active && llmConfig.model === m.id ? 600 : 400,
-                              display: 'flex', alignItems: 'center', gap: 4,
-                              transition: 'background 0.1s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6' }}
-                            onMouseLeave={e => { e.currentTarget.style.background = active && llmConfig.model === m.id ? '#f0fdf4' : 'transparent' }}>
-                            {active && llmConfig.model === m.id && <span style={{ color: '#16a34a', fontSize: 8 }}>●</span>}
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
-                            <span style={{
-                              fontSize: 8, fontWeight: 700, background: '#22c55e', color: '#fff',
-                              borderRadius: 3, padding: '0 4px', lineHeight: '14px',
-                            }}>免费</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {/* ──── 分隔线 ──── */}
-              <div style={{ borderTop: '1px solid var(--border-light)', margin: '4px 8px' }} />
-
-              {/* ──── 其他模型 ──── */}
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase',
-                letterSpacing: '1px', padding: '4px 10px 2px',
-              }}>
-                其他
-              </div>
-              {QUICK_PROVIDERS.filter(p => p.id !== 'opencode-zen').map(p => {
-                const active = p.id === llmConfig.provider || llmConfig.provider === p.nameCn
-                const isExpanded = expandedProvider === p.id
-                const models = providerModels[p.id]
-                const loading = providerLoading[p.id]
-
-                return (
-                  <div key={p.id}>
-                    <div
-                      onClick={() => {
-                        const next = isExpanded ? null : p.id
-                        setExpandedProvider(next)
-                        if (next) fetchModelsForProvider(p.id)
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '8px 10px', borderRadius: 5, cursor: 'pointer',
-                        background: active ? '#eff6ff' : 'transparent',
-                        color: active ? '#2563eb' : '#374151',
-                        fontWeight: active ? 600 : 400,
-                        fontSize: 12,
-                        transition: 'background 0.12s',
-                      }}
-                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#f9fafb' }}
-                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
-                      <span style={{ flex: 1 }}>{p.label}</span>
-                      {active && <span style={{ fontSize: 9, color: '#3b82f6' }}>●</span>}
-                      <span style={{
-                        fontSize: 8, opacity: 0.35,
-                        transition: 'transform 0.2s',
-                        transform: isExpanded ? 'rotate(90deg)' : 'none',
-                      }}>▶</span>
-                    </div>
-                    {isExpanded && (
-                      <div style={{ paddingLeft: 24, paddingBottom: 4, animation: 'fadeIn 0.12s ease-out' }}>
-                        {loading ? (
-                          <div style={{ padding: '6px 8px', fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: '2px solid #e5e7eb', borderTopColor: '#3b82f6', animation: 'spin 0.7s linear infinite' }} />
-                            获取模型列表…
-                          </div>
-                        ) : models && models.length > 0 ? (
-                          models.map(m => (
-                            <div key={m.id} onClick={() => {
-                              const store = useStore.getState()
-                              const actualUrl = (p.id === 'custom' ? store.llmConfig.baseUrl : p.url)
-                              const syncedUrl = (p.id === 'lmstudio' && store.llmConfig.baseUrl?.includes(':1234'))
-                                ? store.llmConfig.baseUrl
-                                : actualUrl
-                              switchLLMProvider(p.nameCn || p.label, syncedUrl, m.id)
-                              store.setLLMConfig({ model: m.id })
-                              setShowProviderMenu(false)
-                              setExpandedProvider(null)
-                            }}
-                              style={{
-                                padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
-                                fontSize: 10, color: 'var(--text-secondary)',
-                                background: active && llmConfig.model === m.id ? '#f0f7ff' : 'transparent',
-                                fontWeight: active && llmConfig.model === m.id ? 600 : 400,
-                                display: 'flex', alignItems: 'center', gap: 4,
-                                transition: 'background 0.1s',
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6' }}
-                              onMouseLeave={e => { e.currentTarget.style.background = active && llmConfig.model === m.id ? '#f0f7ff' : 'transparent' }}>
-                              {active && llmConfig.model === m.id && <span style={{ color: '#3b82f6', fontSize: 8 }}>●</span>}
-                              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.id}</span>
-                              {(m as any).multimodal && <span style={{ fontSize: 8, opacity: 0.4 }}>📷</span>}
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ padding: '6px 8px', fontSize: 10, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                            {p.id === 'custom' ? '输入自定义模型名' : '暂无模型数据'}
-                            <span style={{ marginLeft: 4, cursor: 'pointer', color: '#3b82f6' }}
-                              onClick={e => { e.stopPropagation(); fetchModelsForProvider(p.id) }}>
-                              重试
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
         {/* ═══ LLM 生成中 / 完成提示 ═══ */}
         {activePanel !== 'chat' && (isProcessing || showDone) && (
           <div style={{
@@ -535,6 +338,69 @@ export default function TopBar() {
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" /></svg>
         </button>
       </div>
+
+      {/* 🎭 情绪自定义弹窗 */}
+      {emotionPickerAgent && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 9999,
+          }}
+          onClick={() => setEmotionPickerAgent(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: emotionPickerPos.y,
+              left: Math.min(emotionPickerPos.x, window.innerWidth - 240),
+              background: 'var(--surface-100)',
+              border: '1px solid var(--border-light)',
+              borderRadius: 12, padding: '12px 14px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+              minWidth: 220, zIndex: 10000,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
+              🎭 设置 {AGENT_META[emotionPickerAgent]?.name ?? 'Agent'} 的情绪
+            </div>
+            {(['mood', 'energy', 'affinity'] as const).map(dim => {
+              const labels: Record<string, { name: string; min: string; max: string }> = {
+                mood: { name: '心情', min: '😢 很糟', max: '😄 很棒' },
+                energy: { name: '精力', min: '😴 累趴', max: '⚡ 超精神' },
+                affinity: { name: '亲近度', min: '😶 冷漠', max: '🥰 超亲近' },
+              }
+              const meta = labels[dim]
+              const emotion = getEmotion(emotionPickerAgent)
+              const val = emotion[dim]
+              return (
+                <div key={dim} style={{ marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>
+                    <span>{meta.name}</span>
+                    <span>{((val as number) * 100).toFixed(0)}%</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 9 }}>{meta.min}</span>
+                    <input
+                      type="range"
+                      min={dim === 'mood' ? -100 : 0}
+                      max={100}
+                      value={(val as number) * 100}
+                      onChange={e => {
+                        const v = Number(e.target.value) / 100
+                        setEmotion(emotionPickerAgent, { [dim]: v })
+                        setEmotionLocalTick(t => t + 1)
+                      }}
+                      style={{ flex: 1, height: 4, accentColor: 'var(--accent-500)' }}
+                    />
+                    <span style={{ fontSize: 9 }}>{meta.max}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </header>
   )
 }

@@ -37,6 +37,11 @@ export interface LuckySettingsConfig {
     // 🆕 LLM 精确评估开关
     useLLMEvaluation: boolean
   }
+  mission?: {
+    subTasks: string[]
+    bypassIterationLimit: boolean
+    trackProgress: boolean
+  }
 }
 
 interface LuckyModeSettingsProps {
@@ -71,6 +76,11 @@ export function getDefaultSettings(): LuckySettingsConfig {
       bypassIterationLimit: true,
       trackProgress: true,
       useLLMEvaluation: false,
+    },
+    mission: {
+      subTasks: [],
+      bypassIterationLimit: true,
+      trackProgress: true,
     },
   }
 }
@@ -250,8 +260,8 @@ export default function LuckyModeSettings({
                   🎯 当前预设
                 </label>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  {(['off', 'default', 'goal'] as LuckyModePreset[]).map(p => {
-                    const labels: Record<LuckyModePreset, string> = { off: '⏹️ 关闭', default: '🔄 标准循环', goal: '🎯 目标驱动' }
+                  {(['off', 'default', 'goal', 'mission'] as LuckyModePreset[]).map(p => {
+                    const labels: Record<LuckyModePreset, string> = { off: '⏹️ 关闭', default: '🔄 标准循环', goal: '🎯 目标驱动', mission: '🚀 任务模式' }
                     return (
                       <button key={p}
                         onClick={() => update({ preset: p })}

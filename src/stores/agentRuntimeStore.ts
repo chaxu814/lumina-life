@@ -45,6 +45,10 @@ export interface AgentRuntimeState {
   addToolTrace: (name: string, status: 'running' | 'done' | 'error') => void
   clearToolTraces: () => void
 
+  // ── 🆕 上下文用量（实时显示在输入栏） ──
+  contextUsage: { promptTokens: number; contextWindow: number; updatedAt: number }
+  setContextUsage: (promptTokens: number, contextWindow: number) => void
+
   // ── 重置全部 ──
   resetAgentRuntime: () => void
 }
@@ -72,10 +76,17 @@ export const useAgentRuntime = create<AgentRuntimeState>()((set) => ({
   }),
   clearToolTraces: () => set({ toolTraces: [] }),
 
+  // 🆕 上下文用量
+  contextUsage: { promptTokens: 0, contextWindow: 0, updatedAt: 0 },
+  setContextUsage: (promptTokens, contextWindow) => set({
+    contextUsage: { promptTokens, contextWindow, updatedAt: Date.now() },
+  }),
+
   resetAgentRuntime: () => set({
     agentEvents: [],
     streamingContent: '',
     lastThinking: '',
     toolTraces: [],
+    // 不重置 contextUsage — 对话结束后仍显示上次用量
   }),
 }))

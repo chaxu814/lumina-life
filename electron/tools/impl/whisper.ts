@@ -7,17 +7,19 @@
  *   - voice_status      — 检查语音能力
  */
 
-import { ToolDefinition } from '../registry'
-import { existsSync, statSync } from 'fs'
+import type { ToolDef } from '../types'
+import { existsSync, statSync, writeFileSync, mkdirSync } from 'fs'
+import { join } from 'path'
 
 // ─── voice_transcribe ─────────────────────────────────────────────
 /**
  * 转录一个已有的音频文件为文字
  */
-export const toolVoiceTranscribe: ToolDefinition = {
+export const toolVoiceTranscribe: ToolDef = {
   name: 'voice_transcribe',
   description: '将音频文件（WAV/MP3/OGG/M4A）转录为文字。使用本地 Whisper ONNX 模型。',
   category: 'voice',
+  toolsets: ['voice'],
   parameters: {
     type: 'object',
     properties: {
@@ -89,10 +91,11 @@ export const toolVoiceTranscribe: ToolDefinition = {
 /**
  * 录音 + 转写
  */
-export const toolVoiceRecord: ToolDefinition = {
+export const toolVoiceRecord: ToolDef = {
   name: 'voice_record',
   description: '从麦克风录音（需 sox 或 ffmpeg），自动进行 Whisper 语音识别。',
   category: 'voice',
+  toolsets: ['voice'],
   parameters: {
     type: 'object',
     properties: {
@@ -143,10 +146,11 @@ export const toolVoiceRecord: ToolDefinition = {
 /**
  * 检查语音能力状态
  */
-export const toolVoiceStatus: ToolDefinition = {
+export const toolVoiceStatus: ToolDef = {
   name: 'voice_status',
   description: '检查语音模块的能力状态（录音工具、Whisper 模型是否就绪）',
   category: 'voice',
+  toolsets: ['voice'],
   parameters: {
     type: 'object',
     properties: {},
@@ -171,6 +175,94 @@ export const toolVoiceStatus: ToolDefinition = {
         success: false,
         error: `检查失败: ${err.message}`,
       }
+    }
+  },
+}
+
+// ─── voice_speak ─────────────────────────────────────────────────
+/**
+ * 文字转语音（TTS）
+ * Phase 3: 轻量媒体生成基础版
+ */
+export const toolVoiceSpeak: ToolDef = {
+  name: 'voice_speak',
+  description: '将文字转换为语音（使用 OpenAI TTS 或系统 TTS）。需要配置 API Key。',
+  category: 'voice',
+  toolsets: ['voice', 'media'],
+  parameters: {
+    type: 'object',
+    properties: {
+      text: {
+        type: 'string',
+        description: '要转换的文字内容',
+      },
+      voice: {
+        type: 'string',
+        description: '语音模型 (alloy / echo / fable / onyx / nova / shimmer)',
+        default: 'alloy',
+        enum: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
+      },
+      speed: {
+        type: 'number',
+        description: '语速 (0.25 - 4.0)',
+        default: 1.0,
+      },
+    },
+    required: ['text'],
+  },
+  handler: async (args: { text: string; voice?: string; speed?: number }) => {
+    const { text, voice = 'alloy', speed = 1.0 } = args
+
+    // 从配置获取 API Key
+    const configPath = join(process.env.APPDATA || '', 'lumina', 'lumina-config.json')
+    let apiKey = ''
+    try {
+      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'))
+      apiKey = config.openai?.apiKey || ''
+    } catch {
+      apiKey = process.env.OPENAI_API_KEY || ''
+    }
+
+    if (!apiKey) {
+      return {
+        success: false,
+        error: '未配置 OpenAI API Key。请在设置中配置，或设置环境变量 OPENAI_API_KEY。',
+      }
+    }
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'tts-1',
+          input: text,
+          voice,
+          speed,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        return { success: false, error: `TTS 请求失败: ${error}` }
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer())
+      const saveDir = join(process.env.USERPROFILE || '', 'Desktop', 'lumina_audio')
+      mkdirSync(saveDir, { recursive: true })
+      const savePath = join(saveDir, `lumina_speech_${Date.now()}.mp3`)
+      writeFileSync(savePath, buffer)
+
+      return {
+        success: true,
+        audioPath: savePath,
+        message: `✅ 语音已生成: ${savePath}`,
+      }
+    } catch (err: any) {
+      return { success: false, error: `语音合成失败: ${err.message}` }
     }
   },
 }

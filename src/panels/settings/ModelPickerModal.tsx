@@ -15,6 +15,8 @@ interface Props {
   isFetching: boolean
   baseUrl?: string
   apiKey?: string
+  /** 获取失败/空列表时的具体原因 */
+  error?: string | null
   onTestConnection?: (modelId: string) => void
   onTestMultimodal?: (modelId: string) => void
 }
@@ -22,7 +24,7 @@ interface Props {
 /** 🧠 模型选择弹窗 */
 export default function ModelPickerModal({
   show, models, currentModel, onSelect, onClose, isFetching,
-  baseUrl, apiKey: _apiKey,
+  baseUrl, apiKey: _apiKey, error,
   onTestConnection, onTestMultimodal,
 }: Props) {
   if (!show) return null
@@ -119,6 +121,12 @@ export default function ModelPickerModal({
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>获取模型列表失败</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, maxWidth: 280, margin: '0 auto' }}>
                 <div>请检查 API 地址和密钥是否正确</div>
+                {error && (
+                  <div style={{
+                    marginTop: 8, fontSize: 11, lineHeight: 1.6,
+                    color: '#b91c1c', wordBreak: 'break-all',
+                  }}>❗ {error}</div>
+                )}
                 <div style={{
                   marginTop: 4, fontSize: 11, fontFamily: 'monospace',
                   background: 'var(--surface-100)', padding: '6px 10px', borderRadius: 6,
@@ -136,6 +144,12 @@ export default function ModelPickerModal({
               <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>📭</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>没有可用模型</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>请先在服务端加载模型</div>
+              {error && (
+                <div style={{
+                  marginTop: 8, fontSize: 11, lineHeight: 1.6, maxWidth: 320, margin: '8px auto 0',
+                  color: '#b91c1c', wordBreak: 'break-all',
+                }}>❗ {error}</div>
+              )}
             </div>
           )}
 

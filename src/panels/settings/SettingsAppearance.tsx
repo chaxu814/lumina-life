@@ -6,6 +6,8 @@ import { SettingSection } from '../../components/SettingsUI'
 export default function SettingsAppearance() {
   const theme = useStore(s => s.theme)
   const setTheme = useStore(s => s.setTheme)
+  const compactMode = useStore(s => s.compactMode)
+  const setCompactMode = useStore(s => s.setCompactMode)
 
   const options = [
     { id: 'light' as const, emoji: '☀️', label: '浅色', desc: '明亮清晰' },
@@ -46,6 +48,49 @@ export default function SettingsAppearance() {
         border: '1px solid #ddd6fe', fontSize: 11, color: '#6d28d9', lineHeight: 1.5,
       }}>
         💡 当前主题已自动保存，下次启动自动恢复。
+      </div>
+
+      {/* 🆕 简约模式开关 */}
+      <div style={{
+        marginTop: 20, padding: 14, borderRadius: 10,
+        border: '1px solid var(--border-light)',
+        background: 'var(--surface-0)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>✨</span> 简约模式
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.5 }}>
+              隐藏侧边栏文字、历史列表和次要按钮，让界面更清爽简洁。
+            </div>
+          </div>
+          <button
+            onClick={() => setCompactMode(!compactMode)}
+            style={{
+              width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: compactMode ? '#7c3aed' : '#d1d5db',
+              position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+            }}
+          >
+            <div style={{
+              width: 18, height: 18, borderRadius: '50%', background: 'white',
+              position: 'absolute', top: 3,
+              left: compactMode ? 23 : 3,
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </button>
+        </div>
+        {compactMode && (
+          <div style={{
+            marginTop: 8, padding: '6px 10px', borderRadius: 6,
+            background: '#f5f3ff', border: '1px solid #ddd6fe',
+            fontSize: 11, color: '#6d28d9',
+          }}>
+            ✓ 简约模式已开启 — 效果等同于打开开发者工具时的紧凑布局
+          </div>
+        )}
       </div>
     </SettingSection>
   )

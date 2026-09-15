@@ -153,6 +153,12 @@ export function createAppMenu(mainWindow: BrowserWindow) {
       label: '视图',
       submenu: [
         {
+          label: '显示桌宠',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => mainWindow.webContents.send('menu:toggle-pet'),
+        },
+        { type: 'separator' },
+        {
           label: '切换到聊天面板',
           accelerator: 'CmdOrCtrl+1',
           click: () => mainWindow.webContents.send('menu:switch-panel', 'chat'),

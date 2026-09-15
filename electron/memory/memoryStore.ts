@@ -89,6 +89,11 @@ export interface StructuredMemory {
 export class MemoryStore {
   private db: Database.Database
 
+  /** 获取底层 SQLite 数据库实例（供高级查询使用） */
+  getDb(): Database.Database {
+    return this.db
+  }
+
   /**
    * 打开/创建 SQLite 数据库，启用 WAL 模式，初始化表结构
    * @param dbPath - 可选数据库路径，默认 `%APPDATA%/lumina-memory.db`
@@ -595,6 +600,25 @@ export class MemoryVectorStore {
   /** 外部 embedding 回调 (可选) */
   private externalEmbedder: ((texts: string[]) => Promise<number[][]>) | null = null
 
+  /** 外部 rerank 回调 (可选) */
+  private externalReranker: ((query: string, documents: string[], topK?: number) => Promise<{ index: number; score: number }[]>) | null = null
+
+  /** Embedding 配置（支持热更新） */
+  private embeddingConfig = {
+    mode: 'tfidf' as 'ollama' | 'embedding_server' | 'tfidf' | 'none',
+    ollamaUrl: 'http://localhost:11434',
+    ollamaModel: 'nomic-embed-text',
+    embeddingServerUrl: 'http://127.0.0.1:18923',
+  }
+
+  /** Rerank 配置（支持热更新） */
+  private rerankConfig = {
+    enabled: false,
+    url: 'http://localhost:11434', // OpenAI 兼容接口
+    model: 'bge-reranker-v2-m3',
+    topK: 10,
+  }
+
   /**
    * 启用 Ollama embedding (自动检测可用性，不可用回退 TF-IDF)
    * @param url Ollama 服务地址，默认 http://localhost:11434
@@ -645,6 +669,11 @@ export class MemoryVectorStore {
     return 'tfidf'
   }
 
+  /** 获取 Embedding 配置（只读） */
+  getEmbeddingConfig(): { mode: string; ollamaUrl: string; ollamaModel: string; embeddingServerUrl: string } {
+    return { ...this.embeddingConfig }
+  }
+
   /**
    * 启用本地 Embedding 服务器 (Python sentence-transformers)
    * @param url 服务地址，默认 http://127.0.0.1:18923
@@ -677,6 +706,8 @@ export class MemoryVectorStore {
       Object.defineProperty(EmbeddingServerFn, 'name', { value: 'EmbeddingServerFn' })
 
       this.externalEmbedder = EmbeddingServerFn
+      this.embeddingConfig.mode = 'embedding_server'
+      this.embeddingConfig.embeddingServerUrl = url
       console.log(`[VectorStore] ✅ Embedding 服务已启用 (${url})`)
       return true
     } catch (err) {
@@ -687,7 +718,97 @@ export class MemoryVectorStore {
   }
 
   /**
-   * 设置外部 embedding 函数 (如 ollama, transformers.js)
+   * 🆕 启用 Rerank 服务（OpenAI 兼容接口）
+   * @param url Rerank 服务地址
+   * @param model Rerank 模型名
+   * @param topK 返回前 K 个结果
+   * @returns true 如果服务可用并已启用
+   */
+  async enableRerank(url = 'http://localhost:11434', model = 'bge-reranker-v2-m3', topK = 10): Promise<boolean> {
+    try {
+      // 检测服务是否可用
+      const testRes = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(3000) })
+      if (!testRes.ok) {
+        console.warn(`[VectorStore] Rerank 服务不可用 (${url})`)
+        return false
+      }
+
+      // 设置 reranker（OpenAI 兼容格式）
+      this.externalReranker = async (query: string, documents: string[], topK = 10): Promise<{ index: number; score: number }[]> => {
+        const res = await fetch(`${url}/api/rerank`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            query,
+            documents,
+            top_k: topK,
+          }),
+          signal: AbortSignal.timeout(15000),
+        })
+        if (!res.ok) throw new Error(`Rerank 请求失败: ${res.status}`)
+        const data = await res.json()
+        return data.results as { index: number; score: number }[]
+      }
+
+      this.rerankConfig.enabled = true
+      this.rerankConfig.url = url
+      this.rerankConfig.model = model
+      this.rerankConfig.topK = topK
+
+      console.log(`[VectorStore] ✅ Rerank 已启用 (${url}, ${model})`)
+      return true
+    } catch (err) {
+      console.warn('[VectorStore] Rerank 服务连接失败, 跳过重排:', (err as Error).message)
+      this.externalReranker = null
+      this.rerankConfig.enabled = false
+      return false
+    }
+  }
+
+  /**
+   * 🆕 设置外部 rerank 函数
+   * @param reranker 接受 (query, documents, topK) 返回重排结果的函数
+   */
+  setExternalReranker(reranker: (query: string, documents: string[], topK?: number) => Promise<{ index: number; score: number }[]>): void {
+    this.externalReranker = reranker
+    this.rerankConfig.enabled = true
+  }
+
+  /**
+   * 获取当前 rerank 状态
+   */
+  get rerankStatus(): { enabled: boolean; url: string; model: string } {
+    return {
+      enabled: this.rerankConfig.enabled,
+      url: this.rerankConfig.url,
+      model: this.rerankConfig.model,
+    }
+  }
+
+  /**
+   * 🆕 执行 Rerank 重排序
+   * @param query 查询文本
+   * @param documents 文档列表
+   * @param topK 返回前 K 个结果
+   * @returns 重排结果列表
+   */
+  async rerank(query: string, documents: string[], topK = 10): Promise<{ index: number; score: number }[]> {
+    if (!this.externalReranker) {
+      // 回退：返回原始顺序
+      return documents.slice(0, topK).map((_, i) => ({ index: i, score: 1 - i * 0.01 }))
+    }
+
+    try {
+      const results = await this.externalReranker(query, documents, topK)
+      return results
+    } catch (err) {
+      console.warn('[VectorStore] Rerank 失败，使用原始顺序:', err)
+      return documents.slice(0, topK).map((_, i) => ({ index: i, score: 1 - i * 0.01 }))
+    }
+  }
+
+  /** 设置外部 embedding 函数 (如 ollama, transformers.js)
    * 设置后将优先使用外部 embedder，回退到 TF-IDF
    */
   setExternalEmbedder(embedder: (texts: string[]) => Promise<number[][]>): void {
@@ -776,7 +897,33 @@ export class MemoryVectorStore {
     }
 
     results.sort((a, b) => b.score - a.score)
-    return results.slice(0, topK)
+    let finalResults = results.slice(0, topK)
+
+    // 🆕 Rerank 重排序（如果启用）
+    if (this.externalReranker && finalResults.length > 0) {
+      try {
+        const docs = finalResults.map((r) => r.entry.text)
+        const rerankResults = await this.externalReranker(query, docs, this.rerankConfig.topK || topK)
+
+        // 按 rerank 结果重新排序
+        const reranked: SearchResult[] = []
+        for (const rr of rerankResults) {
+          const original = finalResults[rr.index]
+          if (original) {
+            reranked.push({
+              ...original,
+              score: rr.score, // 使用 rerank 分数覆盖
+            })
+          }
+        }
+        finalResults = reranked.slice(0, topK)
+        console.log(`[VectorStore] 🔄 Rerank 完成: ${rerankResults.length} 条结果已重排`)
+      } catch (err) {
+        console.warn('[VectorStore] Rerank 失败，使用原始排序:', err)
+      }
+    }
+
+    return finalResults
   }
 
   /** 快速关键词搜索 (兼容旧 API) */

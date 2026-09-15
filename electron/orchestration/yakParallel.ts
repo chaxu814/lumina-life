@@ -291,7 +291,7 @@ export class YakParallel {
         const result: DelegationResult = await delegationManager.delegate(
           'yak', // 发起者
           {
-            to: intern.id, // 路由到实习生
+            to: intern.id as any, // 路由到实习生
             task: [
               `【${intern.name} 任务】`,
               ``,

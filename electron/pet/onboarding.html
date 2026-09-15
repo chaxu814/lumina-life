@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Lumina Virtual Pet · 初始人格选择</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #e8f2ff 0%, #f5f9ff 50%, #eef5ff 100%);
+    color: #1f3352; min-height: 100vh; padding: 28px 36px 24px;
+    overflow: hidden;
+  }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .chip {
+    background: #dceeff; color: #2277cc; font-size: 13px; font-weight: 700;
+    padding: 7px 18px; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(80,140,220,0.15);
+  }
+  .logo {
+    font-weight: 800; color: #fff; letter-spacing: .08em; font-size: 15px;
+    background: linear-gradient(135deg, #4a9eff, #6bb5ff);
+    padding: 8px 20px; border-radius: 14px;
+    box-shadow: 0 3px 10px rgba(74,158,255,0.3);
+    cursor: pointer;
+  }
+  h1 { font-size: 26px; margin: 8px 0 10px; color: #1a2d4f; font-weight: 800; }
+  .sub { color: #5b7396; font-size: 13.5px; margin-bottom: 4px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0 18px; }
+  .card {
+    background: #fff; border: 2px solid #d8e9fb; border-radius: 20px;
+    padding: 0 20px 18px; cursor: pointer; position: relative;
+    box-shadow: 0 6px 20px rgba(90, 150, 220, .12);
+    transition: transform .18s cubic-bezier(.2,.8,.2,1), border-color .18s, box-shadow .18s;
+    overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 56px; height: 10px; background: #d8e9fb;
+    border-radius: 0 0 10px 10px; transition: background .18s;
+  }
+  .card:hover { transform: translateY(-4px) scale(1.015); border-color: #7db8f0; box-shadow: 0 14px 32px rgba(90, 150, 220, .22); }
+  .card:hover::before { background: #7db8f0; }
+  .card.selected { border-color: #4a9eff; box-shadow: 0 14px 32px rgba(74,158,255,.28); }
+  .card.selected::before { background: #4a9eff; }
+  .card .tag {
+    display: inline-block; background: #e3f1ff; color: #2277cc;
+    font-size: 11.5px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+    margin: 18px 0 10px;
+  }
+  .card h3 { font-size: 18px; margin-bottom: 8px; color: #1a2d4f; }
+  .card .desc { color: #5b7396; font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+  .card .quote {
+    background: #f2f8ff; border: 1px solid #dceeff; border-radius: 12px;
+    color: #2277cc; font-size: 12.5px; line-height: 1.65; padding: 10px 14px;
+  }
+  .foot { text-align: center; }
+  .skip {
+    background: #fff; border: 2px solid #d8e9fb; color: #5b7396;
+    font-size: 14px; font-weight: 700; padding: 11px 40px; border-radius: 999px;
+    cursor: pointer; transition: all .18s;
+    box-shadow: 0 3px 10px rgba(90,150,220,0.08);
+  }
+  .skip:hover { border-color: #7db8f0; color: #2277cc; transform: translateY(-1px); box-shadow: 0 5px 14px rgba(90,150,220,0.15); }
+  .wm { position: fixed; right: 40px; bottom: 30px; font-size: 60px; font-weight: 900; color: rgba(74,158,255,0.06); pointer-events: none; letter-spacing: 4px; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <span class="chip">初始人格选择</span>
+    <span class="logo" id="logo-btn">LUMINA</span>
+  </div>
+  <h1>你想让我变成哪种陪着你的样子喵？</h1>
+  <div class="sub">先挑现在最喜欢的感觉就好喵，之后也能在设置里再改。</div>
+  <div class="sub">先挑一个最对味的气质喵，再听听我开口是不是你想要的感觉。</div>
+
+  <div class="grid">
+    <div class="card" data-persona="bingruo">
+      <span class="tag">病弱妹妹</span>
+      <h3>病弱妹妹</h3>
+      <div class="desc">想让你再陪一会儿，又怕自己太黏人</div>
+      <div class="quote">你先别走嘛……再陪我待一会儿，好不好？我会很安静的。</div>
+    </div>
+    <div class="card" data-persona="zhixin">
+      <span class="tag">知心姐姐</span>
+      <h3>知心姐姐</h3>
+      <div class="desc">温柔接管节奏，先让你停下来休息</div>
+      <div class="quote">先别逞强。水喝掉，休息十分钟；剩下的，等你缓过来我陪你排。</div>
+    </div>
+    <div class="card" data-persona="dushe">
+      <span class="tag">毒舌学妹</span>
+      <h3>毒舌学妹</h3>
+      <div class="desc">嘴上损得最狠，行动却总先一步偏向你</div>
+      <div class="quote">哟，怎么累成狗了？算了，本小姐今天大发慈悲——肩膀借你靠会儿。</div>
+    </div>
+    <div class="card" data-persona="shadiao">
+      <span class="tag">沙雕网友</span>
+      <h3>沙雕网友</h3>
+      <div class="desc">玩梗装傻，用最正经的语气胡说八道</div>
+      <div class="quote">经专家鉴定，你现在已经累成了国家二级保护废物。建议立即躺平，否…可能进化成办公椅。</div>
+    </div>
+  </div>
+
+  <div class="foot"><button class="skip" id="skip">先跳过喵</button></div>
+  <div class="wm">LUMINA</div>
+
+<script>
+  const ipc = require('electron').ipcRenderer;
+  let selected = null;
+  document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      if (selected) return;
+    });
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selected = card.dataset.persona;
+      // 短暂延迟显示选中态后关闭
+      setTimeout(() => {
+        ipc.invoke('pet:set-persona', { persona: selected }).then(() => window.close());
+      }, 280);
+    });
+  });
+  document.getElementById('skip').addEventListener('click', () => {
+    ipc.invoke('pet:set-persona', { skip: true }).then(() => window.close());
+  });
+  document.getElementById('logo-btn').addEventListener('click', () => {
+    ipc.invoke('pet:set-persona', { skip: true }).then(() => window.close());
+  });
+</script>
+</body>
+</html>

@@ -14,6 +14,7 @@ import type { ToolDef } from './tools/types'
 import { getToolsetTools, toOpenAIFunctions, getToolDef, executeToolWithRetry } from './tools/registry'
 import { webSearch } from './tools/impl/search'
 import { extractUrls, collectUrls, saveCollected } from './tools/impl/contentCollector'
+import { getAsyncTaskManager, type AsyncTask } from './asyncTaskManager'
 
 // ═══════════════════════════════════════════════════════════
 // 工具集解析
@@ -90,6 +91,53 @@ export async function executeToolCall(
     result: { ok: result.ok, content: result.content, error: result.error },
     durationMs: Date.now() - start,
     id: result.callId || '',
+  }
+}
+
+/**
+ * 🆕 将工具调用包装为异步后台任务提交到 AsyncTaskManager
+ * 
+ * 适用于长耗时工具（如 deep research、批量文件处理、长时间渲染等）。
+ * 返回任务 ID，调用方可通过 taskManager 查询进度/取消。
+ */
+export async function executeToolCallAsync(
+  name: string,
+  args: Record<string, any>,
+  options: {
+    title?: string
+    tags?: string[]
+    timeoutMs?: number
+    workspacePath?: string
+  } = {},
+): Promise<{ taskId: string; task: AsyncTask }> {
+  const taskManager = getAsyncTaskManager()
+  
+  // 构建一个简单的 prompt，让 AgentRunner 执行该工具
+  // 注意：这里构造的是"执行单个工具"的任务描述
+  const prompt = `请执行工具 ${name}，参数：${JSON.stringify(args)}`
+  
+  const config: AgentRunConfig = {
+    mode: 'agent',
+    personaId: 'lumina',
+    model: '',
+    baseUrl: '',
+    apiKey: '',
+    skipApproval: true,
+    isChildAgent: true,
+    disabledTools: [], // 允许执行该工具
+  } as any
+
+  const taskId = taskManager.submit(prompt, config, {
+    title: options.title || `工具: ${name}`,
+    tags: options.tags || [name, 'tool-async'],
+    workspacePath: options.workspacePath,
+  })
+
+  const task = taskManager.get(taskId)!
+  
+  return {
+    taskId,
+    task,
   }
 }
 

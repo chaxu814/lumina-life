@@ -486,8 +486,24 @@ export function getLatestReport(type?: string): ReportRecord | null {
 }
 
 /**
- * 关闭数据库连接
+ * 检查今天是否已有包含指定关键词的动态（去重用）
+ * @param agentId - Agent ID
+ * @param keyword - 内容关键词（如 "欢迎回来"）
+ * @returns true = 今天已有，不要再发
  */
+export function hasTodayMomentWithKeyword(agentId: string, keyword: string): boolean {
+  const db = getDb()
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayMs = todayStart.getTime()
+
+  const row = db.prepare(
+    'SELECT 1 FROM moments WHERE agent_id = ? AND content LIKE ? AND created_at >= ? LIMIT 1'
+  ).get(agentId, `%${keyword}%`, todayMs) as any
+  return !!row
+}
+
+/** 关闭数据库连接 */
 export function closeMomentsStore() {
   if (db) {
     db.close()

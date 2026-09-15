@@ -16,11 +16,20 @@
 import { TokenEstimator } from './tokenEstimator'
 import type { AgentMessage } from './tools/types'
 
+// 辅助：将 content 安全转为字符串
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
+
 // ═══════════════════════════════════════════════════════════
 //  配置常量
 // ═══════════════════════════════════════════════════════════
 
-/** Token 预算硬上限（LM Studio Qwen 9B 实际支持 ~128K，与 lumina-providers.json 同步） */
+/** Token 预算默认硬上限（当无法获取模型上下文窗口时的兜底值） */
 export const COMPACTOR_TOKEN_BUDGET = 131_072
 
 /** 消息条数上限（v6.0-fix: 从 120 降到 80），配合 65% 的压缩阈值压缩更快生效 */
@@ -29,13 +38,26 @@ export const COMPACTOR_MESSAGE_LIMIT = 80
 /** 保留的最近完整消息数（增大保留窗口，让 LLM 记得更长期的上下文） */
 export const COMPACTOR_RECENT_PAIRS = 50
 
-/** 
+/**
  * 压缩触发阈值（v6.0-fix: 从 90% 降到 65%）
  *   长上下文下 LLM 推理时间随 token 数非线性增长。
  *   90% 才压缩 → 此时推理已极慢，前端 180s 超时仍可能触发。
  *   65% 压缩 → 在推理变慢前主动瘦身，避免超时。
  */
 export const COMPACTOR_TRIGGER_RATIO = 0.65
+
+/**
+ * 根据模型上下文窗口计算压缩预算
+ *   - 小窗口（≤128K）：用窗口的 65%
+ *   - 中窗口（128K-512K）：用窗口的 60%（大窗口留更多余量给生成）
+ *   - 大窗口（≥512K）：用窗口的 50%（1M 窗口时 50 万 token 才压缩，充分利用长上下文）
+ */
+export function getCompactorBudget(contextWindow?: number): number {
+  if (!contextWindow || contextWindow <= 0) return COMPACTOR_TOKEN_BUDGET
+  if (contextWindow <= 131_072) return Math.floor(contextWindow * COMPACTOR_TRIGGER_RATIO)
+  if (contextWindow <= 524_288) return Math.floor(contextWindow * 0.60)
+  return Math.floor(contextWindow * 0.50)
+}
 
 // ═══════════════════════════════════════════════════════════
 //  结构化摘要
@@ -50,6 +72,16 @@ export interface CompactorSummary {
   isIncremental: boolean
   /** 压缩后的消息数 */
   retainedCount: number
+}
+
+/**
+ * Scroll 模式选项
+ */
+export interface ScrollModeOptions {
+  /** 是否启用 Scroll 模式（不压缩，仅索引化） */
+  enabled?: boolean
+  /** 活跃窗口大小（保留最近 N 条消息） */
+  windowSize?: number
 }
 
 /**
@@ -76,7 +108,7 @@ export function buildStructuredSummary(
   const agentAnswers: string[] = []
 
   for (const m of entries) {
-    const content = (m.content || '').slice(0, 600)
+    const content = toText(m.content).slice(0, 600)
     if (m.role === 'user') {
       userAsks.push(content)
     } else if (m.role === 'assistant') {
@@ -130,14 +162,36 @@ export function buildStructuredSummary(
 }
 
 /**
+ * Scroll 模式：将超出活跃窗口的消息提取出来，供调用方索引化。
+ * 返回 { retained, evicted }，不修改原数组。
+ */
+export function splitScrollWindow(
+  messages: AgentMessage[],
+  windowSize = COMPACTOR_RECENT_PAIRS,
+): { retained: AgentMessage[]; evicted: AgentMessage[] } {
+  if (messages.length <= windowSize) {
+    return { retained: messages, evicted: [] }
+  }
+  return {
+    retained: messages.slice(-windowSize),
+    evicted: messages.slice(0, messages.length - windowSize),
+  }
+}
+
+/**
  * 判断是否需要压缩
+ * @param estimatedTokens 当前估算的 token 数
+ * @param messageCount 当前消息条数
+ * @param contextWindow 模型上下文窗口大小（可选，用于动态预算）
  * @returns true = 需要压缩
  */
 export function needsCompaction(
   estimatedTokens: number,
   messageCount: number,
+  contextWindow?: number,
 ): boolean {
-  if (estimatedTokens >= Math.floor(COMPACTOR_TOKEN_BUDGET * COMPACTOR_TRIGGER_RATIO)) {
+  const budget = getCompactorBudget(contextWindow)
+  if (estimatedTokens >= budget) {
     return true
   }
   if (messageCount >= COMPACTOR_MESSAGE_LIMIT) {
@@ -177,7 +231,7 @@ export async function compactMessagesAsync(
       // 尝试 LLM 压缩
       const allContent = messages
         .filter(m => m.role === 'user' || m.role === 'assistant')
-        .map(m => `[${m.role}]: ${(m.content || '').slice(0, 500)}`)
+        .map(m => `[${m.role}]: ${toText(m.content).slice(0, 500)}`)
         .join('\n---\n')
       const llmSummary = await llmCompressFn(allContent)
       if (llmSummary && llmSummary.length > 50) {
@@ -235,8 +289,8 @@ export function compactMessages(
   const existingSummaryIndex = systemMsgs.findIndex(
     m => typeof m.content === 'string' && m.content.startsWith('📋 【对话摘要')
   )
-  const existingSummaryInMessages = existingSummaryIndex >= 0
-    ? systemMsgs[existingSummaryIndex].content
+  const existingSummaryInMessages: string | null = existingSummaryIndex >= 0
+    ? (systemMsgs[existingSummaryIndex].content as string)
     : null
   const effectiveExistingSummary = compressedSummary || existingSummaryInMessages
 

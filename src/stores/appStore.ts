@@ -6,7 +6,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { showToast } from '../components/Toast'  // 🆕 Lucky 场景感知 Toast
 
-export type PanelType = 'chat' | 'mail' | 'settings' | 'agent' | 'security' | 'skills' | 'usage' | 'diagnostics' | 'tasks' | 'bridge' | 'profile' | 'bookmarks' | 'knowledge' | 'skillmarket' | 'deepresearch' | 'dream' | 'reality' | 'skilldev' | 'social' | 'familytree' | 'testcoverage' | 'news' | 'team' | 'plugins' | 'more' | 'teamcommunity'
+export type PanelType = "chat" | "mail" | "settings" | "agent" | "security" | "skills" | "usage" | "diagnostics" | "tasks" | "bridge" | "profile" | "bookmarks" | "knowledge" | "skillmarket" | "deepresearch" | "dream" | "reality" | "skilldev" | "social" | "familytree" | "testcoverage" | "news" | "team" | "memory" | "emotions" | "plugins" | "more" | "teamcommunity"
 
 export interface ChatMessage {
   id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number
@@ -14,6 +14,10 @@ export interface ChatMessage {
 
 export interface Conversation {
   id: string; name: string; messages: ChatMessage[]; createdAt: number; modelName?: string; pinned?: boolean
+  /** 所属角色 ID — 用于 Lumina Agent 多角色对话隔离 */
+  roleId?: string
+  /** 🔧 P1: 压缩上下文（用于跨轮次恢复） */
+  compactedContext?: string
 }
 
 export interface LLMConfig {
@@ -25,6 +29,15 @@ export interface LLMConfig {
 
 export interface TTSConfig {
   voice: string; speed: number; volume: number
+  engine?: 'edge-tts' | 'gpt-sovits' | 'indextts'
+  enabled?: boolean
+  indextts?: {
+    port: number
+    refAudioPath: string
+    lang: 'ZH' | 'EN' | 'JA' | 'ES' | 'AR'
+    emotion: string
+    durationFactor: number
+  }
 }
 
 export interface AgentPersona {
@@ -34,6 +47,8 @@ export interface AgentPersona {
 export interface AgentConfig {
   name: string; persona: string; tools: string[]; systemPrompt: string
   customPersonas: AgentPersona[]
+  /** 记住上次选择的 Agent 角色 ID，有值时进入 Lumina Agent 不再弹选择器 */
+  lastRole?: string
 }
 
 export interface SecurityConfig {
@@ -127,9 +142,10 @@ interface AppStore {
 
   conversations: Conversation[]
   activeConversationId: string
-  createConversation: (name?: string) => void
+  createConversation: (name?: string, roleId?: string) => void
   deleteConversation: (id: string) => void
   switchConversation: (id: string) => void
+  updateConversation: (id: string, updates: Partial<Conversation>) => void
   renameConversation: (id: string, name: string) => void
   togglePinConversation: (id: string) => void
   addMessage: (convId: string, role: ChatMessage['role'], content: string) => void
@@ -151,6 +167,13 @@ interface AppStore {
   providerConfigs: Record<string, LLMConfig>
   /** 切换供应商：自动保存当前配置 → 恢复目标供应商的配置 */
   switchLLMProvider: (providerId: string, defaultBaseUrl: string, defaultModel: string) => void
+
+  /** 🆕 v10.8: Per-Agent 独立 LLM 配置（从 agent-llm-configs.json 加载） */
+  agentLlmConfigs: Record<string, { enabled?: boolean; provider?: string; model?: string; endpoint?: string; apiKey?: string; timeout?: number }>
+  /** 加载所有 per-agent 配置 */
+  loadAgentLlmConfigs: () => Promise<void>
+  /** 获取指定 agent 的有效 LLM 配置（per-agent 优先，fallback 到全局） */
+  getAgentLlmConfig: (agentId: string) => LLMConfig
 
   /** 🔄 v10.0: 从后端 ProviderManager 同步配置 */
   syncProviderFromBackend: () => Promise<void>
@@ -231,6 +254,10 @@ interface AppStore {
   // 主题切换
   theme: 'light' | 'dark' | 'system'
   setTheme: (t: 'light' | 'dark' | 'system') => void
+
+  // 🆕 简约模式（紧凑 UI）
+  compactMode: boolean
+  setCompactMode: (v: boolean) => void
 
   // Profile 面板默认 Tab（⭐ 徽章点击时设为 'achievements'）
   profileTab: 'profile' | 'achievements'
@@ -356,7 +383,8 @@ const defaultTasks: CronTask[] = [
 
 export const useStore = create<AppStore>()(
   persist(
-    (set, get) => ({
+    // 显式标注 set/get 与返回类型：避免 persist 中间件泛型推断回退导致全 store 参数隐式 any（TS7006）
+    (set: (partial: Partial<AppStore> | ((s: AppStore) => Partial<AppStore>)) => void, get: () => AppStore): AppStore => ({
       activePanel: 'chat',
       setActivePanel: (activePanel) => set({ activePanel }),
 
@@ -364,22 +392,55 @@ export const useStore = create<AppStore>()(
       conversations: [defaultConversation],
       activeConversationId: '__team_group_chat__',
 
-      createConversation: (name) => {
+      createConversation: (name, roleId) => {
         const id = 'conv-' + Date.now()
-        const newConv: Conversation = { id, name: name || `对话 ${get().conversations.length + 1}`, messages: [], createdAt: Date.now() }
+        let convName = name
+        if (!convName) {
+          if (roleId) {
+            // 🔧 按角色命名：代码开发 #1、学习搭子 #1 ...
+            const ROLE_NAME_MAP: Record<string, string> = {
+              general: '通用Agent', learner: '学习搭子', writer: '写作能手',
+              developer: '代码开发', design: '商业设计', intel: '情报部门', colleague: '职场同事',
+            }
+            const roleLabel = ROLE_NAME_MAP[roleId] || roleId
+            const roleCount = get().conversations.filter(c => c.roleId === roleId).length + 1
+            convName = `${roleLabel} #${roleCount}`
+          } else {
+            convName = `对话 ${get().conversations.length + 1}`
+          }
+        }
+        const newConv: Conversation = { id, name: convName, messages: [], createdAt: Date.now(), roleId }
         set((s) => ({ conversations: [...s.conversations, newConv], activeConversationId: id }))
       },
       deleteConversation: (id) => {
         set((s) => {
+          const deleted = s.conversations.find(c => c.id === id)
           const filtered = s.conversations.filter((c) => c.id !== id)
           if (filtered.length === 0) {
-            const newConv: Conversation = { id: 'conv-' + Date.now(), name: '默认对话', messages: [welcomeMsg], createdAt: Date.now() }
+            let fallbackName = '默认对话'
+            if (deleted?.roleId) {
+              const ROLE_NAME_MAP: Record<string, string> = {
+                general: '通用Agent', learner: '学习搭子', writer: '写作能手',
+                developer: '代码开发', design: '商业设计', intel: '情报部门', colleague: '职场同事',
+              }
+              fallbackName = `${ROLE_NAME_MAP[deleted.roleId] || deleted.roleId} #1`
+            }
+            const newConv: Conversation = { id: 'conv-' + Date.now(), name: fallbackName, messages: [welcomeMsg], createdAt: Date.now(), roleId: deleted?.roleId }
             return { conversations: [newConv], activeConversationId: newConv.id }
           }
-          return { conversations: filtered, activeConversationId: s.activeConversationId === id ? filtered[0].id : s.activeConversationId }
+          // 🔧 如果删的是当前激活的对话，切换到同角色的下一个对话
+          if (s.activeConversationId === id) {
+            const sameRole = filtered.filter(c => c.roleId === deleted?.roleId)
+            const nextId = sameRole.length > 0 ? sameRole[0].id : filtered[0].id
+            return { conversations: filtered, activeConversationId: nextId }
+          }
+          return { conversations: filtered, activeConversationId: s.activeConversationId }
         })
       },
       switchConversation: (id) => set({ activeConversationId: id }),
+      updateConversation: (id, updates) => set((s) => ({
+        conversations: s.conversations.map((c) => c.id === id ? { ...c, ...updates } : c),
+      })),
       renameConversation: (id, name) => set((s) => ({
         conversations: s.conversations.map((c) => c.id === id ? { ...c, name } : c),
       })),
@@ -449,6 +510,33 @@ export const useStore = create<AppStore>()(
           return { llmConfig: newLLMConfig, providerConfigs: newProviderConfigs }
         }),
 
+      // ── 🆕 v10.8: Per-Agent LLM 配置 ──────────────
+      agentLlmConfigs: {},
+      loadAgentLlmConfigs: async () => {
+        try {
+          const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
+          if (r?.configs) set({ agentLlmConfigs: r.configs })
+        } catch { /* 静默 */ }
+      },
+      getAgentLlmConfig: (agentId: string) => {
+        const s = get()
+        const agentCfg = s.agentLlmConfigs[agentId]
+        // 如果 per-agent 配置存在且有 endpoint/model，优先使用
+        if (agentCfg?.enabled && agentCfg?.endpoint && agentCfg?.model) {
+          return {
+            provider: agentCfg.provider || s.llmConfig.provider,
+            baseUrl: agentCfg.endpoint,
+            apiKey: agentCfg.apiKey || s.llmConfig.apiKey,
+            model: agentCfg.model,
+            temperature: s.llmConfig.temperature,
+            maxTokens: s.llmConfig.maxTokens,
+            contextWindow: s.llmConfig.contextWindow,
+          }
+        }
+        // fallback 到全局配置
+        return s.llmConfig
+      },
+
       /** 🔄 v10.0: 从后端 ProviderManager 同步所有供应商配置 */
       syncProviderFromBackend: async () => {
         try {
@@ -464,13 +552,15 @@ export const useStore = create<AppStore>()(
           const newProviderConfigs: Record<string, LLMConfig> = {}
           for (const [id, cfg] of Object.entries(configs) as any) {
             if (cfg.enabled || id === activeProviderId) {
+              // maxTokens 是用户的"最大输出"偏好（后端不存）：激活供应商继承当前值，其余沿用各自上次值，避免每次同步被打回 8192
+              const inheritedMaxTokens = (id === activeProviderId ? get().llmConfig.maxTokens : get().providerConfigs[id]?.maxTokens) || 8192
               newProviderConfigs[id] = {
                 provider: id,
                 baseUrl: cfg.baseUrl || '',
                 apiKey: cfg.apiKey || '',
                 model: cfg.model || '',
                 temperature: get().llmConfig.temperature || 0.7,
-                maxTokens: cfg.maxContextTokens || 262144,
+                maxTokens: inheritedMaxTokens,
                 contextWindow: cfg.maxContextTokens || 0,
               }
             }
@@ -501,7 +591,11 @@ export const useStore = create<AppStore>()(
         }
       },
 
-      ttsConfig: { voice: 'zh-CN-XiaoxiaoNeural', speed: 1.0, volume: 0.8 },
+      ttsConfig: {
+        voice: 'zh-CN-XiaoxiaoNeural', speed: 1.0, volume: 0.8,
+        engine: 'edge-tts', enabled: true,
+        indextts: { port: 18927, refAudioPath: '', lang: 'ZH', emotion: 'calm', durationFactor: 1.0 },
+      },
       setTTSConfig: (c) => set((s) => ({ ttsConfig: { ...s.ttsConfig, ...c } })),
 
       ttsMuted: false,
@@ -531,7 +625,7 @@ export const useStore = create<AppStore>()(
       },
       setSecurityConfig: (c) => set((s) => ({ securityConfig: { ...s.securityConfig, ...c } })),
 
-      skillConfig: { enabled: ['weather', 'search', 'browser', 'memory', 'code', 'files', 'desktop', 'audio', 'notify', 'timer', 'proactive'] },
+      skillConfig: { enabled: ['weather', 'search', 'browser', 'memory', 'code', 'files', 'desktop', 'audio', 'notify', 'timer', 'proactive', 'image'] },
       setSkillConfig: (c) => set((s) => ({ skillConfig: { ...s.skillConfig, ...c } })),
 
       bridgeConfig: {
@@ -643,8 +737,8 @@ export const useStore = create<AppStore>()(
         gender: 'secret' as const,
         tags: [] as string[],
         birthday: '',
-        bubbleColorUser: '#eff6ff',   // 默认淡蓝
-        bubbleColorAgent: '#f9fafb',  // 默认浅灰
+        bubbleColorUser: '',   // 空字符串使用CSS变量自动适配主题
+        bubbleColorAgent: '',  // 空字符串使用CSS变量自动适配主题
       },
       setProfile: (p) => set((s) => ({ profile: { ...s.profile, ...p } })),
 
@@ -666,6 +760,10 @@ export const useStore = create<AppStore>()(
       // 主题切换
       theme: 'light',
       setTheme: (theme) => set({ theme }),
+
+      // 🆕 简约模式
+      compactMode: (() => { try { return localStorage.getItem('lumina_compact') === 'true' } catch { return false } })(),
+      setCompactMode: (v) => { try { localStorage.setItem('lumina_compact', String(v)) } catch {} ; set({ compactMode: v }) },
 
       // Profile 面板默认 Tab（⭐ 徽章点击时设为 'achievements'）
       profileTab: 'profile' as const,
@@ -797,6 +895,16 @@ export const useStore = create<AppStore>()(
     {
       name: 'lumina-life-storage',
       storage: createJSONStorage(() => localStorage),
+      // 🔧 v1.1: 合并持久化数据时，清除旧的浅色模式气泡颜色（让 CSS 变量自适应深色模式）
+      merge: (persistedState: any, currentState: any) => {
+        const merged = { ...currentState, ...persistedState }
+        // 如果气泡颜色是已知的浅色模式默认值，重置为空以使用 CSS 变量
+        if (merged.profile) {
+          if (merged.profile.bubbleColorUser === '#eff6ff') merged.profile.bubbleColorUser = ''
+          if (merged.profile.bubbleColorAgent === '#f9fafb') merged.profile.bubbleColorAgent = ''
+        }
+        return merged
+      },
       partialize: (state) => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,

@@ -18,6 +18,8 @@ import {
 } from './tools/registry'
 import { registerAllTools } from './tools/index'
 import { getMemoryStore } from './memory/memoryStore'
+import { getAgentChatsManager } from './agentChatsManager'
+import { getAgentDialogManager } from './agentDialogManager'
 import { ConversationSummarizer } from './memory/summarizer'
 import { globalEventBus, BusEvents } from './eventBus'
 import { buildSystemPrompt, recoverUnsummarizedHistory, CHAT_MODE_TOOLS } from './prompts/systemPrompt'
@@ -33,10 +35,15 @@ import { needsCompaction, compactMessages } from './agentCompactor'
 // Hook 系统
 import { getHookManager } from './hooks/hookManager'
 import type { HookContext, BeforeReasoningInput } from './hooks/types'
+// P0: Scroll Context + ReMe Light
+import { ScrollContext } from './memory/scrollContext'
+import { ReMeLight } from './memory/remeLight'
 // 模型能力缓存
 import { getModelCapabilityCache } from './modelCapabilityCache'
 // 工具审批 UI
 import { classifyApproval, formatDenyFeedback } from './tools/impl/approvalUI'
+// 情绪 ↔ 游戏化桥接（静态导入，打包后动态 require 解析不到）
+import { updateEmotion } from './gamification/emotionBridge'
 // 诊断埋点
 import { getDiagnosticsStore } from './ipc/diagnosticsIpc'
 // Provider 档案 + 连接心跳
@@ -74,6 +81,17 @@ import {
 } from './core/agentUtils'
 
 registerAllTools()
+
+// ── 辅助函数 ──────────────────────────────────────────────
+
+/** 将 AgentMessage content 安全转为字符串 */
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
 
 // 借鉴 QwenPaw — 去掉全局黑名单，改为实例级单次跳过
 //   QwenPaw 从不黑名单工具：每次请求都带 tools，模型自行处理。
@@ -269,6 +287,8 @@ const SEARCH_INTENT_PATTERNS: Array<{ regex: RegExp; description: string }> = [
   { regex: /(.+?)(?:值得买|值得投资|还能涨|还能跌|前景如何|未来走势)/i, description: '判断' },
   { regex: /(?:有多少|多少钱|多大了|什么时候|在哪里|谁[是谁])\s*(.+)/i, description: '事实' },
   { regex: /(.{6,})[？?]$/i, description: '问句兜底' },
+  { regex: /(?:说说|聊聊|介绍|推荐|分析|比较|对比|总结|概括|梳理|点评)\s*(.+)/i, description: '请求分析' },
+  { regex: /(?:怎么|如何|怎样|能不能|可以|行不行|会不会|要不要)\s*(.+)/i, description: '疑问求助' },
 ]
 
 /** 不应触发搜索的模式（编程、闲聊、纯操作） */
@@ -292,8 +312,34 @@ const SEARCH_EXCLUDE_PATTERNS = [
  * 预处理：检测意图并执行搜索。
  * 三层匹配 → 过滤排除 → 执行 web_search → 返回结果/null
  */
-async function preExecuteSearch(text: string): Promise<string | null> {
+// 自我指涉 / 陪伴闲聊 —— 答案在人格与关系里、不在互联网上，绝不自动联网。
+//   反例（修复前）："你是coffee吗？"命中"问句兜底"被强制百度搜索，模型拿到无关结果后
+//   输出"第一个结果…与问题没有直接关联…无法得出结论"这种机械总结，人格全丢。
+//   桌宠 / Lumina 本体 / Lumina Team 三条链路都走 preExecuteSearch，这里统一拦截。
+const COMPANION_CHAT_PATTERNS: RegExp[] = [
+  // 以"你"为主语问 Agent 自身：身份/名字/想法/喜好/能力/情绪
+  /你(?:是|叫|是谁|的名字|觉得|认为|感觉|想不|想要|想啥|喜欢|爱|讨厌|会不|能不能|可不可以|在干嘛|在吗|还好|开心|难过|生气|累不|为什么)/,
+  // 用户表达自身状态/情绪（陪伴场景，需要共情而不是搜索）；刻意不含"我想/我觉得"，避免误伤"我想了解行情"类信息需求
+  /(?:我是|我叫|我有点|我好累|我好难|我不开心|我很难过|我心情不好|我分手|我考试考砸|我下班啦|我上班啦|我今天好)/,
+  // 直接的陪伴/互动请求
+  /(?:陪我|抱抱|摸摸|夸夸|哄我|讲个笑话|聊聊天|说说话|在干嘛|想你了|别搜|不用搜)/,
+  // 主观选择/建议类问题 —— 要的是"你的看法"，不是外部事实，搜了反而答得机械
+  /(?:吃什么|喝什么|玩什么|看什么|怎么办|选哪[个种]|哪[个种]好|好看吗|好听吗|好吃吗|要不要|该不该|喜不喜欢|哪个更适合)/,
+]
+
+/** 一条消息是否属于"不该自动联网"的自我指涉/陪伴闲聊 */
+function isCompanionChat(text: string): boolean {
+  return COMPANION_CHAT_PATTERNS.some(re => re.test(text))
+}
+
+async function preExecuteSearch(text: string, skipAutoSearch = false): Promise<string | null> {
   const trimmed = text.trim()
+
+  // 显式关闭自动搜索（桌宠陪伴会话），或命中自我指涉/陪伴闲聊 → 直接不搜；模型之后仍可自行调用 web_search
+  if (skipAutoSearch || isCompanionChat(trimmed)) {
+    console.log(`[PreSearch] 🚫 跳过自动搜索（${skipAutoSearch ? '会话关闭自动搜索' : '自我指涉/陪伴闲聊'}）: "${trimmed.slice(0, 40)}"`)
+    return null
+  }
 
   // 获取当前日期，用于时效性查询注入
   const _now = new Date()
@@ -355,7 +401,16 @@ async function preExecuteSearch(text: string): Promise<string | null> {
 
   // ── 排除不搜的消息 ──
   for (const ex of SEARCH_EXCLUDE_PATTERNS) {
-    if (ex.test(trimmed)) return null
+    if (ex.test(trimmed)) {
+      // 🔧 2026-08-14: Rescue — 如果消息包含明显搜索意图关键词，不排除
+      //   解决"打开看看最新的AI新闻"等混合指令被误拦截的问题
+      const rescueSignals = /今天|今日|最近|最新|现在|当前|实时|本月|本周|[？?]|股票|新闻|天气|AI|人工智能|分析|对比|推荐|介绍|价格|行情|走势|发布|上市|销量|票房|比分|赛果|地震|台风|预警|汇率|比特币|加密货币|以太坊|区块[链连]|市值|成交量|资金|板块|概念股|估值|泡沫|回调|反弹|牛市|熊市|仓位|减持|增持|回购|分红|送股|财报|业绩|营收|利润|净利润|毛利率|净率|资产负债|现金流|评级|目标价|研报|公告|披露|上市|IPO|退市|ST|科技|数码|手机|芯片|大模型|GPT|评测|跑分|系统|更新|升级|补丁|漏洞|破解|体育|比赛|联赛|NBA|英超|欧冠|世界杯|奥运|金牌|冠军|亚军|娱乐|电影|电视剧|综艺|番位|热搜|路况|航班|高铁|地铁|公交|油价|电价|水价|放假|假期|节日|春运|国庆|春节|五一|中秋|疫情|病例|感染|疫苗|药物|获批|临床|试验|医保|集采|医院|挂号|健康|选举|投票|民调|总统|首相|总理|当选|就职|辞职|下台|政策|法规|立法|禁令|开放|限制|签证|移民|人口|GDP|通胀|CPI|失业率/
+      if (rescueSignals.test(trimmed)) {
+        console.log('[PreSearch] 🚪 排除模式命中但 Rescue 放行（含搜索意图关键词）')
+        break
+      }
+      return null
+    }
   }
 
   for (const pattern of SEARCH_INTENT_PATTERNS) {
@@ -540,7 +595,7 @@ async function preExecuteCollect(text: string): Promise<string | null> {
  *
  * 返回 { collectResult, searchResult }，字段为 null 表示无需/无结果。
  */
-export async function preProcessMessage(text: string): Promise<{
+export async function preProcessMessage(text: string, opts: { skipAutoSearch?: boolean } = {}): Promise<{
   collectResult: string | null;
   searchResult: string | null;
 }> {
@@ -548,7 +603,7 @@ export async function preProcessMessage(text: string): Promise<{
   const collectResult = await preExecuteCollect(text)
 
   // Step 2: 搜索预处理（普通搜索意图检查）
-  const searchResult = await preExecuteSearch(text)
+  const searchResult = await preExecuteSearch(text, opts.skipAutoSearch === true)
 
   return { collectResult, searchResult }
 }
@@ -565,10 +620,25 @@ export class AgentRunner {
   private totalTokens = 0
   private turnCount = 0
   /** 🆕 v7.1: 跟踪 setHistory 注入的历史轮次，防止二重计数 */
-  private summarizer: ConversationSummarizer | null = null
+  
+  /** 🔧 P0: 获取当前压缩摘要 */
+  getCompactedSummary(): string | null {
+    return this._compressedSummary
+  }
+
+  /** 🔧 P0: 设置压缩摘要 */
+  setCompactedSummary(summary: string): void {
+    this._compressedSummary = summary
+  }
+
+private summarizer: ConversationSummarizer | null = null
   private sessionId: string
   /** 跟踪已持久化到 SQLite 的最后一条消息索引 */
   private lastPersistedIndex = -1
+  /** P3-2: 跟踪已同步到 chats.json 的最后一条消息索引 */
+  private _lastChatsPersistIndex = -1
+  /** P4-1: 跟踪已同步到 dialog/ 的最后一条消息索引 */
+  private _lastDialogPersistIndex = -1
   /** 崩溃恢复标记 */
   private isRecovering = false
   /** 🔧 v2.16: 健康检查缓存 — 同一 Agent 实例只检查一次 */
@@ -607,6 +677,11 @@ export class AgentRunner {
   /** 🆕 v9.3: 是否使用新模块（已弃用 — FIX-3 统一走 runReActLoop） */
   private _useNewModules = true
 
+  /** 🆕 P0: Scroll Context — 索引化历史记忆 */
+  private _scrollContext: any = null
+  /** 🆕 P0: ReMe Light — Markdown 知识库记忆 */
+  private _remeLight: any = null
+
   /** 启用/禁用新模块（已弃用 — 保留 API 兼容） */
   setUseNewModules(enabled: boolean): void {
     this._useNewModules = enabled
@@ -618,7 +693,6 @@ export class AgentRunner {
     this._currentEmotion = emotion
     // 同步到游戏化桥接（情绪 × XP 联动）
     try {
-      const { updateEmotion } = require('./gamification/emotionBridge')
       updateEmotion(emotion)
     } catch (_) { /* gamification 模块未加载时静默 */ }
     // 更新 system prompt 中的情绪状态
@@ -661,14 +735,15 @@ export class AgentRunner {
    * 创建 Agent 执行器实例
    * @param config - 运行配置（模式、模型、API 密钥等），`mode` 默认为 `'agent'`
    */
-  constructor(config: AgentRunConfig) {
+  constructor(config: AgentRunConfig, options?: { sessionId?: string }) {
     this.config = {
       temperature: 0.7,
-      maxTokens: 256_000,    // 🆕 v4.0: 默认 256K 输出（匹配 256K 上下文窗口）
+      maxTokens: 8192,    // 输出 token 上限（非上下文窗口），8192 足够长回答+代码
       ...config,
       mode: config.mode || 'agent',
     }
-    this.sessionId = `session-${Date.now()}`
+    this.sessionId = options?.sessionId || `session-1786780079226`
+    // this._sessionId = this.sessionId  // 移除：_sessionId 未定义
 
     // v6.0: Per-agent LLM — 从 TEAM_MEMBERS 读取独立配置
     this._applyAgentLlmConfig()
@@ -684,8 +759,14 @@ export class AgentRunner {
     if (profile) {
       const ctx = profile.model.maxContextTokens || 256_000
       ;(this.config as any).contextWindow = ctx
-      ;(this.config as any).maxTokens = ctx
-      console.log(`[AgentRunner] 📐 profile 匹配: ${profile.model.category || 'unknown'}, context=${ctx}`)
+      // 🔧 FIX: maxTokens 是「输出 token 上限」，不是上下文窗口大小。
+      //   之前把 maxTokens 设成 ctx（如 256000），部分 API 会直接 400 报错，
+      //   部分会静默截断。输出上限用合理默认值 8192，足够长回答+代码。
+      //   仅当用户未配置或配置值异常大（>32768，误把上下文窗口当输出）时修正。
+      if (!this.config.maxTokens || this.config.maxTokens > 32768) {
+        ;(this.config as any).maxTokens = 8192
+      }
+      console.log(`[AgentRunner] 📐 profile 匹配: ${profile.model.category || 'unknown'}, context=${ctx}, maxOutput=${this.config.maxTokens}`)
     }
 
     // v3.0: 委托配置注入（setDelegateConfig 未实现，跳过）
@@ -696,6 +777,17 @@ export class AgentRunner {
     } catch (err) {
       console.error('[AgentRunner] ConversationSummarizer 初始化失败:', err)
       this.summarizer = null
+    }
+
+    // 🆕 P0: 初始化 Scroll Context + ReMe Light
+    try {
+      this._scrollContext = new ScrollContext()
+      this._scrollContext.init()
+      this._remeLight = new ReMeLight()
+      this._remeLight.init()
+      console.log('[AgentRunner] ✅ Scroll Context + ReMe Light 初始化完成')
+    } catch (err) {
+      console.warn('[AgentRunner] ⚠️ Scroll/ReMe 初始化失败（不影响主流程）:', err)
     }
 
     const pending = recoverUnsummarizedHistory()
@@ -886,14 +978,18 @@ export class AgentRunner {
         .slice(-6)  // 最后 3 轮 (user+assistant) × 3 = 6 条
         .map(m => {
           const prefix = m.role === 'user' ? '【用户】' : '【Lumina】'
-          return `${prefix}: ${(m.content || '').slice(0, 1200)}`
+          // v10.9: 多模态内容提取纯文本
+          const text = Array.isArray(m.content)
+            ? (m.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join(' ')
+            : (m.content || '')
+          return `${prefix}: ${text.slice(0, 1200)}`
         })
         .join('\n')
       const result = await dm.delegate(fromId, {
         to,
         task,
         taskType: taskType as any,
-        context: context || defaultContext || undefined,
+        context: context || defaultContext || this._compressedSummary || undefined,
       })
 
       return {
@@ -958,20 +1054,49 @@ export class AgentRunner {
    * 委托给 agentCompactor.ts 执行（已从本文件拆分出去）
    * 
    * 调用者：postProcess（每轮对话后）+ callLLM（LLM 调用前主动压缩）
+   * 
+   * P0: 支持 Scroll 模式 — 不压缩，仅索引化历史消息
    */
   compactContext(): void {
     try {
       const estimator = new TokenEstimator()
       const estimatedTokens = estimator.estimateMessages(this.messages)
+      // 🔧 动态预算：使用模型实际上下文窗口，而非硬编码 128K
+      const ctxWindow = (this.config as any).contextWindow || 0
 
       // 无需压缩 & 无已有摘要 → 跳过
       if (
-        !needsCompaction(estimatedTokens, this.messages.length) &&
+        !needsCompaction(estimatedTokens, this.messages.length, ctxWindow) &&
         !this._compressedSummary
       ) {
         return
       }
 
+      // 🆕 P0: Scroll 模式 — 不压缩，仅索引化
+      const scrollModeEnabled = (this.config as any)?.scrollMode === true
+      if (scrollModeEnabled && this._scrollContext) {
+        const agentId = this.config.personaId as string | undefined
+        const scrollResult = (this._scrollContext as any).evictToIndex(
+          this.sessionId,
+          agentId,
+          this.messages,
+        )
+        if (scrollResult && scrollResult.evictedCount > 0) {
+          this.messages = this.messages.slice(-scrollResult.retainedCount)
+          this._compressedSummary = scrollResult.indexedSummary
+          console.log(
+            `[AgentRunner] 📚 Scroll 模式: 索引化 ${scrollResult.evictedCount} 条历史, ` +
+            `保留 ${scrollResult.retainedCount} 条最近消息`
+          )
+          this.emit({
+            type: 'thinking',
+            text: `📚 已索引 ${scrollResult.evictedCount} 条历史对话（Scroll Context）`,
+          })
+        }
+        return
+      }
+
+      // 传统压缩模式
       const result = compactMessages(this.messages, this._compressedSummary)
       if (!result) return
 
@@ -1011,7 +1136,7 @@ export class AgentRunner {
   }
 
   /** 从持久化历史恢复对话上下文（应用重启/切换对话时调用） */
-  setHistory(history: Array<{ role: string; content: string }>): void {
+  setHistory(history: Array<{ role: string; content: string }>, compactedContext?: string): void {
     this.messages = []
     // > v10.0 -> v14.0 -> v17.0: 动态放宽历史截断。
     //   v17.0: 群聊/协作模式下需要更多上下文（Yak → 热茶 → Lumina 多阶段协作）。
@@ -1051,11 +1176,58 @@ export class AgentRunner {
         const toolCalls = (msg as any).tool_calls
           ? JSON.stringify((msg as any).tool_calls)
           : undefined
-        store.addConversation(this.sessionId, msg.role, msg.content || '', toolCalls)
+        // v10.9: 多模态内容持久化 — 数组格式转为纯文本存储
+        const contentForStorage = Array.isArray(msg.content)
+          ? (msg.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join('\n')
+          : (msg.content || '')
+        store.addConversation(this.sessionId, msg.role, contentForStorage, toolCalls)
       }
       this.lastPersistedIndex = this.messages.length - 1
     } catch {
       // 持久化失败不影响对话
+    }
+  }
+
+  /** P3-2: 同步新增消息到目标 Agent 的独立 chats.json */
+  private persistToChatsJson(): void {
+    try {
+      const agentId = this.config.personaId || 'lumina'
+      const chatsManager = getAgentChatsManager()
+      for (let i = this._lastChatsPersistIndex + 1; i < this.messages.length; i++) {
+        const msg = this.messages[i]
+        const contentForStorage = Array.isArray(msg.content)
+          ? (msg.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join('\n')
+          : (msg.content || '')
+        chatsManager.addMessage(agentId, this.sessionId, {
+          role: msg.role,
+          content: contentForStorage,
+          metadata: (msg as any).tool_calls ? { toolCalls: (msg as any).tool_calls } : undefined,
+        })
+      }
+      this._lastChatsPersistIndex = this.messages.length - 1
+    } catch (e) {
+      console.warn('[AgentRunner] 同步 chats.json 失败:', e)
+    }
+  }
+
+  /** P4-1: 同步原始消息到 dialog/YYYY-MM-DD.jsonl（用于精确回溯） */
+  private persistToDialog(): void {
+    try {
+      const agentId = this.config.personaId || 'lumina'
+      const dialogManager = getAgentDialogManager()
+      for (let i = this._lastDialogPersistIndex + 1; i < this.messages.length; i++) {
+        const msg = this.messages[i]
+        dialogManager.appendMessage(agentId, this.sessionId, {
+          role: msg.role,
+          content: msg.content,
+          agentId,
+          sessionId: this.sessionId,
+          metadata: (msg as any).tool_calls ? { toolCalls: (msg as any).tool_calls } : undefined,
+        })
+      }
+      this._lastDialogPersistIndex = this.messages.length - 1
+    } catch (e) {
+      console.warn('[AgentRunner] 同步 dialog 失败:', e)
     }
   }
 
@@ -1076,7 +1248,13 @@ export class AgentRunner {
     const completionText = response.text || ''
     const completionTokens = Math.max(1, Math.ceil(completionText.length / 3.5))
     // 估算 prompt tokens（从本轮 messages 推算）
-    const promptText = this.messages.map(m => (m.content || '') + (m.name || '')).join(' ')
+    // v10.9: 支持多模态 — 提取纯文本进行估算
+    const promptText = this.messages.map(m => {
+      const c = Array.isArray(m.content)
+        ? (m.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join(' ')
+        : (m.content || '')
+      return c + (m.name || '')
+    }).join(' ')
     const promptTokens = Math.max(1, Math.ceil(promptText.length / 3.5))
     return {
       prompt_tokens: promptTokens,
@@ -1088,6 +1266,25 @@ export class AgentRunner {
   /** v6.0: 获取当前轮工具调用次数 */
   getTurnCount(): number {
     return this.turnCount
+  }
+
+  /** 🆕 P0: Scroll 召回 — 从索引中检索历史对话 */
+  recallScroll(query: string, limit = 10): string {
+    if (!this._scrollContext) return ''
+    try {
+      const agentId = this.config.personaId as string | undefined
+      const results = (this._scrollContext as any).recall({
+        sessionId: this.sessionId,
+        agentId,
+        query,
+        limit,
+      })
+      if (!results || results.length === 0) return ''
+      return (this._scrollContext as any).formatForContext(results, 3000)
+    } catch (e) {
+      console.warn('[AgentRunner] Scroll 召回失败:', e)
+      return ''
+    }
   }
 
   /**
@@ -1121,9 +1318,16 @@ export class AgentRunner {
     // 去重 — 如果 history 最后一条 user 消息刚好和本次 text 一样，
     //   说明 frontend 已经把用户消息放进了 conversationHistory，sendMessage 又 push 一次。
     //   去掉重复的最后一条 user，避免 LLM 看到同一问题两次。
+    // v10.9: 支持多模态 — 比较时提取纯文本
     if (this.messages.length >= 2) {
       const last = this.messages[this.messages.length - 1]
-      if (last.role === 'user' && last.content === text) {
+      const lastText = Array.isArray(last.content)
+        ? (last.content as any[]).find(c => c.type === 'text')?.text || ''
+        : (last.content || '')
+      const newText = Array.isArray(text)
+        ? (text as any[]).find(c => c.type === 'text')?.text || ''
+        : (text || '')
+      if (last.role === 'user' && lastText === newText) {
         this.messages.pop()
         this.turnCount = Math.max(0, this.turnCount - 1)
         console.log(`[AgentRunner] 🔧 去重: history 末尾 user 消息与 sendMessage 重复，已移除`)
@@ -1163,6 +1367,29 @@ export class AgentRunner {
         || this.messages[0].content.includes('## 📢 群聊模式指令'))
     if (this.messages.length === 0 || !firstIsOurSystem) {
       this.initSystemPrompt()
+    }
+
+    // 🆕 P1: Loop Engineering — 应用 Loop 模板
+    const loopMode = (this.config as any)?.loopMode as string | undefined
+    if (loopMode) {
+      try {
+        const loopEngineering = new (require('./loopEngineering').getLoopEngineering)()
+        const template = loopEngineering.getTemplate(loopMode)
+        if (template?.systemPrompt) {
+          // 将模板的 system prompt 注入到消息中
+          this.messages.unshift({
+            role: 'system',
+            content: template.systemPrompt,
+          })
+          console.log(`[AgentRunner] 🔄 Loop 模板已应用: ${template.name}`)
+          this.emit({
+            type: 'thinking',
+            text: `🔄 已启用 ${template.name} 模式`,
+          })
+        }
+      } catch (e) {
+        console.warn('[AgentRunner] Loop 模板应用失败:', e)
+      }
     }
 
     // 🆕 FIX-2: 统一预处理 — 合并搜索 + URL 收集
@@ -1228,7 +1455,7 @@ export class AgentRunner {
         //   "今天天气怎么样""帮我看看AI新闻"等自然语言问句全部漏过。
         //   现在: 同非 socialMode 完整三层匹配（显式搜索指令/时效信息/事实型问题）
         try {
-          const preprocess = await preProcessMessage(text)
+          const preprocess = await preProcessMessage(text, { skipAutoSearch: this.config.noAutoSearch === true })
           searchResult = preprocess.searchResult
           collectResult = preprocess.collectResult
           if (searchResult) {
@@ -1239,7 +1466,7 @@ export class AgentRunner {
         }
       } else {
         // 🆕 FIX-2: 非 socialMode — 统一预处理（URL 收集 + 搜索）
-        const preprocess = await preProcessMessage(text)
+        const preprocess = await preProcessMessage(text, { skipAutoSearch: this.config.noAutoSearch === true })
         searchResult = preprocess.searchResult
         collectResult = preprocess.collectResult
       }
@@ -1387,9 +1614,51 @@ export class AgentRunner {
       }
     } catch { /* ignore */ }
 
-    this.messages.push({ role: 'user', content: text })
+    // v10.9: 支持多模态 — text 可以是字符串或 OpenAI Vision 格式的数组
+    this.messages.push({ role: 'user', content: text as any })
     this.turnCount++
     this.persistConversationHistory()  // 用户消息立即持久化
+    this.persistToDialog()  // P4-1: 用户消息立即归档到 dialog/
+
+    // 🆕 P0: Scroll Context — 超出活跃窗口时索引化历史
+    if (this._scrollContext) {
+      try {
+        const agentId = this.config.personaId as string | undefined
+        const scrollResult = (this._scrollContext as any).evictToIndex(
+          this.sessionId,
+          agentId,
+          this.messages,
+        )
+        if (scrollResult && scrollResult.evictedCount > 0) {
+          // 从 messages 中移除已索引的消息
+          const keepRecent = (this._scrollContext as any).constructor?.name === 'ScrollContext'
+            ? 20  // 默认保留最近20条
+            : this.messages.length - scrollResult.evictedCount
+          this.messages = this.messages.slice(-Math.max(5, this.messages.length - scrollResult.evictedCount))
+          console.log(`[AgentRunner] 📚 Scroll 索引化: 驱逐 ${scrollResult.evictedCount} 条历史到索引`)
+          this.emit({
+            type: 'thinking',
+            text: `📚 已索引 ${scrollResult.evictedCount} 条历史对话（Scroll Context）`,
+          })
+        }
+      } catch (e) {
+        console.warn('[AgentRunner] Scroll 索引化失败:', e)
+      }
+    }
+
+    // 🆕 P0: ReMe Light — 注入相关记忆到上下文
+    if (this._remeLight) {
+      try {
+        const agentId = this.config.personaId as string | undefined
+        const memoryContext = (this._remeLight as any).getMemoryContext(agentId, 1500)
+        if (memoryContext) {
+          this.messages.push({ role: 'system', content: memoryContext })
+          console.log('[AgentRunner] 🧠 ReMe 记忆上下文已注入')
+        }
+      } catch (e) {
+        console.warn('[AgentRunner] ReMe 记忆注入失败:', e)
+      }
+    }
 
     // system prompt 已由上方的 PreSearch 前置检查处理
     //   initSystemPrompt() 不会被跳过（FIX-1 已确保它在 PreSearch 前执行）
@@ -1453,9 +1722,13 @@ export class AgentRunner {
             })
           } else {
             const sysBlocks = this.messages.filter(m => m.role === 'system')
+            // v10.9: 多模态内容提取纯文本
+            const lastUserText = Array.isArray(lastUserMsg.content)
+              ? (lastUserMsg.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join(' ')
+              : (lastUserMsg.content || '')
             this.messages = [
               ...sysBlocks.slice(0, 1),
-              { role: 'user', content: `请自然、直接地回答用户的问题：「${lastUserMsg.content}」` },
+              { role: 'user', content: `请自然、直接地回答用户的问题：「${lastUserText}」` },
             ]
           }
           const recoveryResult = await this.runReActLoop([])
@@ -1545,6 +1818,9 @@ export class AgentRunner {
             totalTokens: this.totalTokens,
             usage: tokenUsage3,
             delta: tokenUsage3.total_tokens,
+            // 🆕 上下文用量指示器：当前 prompt tokens + 上下文窗口
+            promptTokens: tokenUsage3.prompt_tokens,
+            contextWindow: (this.config as any).contextWindow || 0,
           })
           globalEventBus.emit(BusEvents.AGENT_TOKEN_UPDATE, {
             totalTokens: this.totalTokens,
@@ -1917,7 +2193,7 @@ export class AgentRunner {
         // 检查上下文中是否已有搜索结果（由 preProcessMessage 注入）
         const hasSearchResult = (this.messages as AgentMessage[]).some(m =>
           (m.role === 'tool' || m.role === 'system' || m.role === 'assistant') &&
-          (m.content?.includes('实时搜索') || m.content?.includes('搜索结果') || m.content?.includes('【实时搜索结果】'))
+          (toText(m.content).includes('实时搜索') || toText(m.content).includes('搜索结果') || toText(m.content).includes('【实时搜索结果】'))
         )
 
         const needsContinue = !hasSubstantiveContent && (
@@ -2021,8 +2297,8 @@ export class AgentRunner {
         if (err.name === 'AbortError') {
           // 被中止时保留已生成的思考内容
           const partialContent = this.messages
-            .filter(m => m.role === 'assistant' && (m.content || '').trim())
-            .map(m => m.content!.trim())
+            .filter(m => m.role === 'assistant' && toText(m.content).trim())
+            .map(m => toText(m.content).trim())
             .filter(Boolean)
             .join('\n\n')
           if (partialContent) {
@@ -2055,11 +2331,17 @@ export class AgentRunner {
       console.warn(`[AgentRunner] ReAct 循环耗尽，启动恢复`)
 
       // 第 1 级：聚合本轮 assistant 回复（去重）
+      // 🔧 P0: 尝试从 compactedSummary 恢复
+      if (this._compressedSummary && this._compressedSummary.length > 10) {
+        finalText_ = this._compressedSummary + '\n\n' + (finalText_ || '')
+        console.log(`[AgentRunner] ✅ compactedSummary 恢复: ${this._compressedSummary.length} 字`)
+      }
+
       const seen = new Set<string>()
       const assistantTexts = this.messages
         .slice(this._runStartIndex)
-        .filter(m => m.role === 'assistant' && (m.content || '').trim())
-        .map(m => m.content!.trim())
+        .filter(m => m.role === 'assistant' && toText(m.content).trim())
+        .map(m => toText(m.content).trim())
         .filter(t => {
           const key = _normalizeDedupeKey(t)
           if (!key || seen.has(key)) return false
@@ -2231,18 +2513,18 @@ export class AgentRunner {
     const sizeMatch = modelLower.match(/(\d+)b/)
     if (sizeMatch) {
       const size = parseInt(sizeMatch[1])
-      let limit = 256_000  // 默认 256K（现代模型普遍支持大上下文）
-      if (size >= 70) limit = 256_000
-      else if (size >= 30) limit = 256_000
-      else if (size >= 13) limit = 256_000
-      else if (size >= 7) limit = 256_000
+      let limit = 262_144  // 默认 256K（现代模型普遍支持大上下文）
+      if (size >= 70) limit = 1_048_576      // 70B+ 普遍支持 1M
+      else if (size >= 30) limit = 524_288   // 30-70B 普遍支持 512K
+      else if (size >= 13) limit = 262_144   // 13-30B 普遍支持 256K
+      else if (size >= 7) limit = 131_072    // 7-13B 普遍支持 128K
       console.log(`[AgentRunner] 🔮 参数推测: ${size}B → ${TokenEstimator.format(limit)} tokens`)
       _detectedContextCache.set(cacheKey, limit)
       return limit
     }
 
     // ── Step 4: 完全未知 → 256K 保守默认 ──
-    const fallback = 256_000
+    const fallback = 262_144
     console.log(`[AgentRunner] ❓ "${model}" 未知模型，使用默认 ${TokenEstimator.format(fallback)} tokens`)
     _detectedContextCache.set(cacheKey, fallback)
     return fallback
@@ -2273,7 +2555,7 @@ export class AgentRunner {
     const kept: AgentMessage[] = []
     let usedTokens = 0
     for (let i = otherMsgs.length - 1; i >= 0; i--) {
-      const est = estimator.estimate(otherMsgs[i].content || '')
+      const est = estimator.estimate(toText(otherMsgs[i].content))
       if (usedTokens + est > historyBudget * 0.9 && kept.length >= 2) break
       kept.unshift(otherMsgs[i])
       usedTokens += est
@@ -2307,8 +2589,15 @@ export class AgentRunner {
     for (const m of messages) {
       const last = mergedMessages[mergedMessages.length - 1]
       if (last && last.role === m.role && m.role !== 'tool') {
-        // 合并内容
-        last.content = (last.content || '') + '\n\n' + (m.content || '')
+        // v10.9: 合并内容 — 支持多模态数组
+        if (Array.isArray(last.content) || Array.isArray(m.content)) {
+          // 多模态：将两者都转为数组格式合并
+          const lastArr = Array.isArray(last.content) ? last.content : [{ type: 'text', text: last.content || '' }]
+          const mArr = Array.isArray(m.content) ? m.content : [{ type: 'text', text: m.content || '' }]
+          last.content = [...lastArr, ...mArr]
+        } else {
+          last.content = (last.content || '') + '\n\n' + (m.content || '')
+        }
       } else {
         mergedMessages.push({ ...m })
       }
@@ -2353,7 +2642,8 @@ export class AgentRunner {
       model: this.config.model,
       messages: fixedMessages as any[],
       temperature: this.config.temperature || 0.7,
-      max_tokens: this.config.maxTokens || 4096,
+      // 🔧 FIX: max_tokens 是输出上限，封顶 32768 防止误传上下文窗口值导致 API 400
+      max_tokens: Math.min(this.config.maxTokens || 4096, 32768),
     }
 
     if (tools.length > 0) {
@@ -2743,14 +3033,19 @@ export class AgentRunner {
 
   private initSystemPrompt(): void {
     // 群聊场景已由前端（getAgentSystemPromptLite）提供精准 prompt，
-    // 启用 skipSoul 防止 SOUL_*.md 中的角色设定污染思考过程
+    // 启用 skipSoul 防止 SOUL_*.md 中的角色设定污染思考过程。
+    // 🔧 FIX: 只有 socialMode（群聊）才跳过 SOUL，普通角色自定义提示词
+    //   应该追加在完整人格（AGENTS.md + SOUL.md）之上，而不是替换掉人格。
+    //   之前 isCustomPrompt=true 会跳过 SOUL.md，导致"正经问题认真回答"等
+    //   关键指令丢失，LLM 回答变得敷衍。
     const isCustomPrompt = !!this.config.systemPrompt
+    const skipSoul = !!this.config.socialMode
     let prompt = buildSystemPrompt(
       { config: this.config },
       undefined,
-      { 
+      {
         emotion: this._currentEmotion || undefined,
-        skipSoul: isCustomPrompt,
+        skipSoul,
       },
     )
     
@@ -2835,6 +3130,20 @@ export class AgentRunner {
 
     // 持久化所有新增消息到 SQLite
     this.persistConversationHistory()
+    // 🆕 P3-2: 同步新增消息到目标 Agent 的独立 chats.json
+    this.persistToChatsJson()
+    // 🆕 P4-1: 同步原始消息到 dialog/YYYY-MM-DD.jsonl（用于精确回溯）
+    this.persistToDialog()
+    // 🔧 P0: 保存压缩上下文到 sessionManager
+    if (this._compressedSummary) {
+      try {
+        const sm = getSessionManager()
+        sm.saveCompactedContext(this.sessionId, this._compressedSummary)
+      } catch (e) {
+        console.warn('[AgentRunner] 保存压缩上下文失败:', e)
+      }
+    }
+
 
     try {
       // 使用新的结构化压缩
@@ -2869,10 +3178,11 @@ export class AgentRunner {
       if (this.summarizer && this.summarizer.getBufferLength() >= 10) {
         const lastAssistant = [...this.messages].reverse().find(m => m.role === 'assistant')
         if (lastAssistant) {
-          await this.summarizer.summarize(lastAssistant.content.slice(0, 150))
-          this.emit({ type: 'memory_summary', summary: lastAssistant.content.slice(0, 150) })
+          const snippet = toText(lastAssistant.content).slice(0, 150)
+          await this.summarizer.summarize(snippet)
+          this.emit({ type: 'memory_summary', summary: snippet })
           globalEventBus.emit(BusEvents.MEMORY_SUMMARIZED, {
-            summary: lastAssistant.content.slice(0, 150),
+            summary: snippet,
           })
 
           // autoRefine 放入微任务，不阻塞主对话

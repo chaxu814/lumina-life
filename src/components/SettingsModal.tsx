@@ -25,10 +25,16 @@ type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']
 interface SettingsModalProps {
   open: boolean
   onClose: () => void
+  initialTab?: string
 }
 
-export default function SettingsModal({ open, onClose }: SettingsModalProps) {
-  const [activeSection, setActiveSection] = useState<SidebarId>('llm')
+export default function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
+  const [activeSection, setActiveSection] = useState<SidebarId>((initialTab as SidebarId) || 'llm')
+
+  // 当 initialTab 变化时同步
+  React.useEffect(() => {
+    if (initialTab) setActiveSection(initialTab as SidebarId)
+  }, [initialTab])
 
   if (!open) return null
 

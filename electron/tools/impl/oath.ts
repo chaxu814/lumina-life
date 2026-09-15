@@ -9,6 +9,7 @@
 import type { ToolDef, ToolResult } from '../types'
 import { getMemoryStore } from '../../memory/memoryStore'
 import { execFile } from 'child_process'
+import { stripMarkdown } from '../../utils/stripMarkdown'
 
 // ═══════════════════════════════════════════════════════════
 // 誓约系统
@@ -160,8 +161,8 @@ export async function appointmentSet(args: Record<string, any>): Promise<ToolRes
         '[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;',
         '$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);',
         '$n=$t.GetElementsByTagName("text");',
-        `$n.Item(0).AppendChild($t.CreateTextNode('${title.replace(/'/g, "''")}')) > $null;`,
-        `$n.Item(1).AppendChild($t.CreateTextNode('${message.replace(/'/g, "''")}')) > $null;`,
+        `$n.Item(0).AppendChild($t.CreateTextNode('${stripMarkdown(title).replace(/'/g, "''")}')) > $null;`,
+        `$n.Item(1).AppendChild($t.CreateTextNode('${stripMarkdown(message).replace(/'/g, "''")}')) > $null;`,
         '$toast=[Windows.UI.Notifications.ToastNotification]::new($t);',
         `[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Lumina').Show($toast);`,
       ].join('\n')

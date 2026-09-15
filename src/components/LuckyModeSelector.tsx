@@ -8,7 +8,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
 
-export type LuckyModePreset = 'off' | 'default' | 'goal'
+export type LuckyModePreset = 'off' | 'default' | 'goal' | 'mission'
 
 export interface LuckyModeInfo {
   preset: LuckyModePreset
@@ -51,6 +51,8 @@ interface LuckyModeSelectorProps {
   onPresetChange: (preset: LuckyModePreset) => void
   /** 运行时状态（可选） */
   runtimeInfo?: LuckyModeInfo
+  /** 兼容别名：config（等同于 runtimeInfo） */
+  config?: LuckyModeInfo
   /** 按钮大小（默认 small） */
   size?: 'small' | 'medium'
   /** 是否禁用 */

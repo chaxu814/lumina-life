@@ -1,7 +1,6 @@
 // ============================================================
-// GroupChatHistorySidebar.tsx — 群聊历史侧边栏 (v2.11)
-// Extracted from ChatPanel.tsx (was lines ~1664-1812)
-// Communicates with parent via window events to avoid prop drilling
+// GroupChatHistorySidebar.tsx — 群聊历史侧边栏 (v3.0)
+// Redesigned to match ChatPanel conversation list style
 // ============================================================
 
 import React, { useState, useEffect } from 'react'
@@ -29,6 +28,15 @@ export default function GroupChatHistorySidebar() {
     return () => window.removeEventListener('gc:sessions-updated', handler)
   }, [])
 
+  // Also sync activeId when a session is loaded externally
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setActiveId(e.detail)
+    }
+    window.addEventListener('gc:load-session', handler as any)
+    return () => window.removeEventListener('gc:load-session', handler as any)
+  }, [])
+
   const persistSessions = (updated: GCSession[]) => {
     setSessions(updated)
     saveGCSessions(updated)
@@ -42,7 +50,14 @@ export default function GroupChatHistorySidebar() {
 
   const handleNew = () => {
     const newId = newGCSessionId()
-    const newSession: GCSession = { id: newId, date: new Date().toLocaleDateString('zh-CN'), preview: '\u65B0\u7FA4\u804A', count: 0 }
+    // Auto-name: 团队群聊 #N
+    const num = sessions.length + 1
+    const newSession: GCSession = {
+      id: newId,
+      date: new Date().toLocaleDateString('zh-CN'),
+      preview: `团队群聊 #${num}`,
+      count: 0,
+    }
     const updated = [newSession, ...sessions]
     persistSessions(updated)
     setActiveId(newId)
@@ -83,6 +98,22 @@ export default function GroupChatHistorySidebar() {
     persistSessions(updated)
   }
 
+  // Format time like ChatPanel: "MM-DD HH:mm"
+  const formatSessionTime = (dateStr: string): string => {
+    // dateStr is like "2026/8/9" — try to parse and format
+    try {
+      const d = new Date(dateStr)
+      if (isNaN(d.getTime())) return dateStr
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mi = String(d.getMinutes()).padStart(2, '0')
+      return `${mm}-${dd} ${hh}:${mi}`
+    } catch {
+      return dateStr
+    }
+  }
+
   const sorted = [...sessions].sort((a, b) => {
     if ((a as any).pinned && !(b as any).pinned) return -1
     if (!(a as any).pinned && (b as any).pinned) return 1
@@ -90,66 +121,208 @@ export default function GroupChatHistorySidebar() {
   })
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid #e5e7eb', paddingTop: 4, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '6px 12px', fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span>{'\u7FA4\u804A\u8BB0\u5F55'}</span>
-        <button onClick={handleNew} title={'\u65B0\u5EFA\u7FA4\u804A'}
-          style={{ width: 20, height: 20, borderRadius: 4, border: '1px solid var(--border-light)', background: 'var(--surface-100)', cursor: 'pointer', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+    <div style={{
+      flex: 1, overflowY: 'auto',
+      borderTop: '1px solid var(--border-light)',
+      paddingTop: 4, display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '6px 12px',
+        fontSize: 12, fontWeight: 700,
+        color: 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13 }}>💬</span>
+          群聊记录
+        </span>
+        <button onClick={handleNew} title="新建群聊"
+          style={{
+            width: 22, height: 22, borderRadius: 6,
+            border: '1px solid var(--border-light)',
+            background: 'var(--surface-100)',
+            cursor: 'pointer',
+            fontSize: 14, color: 'var(--text-secondary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            lineHeight: 1, transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent-50, #eef2ff)'
+            ;(e.currentTarget as HTMLElement).style.color = 'var(--accent-500, #6366f1)'
+            ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-300, #a5b4fc)'
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--surface-100)'
+            ;(e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'
+            ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)'
+          }}
+        >
           +
         </button>
       </div>
+
+      {/* Empty state */}
       {sorted.length === 0 && (
-        <div style={{ padding: '12px', fontSize: 11, color: '#d1d5db', textAlign: 'center' }}>
-          {'\u6682\u65E0\u5386\u53F2\u7FA4\u804A'}
+        <div style={{ padding: '16px 12px', fontSize: 11, color: 'var(--text-tertiary, #9ca3af)', textAlign: 'center' }}>
+          暂无历史群聊
         </div>
       )}
-      {sorted.slice(0, 20).map(s => (
-        <div key={s.id}
-          className={'gc-history-item' + (s.id === activeId ? ' active' : '')}
-          onClick={() => handleLoad(s)}
-          onMouseEnter={() => setHoveredId(s.id)}
-          onMouseLeave={() => setHoveredId(null)}
-          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-        >
-          {(s as any).pinned && <span style={{ fontSize: 9, flexShrink: 0 }}>{'\uD83D\uDCCC'}</span>}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {editingId === s.id ? (
-              <input
-                value={editTitle}
-                onChange={e => setEditTitle(e.target.value)}
-                onBlur={() => commitRename(s)}
-                onKeyDown={e => { if (e.key === 'Enter') commitRename(s) }}
-                autoFocus
-                onClick={e => e.stopPropagation()}
-                style={{ width: '100%', fontSize: 11, padding: '2px 4px', border: '1px solid #3b82f6', borderRadius: 4, outline: 'none' }}
-              />
-            ) : (
-              <>
-                <div style={{ marginBottom: 1, fontSize: 11, fontWeight: (s as any).pinned ? 600 : 400 }}>{s.date}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.preview || `${s.count} \u6761\u6D88\u606F`}
-                </div>
-              </>
+
+      {/* Session list */}
+      {sorted.slice(0, 20).map(s => {
+        const isActive = s.id === activeId
+        const isEditing = editingId === s.id
+        const sessionTime = formatSessionTime(s.date)
+
+        return (
+          <div key={s.id}
+            onClick={() => !isEditing && handleLoad(s)}
+            onMouseEnter={() => setHoveredId(s.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            style={{
+              padding: '8px 10px',
+              margin: '1px 6px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              background: isActive ? 'var(--accent-50, #eef2ff)' : 'transparent',
+              border: isActive ? '1px solid var(--accent-200, #c7d2fe)' : '1px solid transparent',
+              transition: 'all 0.12s',
+              position: 'relative',
+            }}
+            onMouseOver={(e) => {
+              if (!isActive) {
+                (e.currentTarget as HTMLElement).style.background = 'var(--surface-100, #f3f4f6)'
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!isActive) {
+                (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }
+            }}
+          >
+            {/* Pin indicator */}
+            {(s as any).pinned && (
+              <span style={{ position: 'absolute', top: 2, right: 4, fontSize: 9 }}>📌</span>
             )}
-          </div>
-          {hoveredId === s.id && editingId !== s.id && (
-            <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-              <button onClick={(e) => handlePin(s, e)} title={(s as any).pinned ? '\u53D6\u6D88\u7F6E\u9876' : '\u7F6E\u9876'}
-                style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, padding: 0 }}>
-                {'\uD83D\uDCCC'}
-              </button>
-              <button onClick={(e) => handleRename(s, e)} title={'\u91CD\u547D\u540D'}
-                style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, padding: 0 }}>
-                {'\u270F\uFE0F'}
-              </button>
-              <button onClick={(e) => handleDelete(s, e)} title={'\u5220\u9664'}
-                style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, padding: 0, color: '#ef4444' }}>
-                {'\uD83D\uDDD1'}
-              </button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Session title (editable) */}
+                {isEditing ? (
+                  <input
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    onBlur={() => commitRename(s)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitRename(s)
+                      if (e.key === 'Escape') { setEditingId(null) }
+                    }}
+                    autoFocus
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      width: '100%', padding: '2px 4px', borderRadius: 4,
+                      border: '1px solid var(--accent-400, #818cf8)', outline: 'none',
+                      fontSize: 12, fontWeight: 600,
+                      background: 'var(--surface-0, #fff)',
+                      color: 'var(--text-primary, #111827)',
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? 'var(--accent-600, #4f46e5)' : 'var(--text-primary, #111827)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    lineHeight: 1.3,
+                  }}>
+                    {s.preview || `团队群聊`}
+                  </div>
+                )}
+
+                {/* Meta line: time + message count */}
+                <div style={{
+                  fontSize: 10,
+                  color: 'var(--text-secondary, #6b7280)',
+                  marginTop: 2,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <span>{sessionTime}</span>
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  <span>{s.count || 0} 条消息</span>
+                </div>
+              </div>
+
+              {/* Action buttons (on hover) */}
+              {hoveredId === s.id && !isEditing && (
+                <div style={{ display: 'flex', gap: 1, flexShrink: 0, marginLeft: 4 }}
+                  onClick={e => e.stopPropagation()}>
+                  <button
+                    onClick={(e) => handlePin(s, e)}
+                    title={(s as any).pinned ? '取消置顶' : '置顶'}
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: 'none',
+                      background: (s as any).pinned ? '#fef3c7' : 'transparent',
+                      color: (s as any).pinned ? '#d97706' : 'var(--text-tertiary, #9ca3af)',
+                      cursor: 'pointer', fontSize: 10,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onMouseEnter={e => {
+                      if (!(s as any).pinned) (e.currentTarget as HTMLElement).style.color = 'var(--text-primary, #111827)'
+                    }}
+                    onMouseLeave={e => {
+                      if (!(s as any).pinned) (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary, #9ca3af)'
+                    }}
+                  >
+                    📌
+                  </button>
+                  <button
+                    onClick={(e) => handleRename(s, e)}
+                    title="重命名"
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-tertiary, #9ca3af)',
+                      cursor: 'pointer', fontSize: 10,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.color = 'var(--text-primary, #111827)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary, #9ca3af)'
+                    }}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(s, e)}
+                    title="删除"
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-tertiary, #9ca3af)',
+                      cursor: 'pointer', fontSize: 10,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.color = '#ef4444'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary, #9ca3af)'
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      ))}
+          </div>
+        )
+      })}
     </div>
   )
 }

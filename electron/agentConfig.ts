@@ -11,6 +11,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import type { AgentProfile } from './agentProfileManager'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -179,14 +180,74 @@ class AgentConfigManager {
   private _loaded: boolean = false
 
   constructor(configPath?: string) {
-    this._configPath = configPath || path.join(
-      process.env.LUMINA_USER_DATA ||
-      path.join(require('electron').app?.getPath('userData') || process.cwd(), 'agent-llm-configs.json'),
-    )
+    // 🔧 P2-fix: 双轨配置路径兼容 — 优先使用传入路径，否则检测 legacy 目录
+    const resolved = this._resolveConfigPath(configPath)
+    this._configPath = resolved.configPath
     this._configs = {
       lumina: { ...DEFAULT_CONFIG },
       yak: { ...DEFAULT_CONFIG },
       recha: { ...DEFAULT_CONFIG },
+    }
+    // 如果检测到双轨，同步 legacy 目录的配置
+    if (resolved.legacyPath && fs.existsSync(resolved.legacyPath)) {
+      this._syncFromLegacy(resolved.legacyPath)
+    }
+  }
+
+  /** 🔧 P2-fix: 解析配置路径，检测 legacy 目录 */
+  private _resolveConfigPath(configPath?: string): { configPath: string; legacyPath?: string } {
+    if (configPath) return { configPath }
+
+    const userData = process.env.LUMINA_USER_DATA ||
+      path.join(require('electron').app?.getPath('userData') || process.cwd())
+    const configPathResolved = path.join(userData, 'agent-llm-configs.json')
+
+    // 检测 legacy 目录（旧版 Electron 使用 'Electron' 作为 appName）
+    const legacyCandidates = [
+      path.join(process.cwd(), 'agent-llm-configs.json'),  // 开发模式 cwd
+      path.join(userData, '..', 'Electron', 'agent-llm-configs.json'),  // legacy Electron dir
+      path.join(process.env.APPDATA || '', 'Electron', 'agent-llm-configs.json'),  // Windows legacy
+    ]
+
+    for (const legacy of legacyCandidates) {
+      if (fs.existsSync(legacy) && !fs.existsSync(configPathResolved)) {
+        return { configPath: legacy, legacyPath: legacy }
+      }
+    }
+
+    return { configPath: configPathResolved }
+  }
+
+  /** 🔧 P2-fix: 从 legacy 目录同步配置到当前目录 */
+  private _syncFromLegacy(legacyPath: string): void {
+    try {
+      const legacyDir = path.dirname(legacyPath)
+      const currentDir = path.dirname(this._configPath)
+      const legacyProviders = path.join(legacyDir, 'lumina-providers.json')
+      const currentProviders = path.join(currentDir, 'lumina-providers.json')
+
+      // 同步 agent-llm-configs.json
+      if (fs.existsSync(legacyPath)) {
+        const legacyConfig = JSON.parse(fs.readFileSync(legacyPath, 'utf-8'))
+        const currentConfig: Record<string, any> = {}
+        for (const id of ['lumina', 'yak', 'recha'] as AgentId[]) {
+          if (legacyConfig[id]) {
+            currentConfig[id] = { ...legacyConfig[id] }
+          }
+        }
+        if (Object.keys(currentConfig).length > 0) {
+          fs.writeFileSync(this._configPath, JSON.stringify(currentConfig, null, 2), 'utf-8')
+          console.log('[AgentConfig] 🔄 已从 legacy 目录同步 agent-llm-configs.json')
+        }
+      }
+
+      // 同步 lumina-providers.json
+      if (fs.existsSync(legacyProviders) && !fs.existsSync(currentProviders)) {
+        fs.copyFileSync(legacyProviders, currentProviders)
+        console.log('[AgentConfig] 🔄 已从 legacy 目录同步 lumina-providers.json')
+      }
+    } catch (err) {
+      console.warn('[AgentConfig] ⚠️ legacy 配置同步失败:', err)
     }
   }
 
@@ -386,6 +447,13 @@ class AgentConfigManager {
     const current = this._configs[agentId]
     if (!current || !current.provider) return false
 
+    // 🆕 v10.8: 用户手动保存的配置优先 — 不自动覆盖
+    //   如果用户在 UI 上手动配置过（有 configuredAt 且有 endpoint/model），
+    //   跳过 autoRefresh，避免 .env 地址覆盖用户选择
+    if (current.configuredAt && current.endpoint && current.model) {
+      return false
+    }
+
     // ── 优先级 1: .env 环境变量（用户可直接修改，无需重新编译）──
     let globalEndpoint: string | undefined
     let globalApiKey: string | undefined
@@ -431,6 +499,11 @@ class AgentConfigManager {
     return false
   }
 
+  /** 返回所有 agent 的完整配置 */
+  getAll(): AgentConfigMap {
+    return { ...this._configs }
+  }
+
   /** 返回所有 agent 的配置状态摘要 */
   getAllStatus(): Array<{
     id: AgentId
@@ -463,6 +536,95 @@ class AgentConfigManager {
     return !!(cfg && cfg.enabled && cfg.model && cfg.endpoint)
   }
 
+  /** 从 agent.json 构建 AgentRunConfig (P3-1) */
+  buildRunConfig(agentId: AgentId, profile?: AgentProfile, overrides?: any): any {
+    const cfg = this._configs[agentId]
+    const agentProfile = profile || this._buildDefaultProfile(agentId)
+    
+    return {
+      mode: agentProfile.role === 'boss' ? 'chat' : 'agent',
+      model: cfg.model,
+      baseUrl: cfg.endpoint,
+      apiKey: cfg.apiKey || '',
+      temperature: agentProfile.llm.temperature ?? 0.7,
+      maxTokens: cfg.maxContextTokens || 256000,
+      timeout: (cfg.timeout || 600) * 1000,
+      disabledTools: agentProfile.tools.blacklist,
+      skipApproval: agentProfile.tools.approvalLevel === 'none',
+      isChildAgent: agentProfile.role === 'worker',
+      socialMode: agentProfile.role === 'worker',
+      ...overrides,
+    }
+  }
+
+  /** 构建默认 AgentProfile (P3-1) */
+  private _buildDefaultProfile(agentId: AgentId): AgentProfile {
+    const cfg = this._configs[agentId]
+    
+    const templates: Record<string, Partial<AgentProfile>> = {
+      lumina: {
+        id: 'lumina',
+        name: 'Lumina',
+        role: 'boss',
+        enabled: !!cfg.enabled,
+        llm: {
+          provider: cfg.provider,
+          model: cfg.model,
+          endpoint: cfg.endpoint,
+          apiKey: cfg.apiKey,
+          maxContextTokens: cfg.maxContextTokens,
+          timeout: cfg.timeout,
+          temperature: 0.7,
+          topP: 0.9,
+        },
+        tools: { whitelist: [], blacklist: [], approvalLevel: 'auto' as const },
+        social: { ttsVoice: 'zh-CN-XiaoxiaoNeural', mood: 0.3, energy: 0.7, affinity: 0.5 },
+        paths: { chats: 'chats.json', jobs: 'jobs.json', memory: 'memory', dialog: 'dialog' },
+      },
+      yak: {
+        id: 'yak',
+        name: 'Yak',
+        role: 'worker',
+        enabled: !!cfg.enabled,
+        llm: {
+          provider: cfg.provider,
+          model: cfg.model,
+          endpoint: cfg.endpoint,
+          apiKey: cfg.apiKey,
+          maxContextTokens: cfg.maxContextTokens,
+          timeout: cfg.timeout,
+          temperature: 0.3,
+          topP: 0.9,
+        },
+        tools: { whitelist: ['write_code', 'debug', 'explain_code'], blacklist: [], approvalLevel: 'none' as const },
+        social: { ttsVoice: 'zh-CN-YunjianNeural', mood: 0.5, energy: 0.8, affinity: 0.6 },
+        paths: { chats: 'chats.json', jobs: 'jobs.json', memory: 'memory', dialog: 'dialog' },
+      },
+      recha: {
+        id: 'recha',
+        name: '热茶',
+        role: 'worker',
+        enabled: !!cfg.enabled,
+        llm: {
+          provider: cfg.provider,
+          model: cfg.model,
+          endpoint: cfg.endpoint,
+          apiKey: cfg.apiKey,
+          maxContextTokens: cfg.maxContextTokens,
+          timeout: cfg.timeout,
+          temperature: 0.2,
+          topP: 0.9,
+        },
+        tools: { whitelist: ['review_code', 'find_bug', 'risk_assessment'], blacklist: [], approvalLevel: 'none' as const },
+        social: { ttsVoice: 'zh-CN-YunxiNeural', mood: 0.4, energy: 0.6, affinity: 0.7 },
+        paths: { chats: 'chats.json', jobs: 'jobs.json', memory: 'memory', dialog: 'dialog' },
+      },
+    }
+    
+    return templates[agentId] as AgentProfile
+  }
+
+  /** 重置 */
   reset(): void {
     this._configs = {
       lumina: { ...DEFAULT_CONFIG },

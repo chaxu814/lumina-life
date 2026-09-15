@@ -161,6 +161,9 @@ export class ChannelManager {
       case 'telegram':
         adapter = await this.createTelegramAdapter(cfg)
         break
+      case 'discord':
+        adapter = await this.createDiscordAdapter(cfg)
+        break
       default:
         console.warn(`[ChannelManager] 不支持的渠道类型: ${cfg.type}`)
         return false
@@ -231,6 +234,16 @@ export class ChannelManager {
       return new TelegramAdapter()
     } catch {
       console.warn('[ChannelManager] Telegram 适配器未找到')
+      return undefined
+    }
+  }
+
+  private async createDiscordAdapter(_cfg: ChannelConfig): Promise<ChannelAdapter | undefined> {
+    try {
+      const { DiscordAdapter } = await import('./adapters/discord')
+      return new DiscordAdapter()
+    } catch {
+      console.warn('[ChannelManager] Discord 适配器未找到')
       return undefined
     }
   }

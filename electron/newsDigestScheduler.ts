@@ -49,6 +49,7 @@ export interface NewsDigestConfig {
     github: boolean
     hackernews: boolean
     reddit: boolean
+    baidu: boolean
   }
   /** 自定义 RSS 源列表（存 URL） */
   customRssSources?: string[]
@@ -69,21 +70,23 @@ export interface NewsDigestConfig {
 }
 
 const DEFAULT_CATEGORY_QUOTA: Record<string, number> = {
-  tech: 5,
-  finance: 3,
-  trending: 4,
+  ai: 5,
+  tech: 4,
+  finance: 4,
+  trending: 2,
   oss: 3,
-  general: 5,
+  paper: 2,
+  general: 3,
 }
 
 const DEFAULT_CONFIG: NewsDigestConfig = {
   enabled: true,
   enabledSlots: [8, 12, 18, 22],
-  interests: 'AI科技、财经股市、热搜、开源项目、综合新闻',
-  sources: { rss: true, zhihu: true, finance: true, github: true, hackernews: true, reddit: false },
+  interests: 'AI大模型发布与更新、AI编程工具、半导体芯片、新能源汽车、A股美股港股、宏观经济政策、GitHub开源项目、科技公司动态',
+  sources: { rss: true, zhihu: true, finance: true, github: true, hackernews: true, reddit: false, baidu: true },
   customRssSources: [],
-  maxItems: 15,
-  minScore: 20,
+  maxItems: 20,
+  minScore: 50,
   crossSourceDedup: true,
   enrichment: true,
   bilingual: false,
@@ -225,11 +228,10 @@ class NewsDigestScheduler {
         }))
       const allItems = await collectAll({
         rss: this.config.sources.rss,
-        zhihu: this.config.sources.zhihu,
-        finance: this.config.sources.finance,
-        github: this.config.sources.github,
-        hackernews: this.config.sources.hackernews,
-        reddit: this.config.sources.reddit,
+        baidu: this.config.sources.baidu || false,
+        github: this.config.sources.github !== false,
+        finance: this.config.sources.finance !== false,
+        hn: this.config.sources.hackernews !== false,
         rssSources: customSources.length > 0 ? [
           ...(await import('./tools/impl/newsCollector')).DEFAULT_RSS_SOURCES,
           ...customSources,

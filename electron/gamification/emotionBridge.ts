@@ -5,6 +5,10 @@
 // agentRunner.setEmotion() 会同步更新这里的共享状态。
 // ============================================================
 
+// 静态导入（打包后动态 require 路径解析不到）
+import { setCurrentMood } from '../luckyModeIntegration'
+import { globalEventBus } from '../eventBus'
+
 /** 当前情绪状态（默认中性） */
 let _currentEmotion: { mood: number; energy: number; affinity: number } = {
   mood: 0,
@@ -50,7 +54,6 @@ export function updateEmotion(emotion: { mood: number; energy: number; affinity:
   _currentEmotion = { mood: emotion.mood, energy: emotion.energy, affinity: emotion.affinity }
   // 🆕 Lucky: 根据 mood 数值映射到情绪标签
   try {
-    const { setCurrentMood } = require('../luckyModeIntegration')
     const label = emotion.label || getEmotionLabel()
     const moodMap: Record<string, string> = {
       '低落 😔': 'tired',
@@ -66,7 +69,6 @@ export function updateEmotion(emotion: { mood: number; energy: number; affinity:
     const mappedMood = moodMap[label] || 'neutral'
     setCurrentMood(mappedMood)
 
-    const { globalEventBus } = require('../eventBus')
     globalEventBus.emit('agent:mood_changed', { mood: mappedMood, intensity: Math.abs(emotion.mood) })
   } catch {}
 }

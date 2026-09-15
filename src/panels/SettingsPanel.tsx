@@ -716,6 +716,25 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
       })
       // 2) 设为激活
       await window.luminaAPI?.providerSetActive?.(provider)
+
+      // 刷新前端缓存，避免界面仍显示旧值
+      try {
+        const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
+        if (r?.configs) setAgentLlmConfigs(r.configs)
+        const all = await window.luminaAPI?.providerGetAll?.()
+        if (all?.activeProviderId) {
+          const active = all.configs[all.activeProviderId]
+          if (active) {
+            useStore.getState().setLLMConfig({
+              provider: all.activeProviderId,
+              baseUrl: active.baseUrl || '',
+              apiKey: active.apiKey || '',
+              model: active.model || '',
+            })
+          }
+        }
+      } catch { /* 刷新失败不影响保存成功提示 */ }
+
       // 3) 标记为在线（TopBar 状态指示器会响应）
       setLlmOnline(true)
       setLlmChecked(true)
@@ -736,24 +755,32 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     setFetchingModels(true)
 
     // v10.0: 优先使用新 provider 系统
+    let lastError = ''
     try {
       if (window.luminaAPI?.providerFetchModels && provider) {
-        const res = await window.luminaAPI.providerFetchModels(provider)
+        // 传入界面当前填写的地址/密钥（无需先保存）
+        const res = await window.luminaAPI.providerFetchModels(provider, { baseUrl, apiKey: apiKey || '' })
         if (res?.models && res.models.length > 0) {
           setAvailableModels(res.models)
           setFetchingModels(false)
           return
         }
+        if (res?.error) lastError = res.error
       }
     } catch {}
 
     // 回退到旧方式
     try {
       const res = await window.luminaAPI?.llmFetchModels?.({ baseUrl, apiKey: apiKey || '' })
-      if (res?.models) {
+      if (res?.models && res.models.length > 0) {
         setAvailableModels(res.models)
+        setFetchingModels(false)
+        return
       }
+      if (res?.error) lastError = res.error || lastError
     } catch {}
+    setAvailableModels(null)
+    console.warn('[SettingsPanel] 获取模型列表失败:', lastError || '未知原因')
     setFetchingModels(false)
   }
 

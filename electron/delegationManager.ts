@@ -34,6 +34,9 @@ import type { PhaseName } from './orchestration/phaseGate'
 import type { ComplexityAnalysis } from './orchestration/complexityAnalyzer'
 // 🆕 Lucky 模式集成 — 多 Agent 循环控制
 import { getLuckyDelegationControl, shouldStopDelegationLoop, getConfig as getLuckyConfig, getCurrentMood, getCurrentMode } from './luckyModeIntegration'
+// 🆕 P3-5: spawn_subagent fork 模式集成
+import { getAsyncTaskManager } from './asyncTaskManager'
+import { getAgentWorkspaceManager } from './agentWorkspaceManager'
 
 // ═══════════════════════════════════════════════════════════
 // 通知板 & 共享上下文 持久化路径
@@ -355,11 +358,13 @@ ${lastError.slice(0, 1000)}
       }
     }
 
-    const targetRunner = this.runners.get(to)
-    if (!targetRunner) {
+    // 🆕 P3-5: 检查目标 Agent 是否已配置（通过 agentWorkspaceManager）
+    const workspace = getAgentWorkspaceManager()
+    const targetProfile = workspace.profiles.get(to)
+    if (!targetProfile) {
       return {
         success: false, content: '',
-        error: `${member.name}(${to}) 未就绪（Runner 未注册）`,
+        error: `${member.name}(${to}) 未就绪（Agent 未配置）`,
         toolCallsCount: 0, elapsedMs: Date.now() - startTime,
       }
     }
@@ -444,15 +449,46 @@ ${lastError.slice(0, 1000)}
       }
 
       try {
-        // 构建 worker 输入
-        const workerInput = this._buildWorkerInput(currentTask, taskType, context, filePaths)
-
-        const effectiveTimeout = timeout || 300000
-        const result = await targetRunner.chat(workerInput, {
-          timeoutMs: effectiveTimeout,
-          socialMode: false,
+        // 🆕 P3-5: spawn_subagent fork 模式 — 使用 asyncTaskManager 提交后台任务
+        const workspace = getAgentWorkspaceManager()
+        const targetProfile = workspace.profiles.get(to)
+        
+        // 构建子任务配置
+        const childConfig = workspace.config.buildRunConfig(to as any, targetProfile, {
+          systemPrompt: this._buildWorkerSystemPrompt(currentTask, taskType, from, to),
+          personaId: to,
         })
-
+        
+        // 提交到 asyncTaskManager 作为后台任务
+        const asyncManager = getAsyncTaskManager()
+        const taskId = asyncManager.submit(
+          `[${from} → ${to}] ${currentTask.slice(0, 50)}`,
+          childConfig,
+          { title: `Delegation: ${from} → ${to}` }
+        )
+        
+        console.log(`[DelegationManager] 🧬 spawn_subagent fork: ${from} → ${to}, taskId=${taskId}`)
+        
+        // 记录委托到目标 Agent 的独立 jobs.json
+        try {
+          workspace.jobs.addJob(to, {
+            agentId: to,
+            type: 'delegation',
+            status: 'running',
+            title: `[${from} → ${to}] ${currentTask.slice(0, 50)}`,
+            description: currentTask,
+            metadata: {
+              parentJobId: undefined,
+              taskId,
+            }
+          })
+        } catch (e) {
+          console.warn('[DelegationManager] 记录委托任务失败:', e)
+        }
+        
+        // 等待任务完成（轮询进度）
+        const result = await this._waitForTaskCompletion(asyncManager, taskId, timeout ?? 300_000)
+        
         if (result.error) {
           lastError = result.error
           attemptErrors.push(result.error)
@@ -466,7 +502,7 @@ ${lastError.slice(0, 1000)}
             const finalResult: DelegationResult = {
               success: false, content: '',
               error: result.error,
-              toolCallsCount: result.toolCallsCount,
+              toolCallsCount: 0,
               elapsedMs: Date.now() - startTime,
               retryInfo: {
                 totalRetries: attempt - 1,
@@ -482,11 +518,11 @@ ${lastError.slice(0, 1000)}
         }
 
         // ✅ 成功
-        const rawText = result.text || ''
+        const rawText = result.result || ''
         const { cleanText, questions } = this._parseQuestions(rawText)
         finalCleanText = cleanText
         finalQuestions = questions.length > 0 ? questions : undefined
-        finalToolCallsCount = result.toolCallsCount
+        finalToolCallsCount = 0 // fork 模式暂不统计 tool calls
 
         // 🆕 Phase 2: 记录本轮输出用于收敛检测
         loopCtx.recentOutputs.push(cleanText.slice(0, 500))
@@ -536,7 +572,6 @@ ${lastError.slice(0, 1000)}
           retryInfo,
         }
         this.runnerResultCache.set(cacheKey, { result: resultVal, expiresAt: Date.now() + CACHE_TTL_MS })
-
         return resultVal
       } catch (err: any) {
         lastError = err.message
@@ -601,6 +636,63 @@ ${lastError.slice(0, 1000)}
     if (attempt >= 4) return 'escalate'
 
     return 'same'
+  }
+
+  // ═══ P3-5: spawn_subagent fork 模式 ═══
+
+  /** 等待 asyncTaskManager 任务完成 */
+  private async _waitForTaskCompletion(
+    asyncManager: any,
+    taskId: string,
+    timeout: number
+  ): Promise<{ result?: string; error?: string }> {
+    const startTime = Date.now()
+    const pollInterval = 500 // 500ms 轮询一次
+    
+    while (Date.now() - startTime < timeout) {
+      const task = asyncManager.get(taskId)
+      
+      if (!task) {
+        return { error: '任务不存在' }
+      }
+      
+      if (task.status === 'done') {
+        return { result: task.result }
+      }
+      
+      if (task.status === 'error') {
+        return { error: task.error || '任务执行失败' }
+      }
+      
+      if (task.status === 'cancelled') {
+        return { error: '任务已取消' }
+      }
+      
+      // 等待后继续轮询
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+    }
+    
+    return { error: '任务超时' }
+  }
+
+  /** 构建子任务系统提示词（继承父任务上下文） */
+  private _buildWorkerSystemPrompt(task: string, taskType: string, from: string, to: string): string {
+    const parts: string[] = []
+    
+    parts.push(`你是 ${to}，正在执行来自 ${from} 的委托任务。`)
+    parts.push(`这是一个子任务（spawn_subagent fork），你有独立的上下文空间。`)
+    parts.push('')
+    parts.push('## 任务信息')
+    parts.push(`- 任务类型: ${taskType}`)
+    parts.push(`- 委托方: ${from}`)
+    parts.push(`- 执行方: ${to}`)
+    parts.push('')
+    parts.push('## 执行规则')
+    parts.push('① 直接执行任务，返回结果')
+    parts.push('② 如果遇到问题，使用 [QUESTION]...[/QUESTION] 标记需要确认的问题')
+    parts.push('③ 不要寒暄，直接输出结果')
+    
+    return parts.join('\n')
   }
 
 
@@ -881,16 +973,27 @@ ${currentVerify.errors.join('\n').slice(0, 3000)}
 
         console.log(`[DelegationManager] 🔧 第 ${round} 轮修复 (委托给 ${member.name})...`)
 
-        const targetRunner = this.runners.get(to)
-        if (!targetRunner) {
-          fixAttempts.push(`第 ${round} 轮: Runner 不可用`)
-          break
-        }
-
-        const fixResult = await targetRunner.chat(fixTask, {
-          timeoutMs: 120_000,
-          socialMode: false,
+        // 🆕 P3-5: 使用 asyncTaskManager fork 模式
+        const workspace = getAgentWorkspaceManager()
+        const targetProfile = workspace.profiles.get(to)
+        const asyncManager = getAsyncTaskManager()
+        
+        const fixChildConfig = workspace.config.buildRunConfig(to as any, targetProfile, {
+          systemPrompt: '你正在执行自动修复任务，请仔细阅读错误信息并修复问题。',
         })
+        
+        const fixTaskId = asyncManager.submit(
+          `[自动修复] ${fixTask.slice(0, 50)}`,
+          fixChildConfig,
+          { title: `AutoFix: ${to}` }
+        )
+        
+        const fixResult = await this._waitForTaskCompletion(asyncManager, fixTaskId, 120_000)
+        
+        if (!fixResult.result) {
+          fixAttempts.push(`第 ${round} 轮: 修复任务失败 - ${fixResult.error}`)
+          continue
+        }
 
         console.log(`[DelegationManager] 🔍 第 ${round} 轮修复后验证...`)
 
@@ -902,7 +1005,7 @@ ${currentVerify.errors.join('\n').slice(0, 3000)}
           return {
             autoFixed: true,
             fixLog: `✅ 第 ${round} 轮修复后通过`,
-            finalContent: fixResult.text || delegateOutput,
+            finalContent: fixResult.result || delegateOutput,
             attempts: fixAttempts,
           }
         }

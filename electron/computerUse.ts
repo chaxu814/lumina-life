@@ -234,6 +234,9 @@ export class ComputerUse {
         case 'close_window': {
           return await this.safeExec(this.closeWindowCmd())
         }
+        case 'screenshot': {
+          try { await this.captureScreen(); return true } catch { return false }
+        }
         default:
           return false
       }
@@ -288,13 +291,20 @@ export class ComputerUse {
   }
 
   private scrollCmd(direction: string, amount: number): string {
-    const btn = direction === 'up' ? '4' : '5'
-    const clicks = Array(amount).fill(btn).join(' ')
+    if (process.platform === 'win32') {
+      // PowerShell: 复用 Win32 mouse_event 模拟滚轮（0x0800 = MOUSEEVENTF_WHEEL）
+      const delta = direction === 'up' ? 120 : -120
+      const clicks = Math.max(1, Math.min(10, amount))
+      const ps = `Add-Type -AssemblyName System.Windows.Forms; $s = Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern void mouse_event(uint f,uint x,uint y,uint d,int e);' -Name 'W32S' -Namespace 'Sys' -PassThru; 1..${clicks} | ForEach-Object { $s::mouse_event(0x0800,0,0,${delta},0); Start-Sleep -Milliseconds 50 }`
+      return `powershell -Command "${ps}"`
+    }
     if (process.platform === 'darwin') {
       const y = direction === 'up' ? -amount * 30 : amount * 30
       return `osascript -e 'tell application "System Events" to scroll page ${y}'`
     }
-    return `xdotool click ${clicks}`
+    const btn = direction === 'up' ? '4' : '5'
+    const clicksArr = Array(amount).fill(btn).join(' ')
+    return `xdotool click ${clicksArr}`
   }
 
   private clipboardCmd(text: string): string {

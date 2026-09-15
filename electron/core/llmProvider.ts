@@ -43,7 +43,7 @@ export interface LLMEmitCallbacks {
 }
 
 export interface LLMRequestOptions {
-  messages: Array<{ role: string; content: string; name?: string; tool_calls?: any[]; tool_call_id?: string }>
+  messages: Array<{ role: string; content: string; name?: string; tool_calls?: any[]; tool_call_id?: string; images?: string[] }>
   tools?: any[]
   maxTokens?: number
   temperature?: number
@@ -88,10 +88,14 @@ export class LLMProvider {
     if (this.healthChecked) return { ok: true, modelFound: true, loadedModels: [] }
 
     try {
-      const res = await fetch(`${this.config.baseUrl}/models`, {
+      let res = await fetch(`${this.config.baseUrl}/models`, {
         signal: AbortSignal.timeout(10_000),
-        headers: { Authorization: `Bearer ${this.config.apiKey}` },
+        headers: this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {},
       })
+      // 本地端点误填 key 导致 401/403 时，免密重试一次（LM Studio/Ollama 本地通常不需要鉴权）
+      if (!res.ok && /(localhost|127\.|0\.0\.0\.0|192\.168\.|^https?:\/\/10\.)/i.test(this.config.baseUrl || '') && this.config.apiKey) {
+        res = await fetch(`${this.config.baseUrl}/models`, { signal: AbortSignal.timeout(10_000), headers: {} })
+      }
       if (res.ok) {
         const modelList = await res.json().catch(() => null)
         const loadedModels: string[] = modelList?.data?.map((m: any) => m.id) || []
@@ -132,9 +136,19 @@ export class LLMProvider {
     const shouldSendTools = opts.tools && opts.tools.length > 0 && !modelLacksTools
 
     // 构建请求体
+    const messages = opts.messages.map((m) => {
+      if (!m.images || !m.images.length) return m
+      const content: any[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : [...(m.content || [])]
+      for (const img of m.images) {
+        content.push({ type: 'image_url', image_url: { url: img } })
+      }
+      const { images, ...rest } = m
+      return { ...rest, content }
+    })
+
     const requestBody: Record<string, any> = {
       model: this.config.model,
-      messages: opts.messages,
+      messages,
       max_tokens: opts.maxTokens || this.config.maxContextTokens,
       temperature: opts.temperature ?? 0.7,
       stream: true,
@@ -186,15 +200,30 @@ export class LLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const isLocalishEndpoint = /(localhost|127\.|0\.0\.0\.0|192\.168\.|^https?:\/\/10\.)/i.test(this.config.baseUrl || '')
+      const buildReqHeaders = (withAuth: boolean): Record<string, string> => {
+        const h: Record<string, string> = { 'Content-Type': 'application/json' }
+        // 本地推理服务（LM Studio/Ollama 等）通常免密；没 key 时不发空头，误填 key 401 时还会自动去鉴权重试
+        if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+        return h
+      }
+      let response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
+        headers: buildReqHeaders(true),
         body: JSON.stringify(requestBody),
         signal: masterSignal,
       })
+      // 本地端点误填 API Key（如 LM Studio 报 Invalid token 401）→ 去掉 Authorization 自动重试一次
+      if (response.status === 401 && isLocalishEndpoint && this.config.apiKey) {
+        console.warn('[LLMProvider] 本地端点返回 401（疑似误填 API Key），去掉鉴权头重试一次')
+        try { await response.body?.cancel() } catch { /* ignore */ }
+        response = await fetch(url, {
+          method: 'POST',
+          headers: buildReqHeaders(false),
+          body: JSON.stringify(requestBody),
+          signal: masterSignal,
+        })
+      }
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '')
@@ -386,15 +415,18 @@ export class LLMProvider {
     }
 
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(timeout),
-      })
+      const isLocal = /(localhost|127\.|0\.0\.0\.0|192\.168\.|^https?:\/\/10\.)/i.test(this.config.baseUrl || '')
+      const reqHeaders = (withAuth: boolean): Record<string, string> => {
+        const h: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+        return h
+      }
+      let res = await fetch(url, { method: 'POST', headers: reqHeaders(true), body: JSON.stringify(requestBody), signal: AbortSignal.timeout(timeout) })
+      if (res.status === 401 && isLocal && this.config.apiKey) {
+        console.warn('[LLMProvider] 非流式：本地端点 401，去鉴权重试一次')
+        try { await res.body?.cancel() } catch {}
+        res = await fetch(url, { method: 'POST', headers: reqHeaders(false), body: JSON.stringify(requestBody), signal: AbortSignal.timeout(timeout) })
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => '')

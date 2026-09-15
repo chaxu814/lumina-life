@@ -19,6 +19,19 @@ import { app } from 'electron'
 import type { AgentMessage } from './tools/types'
 
 // ═══════════════════════════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════════════════════════
+
+/** 将 AgentMessage content 安全转为字符串 */
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
+
+// ═══════════════════════════════════════════════════════════
 // 类型
 // ═══════════════════════════════════════════════════════════
 
@@ -34,6 +47,7 @@ export interface SessionMeta {
   completed: boolean
   tags: string[]
   summary?: string
+  compactedContext?: string
 }
 
 export interface SessionData {
@@ -185,7 +199,34 @@ export class SessionManager {
     this.persistSession(data)
   }
 
-  // ── 获取压缩上下文 (用于跨 session 注入) ──────────
+  
+  // ── 获取压缩上下文 ─────────────────────────────────
+
+  getCompactedContext(sessionId: string): string | null {
+    const data = this.activeSessions.get(sessionId)
+    if (data?.compactedContext) return data.compactedContext
+    // 从磁盘加载
+    const filePath = this.getSessionPath(sessionId)
+    if (!fs.existsSync(filePath)) return null
+    try {
+      const data: SessionData = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      return data.compactedContext || null
+    } catch {
+      return null
+    }
+  }
+
+  // ── 清除压缩上下文 ─────────────────────────────────
+
+  clearCompactedContext(sessionId: string): void {
+    const data = this.activeSessions.get(sessionId)
+    if (data) {
+      data.compactedContext = undefined
+      this.persistSession(data)
+    }
+  }
+
+// ── 获取压缩上下文 (用于跨 session 注入) ──────────
 
   getCompactedContextForInjection(sessionId: string): string | null {
     const data = this.activeSessions.get(sessionId)
@@ -337,7 +378,8 @@ export class SessionManager {
     return this.index.sessions.filter(s =>
       s.title.toLowerCase().includes(q) ||
       s.tags.some(t => t.toLowerCase().includes(q)) ||
-      (s.summary && s.summary.toLowerCase().includes(q)),
+      (s.summary && s.summary.toLowerCase().includes(q)) ||
+      (s.compactedContext && s.compactedContext.toLowerCase().includes(q)),
     )
   }
 
@@ -364,7 +406,7 @@ export class SessionManager {
         const role = msg.role === 'user' ? '👤 用户' : msg.role === 'assistant' ? '🤖 助手' : `⚙️ ${msg.role}`
         lines.push(`### ${role}`)
         lines.push('')
-        lines.push(msg.content.slice(0, 2000))
+        lines.push(toText(msg.content).slice(0, 2000))
         lines.push('')
       }
 

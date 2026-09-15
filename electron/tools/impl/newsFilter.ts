@@ -51,7 +51,83 @@ export interface FilterOptions {
 // 默认兴趣配置（从用户数据目录读取，可覆盖）
 // ═══════════════════════════════════════════════════════════
 
-export const DEFAULT_INTERESTS = 'AI大模型、半导体、新能源、美股、A股、GitHub热门'
+export const DEFAULT_INTERESTS = 'AI大模型发布与更新、AI编程工具、半导体芯片、新能源汽车、A股美股港股、宏观经济政策、GitHub开源项目、科技公司动态'
+
+// ═══════════════════════════════════════════════════════════
+// 分类均衡选取
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 分类配额比例（总和为 1.0）
+ * AI 25% / 科技 20% / 财经 20% / 开源 15% / 热搜 10% / 论文 5% / 综合 5%
+ */
+const CATEGORY_QUOTA_RATIO: Record<string, number> = {
+  ai: 0.25,
+  tech: 0.20,
+  finance: 0.20,
+  oss: 0.15,
+  trending: 0.10,
+  paper: 0.05,
+  general: 0.05,
+}
+
+/**
+ * 按分类配额均衡选取新闻，避免单一分类霸屏。
+ *
+ * 策略：
+ *   1. 第一轮：每个分类按配额从高分到低分填充
+ *   2. 第二轮：未填满的配额释放，从剩余条目中按全局高分补齐
+ */
+function balanceByCategory(items: FilteredItem[], maxItems: number): FilteredItem[] {
+  if (items.length <= maxItems) return items
+
+  // 计算每个分类的配额（至少 1 条，如果该分类有条目）
+  const quota: Record<string, number> = {}
+  for (const [cat, ratio] of Object.entries(CATEGORY_QUOTA_RATIO)) {
+    const q = Math.max(1, Math.round(maxItems * ratio))
+    quota[cat] = q
+  }
+
+  // 按分类分组（已按相关性降序）
+  const byCategory = new Map<string, FilteredItem[]>()
+  for (const item of items) {
+    const cat = item.item.category
+    if (!byCategory.has(cat)) byCategory.set(cat, [])
+    byCategory.get(cat)!.push(item)
+  }
+
+  const result: FilteredItem[] = []
+  const usedIds = new Set<string>()
+
+  // 第一轮：按配额填充
+  for (const [cat, catItems] of byCategory) {
+    const q = quota[cat] || 1
+    const taken = catItems.slice(0, q)
+    for (const item of taken) {
+      result.push(item)
+      usedIds.add(item.item.id)
+    }
+  }
+
+  // 如果第一轮超过 maxItems，按相关性裁剪
+  if (result.length > maxItems) {
+    result.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    return result.slice(0, maxItems)
+  }
+
+  // 第二轮：用剩余高分条目补齐
+  if (result.length < maxItems) {
+    const remaining = items.filter(i => !usedIds.has(i.item.id))
+    for (const item of remaining) {
+      if (result.length >= maxItems) break
+      result.push(item)
+    }
+  }
+
+  // 最终按相关性降序排列
+  result.sort((a, b) => b.relevanceScore - a.relevanceScore)
+  return result
+}
 
 // ═══════════════════════════════════════════════════════════
 // Prompt 模板
@@ -75,15 +151,21 @@ function buildFilterPrompt(items: NewsItem[], interests: string): string {
 
   return `# 任务：新闻相关性筛选
 
-你是一个智能新闻筛选助手。用户关注以下领域：**${interests}**
+你是一个专业的 AI 情报站编辑。用户关注以下领域：**${interests}**
 
 请对以下 ${items.length} 条新闻逐条评估，返回 JSON 数组。
 
 ## 评估标准
-- **相关性**（0-100）：与用户兴趣领域的匹配程度
+- **相关性**（0-100）：与用户兴趣领域的匹配程度。AI 模型发布/更新、芯片半导体、股市行情、科技公司动态、开源项目 = 80-100 分；泛科技/财经 = 50-79 分；社会新闻/娱乐八卦/灾难/政治 = 0-20 分
+- **信息量**：有实质内容、对用户有参考价值的优先
 - **时效性**：越新越好
-- **信息量**：有实质内容的优先
 - **独家性**：非泛泛而谈的优先
+
+## 重要规则
+- 社会事件、灾难救援、娱乐八卦、明星绯闻、刑事案件等一律给 0-20 分
+- 只有标题没有实质内容的"标题党"给低分
+- AI/科技/财经领域的实质性新闻给高分
+- 如果一条新闻虽然是百度热搜但确实涉及科技/AI/财经政策，应给合理高分
 
 ## 输出格式（纯 JSON 数组，不要 markdown 包裹）
 [
@@ -173,15 +255,34 @@ export async function filterWithLLM(
 ): Promise<FilteredItem[]> {
   const {
     interests = DEFAULT_INTERESTS,
-    minScore = 30,
+    minScore = 50,
   } = options || {}
 
   if (items.length === 0) return []
 
-  // 如果条目太多，先做一轮预筛选（保留热度分 Top 50）
-  const toFilter = items.length > 50
-    ? items.sort((a, b) => b.hotScore - a.hotScore).slice(0, 50)
-    : items
+  // 预筛选：按分类均衡取样，避免单一来源（如百度热搜）霸占 LLM 筛选池
+  // 每个分类最多取 12 条，总共最多 60 条，确保 AI/科技/财经/开源都有代表
+  const byCategory = new Map<string, NewsItem[]>()
+  for (const item of items) {
+    const cat = item.category
+    if (!byCategory.has(cat)) byCategory.set(cat, [])
+    byCategory.get(cat)!.push(item)
+  }
+  const toFilter: NewsItem[] = []
+  const PER_CATEGORY_LIMIT = 12
+  for (const [, catItems] of byCategory) {
+    catItems.sort((a, b) => b.hotScore - a.hotScore)
+    toFilter.push(...catItems.slice(0, PER_CATEGORY_LIMIT))
+  }
+  // 如果总数还不够 60，按热度补齐
+  if (toFilter.length < 60) {
+    const existing = new Set(toFilter.map(i => i.id))
+    const sorted = [...items].sort((a, b) => b.hotScore - a.hotScore)
+    for (const item of sorted) {
+      if (toFilter.length >= 60) break
+      if (!existing.has(item.id)) toFilter.push(item)
+    }
+  }
 
   const systemPrompt = '你是一个专业的新闻筛选助手。请严格按用户要求的 JSON 格式输出，不要添加额外说明。'
   const userPrompt = buildFilterPrompt(toFilter, interests)
@@ -216,8 +317,10 @@ export async function filterWithLLM(
     filtered.sort((a, b) => b.relevanceScore - a.relevanceScore)
 
     const maxItems = options?.maxItems || 15
-    console.log(`[NewsFilter] LLM 筛选: ${items.length} → ${filtered.length} 条（限制 ${maxItems}）`)
-    return filtered.slice(0, maxItems)
+    // 分类配额选取：保证 AI/科技/财经/开源都有代表，不被单一分类霸屏
+    const balanced = balanceByCategory(filtered, maxItems)
+    console.log(`[NewsFilter] LLM 筛选: ${items.length} → ${filtered.length} 条合格 → ${balanced.length} 条精选（均衡后，限制 ${maxItems}）`)
+    return balanced
   } catch (err: any) {
     console.warn('[NewsFilter] LLM 调用失败，使用热度分降级:', err.message)
     return fallbackFilter(toFilter, minScore)
@@ -229,25 +332,43 @@ export async function filterWithLLM(
  */
 function fallbackFilter(items: NewsItem[], minScore: number): FilteredItem[] {
   const sourcePriority: Record<string, number> = {
-    '知乎热榜': 10,
-    'GitHub Trending': 9,
+    'OpenAI Blog': 12,
+    'Google AI Blog': 11,
+    'Hugging Face': 11,
+    'MIT Tech Review AI': 10,
+    'GitHub Trending': 10,
+    'Hacker News': 9,
+    'TechCrunch': 8,
+    'The Verge': 8,
     '36氪': 8,
-    '新浪财经': 7,
+    'Solidot': 8,
+    '东方财富': 8,
+    '金十数据': 7,
+    '开源中国': 7,
     '少数派': 6,
-    '极客公园': 6,
-    '阮一峰的网络日志': 5,
+    '百度热搜': 4,
+  }
+
+  // 分类权重：AI/财经/科技优先
+  const categoryWeight: Record<string, number> = {
+    ai: 20,
+    finance: 15,
+    tech: 12,
+    oss: 10,
+    paper: 8,
+    trending: 2,
+    general: 5,
   }
 
   const scored = items.map(item => ({
     item,
-    score: (sourcePriority[item.source] || 5) * 10 + item.hotScore,
+    score: (sourcePriority[item.source] || 5) * 8 + (categoryWeight[item.category] || 5) + item.hotScore * 0.3,
   }))
 
   scored.sort((a, b) => b.score - a.score)
 
-  return scored
+  const fallbackItems: FilteredItem[] = scored
     .filter(s => s.score >= minScore)
-    .slice(0, 15)
     .map(s => ({
       item: s.item,
       relevanceScore: Math.round(s.score / 2),
@@ -256,6 +377,9 @@ function fallbackFilter(items: NewsItem[], minScore: number): FilteredItem[] {
       digest: s.item.summary,
       tags: [s.item.category],
     }))
+
+  // 降级方案也走分类均衡，避免单一源霸屏
+  return balanceByCategory(fallbackItems, 15)
 }
 
 /**

@@ -15,6 +15,7 @@
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-width: 0;
 }
 
 .main-content {
@@ -23,6 +24,7 @@
   display: flex;
   flex-direction: column;
   background: var(--surface-0);
+  min-width: 0;
 }
 
 /* === TopBar === */
@@ -908,13 +910,15 @@
 
 /* ── Group chat history item ── */
 .gc-history-item {
-  padding: 7px 12px; cursor: pointer; font-size: 11px;
+  padding: 8px 10px; margin: 1px 6px; cursor: pointer;
   border-radius: 6px; transition: all 0.12s;
-  color: var(--text-secondary); overflow: hidden;
-  white-space: nowrap; text-overflow: ellipsis;
+  border: 1px solid transparent; position: relative;
 }
-.gc-history-item:hover { background: var(--surface-2); color: var(--text-primary); }
-.gc-history-item.active { background: var(--accent-50, #eef2ff); color: var(--accent-500); font-weight: 600; }
+.gc-history-item:hover { background: var(--surface-100, #f3f4f6); }
+.gc-history-item.active {
+  background: var(--accent-50, #eef2ff);
+  border-color: var(--accent-200, #c7d2fe);
+}
 
 /* ═══════════════════════════════════════════════════════════
    v2.12: Agent Emotion Bar — 情绪状态栏
@@ -1108,4 +1112,24 @@
   border: 2px solid white;
   box-shadow: var(--shadow-xs);
   cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DevTools docked 窄屏自适应（JS 驱动）
+   ═══════════════════════════════════════════════════════════ */
+
+/* sidebar 紧凑模式 — 由 Sidebar 组件 ResizeObserver 触发 */
+.sidebar-compact {
+  width: 52px !important;
+  min-width: 52px !important;
+}
+.sidebar-compact .sidebar-item {
+  padding: 8px 0 !important;
+  justify-content: center;
+}
+.sidebar-compact .sidebar-item span {
+  display: none;
+}
+.sidebar-compact .sidebar-scroll {
+  align-items: center;
 }

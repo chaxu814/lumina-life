@@ -8,6 +8,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
+import type { NewsCategory } from '../tools/impl/newsCollector'
 
 export interface BilingualDigestResult {
   ok: boolean
@@ -21,7 +22,7 @@ export interface BilingualDigestResult {
     enTitle: string
     url: string
     source: string
-    category: string
+    category: NewsCategory
     cnSummary: string
     enSummary: string
   }>
@@ -54,7 +55,7 @@ export async function generateBilingualDigest(
       enTitle: item.title,      // 默认用原标题
       url: item.url,
       source: item.source,
-      category: item.category,
+      category: item.category as NewsCategory,
       cnSummary: item.summary,
       enSummary: item.summary,  // 默认用原摘要
     }))
@@ -124,8 +125,8 @@ export async function generateBilingualDigest(
 
 /** 用 LLM 批量翻译标题+摘要 */
 async function _batchTranslate(
-  items: Array<{ title: string; enTitle: string; url: string; source: string; category: string; cnSummary: string; enSummary: string }>
-): Promise<Array<{ title: string; enTitle: string; url: string; source: string; category: string; cnSummary: string; enSummary: string }>> {
+  items: Array<{ title: string; enTitle: string; url: string; source: string; category: NewsCategory; cnSummary: string; enSummary: string }>
+): Promise<Array<{ title: string; enTitle: string; url: string; source: string; category: NewsCategory; cnSummary: string; enSummary: string }>> {
   try {
     const { getProviderManager } = await import('../core/providerManager')
     const pm = getProviderManager?.()

@@ -13,6 +13,15 @@
 
 import type { AgentMessage } from '../tools/types'
 
+/** 将 AgentMessage content 安全转为字符串 */
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
+
 // ═══════════════════════════════════════════════════════════
 // 场景模式枚举
 // ═══════════════════════════════════════════════════════════
@@ -224,8 +233,8 @@ export class CodingModeInjector {
     // 检查是否已包含 CodingMode
     const systemMsg = messages[0]
     if (systemMsg && systemMsg.role === 'system') {
-      if (systemMsg.content.includes('Coding Mode')) return null
-      systemMsg.content = systemMsg.content + '\n\n' + prompt
+      if (toText(systemMsg.content).includes('Coding Mode')) return null
+      systemMsg.content = toText(systemMsg.content) + '\n\n' + prompt
       return messages
     }
 

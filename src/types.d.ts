@@ -122,6 +122,8 @@ declare global {
       // Agent API (v2)
       agentChat: (params: {
         text: string
+        sessionId?: string
+        compactedContext?: string
         config: {
           mode: 'chat' | 'agent' | 'developer'
           model: string; baseUrl: string; apiKey: string
@@ -135,7 +137,7 @@ declare global {
           trackReasoning?: boolean  // 🧠 v10.6: thinking_stream
         }
         conversationHistory?: Array<{ role: string; content: string }>
-      }) => Promise<{ success: boolean; content?: string; totalTokens?: number; error?: string }>
+      }) => Promise<{ success: boolean; content?: string; compactedContext?: string; totalTokens?: number; contextWindow?: number; error?: string }>
 
       agentAbort: () => Promise<{ success: boolean }>
       agentClear: () => Promise<{ success: boolean }>
@@ -151,7 +153,7 @@ declare global {
       providerSaveConfig: (id: string, config: any) => Promise<{ success: boolean; error?: string }>
       providerSaveMultiple: (configs: Record<string, any>) => Promise<{ success: boolean; error?: string }>
       providerSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
-      providerFetchModels: (id: string) => Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>
+      providerFetchModels: (id: string, override?: { baseUrl?: string; apiKey?: string }) => Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>
       providerTestConnection: (id: string) => Promise<{ success: boolean; latency?: number; error?: string }>
 
       onAgentEvent: (callback: (event: {
@@ -198,6 +200,10 @@ declare global {
       clearAllData: () => Promise<{ success: boolean; error?: string }>
       resetSettings: () => Promise<{ success: boolean; error?: string }>
 
+      // Lucky Mode 配置持久化
+      luckyModeGetConfig: () => Promise<{ config?: any; error?: string }>
+      luckyModeSaveConfig: (config: any) => Promise<{ ok: boolean; error?: string }>
+
       // 对话框
       dialogSave: (options: any) => Promise<any>
       dialogOpen: (options: any) => Promise<any>
@@ -212,6 +218,8 @@ declare global {
 
       // 菜单/事件
       onMenuEvent: (channel: string, callback: (...args: any[]) => void) => () => void
+      // 主窗口回传桌宠生活视图数据
+      lifeProvideData: (payload: { reqId: string; items: Array<{ title: string; body?: string; meta?: string; icon?: string }> }) => void
       onTokenUsage: (callback: (data: any) => void) => void
 
       // Cron 任务同步到主进程
@@ -445,6 +453,11 @@ declare global {
         target: string; reason: string; denied: boolean
       }>>
       accessClearViolations: () => Promise<{ ok: boolean }>
+
+      // 📁 文件读写（Loop 引擎跨 Session 持久化等）
+      fsReadFile: (filePath: string) => Promise<string>
+      fsWriteFile: (filePath: string, content: string) => Promise<void>
+      fsListDir: (dirPath: string) => Promise<unknown[]>
     }
   }
 }

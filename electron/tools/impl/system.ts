@@ -3,6 +3,8 @@
 // v3.2: openFile 重写 — 智能路径修复 + URL/文件/文件夹/应用全覆盖 + Electron + 系统命令双回退
 // ============================================================
 
+import { stripMarkdown } from '../../utils/stripMarkdown'
+
 import { execFile } from 'child_process'
 import fs from 'fs'
 import path from 'path'
@@ -89,8 +91,8 @@ export const notificationDef: ToolDef = {
 }
 
 export async function notification(args: Record<string, any>): Promise<ToolResult> {
-  const title = String(args.title || '').replace(/'/g, "''")
-  const message = String(args.message || '').replace(/'/g, "''")
+  const title = stripMarkdown(String(args.title || '').replace(/'/g, "''"))
+  const message = stripMarkdown(String(args.message || '').replace(/'/g, "''"))
   const psScript = [
     '[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;',
     '$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);',

@@ -3,6 +3,9 @@ import {
   buildStructuredSummary,
   compactMessages,
   needsCompaction,
+  COMPACTOR_MESSAGE_LIMIT,
+  COMPACTOR_TOKEN_BUDGET,
+  COMPACTOR_TRIGGER_RATIO,
 } from '../electron/agentCompactor'
 import { TokenEstimator } from '../electron/tokenEstimator'
 import type { AgentMessage } from '../electron/tools/types'
@@ -53,14 +56,28 @@ describe('agentCompactor', () => {
   })
 
   it('needsCompaction triggers by token budget or message count', () => {
-    const long = 'model response '.repeat(120)
+    const tokenThreshold = Math.floor(COMPACTOR_TOKEN_BUDGET * COMPACTOR_TRIGGER_RATIO)
+
+    // 61 条长消息 → token 预算触发（每条消息按估算器 ~4 chars/token 放大 + 安全余量）
     const longMsgs: AgentMessage[] = Array.from({ length: 61 }, (_, i) =>
-      makeMsg({ role: i % 2 === 0 ? 'user' : 'assistant', content: long }),
+      makeMsg({
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        content: 'x'.repeat(Math.ceil(tokenThreshold / 61) * 8),
+      }),
     )
     expect(
       needsCompaction(estimator.estimateMessages(longMsgs), longMsgs.length),
     ).toBe(true)
 
+    // 条数达到上限 → 条数触发
+    const manyMsgs: AgentMessage[] = Array.from({ length: COMPACTOR_MESSAGE_LIMIT }, (_, i) =>
+      makeMsg({ role: i % 2 === 0 ? 'user' : 'assistant', content: 'hi' }),
+    )
+    expect(
+      needsCompaction(estimator.estimateMessages(manyMsgs), manyMsgs.length),
+    ).toBe(true)
+
+    // 短消息 + 小条数 → 不触发
     const shortMsgs: AgentMessage[] = Array.from({ length: 10 }, (_, i) =>
       makeMsg({ role: i % 2 === 0 ? 'user' : 'assistant', content: 'hi' }),
     )
@@ -71,7 +88,7 @@ describe('agentCompactor', () => {
 
   it('compactMessages keeps system + recent pairs and injects summary', () => {
     const system = makeMsg({ role: 'system', content: 'BASE' })
-    const mid: AgentMessage[] = Array.from({ length: 65 }, (_, i) =>
+    const mid: AgentMessage[] = Array.from({ length: COMPACTOR_MESSAGE_LIMIT + 10 }, (_, i) =>
       makeMsg({ role: i % 2 === 0 ? 'user' : 'assistant', content: `m${i}` }),
     )
     const msgs = [system, ...mid]

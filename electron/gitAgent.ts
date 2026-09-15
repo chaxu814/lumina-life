@@ -268,6 +268,39 @@ ${diff.slice(0, 2000)}
 
   async commit(message: string): Promise<GitCommitResult> {
     try {
+      // 🆕 Git 身份自动降级：未配置时使用本地默认身份
+      try {
+        const { stdout: nameOut } = await this.exec('git config user.name')
+        const { stdout: emailOut } = await this.exec('git config user.email')
+        const hasIdentity = nameOut.trim() && emailOut.trim()
+        
+        if (!hasIdentity) {
+          // 尝试从 Git 全局配置获取
+          try {
+            const { stdout: globalName } = await this.exec('git config --global user.name')
+            const { stdout: globalEmail } = await this.exec('git config --global user.email')
+            
+            if (globalName.trim() && globalEmail.trim()) {
+              // 使用全局配置作为本地配置
+              await this.exec(`git config user.name "${globalName.trim()}"`)
+              await this.exec(`git config user.email "${globalEmail.trim()}"`)
+              console.log(`[GitAgent] 🔧 自动降级：使用全局 Git 身份 (${globalName.trim()} <${globalEmail.trim()}>)`)
+            } else {
+              // 使用系统默认身份
+              const os = require('os')
+              const username = os.userInfo().username
+              await this.exec(`git config user.name "${username}"`)
+              await this.exec(`git config user.email "${username}@localhost"`)
+              console.log(`[GitAgent] 🔧 自动降级：使用系统默认身份 (${username}@localhost)`)
+            }
+          } catch (e) {
+            console.warn('[GitAgent] ⚠️ 获取全局 Git 身份失败:', e)
+          }
+        }
+      } catch (e) {
+        console.warn('[GitAgent] ⚠️ Git 身份检查失败:', e)
+      }
+
       await this.exec(`git commit -m "${message.replace(/"/g, '\\"')}"`)
       const { stdout: hash } = await this.exec('git rev-parse --short HEAD')
       const { stdout: stats } = await this.exec('git diff --stat HEAD~1..HEAD 2>/dev/null || echo "0 files changed"')

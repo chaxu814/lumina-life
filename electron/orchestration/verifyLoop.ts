@@ -165,7 +165,7 @@ export function runVerification(config: VerifyConfig): VerifyResult {
 
   for (const cmd of config.commands) {
     try {
-      const opts: ExecSyncOptions = {
+      const opts: any = {
         cwd: config.cwd,
         timeout: config.timeoutMs,
         encoding: 'utf-8',

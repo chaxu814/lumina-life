@@ -104,9 +104,6 @@ export default function ModeIndicator() {
         {isManual && (
           <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>📌</span>
         )}
-        {luminaMode.lastScene && luminaMode.lastScene.confidence < 50 && (
-          <span style={{ fontSize: 9, opacity: 0.5 }}>❓</span>
-        )}
       </div>
 
       {/* 下拉菜单 */}

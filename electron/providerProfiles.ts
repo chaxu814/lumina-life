@@ -148,15 +148,14 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
       {
         pattern: /chat|v3/i,
         category: 'coding',
-        maxContextTokens: 131_072,
-        supports256K: false,
+        maxContextTokens: 1_000_000,  // DeepSeek 官方 API 支持 1M
+        supports256K: true,
         supportsTools: true,
         estimatedFirstTokenSec: 3,
         recommendedFor: ['coding', 'orchestration'],
         toolCallingReliability: 0.88,
         recommendedHttpTimeout: 120,
         slowTierTimeout: 600,
-        isLocal: true,
       },
       {
         pattern: /.*/,
@@ -169,7 +168,6 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
         toolCallingReliability: 0.85,
         recommendedHttpTimeout: 120,
         slowTierTimeout: 600,
-        isLocal: true,
       },
     ],
   },

@@ -125,6 +125,10 @@ export interface LuckyModeState {
     completionConfidence: number
     /** 最后一次完成度评估结果 */
     lastEvaluation: string | null
+    /** 当前子任务（目标模式） */
+    currentSubTask?: string
+    /** 已完成子任务列表 */
+    completedSubTasks?: string[]
   }
   /** 任务模式专用状态（deprecated） */
   missionState: {
@@ -716,10 +720,10 @@ export function luckyModeDecision(
           },
         }
       }
-      if (progress.nextSubTask !== config.goal.currentSubTask) {
+      if ((progress.nextSubTask ?? '') !== (config.goal.currentSubTask ?? '')) {
         updates.goalState = {
           ...(updates.goalState || state.goalState),
-          currentSubTask: progress.nextSubTask,
+          currentSubTask: progress.nextSubTask ?? undefined,
           completedSubTasks: progress.completedSubTasks,
         }
       }

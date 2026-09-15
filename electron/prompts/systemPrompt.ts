@@ -29,16 +29,21 @@ const AGENTS_ROOT = 'electron/agents' // 相对于项目根目录
 function findLuminaRoot(): string {
   try {
     const { app } = require('electron')
-    // 先找 electron/agents/lumina/ 目录（标准化路径）
     const appPath = app.getAppPath()
     const candidates = [
-      path.join(appPath, AGENTS_ROOT, 'lumina'),
+      // 1. 项目根目录的 AGENTS.md（开发模式 & 打包后根目录）
       appPath,
+      // 2. 标准化 agent 目录存在 → 说明 appPath 就是项目根，直接返回
+      path.join(appPath, AGENTS_ROOT, 'lumina'),
       path.join(appPath, '..'),
       process.cwd(),
     ]
     for (const dir of candidates) {
-      if (fs.existsSync(path.join(dir, 'AGENTS.md'))) return dir
+      if (fs.existsSync(path.join(dir, 'AGENTS.md'))) {
+        // 候选2命中时 dir 是 agent 目录，项目根是 appPath
+        if (dir.endsWith(path.join(AGENTS_ROOT, 'lumina'))) return appPath
+        return dir
+      }
     }
   } catch {}
   // 降级遍历驱动器
@@ -59,7 +64,23 @@ function loadMdFile(dir: string, filename: string): string {
   try {
     const filePath = path.join(dir, filename)
     if (!fs.existsSync(filePath)) return ''
-    const content = fs.readFileSync(filePath, 'utf-8')
+    // 🔧 P2-fix: 编码兼容 — 自动检测 UTF-16 BOM，优先 UTF-8，失败则回退 GBK
+    const buf = fs.readFileSync(filePath)
+    let content: string
+    // UTF-16 LE BOM (FF FE) 或 UTF-16 BE BOM (FE FF)
+    if (buf.length >= 2 && (buf[0] === 0xff && buf[1] === 0xfe || buf[0] === 0xfe && buf[1] === 0xff)) {
+      content = buf.toString('utf16le')
+    } else {
+      try {
+        content = buf.toString('utf-8')
+        // 检测 UTF-8 解码是否产生 replacement character（说明不是 UTF-8）
+        if (content.includes('\uFFFD')) {
+          content = buf.toString('binary')
+        }
+      } catch {
+        content = buf.toString('binary')
+      }
+    }
     return content.replace(/^---[\s\S]*?---\s*\n?/, '').trim()
   } catch { return '' }
 }
@@ -79,8 +100,18 @@ function loadAgentFiles(agentId: string): { agents: string; soul: string; profil
   if (_agentFileCache[cacheKey]) return _agentFileCache[cacheKey] as any
 
   const root = getLuminaRoot()
-  const agentDir = getAgentDir(root, agentId)
-  const rootDir = root.endsWith('lumina') ? path.dirname(path.dirname(root)) : root
+  // 🔧 FIX: findLuminaRoot() 可能直接返回 agent 目录（候选1命中时），
+  //   此时 root 已以 agents/<agentId> 结尾，不要再拼接一次导致双重嵌套路径。
+  const agentDirSuffix = path.join(AGENTS_ROOT, agentId)
+  let agentDir: string
+  if (root.replace(/\\/g, '/').endsWith(agentDirSuffix.replace(/\\/g, '/'))) {
+    agentDir = root  // root 已经是 agent 目录
+  } else {
+    agentDir = getAgentDir(root, agentId)
+  }
+  const rootDir = root.replace(/\\/g, '/').endsWith(agentDirSuffix.replace(/\\/g, '/'))
+    ? path.dirname(path.dirname(root))  // root 是 agent 目录，上溯两级到项目根
+    : root
 
   // 优先从 electron/agents/<agentId>/ 加载
   const result = {

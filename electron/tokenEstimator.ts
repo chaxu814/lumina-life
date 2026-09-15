@@ -37,10 +37,11 @@ export class TokenEstimator {
   }
 
   /** 估算消息数组的总 token 数 */
-  estimateMessages(messages: Array<{ content: string; role?: string; tool_calls?: unknown[] }>): number {
+  estimateMessages(messages: Array<{ content: string | any[]; role?: string; tool_calls?: unknown[] }>): number {
     let total = 0
     for (const msg of messages) {
-      total += this.estimate(msg.content)
+      const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+      total += this.estimate(content)
       // 工具调用额外开销
       if (msg.tool_calls) {
         for (const tc of msg.tool_calls) {

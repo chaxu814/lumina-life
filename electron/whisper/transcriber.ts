@@ -66,8 +66,8 @@ export class WhisperTranscriber {
     this.modelName = options.modelName || 'Xenova/whisper-tiny.en'
 
     try {
-      // 动态导入 @xenova/transformers
-      const { pipeline } = await import('@xenova/transformers')
+      // 动态导入 @xenova/transformers（可选依赖）
+      const { pipeline } = await import('@xenova/transformers' as any)
 
       this.pipeline = await pipeline('automatic-speech-recognition', this.modelName, {
         quantized: true, // 使用 int8 量化，更快更省内存

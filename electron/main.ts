@@ -58,6 +58,8 @@ import { globalEventBus, BusEvents } from './eventBus'
 import { initAgentConfig, getAgentConfig } from './agentConfig'
 import { LLMProvider } from './core/llmProvider'
 import { initOrchestrator, getOrchestrator } from './core/agentOrchestrator'
+// ─── P3-5: Agent 工作区管理器 ──────────────────────────
+import { initAgentWorkspaceManager } from './agentWorkspaceManager'
 // ─── v10.0: 统一 LLM Provider 管理器 (QwenPaw 风格) ──────
 import { getProviderManager, registerProviderIpc } from './core/providerManager'
 // ─── v8.0: 真·多 Agent 独立 Runner ──────────────────────
@@ -71,6 +73,7 @@ import { registerMemoryIpc } from './ipc/memoryIpc'
 import { registerBridgeIpc } from './ipc/bridgeIpc'
 import { registerSystemIpc, cleanupSystemProcesses, autoStartEdgeTts } from './ipc/systemIpc'
 import { registerTeamIpc, initTeamSocialEngine } from './ipc/teamIpc'
+import { registerLoopIpc } from './ipc/loopIpc'
 
 // ─── 🆕 v2.7 新模??────────────────────────────────────
 import { initMessageQueue, getMessageQueue, destroyMessageQueue } from './messageQueue'
@@ -110,10 +113,10 @@ const WINDOW_CONFIG = {
   minWidth: 900,
   minHeight: 600,
   transparent: false,
-  frame: true,
+  frame: false,
   backgroundColor: '#ffffff',
   vibrancy: 'light' as any,
-  titleBarStyle: 'default' as const,
+  titleBarStyle: 'hidden' as const,
 }
 
 // ==================??// 窗口创建
@@ -153,6 +156,11 @@ function createWindow(): BrowserWindow {
   })
 
   win.on('closed', () => { mainWindow = null })
+
+  // 🆕 DevTools 被用户点 X 关闭时也通知渲染进程恢复 compact
+  win.webContents.on('devtools-closed', () => {
+    win.webContents.send('window:devtools-changed', false)
+  })
 
   return win
 }
@@ -290,16 +298,19 @@ const isCLIMode = process.env.LUMINA_CLI_MODE === '1'
 const isAPIMode = process.env.LUMINA_API_ENABLED === '1'
   || process.argv.includes('--api')
 
+// 🔔 Windows Toast 通知身份（与 electron-builder appId 一致，否则打包后通知可能不显示）
+app.setAppUserModelId('com.lumina.desktop-pet')
+
 // ==================??// 应用生命周期
 // ==================??
 app.whenReady().then(async () => {
   // ── 🔔 Windows 通知权限（尽早声明） ─────────────────
   try {
-    if (typeof Notification !== 'undefined' && Notification.requestPermission && Notification.permission === 'default') {
-      await Notification.requestPermission()
+    const anyNotify = Notification as any
+    if (typeof anyNotify.requestPermission === 'function' && anyNotify.permission === 'default') {
+      await anyNotify.requestPermission()
     }
     // 同时确保通知具备显示条件
-    const anyNotify = Notification as any
     if (typeof anyNotify.isSupported === 'function' && !anyNotify.isSupported()) {
       console.warn('[Notification] 当前环境不支持系统通知')
     }
@@ -330,6 +341,12 @@ app.whenReady().then(async () => {
   initOrchestrator()
   console.log('[main] v6.0 Agent 独立 LLM 配置已加载',
     agentConfig.getAllStatus().map(s => `${s.icon}${s.name}=${s.configured ? s.model : '未配置'}`).join(', '),
+  )
+
+  // ── P3-5: 初始化 Agent 工作区管理器 ──
+  const agentWorkspace = initAgentWorkspaceManager()
+  console.log('[main] P3-5 Agent 工作区已初始化',
+    Object.keys(agentWorkspace.profiles.getAll()).map(id => `${id}`).join(', '),
   )
 
   // ── v10.0: 初始化统一 Provider 管理??───────────────
@@ -468,6 +485,10 @@ for (const { id } of orch.listRunners()) {
     globalShortcut.register('F12', () => {
       if (mainWindow) {
         mainWindow.webContents.toggleDevTools()
+        const opened = mainWindow.webContents.isDevToolsOpened()
+        setTimeout(() => {
+          mainWindow?.webContents.send('window:devtools-changed', opened)
+        }, 300)
       }
     })
     console.log('[main] 🔧 F12 开发者工具快捷键已注')
@@ -490,6 +511,7 @@ for (const { id } of orch.listRunners()) {
   registerSystemIpc(mainWindow)
   registerProviderIpc()                               // 📡 v10.0: 统一 Provider IPC
   registerTeamIpc()                                   // 🆕 v2.6: AI 小团队系统 IPC
+  registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
   registerGamificationIpc()                           // 🎮 v3.0: 游戏化系统 IPC
 
   // 3.5.1 🎭 v6.0: 社交引擎初始化（Agent 朋友??团队闲聊?
@@ -570,9 +592,26 @@ try {
   try {
     petModule = await import('./pet/petWindow')
     petModule.registerPetIpc()
+    petModule.maybeShowOnboarding()   // 首次使用：N.E.K.O 风格初始人格引导
+    // 随 Lumina 启动：如果 autoRestart=true，自动开启桌宠
+    try {
+      const petCfg = petModule.getPetConfig()
+      if (petCfg.autoRestart) {
+        console.log('[main] 🐱 随 Lumina 启动：自动开启桌宠')
+        petModule.togglePet(true, mainWindow)
+      }
+    } catch (e) { console.warn('[main] 桌宠自启动失败:', e) }
     console.log('[main] 🐱 桌宠模块已加载（独立进程架构）')
   } catch (e: any) {
     console.warn('[main] ⚠️ 桌宠模块加载失败（降级运行）:', e.message)
+  }
+
+  // ──  Phase 1 Week 1: 桌宠意图调度器（LLM → 动作标签 → Live2D）──
+  try {
+    const { registerPetIntentIpc } = await import('./pet/intentDispatcher')
+    registerPetIntentIpc()
+  } catch (e: any) {
+    console.warn('[main] ⚠️ 桌宠意图调度器加载失败（降级运行）:', e.message)
   }
 
   // ── 🐍 v4.0 Plan C: Python Agent Node ───────────────
@@ -729,7 +768,7 @@ try {
     const tools = getNewsMCPTools(mainWindow)
     // 通过 globalEventBus 暴露??MCP 系统
     globalEventBus.on('mcp:register-tools' as any, () => {
-      tools.forEach(t => {
+      tools.forEach((t: any) => {
         globalEventBus.emit('mcp:register-tool' as any, t)
       })
     })
@@ -751,6 +790,29 @@ try {
       mainWindow?.webContents.send('personality:conflict', conflict)
     })
   } catch {}
+
+  // 7b. 🆕 Window IPC handlers (关于 / 开发者工具)
+  ipcMain.handle('window:show-about', () => {
+    const { dialog } = require('electron')
+    dialog.showMessageBox(mainWindow!, {
+      type: 'info',
+      title: '关于 Lumina Life',
+      message: 'Lumina Life',
+      detail: `版本: 1.0\nElectron: ${process.versions.electron}\nChrome: ${process.versions.chrome}\nNode.js: ${process.versions.node}\n\n© 2026 Lumina Team. All rights reserved.`,
+      buttons: ['确定'],
+    })
+  })
+  ipcMain.handle('window:toggle-dev-tools', () => {
+    if (mainWindow?.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools()
+      mainWindow.webContents.send('window:devtools-changed', false)
+    } else {
+      mainWindow?.webContents.openDevTools()
+      setTimeout(() => {
+        mainWindow?.webContents.send('window:devtools-changed', true)
+      }, 300)
+    }
+  })
 
   // 8. 🆕 ProactiveEngine IPC handlers
   ipcMain.handle('proactive:status', () => getProactiveEngine().getStatus())
@@ -903,6 +965,7 @@ try {
   } catch (err: any) {
     console.warn(`[main] ⚠️ 沙箱 IPC 注册失败: ${err.message}`)
   }
+
 
   // 8.5 🌸 v2.10: Agent 朋友??Moments IPC handlers
   ipcMain.handle('moments:post', (_e: any, params: any) => {
@@ -1504,6 +1567,7 @@ function registerAcpIpc(): void {
         capabilities: config.capabilities || [],
         blindSpots: config.blindSpots || [],
         triggers: config.triggers || [],
+        registeredAt: new Date().toISOString(),
         acpConfig: {
           url: config.url || '',
           apiKey: config.apiKey || '',

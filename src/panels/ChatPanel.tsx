@@ -19,8 +19,12 @@ import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
 import { getDisabledToolNames } from '../stores/appStore'
 import PersonalityConflictAlert from '../components/PersonalityConflictAlert'
-import { IconPlus } from '../components/Icons'
+import { IconPlus, IconSend } from '../components/Icons'
+import ModelSelector from '../components/ModelSelector'
 import { DEFAULT_PERSONAS, getPersona, getPersonaPrompt } from '../data/personas'
+import { AGENT_ROLES, getAgentRole } from '../data/agentRoles'
+import { useLoopStore } from '../stores/loopStore'
+import { detectLoopIntent } from '../services/loopEngine'
 import ProactiveSidebar from '../components/ProactiveSidebar'
 import MomentsPanel from '../components/MomentsPanel'
 import AgentTaskBoard from '../components/AgentTaskBoard'
@@ -29,7 +33,7 @@ import MemoryTheater from '../components/MemoryTheater'
 import GroupChatHistorySidebar from '../components/GroupChatHistorySidebar'
 import GroupChatView from '../panels/GroupChatView'
 import { updateEmotion, emotionContext } from '../services/agentEmotion'
-import AgentEmotionBar, { injectEmotionStyles } from '../components/AgentEmotionBar'
+import { injectEmotionStyles } from '../components/AgentEmotionBar'
 import { addBookmark } from '../services/messageBookmarks'
 import { showToast } from '../components/Toast'
 import { buildAgentPrompt, AGENT_SOULS } from '../data/agentSouls'
@@ -40,6 +44,7 @@ import {
   detectMentionInReply,
 } from '../services/conversationDynamics'
 import LuckyModeSelector from '../components/LuckyModeSelector'
+import ContextUsageIndicator from '../components/ContextUsageIndicator'
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
 import type { LuckySettingsConfig } from '../components/LuckyModeSettings'
@@ -78,15 +83,28 @@ export default function ChatPanel() {
   const activePersona = useStore(s => s.activePersona)
   const setActivePersona = useStore(s => s.setActivePersona)
   const agentConfig = useStore(s => s.agentConfig)
+  const setAgentConfig = useStore(s => s.setAgentConfig)
   const skillConfig = useStore(s => s.skillConfig)
   const profile = useStore(s => s.profile)
 
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<'chat' | 'agent' | 'developer' | 'worker' | 'group'>('group')
+  /** Lumina Agent 角色选择 — 初始化时读取上次选择的角色 */
+  const [selectedRole, setSelectedRole] = useState<string>(() => agentConfig.lastRole || 'general')
+  /** 角色选择器 — 只有无历史记录时才自动弹出 */
+  const [rolePickerOpen, setRolePickerOpen] = useState(false)
+  /** 🔧 动态快捷指令 — 每次进入空对话时从池中随机挑 3 个 */
+  const [dynamicPrompts, setDynamicPrompts] = useState<string[]>([])
+
+  /** 从池中随机选 N 个不重复的提示 */
+  const pickRandomPrompts = useCallback((pool: string[], n = 3) => {
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, n)
+  }, [])
 
   // ── ?ref 跟踪最新值，避免 useEffect([]) 闭包过期（必须声明在 mode 之后）──
-  const latestRef = useRef({ activeConversationId, isProcessing, mode } as const)
-  latestRef.current = { activeConversationId, isProcessing, mode }
+  const latestRef = useRef({ activeConversationId, isProcessing, mode, selectedRole } as const)
+  latestRef.current = { activeConversationId, isProcessing, mode, selectedRole }
   const handleSendRef = useRef<((text: string) => void) | null>(null)
   // handleSendRef.current ?handleSendWithText 声明后赋?
   /** 🔧 v2.8.x: 跟踪上一个 mode，用于切换时清理上下文 */
@@ -155,10 +173,52 @@ export default function ChatPanel() {
   const [deletingTarget, setDeletingTarget] = useState<{ msgId: string; content: string } | null>(null)
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null)
 
+  // ── 工具栏状态（与团队群聊一致） ──
+  const [thinkingMode, setThinkingMode] = useState(false)
+  const [realtimeVoiceActive, setRealtimeVoiceActive] = useState(false)
+  const [computerUseActive, setComputerUseActive] = useState(false)
+
+  // 🆕 DevTools 紧凑模式（DevTools 打开 OR 简约模式）
+  const compactMode = useStore((s) => s.compactMode)
+  const [devtoolsOpen, setDevtoolsOpen] = useState(false)
+  const compact = compactMode || devtoolsOpen
+
+  // 🆕 简约模式变化时也隐藏/恢复历史列表
+  useEffect(() => {
+    if (compactMode) {
+      narrowRef.current = true
+      setShowHistory(false)
+    } else if (!devtoolsOpen) {
+      narrowRef.current = false
+      setShowHistory(true)
+    }
+  }, [compactMode, devtoolsOpen])
+
+  // 🆕 窄屏自适应：DevTools 打开时自动隐藏历史列表
+  const narrowRef = useRef(false)
+  useEffect(() => {
+    const api = (window as any).luminaAPI
+    if (!api?.onDevToolsChanged) return
+    const unsub = api.onDevToolsChanged((opened: boolean) => {
+      setDevtoolsOpen(opened)
+      if (opened !== narrowRef.current) {
+        narrowRef.current = opened
+        setShowHistory(!opened)
+      }
+    })
+    return unsub
+  }, [])
+
   const activeConv = conversations.find(c => c.id === activeConversationId)
   const messages = activeConv?.messages || []
   const persona = getPersona(activePersona, agentConfig.customPersonas)
   const currentVoice = TTS_VOICES.find(v => v.id === ttsConfig.voice) || TTS_VOICES[0]
+
+  // 🔧 角色对话隔离 — agent 模式下只显示当前角色的对话
+  const isAgentMode = mode !== 'group'
+  const filteredConversations = isAgentMode
+    ? conversations.filter(c => c.roleId === selectedRole || (!c.roleId && selectedRole === 'general'))
+    : conversations
 
   // ═════════════════════════════════════════════════════
   // 默认进入团队群聊模式 — 初始化 IPC
@@ -205,6 +265,29 @@ export default function ChatPanel() {
       setTimeout(() => { abortRef.current = false }, 500)
       setInput('')  // 🔧 v2.10.x: 清空主面板输入
       console.log('[ChatPanel] 进入群聊模式，已保存会话和输入')
+    }
+    // .x: 进入 Lumina Agent 模式 → 仅首次（无 lastRole）自动弹角色选择器
+    if (prev === 'group' && mode === 'agent') {
+      const curState = useStore.getState()
+      const hasChosenRole = !!curState.agentConfig.lastRole
+      const roleForMode = curState.agentConfig.lastRole || 'general'
+      // 🔧 自动切换到该角色的对话（或创建一个）
+      const roleConvs = curState.conversations.filter(c => c.roleId === roleForMode)
+      if (roleConvs.length > 0) {
+        const lastUsed = roleConvs.sort((a, b) => b.createdAt - a.createdAt)[0]
+        if (curState.activeConversationId !== lastUsed.id) switchConversation(lastUsed.id)
+      } else {
+        createConversation(undefined, roleForMode)
+      }
+      if (!hasChosenRole) {
+        setRolePickerOpen(true)
+        console.log('[ChatPanel] 首次进入 Lumina Agent，打开角色选择器')
+      } else {
+        console.log('[ChatPanel] 进入 Lumina Agent，已记住角色:', roleForMode)
+      }
+      // 🔧 生成该角色的动态快捷指令
+      const role = getAgentRole(roleForMode)
+      setDynamicPrompts(pickRandomPrompts(role.quickPromptsPool))
     }
     prevModeRef.current = mode
   }, [mode])
@@ -350,6 +433,7 @@ export default function ChatPanel() {
 
   const playTTS = async (text: string) => {
     if (useStore.getState().ttsMuted) return
+    if (useStore.getState().ttsConfig.enabled === false) return
     const clean = cleanTtsText(text)
     if (!clean || clean.length < 2) {
       console.warn('[TTS] 清洗后文本太短，跳过:', JSON.stringify(clean))
@@ -477,7 +561,31 @@ export default function ChatPanel() {
       return
     }
 
-    // ── 🔓 解锁 AudioContext（确保首?TTS 不被 autoplay 阻止）──
+    // ── 📋 被动确认「看看」展开 ──────────────────────────
+    const lookUp = text.trim().match(/^(看看|查看|详情|展开)(.*)$/)
+    if (lookUp) {
+      const tasks = useLoopStore.getState().tasks
+      const withOutput = tasks.filter(t => t.outputs.length > 0)
+      // 只展开 10 分钟内有产出的 Loop（避免旧产出被误触）
+      const recent = withOutput.filter(t => {
+        const last = t.outputs[t.outputs.length - 1]
+        return last && Date.now() - last.time < 30 * 60 * 1000
+      })
+      if (recent.length > 0) {
+        const target = recent[recent.length - 1]
+        const last = target.outputs[target.outputs.length - 1]
+        const detail = target.subtasks
+          .map(s => `- ${s.title}${s.result ? '：' + s.result.slice(0, 120) : ''}`)
+          .join('\n')
+        useStore.getState().addMessage(activeConversationId, 'assistant',
+          `📋「${target.goal}」第 ${target.runCount} 轮产出：\n\n${last.content}\n\n---\n本轮子任务详情：\n${detail}`)
+        setInput('')
+        return
+      }
+      // 没有最近产出 → 继续正常对话（LLM 会回答）
+    }
+
+    // ── 🔓 解锁 AudioContext（确保首次 TTS 不被 autoplay 阻止）──
     ttsEngine.unlock()
 
     setInput(''); abortRef.current = false; setIsProcessing(true)
@@ -504,20 +612,44 @@ export default function ChatPanel() {
     setAgentEvents([{ type: 'thinking', text: '思考中...', timestamp: Date.now() }])
     useAgentRuntime.getState().setAgentEvents([{ type: 'thinking', text: '思考中...', timestamp: Date.now() }])
 
+    // ── 🔁 OKR 意图检测：「帮我每天做 XXX」→ 自动创建 Loop 草稿 ──
+    const loopIntent = detectLoopIntent(text)
+    if (loopIntent) {
+      const loop = await useLoopStore.getState().createLoop(loopIntent.goal, {
+        suggestedTriggers: [loopIntent.trigger],
+      }).catch(() => null)
+      if (loop) {
+        const plan = loop.subtasks
+          .map((s, i) => `${i + 1}. ${s.title}：${s.description.slice(0, 60)}`)
+          .join('\n')
+        const freqLabel = loopIntent.trigger.type === 'interval'
+          ? (() => {
+              const h = Math.round((loopIntent.trigger.config?.intervalMs || 86400000) / 3600000)
+              return h === 24 ? '每天' : h === 168 ? '每周' : `每 ${h} 小时`
+            })()
+          : '定期'
+        useStore.getState().addMessage(activeConversationId, 'system',
+          `🔁 已为你创建自动任务（待确认）：\n\n` +
+          `📋 目标：${loopIntent.goal}\n⏰ 触发：${freqLabel}\n\n` +
+          `我会帮你做这些事：\n${plan}\n\n` +
+          `去「任务看板 → Loop → 确认启动」后即可开始运转。`)
+      }
+    }
+
     const systemPrompt = persona ? getPersonaPrompt(persona) : undefined
+    const rolePrompt = mode === 'agent' ? getAgentRole(selectedRole).systemPrompt : undefined
+    const effectiveSystemPrompt = rolePrompt || systemPrompt
     // 清理 — group 模式永远不走此路径（由 GroupChatView 独立处理）
     //   isGroupChat 不设置，默认 false，buildSystemPrompt 使用干净提示词
     const config = {
-      mode: mode === 'worker' ? 'agent' : mode as 'chat' | 'agent' | 'developer',
+      mode: 'agent' as const,
       model: llmConfig.model,
       baseUrl: llmConfig.baseUrl,
       apiKey: llmConfig.apiKey,
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.maxTokens,
-      maxToolCalls: mode === 'worker' ? 3 : 10,
-      systemPrompt: mode === 'worker'
-        ? `${systemPrompt || ''}\n\n【Worker 模式】你是高效的任务执行器。只输出结果，不闲聊。`
-        : systemPrompt,
+      maxToolCalls: 10,
+      systemPrompt: effectiveSystemPrompt,
       personaId: activePersona,
       disabledTools: getDisabledToolNames(skillConfig),
       contextWindow: llmConfig.contextWindow || 0,
@@ -659,6 +791,11 @@ export default function ChatPanel() {
       if (ev.type === 'token_update' && (ev as any).delta !== undefined && (ev as any).delta > 0) {
         addTokenUsage(llmConfig.model, (ev as any).delta, 'assistant')
       }
+      // 🆕 上下文用量指示器：实时更新 prompt tokens / context window
+      if (ev.type === 'token_update' && (ev as any).promptTokens > 0) {
+        const cw = (ev as any).contextWindow || llmConfig.contextWindow || 0
+        useAgentRuntime.getState().setContextUsage((ev as any).promptTokens, cw)
+      }
     })
 
     try {
@@ -671,15 +808,46 @@ export default function ChatPanel() {
       const result = await window.luminaAPI.agentChat({
         text,
         config,
+        sessionId: latestConvId,
+        compactedContext: latestConv?.compactedContext,
         conversationHistory: history,
       })
       agentText = result.content || ''
+      // 🔧 P1: 保存压缩上下文
+      if (result.compactedContext && latestConv) {
+        useStore.getState().updateConversation(latestConvId, { compactedContext: result.compactedContext })
+      }
+      // 🆕 对话结束后更新上下文用量（最终值）
+      if (result.contextWindow) {
+        const lastEvt = eventLog.reverse().find(e => e.type === 'token_update')
+        const pt = (lastEvt as any)?.promptTokens || 0
+        if (pt > 0) useAgentRuntime.getState().setContextUsage(pt, result.contextWindow)
+      }
       unsub()
       // 保存结构化思考步骤供面板展示
       setLastAgentEvents([...agentEvents, ...currentThinkingSteps.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
       setAgentEvents([])
       setCurrentThinkingSteps([])
       useAgentRuntime.getState().resetAgentRuntime()
+
+      // ═══ Lucky 模式检查 ═══
+      if (agentText && luckyMode.isActive && luckyMode.preset !== 'off') {
+        const { checkAfterReply } = await import('../services/luckyModeService')
+        const checkResult = checkAfterReply(agentText)
+
+        // 死循环检测
+        if (checkResult.isDoomLoop && checkResult.doomLoopMessage) {
+          const finalConvId = useStore.getState().activeConversationId || activeConversationId
+          useStore.getState().addMessage(finalConvId, 'system', checkResult.doomLoopMessage)
+        }
+
+        // 达到最大迭代次数
+        if (checkResult.shouldPause && checkResult.pauseReason) {
+          const finalConvId = useStore.getState().activeConversationId || activeConversationId
+          useStore.getState().addMessage(finalConvId, 'system', checkResult.pauseReason)
+          luckyMode.pause(checkResult.pauseReason)
+        }
+      }
 
       if (agentText && !abortRef.current) {
         // ── 🔧 v2.17: 修复闭包过期 — 使用最新 convId，切换对话时不丢消息 ──
@@ -724,7 +892,7 @@ export default function ChatPanel() {
       }
     }
     setIsProcessing(false)
-  }, [isProcessing, activeConversationId, mode, llmConfig, persona, agentConfig, activePersona, ttsMuted, ttsConfig, setIsProcessing, addAuditLog])
+  }, [isProcessing, activeConversationId, mode, selectedRole, llmConfig, persona, agentConfig, activePersona, ttsMuted, ttsConfig, setIsProcessing, addAuditLog])
 
   // ref 赋值在 useCallback 声明之后，避免 TDZ
   handleSendRef.current = handleSendWithText
@@ -782,7 +950,7 @@ export default function ChatPanel() {
       <div style={{
         width: showHistory ? 220 : 0,
         minWidth: showHistory ? 220 : 0,
-        borderRight: showHistory ? '1px solid #e5e7eb' : 'none',
+        borderRight: showHistory ? '1px solid var(--border-light)' : 'none',
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
         transition: 'width 0.25s ease, min-width 0.25s ease',
@@ -790,76 +958,74 @@ export default function ChatPanel() {
       }}>
         {(showHistory) && (
           <>
-            {/* 👥 团队群聊 — 固定在顶部，独立醒目 */}
+            {/* 👥 团队群聊 — 紧凑卡片风格 */}
             <div
               onClick={() => { setMode('group'); window.luminaAPI?.agentSetMode('group') }}
               style={{
-                padding: '10px 12px',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                margin: '4px 6px', padding: '10px 12px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+                borderRadius: 10, border: mode === 'group' ? '1.5px solid var(--accent-500)' : '1.5px solid transparent',
                 background: mode === 'group'
-                  ? 'linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)'
-                  : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
-                borderBottom: mode === 'group'
-                  ? '2px solid #3b82f6'
-                  : '2px solid transparent',
-                borderLeft: mode === 'group' ? '3px solid #3b82f6' : '3px solid transparent',
+                  ? 'var(--accent-50)'
+                  : 'transparent',
                 transition: 'all 0.2s',
                 flexShrink: 0,
               }}
               onMouseEnter={e => {
                 if (mode !== 'group') {
-                  (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)'
+                  (e.currentTarget as HTMLElement).style.background = 'var(--surface-100)'
+                  ;(e.currentTarget as HTMLElement).style.borderRadius = '10px'
                 }
               }}
               onMouseLeave={e => {
                 if (mode !== 'group') {
-                  (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)'
+                  (e.currentTarget as HTMLElement).style.background = 'transparent'
                 }
               }}
             >
               <span style={{
-                fontSize: 20,
+                fontSize: 26,
                 filter: mode === 'group' ? 'none' : 'grayscale(0.3)',
                 transition: 'filter 0.2s',
               }}>👥</span>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: 14, fontWeight: mode === 'group' ? 700 : 600,
-                  color: mode === 'group' ? '#1d4ed8' : 'var(--text-primary)',
+                  fontSize: 15, fontWeight: mode === 'group' ? 800 : 600,
+                  color: mode === 'group' ? 'var(--accent-600)' : 'var(--text-primary)',
+                  lineHeight: 1.3,
                 }}>
                   团队群聊
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   Lumina🐱 · 热茶 · Yak📊
                 </div>
               </div>
               {mode === 'group' && (
                 <span style={{
-                  width: 8, height: 8, borderRadius: 4, background: '#3b82f6',
+                  width: 8, height: 8, borderRadius: 4, background: 'var(--accent-500)',
                   flexShrink: 0, boxShadow: '0 0 6px rgba(59,130,246,0.5)',
                 }} />
               )}
             </div>
 
-            {/* 🆕 模式切换 — 团队群聊下方的模式选择 */}
+            {/* 🆕 Lumina Agent — 团队群聊下方的单一入口 */}
             <div style={{ padding: '4px 6px', flexShrink: 0 }}>
-              {([
-                { id: 'chat' as const, icon: '💬', label: '聊天' },
-                { id: 'agent' as const, icon: '🤖', label: 'AI智能体' },
-                { id: 'worker' as const, icon: '⚡', label: '快速模式' },
-                { id: 'developer' as const, icon: '🔧', label: '修复模式' },
-              ]).map(item => (
-                <button key={item.id}
-                  className={'mode-sidebar-item' + (mode === item.id ? ' active' : '')}
-                  onClick={() => { setMode(item.id); window.luminaAPI?.agentSetMode(item.id) }}
-                >
-                  <span className="mode-dot" style={{
-                    background: mode === item.id ? 'var(--accent-500, #6366f1)' : '#d1d5db',
-                  }} />
-                  <span>{item.icon}</span>
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                </button>
-              ))}
+              <button
+                className={'mode-sidebar-item' + (mode !== 'group' ? ' active' : '')}
+                onClick={() => {
+                  setMode('agent')
+                  if (!agentConfig.lastRole) setRolePickerOpen(true)
+                  window.luminaAPI?.agentSetMode('agent')
+                }}
+              >
+                <span className="mode-dot" style={{
+                  background: mode !== 'group' ? getAgentRole(selectedRole).color : '#d1d5db',
+                }} />
+                <span>{getAgentRole(selectedRole).icon}</span>
+                <span style={{ flex: 1 }}>
+                  {mode !== 'group' ? getAgentRole(selectedRole).name : 'Lumina Agent'}
+                </span>
+              </button>
             </div>
 
             {/* 🆕 群聊历史会话 ??group 模式显示 */}
@@ -876,7 +1042,7 @@ export default function ChatPanel() {
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     📝 历史对话
                   </span>
-                  <button onClick={() => createConversation()} title="新建对话"
+                  <button onClick={() => createConversation(undefined, selectedRole)} title="新建对话"
                     style={{
                       width: 24, height: 24, borderRadius: 5, border: '1px solid var(--border-light)',
                       background: 'var(--surface-100)', cursor: 'pointer', display: 'flex',
@@ -888,12 +1054,12 @@ export default function ChatPanel() {
 
                 {/* 对话列表 */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-                  {conversations.length === 0 && (
+                  {filteredConversations.length === 0 && (
                     <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
                       暂无对话记录
                     </div>
                   )}
-                  {[...conversations]
+                  {[...filteredConversations]
                     .sort((a, b) => {
                       if (a.pinned && !b.pinned) return -1
                       if (!a.pinned && b.pinned) return 1
@@ -978,7 +1144,7 @@ export default function ChatPanel() {
                               title="重命名"
                               style={{
                                 width: 20, height: 20, borderRadius: 4, border: 'none',
-                                background: 'transparent', color: '#d1d5db',
+                                background: 'transparent', color: 'var(--text-tertiary)',
                                 cursor: 'pointer', fontSize: 10, display: 'flex',
                                 alignItems: 'center', justifyContent: 'center',
                               }}>
@@ -1040,7 +1206,7 @@ export default function ChatPanel() {
           position: 'absolute', top: 0, left: 0, bottom: 0,
           width: showProactivePanel ? 300 : 0, overflow: showProactivePanel ? 'auto' : 'hidden',
           zIndex: 100, transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          background: '#f8f9fb', borderRight: showProactivePanel ? '1px solid #e5e7eb' : 'none',
+          background: 'var(--surface-50)', borderRight: showProactivePanel ? '1px solid var(--border-light)' : 'none',
           boxShadow: showProactivePanel ? '4px 0 20px rgba(0,0,0,0.08)' : 'none',
         }}>
           {showProactivePanel && <ProactiveSidebar visible={showProactivePanel} onClose={() => setShowProactivePanel(false)} />}
@@ -1057,8 +1223,8 @@ export default function ChatPanel() {
         </div>
         {/* ── Header ── */}
         <div style={{
-          padding: '10px 14px', borderBottom: '1px solid var(--border-light)',
-          display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap',
+          padding: compact ? '6px 10px' : '10px 14px', borderBottom: '1px solid var(--border-light)',
+          display: 'flex', alignItems: 'center', gap: compact ? 4 : 8, flexShrink: 0, flexWrap: 'wrap',
         }}>
           {/* 历史切换按钮 */}
           <button onClick={() => setShowHistory(!showHistory)}
@@ -1070,8 +1236,8 @@ export default function ChatPanel() {
             {showHistory ? '◀' : '▶'}
           </button>
 
-          {/* ⚡ 主动引擎按钮 */}
-          <button onClick={() => { setShowProactivePanel(!showProactivePanel); setShowHistory(true) }}
+          {/* ⚡ 主动引擎按钮 — compact 隐藏 */}
+          {!compact && <button onClick={() => { setShowProactivePanel(!showProactivePanel); setShowHistory(true) }}
             title="24/7 主动对话引擎" style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '5px 14px', border: 'none', cursor: 'pointer', borderRadius: 20,
@@ -1080,10 +1246,10 @@ export default function ChatPanel() {
               color: '#fff',
               boxShadow: showProactivePanel ? '0 0 14px rgba(124,58,237,0.5)' : '0 2px 8px rgba(124,58,237,0.3)',
               transition: 'all 0.25s',
-            }}><span style={{ fontSize: 15 }}>⚡</span><span>主动引擎</span></button>
+            }}><span style={{ fontSize: 15 }}>⚡</span><span>主动引擎</span></button>}
 
-          {/* 🌸 朋友圈按钮 */}
-          <button onClick={() => setShowMomentsPanel(!showMomentsPanel)}
+          {/* 🌸 朋友圈按钮 — compact 隐藏 */}
+          {!compact && <button onClick={() => setShowMomentsPanel(!showMomentsPanel)}
             title="Agent 朋友圈" style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '5px 14px', cursor: 'pointer', borderRadius: 20,
@@ -1093,63 +1259,82 @@ export default function ChatPanel() {
               border: showMomentsPanel ? 'none' : '1px solid #f9a8d4',
               boxShadow: showMomentsPanel ? '0 0 14px rgba(236,72,153,0.5)' : '0 1px 3px rgba(236,72,153,0.15)',
               transition: 'all 0.25s',
-            }}><span style={{ fontSize: 15 }}>🌸</span><span>朋友圈</span></button>
+            }}><span style={{ fontSize: 15 }}>🌸</span><span>朋友圈</span></button>}
 
-          <span style={{ fontWeight: 600, fontSize: 15, color: '#111827' }}>
-            {mode === 'group' ? '👥 团队群聊' : mode === 'agent' ? '🤖 AI智能体' : mode === 'worker' ? '⚡ 快速模式' : mode === 'developer' ? '🔧 修复模式' : '💬 聊天'}
-          </span>
-          <div style={{ flex: 1, minWidth: 8 }} />
-
-          {/* Persona picker — v2.8.1: 群聊模式下隐藏 */}
-          {mode !== 'group' && (
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => { setShowPersonaPicker(!showPersonaPicker); setShowVoicePicker(false) }}
-              style={subtleBtn}>
-              {currentPersona?.icon || '🐱'} {currentPersona?.name || 'Lumina'}
-            </button>
-            {showPersonaPicker && (
-              <div style={{
-                position: 'absolute', top: 36, right: 0, background: 'var(--surface-0)',
-                border: '1px solid var(--border-light)', borderRadius: 8, padding: 4,
-                zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,.1)', minWidth: 140,
-              }}>
-                {[...DEFAULT_PERSONAS, ...agentConfig.customPersonas].map(p => (
-                  <div key={p.id} onClick={() => { setActivePersona(p.id); setShowPersonaPicker(false) }}
-                    style={{
-                      padding: '6px 10px', cursor: 'pointer', borderRadius: 4, fontSize: 13,
-                      background: p.id === activePersona ? '#eff6ff' : 'transparent',
-                    }}>
-                    {p.icon} {p.name}
-                  </div>
-                ))}
-              </div>
+          <span
+            onClick={() => mode !== 'group' && setRolePickerOpen(true)}
+            style={{
+              fontWeight: 600, fontSize: 15,
+              color: mode === 'group' ? '#111827' : getAgentRole(selectedRole).color,
+              display: 'flex', alignItems: 'center', gap: 4,
+              cursor: mode !== 'group' ? 'pointer' : 'default',
+              padding: '2px 6px', borderRadius: 8,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => { if (mode !== 'group') e.currentTarget.style.background = `${getAgentRole(selectedRole).color}10` }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+          >
+            {mode === 'group' ? '👥 团队群聊' : (
+              <>
+                {getAgentRole(selectedRole).icon}
+                <span>{getAgentRole(selectedRole).name}</span>
+                <span style={{
+                  width: 6, height: 6, borderRadius: 3,
+                  background: getAgentRole(selectedRole).color,
+                  marginLeft: 2, boxShadow: `0 0 6px ${getAgentRole(selectedRole).color}60`,
+                }} />
+              </>
             )}
-          </div>
+          </span>
+
+          {/* 🔄 切换角色按钮 — 仅非群聊模式 */}
+          {mode !== 'group' && (
+            <button onClick={() => setRolePickerOpen(true)}
+              title="切换角色" style={{
+                ...subtleBtn, padding: '3px 8px', gap: 4,
+                fontSize: 11, fontWeight: 600,
+                color: getAgentRole(selectedRole).color,
+                background: `${getAgentRole(selectedRole).color}10`,
+                border: `1px solid ${getAgentRole(selectedRole).color}30`,
+                borderRadius: 14,
+                transition: 'all 0.2s',
+              }}>
+              <span style={{ fontSize: 12 }}>🔄</span>
+              <span>切换角色</span>
+            </button>
           )}
 
-          {/* ── TTS 音色选择 — v2.8.1: 群聊模式下隐藏 */}
-          {mode !== 'group' && (
+          <div style={{ flex: 1, minWidth: 8 }} />
+
+          {/* ── Agent音色选择 — v2.8.1: 群聊或 compact 下隐藏 */}
+          {mode !== 'group' && !compact && (
           <div style={{ position: 'relative' }}>
-            <button onClick={() => { setShowVoicePicker(!showVoicePicker); setShowPersonaPicker(false) }}
+            <button onClick={() => { setShowVoicePicker(!showVoicePicker) }}
               style={{
                 ...subtleBtn, gap: 3, fontSize: 11, padding: '4px 8px',
               }}
-              title={`当前音色: ${currentVoice.label} - ${currentVoice.desc}`}>
-              <span style={{ fontSize: 13 }}>{currentVoice.icon}</span>
-              <span>{currentVoice.label}</span>
+              title={`当前: ${currentVoice.label} — ${currentVoice.desc}`}>
+              <span style={{ fontSize: 13 }}>🎙️</span>
+              <span>Agent音色</span>
               <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}></span>
             </button>
             {showVoicePicker && (
               <div style={{
                 position: 'absolute', top: 36, right: 0, background: 'var(--surface-0)',
-                border: '1px solid var(--border-light)', borderRadius: 8, padding: 6,
-                zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,.1)',
-                minWidth: 200, maxHeight: 280, overflowY: 'auto',
+                border: '1px solid var(--border-light)', borderRadius: 10, padding: 6,
+                zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,.12)',
+                minWidth: 220, maxHeight: 300, overflowY: 'auto',
+                animation: 'voiceDropIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
+                transformOrigin: 'top right',
               }}>
-                <div style={{ fontSize: 10, color: 'var(--text-secondary)', padding: '4px 8px 6px', borderBottom: '1px solid var(--border-light)', marginBottom: 4 }}>
-                  Edge-TTS 音色
+                <style>{`
+                  @keyframes voiceDropIn { from { opacity: 0; transform: scale(0.9) translateY(-6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+                  @keyframes voiceItemIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+                `}</style>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', padding: '4px 8px 6px', borderBottom: '1px solid var(--border-light)', marginBottom: 4, fontWeight: 600, letterSpacing: 0.5 }}>
+                  🎙️ Agent 音色
                 </div>
-                {TTS_VOICES.map(v => {
+                {TTS_VOICES.map((v, i) => {
                   const isActive = v.id === ttsConfig.voice
                   return (
                     <div key={v.id}
@@ -1158,16 +1343,21 @@ export default function ChatPanel() {
                         setShowVoicePicker(false)
                       }}
                       style={{
-                        padding: '6px 10px', cursor: 'pointer', borderRadius: 4, fontSize: 12,
+                        padding: '7px 10px', cursor: 'pointer', borderRadius: 6, fontSize: 12,
                         background: isActive ? '#eff6ff' : 'transparent',
                         display: 'flex', alignItems: 'center', gap: 8,
                         border: isActive ? '1px solid #bfdbfe' : '1px solid transparent',
-                      }}>
+                        animation: `voiceItemIn 0.2s ease ${i * 30}ms both`,
+                        transition: 'background 0.15s, border-color 0.15s',
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--surface-50)' }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                    >
                       <span style={{ fontSize: 16 }}>{v.icon}</span>
                       <div>
                         <div style={{ fontWeight: isActive ? 600 : 500, color: isActive ? '#1d4ed8' : 'var(--text-primary)' }}>
                           {v.label}
-                          {isActive && <span style={{ marginLeft: 6, fontSize: 10, color: '#3b82f6' }}></span>}
+                          {isActive && <span style={{ marginLeft: 6, fontSize: 10, color: '#3b82f6' }}>✓</span>}
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{v.desc}</div>
                       </div>
@@ -1179,8 +1369,8 @@ export default function ChatPanel() {
           </div>
           )}
 
-          {/* ── TTS 可视化播放器 — v2.8.1: 群聊下隐藏 */}
-          {mode !== 'group' && (
+          {/* ── TTS 可视化播放器 — v2.8.1: 群聊或 compact 下隐藏 */}
+          {mode !== 'group' && !compact && (
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => {
@@ -1333,7 +1523,7 @@ export default function ChatPanel() {
 
           {/* New Chat — 群聊模式下隐藏，群聊用侧边栏的 + 按钮 */}
           {mode !== 'group' && (
-          <button onClick={() => createConversation()} title="新建对话"
+          <button onClick={() => createConversation(undefined, selectedRole)} title="新建对话"
             style={{
               ...subtleBtn, padding: '4px 6px', minWidth: 28, justifyContent: 'center',
             }}>
@@ -1342,25 +1532,168 @@ export default function ChatPanel() {
           )}
         </div>
 
-        {mode === 'group' ? <GroupChatView /> : (<>
+        {mode === 'group' ? <GroupChatView /> : (rolePickerOpen ? (
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflowY: 'auto', padding: '16px 20px', alignItems: 'flex-start' }}>
+          <style>{`
+            @keyframes roleCardIn { from { opacity: 0; transform: translateY(16px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes roleGlow { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 20px 4px var(--glow-color); } }
+            .role-card { animation: roleCardIn 0.4s ease both; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
+            .role-card:hover { transform: translateY(-3px) scale(1.015); }
+            .role-card.selected { animation: roleGlow 2s ease-in-out infinite; }
+            .skill-tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; margin: 1px; }
+            .role-picker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; }
+          `}</style>
+          <div style={{ width: '100%' }}>
+            {/* 标题区 */}
+            <div style={{ textAlign: 'center', marginBottom: 16, paddingTop: 10 }}>
+              <div style={{ fontSize: 44, marginBottom: 4, animation: 'roleCardIn 0.6s ease both', filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.1))' }}>🐱</div>
+              <div style={{ fontSize: 22, fontWeight: 800, background: 'linear-gradient(135deg, #6366f1, #ec4899, #f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 4 }}>
+                你好，我是 Lumina！
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>选一个专攻角色，我来帮你把事情做好 ✨</div>
+            </div>
 
-        {/* 🔥 v2.12: Agent 情绪状态栏 */}
-        <AgentEmotionBar
-          mode={mode}
-          onStatusChange={(agentId, status) => {
-            console.log(`[ChatPanel] ${agentId} status → ${status}`)
-          }}
-        />
+            {/* 角色网格 — 默认3列，超宽屏4列 */}
+            <div className="role-picker-grid">
+              {AGENT_ROLES.map((role, idx) => {
+                const active = selectedRole === role.id
+                return (
+                  <div key={role.id}
+                    className={`role-card${active ? ' selected' : ''}`}
+                    style={{
+                      animationDelay: `${idx * 50}ms`,
+                      ['--glow-color' as any]: `${role.color}33`,
+                      border: `2px solid ${active ? role.color : 'var(--border-light)'}`,
+                      borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
+                      background: active ? role.bgColor : 'var(--surface-0)',
+                      boxShadow: active ? `0 4px 16px ${role.color}25` : '0 1px 6px rgba(0,0,0,0.04)',
+                      position: 'relative', overflow: 'hidden',
+                    }}
+                    onClick={() => {
+                      setSelectedRole(role.id)
+                      setRolePickerOpen(false)
+                      setAgentConfig({ lastRole: role.id })
+                      const curState = useStore.getState()
+                      const roleConvs = curState.conversations.filter(c => c.roleId === role.id)
+                      if (roleConvs.length > 0) {
+                        const lastUsed = roleConvs.sort((a, b) => b.createdAt - a.createdAt)[0]
+                        switchConversation(lastUsed.id)
+                      } else {
+                        createConversation(undefined, role.id)
+                      }
+                    }}
+                  >
+                    {active && (
+                      <div style={{ position: 'absolute', top: 7, right: 9, width: 19, height: 19, borderRadius: 10, background: role.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, animation: 'roleCardIn 0.3s ease' }}>✓</div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginBottom: 7 }}>
+                      <span style={{ fontSize: 28, flexShrink: 0, filter: active ? 'none' : 'grayscale(0.15)', transition: 'filter 0.2s' }}>{role.icon}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: active ? role.color : '#111827' }}>{role.name}</div>
+                        <div style={{ marginTop: 2, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{role.desc}</div>
+                      </div>
+                    </div>
+                    {/* 能力标签 */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 7 }}>
+                      {role.skillTags.map(tag => (
+                        <span key={tag} className="skill-tag" style={{
+                          background: active ? `${role.color}15` : 'var(--surface-100)',
+                          color: active ? role.color : 'var(--text-secondary)',
+                          border: `1px solid ${active ? `${role.color}30` : 'var(--border-light)'}`,
+                        }}>{tag}</span>
+                      ))}
+                    </div>
+                    {/* 欢迎语预览 */}
+                    <div style={{
+                      fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5,
+                      padding: '5px 8px', borderRadius: 7,
+                      background: active ? `${role.color}08` : 'var(--surface-50)',
+                      borderLeft: `2px solid ${active ? role.color : 'var(--border-light)'}`,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    }}>
+                      "{role.welcomeMsg}"
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 底部提示 */}
+            <div style={{ marginTop: 14, textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', paddingBottom: 8 }}>
+              <span>选中角色即可开始对话</span>
+              <span style={{ opacity: 0.4 }}> · </span>
+              <span>随时可在顶部栏「切换角色」重新选择</span>
+            </div>
+          </div>
+        </div>
+        ) : (<> 
 
         {/* ── Messages ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
           {messages.length === 0 && !isProcessing && (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 100, fontSize: 14 }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}></div>
-              <div>你好！我是 Lumina，你的 AI 桌宠助手</div>
-              <div style={{ marginTop: 4, fontSize: 12 }}>试试让我帮你做事？搜索、文件、Git、定时任务…</div>
-              <div style={{ marginTop: 8, fontSize: 11, color: '#d1d5db' }}>
-                也可以点 🎤 用语音跟我说话哦
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 60, fontSize: 14 }}>
+              <style>{`
+                @keyframes welcomePop { 0% { opacity: 0; transform: scale(0.8) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+                @keyframes chipSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+              `}</style>
+              {/* 角色图标 + 欢迎语 */}
+              <div style={{ animation: 'welcomePop 0.5s ease both' }}>
+                <div style={{
+                  fontSize: 52, marginBottom: 10,
+                  filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.08))',
+                }}>{getAgentRole(selectedRole).icon}</div>
+                <div style={{
+                  fontSize: 17, fontWeight: 700,
+                  color: getAgentRole(selectedRole).color,
+                  marginBottom: 6,
+                }}>
+                  {getAgentRole(selectedRole).name} 已就绪
+                </div>
+                <div style={{
+                  marginTop: 4, fontSize: 13, color: 'var(--text-secondary)',
+                  maxWidth: 360, margin: '0 auto', lineHeight: 1.6,
+                }}>
+                  {getAgentRole(selectedRole).welcomeMsg}
+                </div>
+              </div>
+
+              {/* 快捷指令气泡 — 动态推荐 + 点击直接发送 */}
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+                gap: 8, marginTop: 20, maxWidth: 500, margin: '20px auto 0',
+              }}>
+                {(dynamicPrompts.length > 0 ? dynamicPrompts : getAgentRole(selectedRole).quickPrompts).map((prompt, i) => (
+                  <button key={`${selectedRole}-${i}`}
+                    onClick={() => {
+                      // 🔧 点击直接发送，不填输入框
+                      handleSendWithText(prompt)
+                    }}
+                    style={{
+                      animation: `chipSlide 0.4s ease both`,
+                      animationDelay: `${300 + i * 80}ms`,
+                      padding: '8px 16px', borderRadius: 20, cursor: 'pointer',
+                      border: `1px solid ${getAgentRole(selectedRole).color}30`,
+                      background: 'var(--surface-50)',
+                      color: getAgentRole(selectedRole).color,
+                      fontSize: 12, fontWeight: 500,
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'var(--surface-100)'
+                      ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'var(--surface-50)'
+                      ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+                    }}
+                  >
+                    ✨ {prompt}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-tertiary)' }}>
+                点击快捷指令即可发送 · 🎤 语音也可以哦
               </div>
             </div>
           )}
@@ -1392,11 +1725,12 @@ export default function ChatPanel() {
               </div>
               <div style={{
                 maxWidth: '75%', background: isUser
-                  ? (profile.bubbleColorUser || '#eff6ff')
+                  ? (profile.bubbleColorUser || 'var(--accent-50)')
                   : (profile.bubbleColorAgent || 'var(--surface-100)'),
                 borderRadius: 12, padding: '8px 12px', border: '1px solid var(--border-light)',
                 userSelect: 'text',
                 cursor: 'text',
+                color: 'var(--text-primary)',
               }}>
                 {isUser && profile.nickname && (
                   <div style={{ fontSize: 10, fontWeight: 600, color: '#3b82f6', marginBottom: 2 }}>
@@ -1519,12 +1853,12 @@ export default function ChatPanel() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '5px 10px', borderRadius: 8,
-                  border: '1px solid var(--border-light)', background: '#fafafa',
+                  border: '1px solid var(--border-light)', background: 'var(--surface-50)',
                   fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer',
                   transition: 'background 0.15s', width: 'fit-content',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--border-light)')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#fafafa')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface-50)')}
               >
                 <span style={{
                   display: 'inline-block',
@@ -1544,7 +1878,7 @@ export default function ChatPanel() {
               {thinkingExpanded && (
                 <div style={{
                   marginTop: 4, padding: '6px 8px',
-                  background: '#fafafa', borderRadius: 8,
+                  background: 'var(--surface-50)', borderRadius: 8,
                   border: '1px solid var(--border-light)',
                   maxHeight: 320, overflowY: 'auto',
                 }}>
@@ -1617,7 +1951,7 @@ export default function ChatPanel() {
                 padding: '6px 8px', background: 'var(--yellow-100)', borderRadius: 8,
                 border: '1px solid #fde68a', maxHeight: 320, overflowY: 'auto',
               }}>
-                <div style={{ fontSize: 11, color: '#92400e', fontWeight: 600, marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: 'var(--yellow-500)', fontWeight: 600, marginBottom: 4 }}>
                   🧠 实时思考中...
                 </div>
                 {currentThinkingSteps.map((step, i) => {
@@ -1626,7 +1960,7 @@ export default function ChatPanel() {
                     <div key={step.id || i} style={{
                       marginBottom: 3, display: 'flex', alignItems: 'flex-start',
                       gap: 6, fontSize: 11,
-                      borderBottom: i < currentThinkingSteps.length - 1 ? '1px solid #fef3c7' : 'none',
+                      borderBottom: i < currentThinkingSteps.length - 1 ? '1px solid var(--yellow-100)' : 'none',
                       paddingBottom: 3,
                     }}>
                       <span style={{ fontSize: 12, flexShrink: 0 }}>
@@ -1637,7 +1971,7 @@ export default function ChatPanel() {
                         {step.result && step.result !== step.label && (
                           <div style={{
                             marginTop: 2, padding: '2px 6px',
-                            background: isReasoning ? '#f0fdf4' : 'var(--surface-100)',
+                            background: isReasoning ? 'var(--green-100)' : 'var(--surface-100)',
                             borderRadius: 4, color: 'var(--text-primary)', fontSize: 10,
                             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                             maxHeight: 100, overflowY: 'auto',
@@ -1734,7 +2068,7 @@ export default function ChatPanel() {
             display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
             flexShrink: 0,
           }}>
-            <span style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 600 }}>📥 将上传：</span>
+            <span style={{ fontSize: 12, color: 'var(--accent-600)', fontWeight: 600 }}>📥 将上传：</span>
             {dragFiles.map((f, i) => (
               <span key={i} style={{
                 fontSize: 11, color: '#1e40af', background: '#dbeafe',
@@ -1795,9 +2129,9 @@ export default function ChatPanel() {
               {attachments.map((a, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: 4,
-                  background: 'var(--accent-50)', border: '1px solid #bfdbfe',
+                  background: 'var(--accent-50)', border: '1px solid var(--accent-100)',
                   borderRadius: 6, padding: '3px 8px', fontSize: 11,
-                  color: '#1d4ed8', maxWidth: 200,
+                  color: 'var(--accent-600)', maxWidth: 200,
                 }}>
                   {a.dataUrl ? (
                     <img src={a.dataUrl} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover' }} />
@@ -1816,113 +2150,154 @@ export default function ChatPanel() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          {/* ── 隐藏文件上传 input ── */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.json,.xml,.md,.csv,.yaml,.yml,.log,.py,.js,.ts,.java,.cpp,.c,.h,.html,.css,.sh,.bat,.ps1,.ini,.cfg,.toml,.zip"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+
+          {/* ── textarea（与团队群聊一致） ── */}
+          <div style={{ position: 'relative' }}>
             <textarea ref={inputRef} value={input}
               onChange={e => { setInput(e.target.value); autoResize() }}
               onKeyDown={handleKeyDown}
               placeholder={
                 isProcessing ? 'Lumina 正在回复，你可以先打草稿等待' :
-                mode === 'worker' ? 'Worker 模式 — 给我一个任务，我快速执行' :
-                mode === 'developer' ? 'Dev 模式 — 告诉我代码任务' :
-                mode === 'agent' ? '告诉我要做什么，Agent 自动执行...（或点 🎤 语音输入）' :
-                '和我聊天吧...（或点 🎤 语音输入）'
+                `${getAgentRole(selectedRole).icon} ${getAgentRole(selectedRole).name} · ${getAgentRole(selectedRole).desc}`
               }
               rows={1}
               style={{
-                flex: 1, padding: '8px 12px', borderRadius: 8,
-                border: '1px solid #d1d5db', fontSize: 13, lineHeight: 1.5,
-                resize: 'vertical', outline: 'none', fontFamily: 'inherit',
-                minHeight: 36,
-                background: isProcessing ? '#fffbeb' : 'var(--surface-0)',
+                width: '100%', padding: '10px 14px', borderRadius: 10,
+                border: `1.5px solid ${getAgentRole(selectedRole).color}40`,
+                fontSize: 13, outline: 'none', fontFamily: 'inherit',
+                resize: 'vertical', minHeight: 52, paddingRight: 74,
+                boxSizing: 'border-box', lineHeight: 1.5,
+                transition: 'border-color 0.2s',
               }}
+              onFocus={e => { (e.target as HTMLElement).style.borderColor = getAgentRole(selectedRole).color }}
+              onBlur={e => { (e.target as HTMLElement).style.borderColor = `${getAgentRole(selectedRole).color}40` }}
             />
-
-            {/* 📎 文件上传 */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.json,.xml,.md,.csv,.yaml,.yml,.log,.py,.js,.ts,.java,.cpp,.c,.h,.html,.css,.sh,.bat,.ps1,.ini,.cfg,.toml,.zip"
-              style={{ display: 'none' }}
-              onChange={handleFileSelect}
-            />
-            <div style={{ position: 'relative', flexShrink: 0 }}
-              onMouseEnter={() => {
-                if (uploadTipTimer.current) { clearTimeout(uploadTipTimer.current); uploadTipTimer.current = null }
-                setUploadTipVisible(true)
-                setShowUploadTip(true)
-              }}
-              onMouseLeave={() => {
-                setUploadTipVisible(false)
-                uploadTipTimer.current = setTimeout(() => setShowUploadTip(false), 200)
-              }}
-            >
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                title="上传文件"
-                style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  border: `1.5px solid ${attachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
-                  background: attachments.length > 0 ? '#eff6ff' : 'var(--surface-100)',
-                  cursor: 'pointer', fontSize: 17,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all .15s',
-                }}>
-                📎
-              </button>
-              {showUploadTip && (
-                <div style={{
-                  position: 'absolute', bottom: 42, left: '50%',
-                  background: '#1f2937', color: '#fff', borderRadius: 8,
-                  padding: '6px 10px', fontSize: 11, lineHeight: 1.5,
-                  whiteSpace: 'nowrap', zIndex: 101,
-                  boxShadow: '0 2px 12px rgba(0,0,0,.18)',
-                  pointerEvents: 'none',
-                  opacity: uploadTipVisible ? 1 : 0,
-                  transform: uploadTipVisible
-                    ? 'translate(-50%, 0) scale(1)'
-                    : 'translate(-50%, 6px) scale(0.95)',
-                  transition: 'opacity 0.18s ease-out, transform 0.18s ease-out',
-                }}>
-                  <div style={{ fontWeight: 600, marginBottom: 3 }}>📎 上传文件</div>
-                  <div style={{ opacity: 0.8 }}>图片 · 文档 · 代码 · 文本</div>
-                  <div style={{ opacity: 0.6, fontSize: 10, marginTop: 2 }}>png / pdf / docx / xlsx / py / js / txt</div>
-                  <div style={{ opacity: 0.5, fontSize: 10, marginTop: 1 }}>单文件 ≤10MB · 支持多种格式</div>
-                </div>
+            {/* 发送按钮（输入框内右下角，与团队群聊一致） */}
+            <div style={{
+              position: 'absolute', right: 10, bottom: 8,
+              display: 'flex', alignItems: 'center',
+            }}>
+              {isProcessing ? (
+                <button onClick={handleAbort}
+                  title="中断回复"
+                  style={{
+                    padding: '4px 12px', borderRadius: 6,
+                    border: '1.5px solid #fca5a5', background: 'var(--red-100)', color: '#ef4444',
+                    cursor: 'pointer', fontSize: 12, display: 'flex',
+                    alignItems: 'center', gap: 3, fontFamily: 'inherit', fontWeight: 600,
+                  }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" style={{ animation: 'sendSpin 0.9s linear infinite' }}>
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="50 50" strokeLinecap="round" />
+                  </svg>
+                  中断
+                </button>
+              ) : (
+                <button onClick={handleSend} disabled={!input.trim()}
+                  title="发送消息"
+                  style={{
+                    border: 'none', borderRadius: 6, padding: '4px 12px',
+                    background: input.trim() ? '#3b82f6' : 'var(--border-light)',
+                    color: input.trim() ? '#fff' : 'var(--text-secondary)',
+                    fontSize: 12, cursor: input.trim() ? 'pointer' : 'default', fontWeight: 600,
+                    fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                  <IconSend size={14} />
+                  发送
+                </button>
               )}
             </div>
+          </div>
 
-            {/* 😊 Emoji 选择?*/}
+          {/* ── 功能工具栏（小长方形按钮 + 微软雅黑标注） ── */}
+          <div style={{
+            display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
+            fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
+          }}>
+            {/* ── 🧠 模型选择 ── */}
+            <ModelSelector />
+            {/* ── 🍀 Lucky 模式（第二位） ── */}
+            <LuckyModeSelector
+              currentPreset={luckyMode.preset}
+              onPresetChange={luckyMode.setPreset}
+              runtimeInfo={{
+                preset: luckyMode.preset,
+                isActive: luckyMode.isActive,
+                currentIteration: luckyMode.runtime.currentIteration,
+                maxIteration: luckyMode.runtime.maxIteration,
+                isPaused: luckyMode.isPaused,
+                pauseReason: luckyMode.runtime.pauseReason,
+              }}
+              onOpenSettings={() => luckyMode.setShowSettings(true)}
+            />
+            {/* 🍀 Lucky 模式暂停继续按钮 */}
+            {luckyMode.isPaused && (
+              <button
+                onClick={luckyMode.resume}
+                style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  border: '1.5px solid #fca5a5', background: '#fef2f2',
+                  cursor: 'pointer', fontSize: 12, display: 'flex',
+                  alignItems: 'center', gap: 3, fontFamily: 'inherit',
+                  color: '#dc2626',
+                }}>
+                ▶️ 继续
+              </button>
+            )}
+            {/* ── 🧠 思考 ── */}
+            <button
+              onClick={() => setThinkingMode(v => !v)}
+              title={thinkingMode ? '🧠 思考过程已开启 — 点击关闭' : '🧠 思考过程已关闭 — 点击开启'}
+              style={{
+                padding: '4px 10px', borderRadius: 6,
+                border: `1.5px solid ${thinkingMode ? '#f59e0b' : 'var(--border-light)'}`,
+                background: thinkingMode ? 'var(--yellow-100)' : 'var(--surface-50)',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit',
+                opacity: thinkingMode ? 1 : 0.6,
+                transition: 'all .2s',
+              }}>
+              🧠 思考
+            </button>
+            {/* ── 😊 表情 ── */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 title="表情符号"
                 style={{
-                  width: 36, height: 36, borderRadius: 8,
+                  padding: '4px 10px', borderRadius: 6,
                   border: `1.5px solid ${showEmojiPicker ? '#93c5fd' : 'var(--border-light)'}`,
-                  background: showEmojiPicker ? '#eff6ff' : 'var(--surface-100)',
-                  cursor: 'pointer', fontSize: 17,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all .15s', flexShrink: 0,
+                  background: showEmojiPicker ? 'var(--accent-50)' : 'var(--surface-50)',
+                  cursor: 'pointer', fontSize: 12, display: 'flex',
+                  alignItems: 'center', gap: 3, fontFamily: 'inherit',
+                  transition: 'all .15s',
                 }}>
-                😊
+                😊 表情
               </button>
               {showEmojiPicker && (
                 <>
                   <div style={{ position: 'fixed', inset: 0, zIndex: 99 }}
                     onClick={() => setShowEmojiPicker(false)} />
                   <div style={{
-                    position: 'absolute', bottom: 44, right: 0, zIndex: 100,
+                    position: 'absolute', bottom: 40, left: 0, zIndex: 100,
                     width: 312, background: 'var(--surface-0)', borderRadius: 12,
                     border: '1px solid var(--border-light)',
                     boxShadow: '0 4px 24px rgba(0,0,0,.12)',
                     overflow: 'hidden',
                   }}>
-                    {/* ═══分类标签 ═══*/}
                     <div style={{
                       display: 'flex', gap: 2, padding: '4px 6px',
                       borderBottom: '1px solid var(--border-light)',
-                      background: '#fafafa', overflowX: 'auto',
+                      background: 'var(--surface-50)', overflowX: 'auto',
                     }}
                       onWheel={e => {
                         const el = e.currentTarget
@@ -1933,7 +2308,7 @@ export default function ChatPanel() {
                       {EMOJI_GROUPS.map((group, gi) => (
                         <button key={gi}
                           onClick={() => {
-                            const el = document.getElementById(`emoji-group-${gi}`)
+                            const el = document.getElementById(`emoji-panel-${gi}`)
                             if (el) {
                               const container = el.parentElement
                               if (container) {
@@ -1959,10 +2334,9 @@ export default function ChatPanel() {
                         </button>
                       ))}
                     </div>
-                    {/* ═══Emoji 网格 ═══*/}
                     <div style={{ maxHeight: 240, overflowY: 'auto', padding: 6 }}>
                       {EMOJI_GROUPS.map((group, gi) => (
-                        <div key={gi} id={`emoji-group-${gi}`}>
+                        <div key={gi} id={`emoji-panel-${gi}`}>
                           {gi > 0 && <div style={{ height: 1, background: 'var(--border-light)', margin: '6px 2px' }} />}
                           <div style={{
                             fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600,
@@ -2006,22 +2380,72 @@ export default function ChatPanel() {
                 </>
               )}
             </div>
-
-            <button onClick={toggleMic} disabled={isProcessing}
-              title={sttListening ? '停止语音输入' : '语音输入'}
+            {/* ── 📎 文件 ── */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="上传文件"
               style={{
-                width: 36, height: 36, borderRadius: 8,
-                border: `1.5px solid ${sttListening ? '#ef4444' : 'var(--border-light)'}`,
-                background: sttListening ? '#fef2f2' : 'var(--surface-100)',
-                cursor: isProcessing ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all .2s', flexShrink: 0,
-                opacity: isProcessing ? 0.5 : 1, fontSize: 16,
+                padding: '4px 10px', borderRadius: 6,
+                border: `1.5px solid ${attachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
+                background: attachments.length > 0 ? 'var(--accent-50)' : '#f9fafb',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit',
               }}>
-              {sttListening ? '🔴' : '🎤'}
+              📎 文件{attachments.length > 0 ? <sup style={{ fontSize: 9, color: '#3b82f6', marginLeft: 1 }}>{attachments.length}</sup> : null}
             </button>
-
-            {/* 🆕 v3.0: 时光胶囊按钮 */}
+            {/* ── 🎙️ 实时语音对话 ── */}
+            <button onClick={async () => {
+              if (realtimeVoiceActive) {
+                try {
+                  const r = await window.luminaAPI?.agentStopRealtimeVoice?.()
+                  if (r?.success) { setRealtimeVoiceActive(false); showToast?.('🎙️ 实时语音对话已停止', 'info') }
+                  else { showToast?.(`⚠️ ${r?.error || '停止失败'}`, 'warning') }
+                } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
+              } else {
+                try {
+                  const r = await window.luminaAPI?.agentStartRealtimeVoice?.()
+                  if (r?.success) { setRealtimeVoiceActive(true); showToast?.(r.message || '🎙️ 实时语音对话已启动', 'info') }
+                  else { showToast?.(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+                } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
+              }
+            }}
+              title={realtimeVoiceActive ? '停止实时语音对话' : '实时语音对话'}
+              style={{
+                padding: '4px 10px', borderRadius: 6,
+                border: `1.5px solid ${realtimeVoiceActive ? '#22c55e' : 'var(--border-light)'}`,
+                background: realtimeVoiceActive ? 'var(--green-100)' : '#f9fafb',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit',
+                boxShadow: realtimeVoiceActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
+              }}>
+              {realtimeVoiceActive ? '🔊 实时语音对话' : '🎙️ 实时语音对话'}
+            </button>
+            {/* ── 💻 AI操作电脑 ── */}
+            <button onClick={async () => {
+              if (computerUseActive) {
+                try { await window.luminaAPI?.agentStopComputerUse?.() } catch {}
+                setComputerUseActive(false)
+                showToast?.('💻 AI操作电脑已停止', 'info')
+              } else {
+                try {
+                  const r = await window.luminaAPI?.agentStartComputerUse?.()
+                  if (r?.success) { setComputerUseActive(true); showToast?.(r.message || '💻 AI操作电脑已就绪', 'info') }
+                  else { showToast?.(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+                } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
+              }
+            }}
+              title={computerUseActive ? '停止 AI操作电脑' : '让 AI 操作你的电脑'}
+              style={{
+                padding: '4px 10px', borderRadius: 6,
+                border: `1.5px solid ${computerUseActive ? '#22c55e' : 'var(--border-light)'}`,
+                background: computerUseActive ? 'var(--green-100)' : '#f9fafb',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit',
+                boxShadow: computerUseActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
+              }}>
+              {computerUseActive ? '💻 AI操作电脑（运行中）' : '💻 AI操作电脑'}
+            </button>
+            {/* ── ⏳ 胶囊 ── */}
             <button onClick={() => {
               const text = input.trim()
               if (!text) { alert('输入你想对未来的自己说的话，然后点击 ⏳ 埋下时光胶囊'); return }
@@ -2032,85 +2456,18 @@ export default function ChatPanel() {
             }}
               title="埋时光胶囊 ⏳"
               style={{
-                width: 36, height: 36, borderRadius: 8,
+                padding: '4px 10px', borderRadius: 6,
                 border: '1.5px solid var(--border-light)',
-                background: 'var(--surface-100)',
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all .2s', flexShrink: 0, fontSize: 16,
+                background: '#f9fafb',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit',
               }}>
-              ⏳
+              ⏳ 胶囊
             </button>
-
-            <button onClick={handleSend} disabled={isProcessing || !input.trim()}
-              className="btn-send-pulse"
-              style={{
-                border: 'none', borderRadius: 8, padding: '7px 16px',
-                background: input.trim() ? (isProcessing ? '#2563eb' : '#3b82f6') : 'var(--border-light)',
-                color: (isProcessing || input.trim()) ? 'var(--surface-0)' : 'var(--text-secondary)',
-                fontSize: 13, cursor: input.trim() && !isProcessing ? 'pointer' : 'default', fontWeight: 600,
-                minWidth: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                transition: 'all .2s',
-                boxShadow: isProcessing ? '0 0 0 3px rgba(59,130,246,.3)' : undefined,
-              }}>
-              {isProcessing ? (<>
-                <span style={{
-                  width: 14, height: 14, borderRadius: '50%',
-                  border: '2px solid rgba(255,255,255,.3)',
-                  borderTopColor: '#fff',
-                  animation: 'spin 0.6s linear infinite',
-                  flexShrink: 0,
-                }} />
-                <span style={{ fontSize: 12 }}>处理中</span>
-              </>) : (
-                '发送'
-              )}
-            </button>
-          </div>
-
-          {/* 🍀 v1.0: Lucky 模式控制栏 */}
-          <div style={{
-            marginTop: 4, display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <LuckyModeSelector
-              currentPreset={luckyMode.preset}
-              onPresetChange={luckyMode.setPreset}
-              runtimeInfo={{
-                preset: luckyMode.preset,
-                isActive: luckyMode.isActive,
-                currentIteration: luckyMode.runtime.currentIteration,
-                maxIteration: luckyMode.runtime.maxIteration,
-                isPaused: luckyMode.isPaused,
-                pauseReason: luckyMode.runtime.pauseReason,
-              }}
-              disabled={isProcessing}
-              onOpenSettings={() => luckyMode.setShowSettings(true)}
-            />
-            {luckyMode.isActive && !luckyMode.isPaused && (
-              <span style={{
-                fontSize: 9, color: 'var(--text-secondary)', marginLeft: 2,
-                display: 'flex', alignItems: 'center', gap: 3,
-              }}>
-                <span style={{
-                  width: 4, height: 4, borderRadius: 2,
-                  background: '#10b981',
-                  animation: 'pulse 1.2s ease-in-out infinite',
-                }} />
-                运行中
-              </span>
-            )}
-            {luckyMode.isPaused && (
-              <button
-                onClick={luckyMode.resume}
-                style={{
-                  padding: '1px 8px', borderRadius: 4,
-                  border: '1px solid #fca5a5', background: '#fef2f2',
-                  cursor: 'pointer', fontSize: 10, color: '#dc2626',
-                  display: 'flex', alignItems: 'center', gap: 3,
-                }}>
-                ▶️ 继续
-              </button>
-            )}
+            {/* 🆕 上下文用量指示器 */}
+            <ContextUsageIndicator />
+            {/* 弹性空间 */}
+            <div style={{ flex: 1, minWidth: 8 }} />
           </div>
 
           {/* 🍀 v1.0: Lucky 模式设置弹窗 */}
@@ -2122,31 +2479,20 @@ export default function ChatPanel() {
             />
           )}
 
+          {/* ── 底部提示 ── */}
           <div style={{
             marginTop: 4, fontSize: 10, color: 'var(--text-secondary)',
             display: 'flex', justifyContent: 'space-between',
           }}>
             <span>
-              {mode === 'worker' ? '⚡ Worker: 单任务快速执行' :
-               mode === 'agent' ? '🤖 Agent: 多轮自动工具调用' :
-               mode === 'developer' ? '🔧 Developer: ?Git 工具' :
-               '💬 Chat: 轻量对话模式'}
-              {sttListening ? ' · 🎤 语音输入中...' : ' · Shift+Enter 换行'}
+              {sttListening ? '🎤 语音输入中...' : 'Shift+Enter 换行 · /help 查看命令'}
             </span>
-            <span style={{ cursor: 'pointer' }}
-              onClick={() => {
-                const modes = ['chat','agent','worker','developer','group'] as const
-                const i = modes.indexOf(mode)
-                const next = modes[(i+1) % modes.length]
-                setMode(next)
-                window.luminaAPI?.agentSetMode(next)
-              }}>
-              切换模式
-            </span>
+            <span style={{ cursor: 'default', color: 'var(--text-secondary)' }}>
+              {getAgentRole(selectedRole).name}</span>
           </div>
         </div>
 
-        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} } @keyframes sendSpin { to { transform: rotate(360deg); } }`}</style>
 
         {/* v2.14: 删除确认 */}
         {deletingTarget && (
@@ -2186,7 +2532,7 @@ export default function ChatPanel() {
             </div>
           </div>
         )}
-      </> )}
+      </> ))}
       </div>
     </div>
   )

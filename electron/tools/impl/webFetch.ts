@@ -33,7 +33,7 @@ export async function webFetch(args: Record<string, any>): Promise<ToolResult> {
   }
 
   try {
-    const response = await httpGet(url, 15000)
+    const response = await httpGet(url, {}, 15000)
 
     if (!response.ok) {
       return {

@@ -112,8 +112,28 @@ export function getEmotion(agentId: string): AgentEmotion {
   return { ...emotionCache[agentId] }
 }
 
+/** 手动设置某 Agent 情绪 */
+export function setEmotion(agentId: string, patch: Partial<Pick<AgentEmotion, 'mood' | 'energy' | 'affinity'>>): AgentEmotion {
+  const current = getEmotion(agentId)
+  if (patch.mood !== undefined) current.mood = _clamp(patch.mood, -1, 1)
+  if (patch.energy !== undefined) current.energy = _clamp(patch.energy, 0, 1)
+  if (patch.affinity !== undefined) current.affinity = _clamp(patch.affinity, 0, 1)
+  current.lastUpdated = Date.now()
+  emotionCache[agentId] = current
+  saveEmotions(emotionCache)
+  _emitChange(agentId)
+  return { ...current }
+}
+
 function _clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v))
+}
+
+/** 通知情绪变化 */
+function _emitChange(agentId: string): void {
+  emotionListeners.forEach(fn => {
+    try { fn(agentId, emotionCache[agentId], getNamedEmotion(agentId)) } catch {}
+  })
 }
 
 // ═══════════════════════════════════════════════════════════

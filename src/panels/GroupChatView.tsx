@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStore } from '../stores/appStore'
-import { IconPlus } from '../components/Icons'
+import { IconPlus, IconSend } from '../components/Icons'
 import AgentTaskBoard from '../components/AgentTaskBoard'
 import AgentMoments from '../components/AgentMoments'
 import NoteCycle, { LuminaDailyReport, TeamMilestones, YakTechNotes } from '../components/NoteCycle'
@@ -16,7 +16,7 @@ import { sttService, type STTStatus } from '../services/sttService'
 import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
 import { updateEmotion, emotionContext } from '../services/agentEmotion'
-import AgentEmotionBar, { injectEmotionStyles } from '../components/AgentEmotionBar'
+import { injectEmotionStyles } from '../components/AgentEmotionBar'
 import { addBookmark } from '../services/messageBookmarks'
 import { showToast } from '../components/Toast'
 import TeamPanel from './TeamPanel'  // 🆕 团队面板整合
@@ -28,13 +28,18 @@ import {
   detectMentionInReply,
 } from '../services/conversationDynamics'
 import LuckyModeSelector from '../components/LuckyModeSelector'
+import ModelSelector from '../components/ModelSelector'
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
 import type { LuckySettingsConfig } from '../components/LuckyModeSettings'
 import {
   getToolNotification,
   getGCToolsPrompt,
+  getGCToolsPromptForIntent,
   getDisabledTools,
+  getToolsForIntent,
+  detectToolIntent,
+  type ToolIntent,
   DEFAULT_TEAM_SECURITY,
   type TeamSecurityConfig,
 } from '../services/gcSafeTools'
@@ -48,9 +53,18 @@ import {
   useLLMPanels,
   cleanTtsText, formatTime, insertAtCursor, getAgentSystemPrompt, getAgentSystemPromptLite,
 } from '../chat/chatShared'
+import { useLoopStore } from '../stores/loopStore'
+import { detectLoopIntent } from '../services/loopEngine'
+import TaskDispatcher from '../components/TaskDispatcher'
+import { TASK_TYPE_CARDS, TEAM_MEMBERS, TaskType, getRecommendedAgent } from '../data/agentRoles'
+import ContextUsageIndicator from '../components/ContextUsageIndicator'
+import { useAgentRuntime } from '../stores/agentRuntimeStore'
 
 /** P0.4: 团队群聊 agentChat 硬截止 + 兜底 */
-const GC_CHAT_HARD_MS = 300_000
+// 🔧 v9.2: 300s→600s — 本地35B模型+大PDF附件可能需要更长推理时间，
+//   后端 providerProfiles 对 Qwen 本地模型推荐超时为 600s（慢速模式900s），
+//   前端必须 ≥ 后端超时，否则会在后端仍在处理时强制中断。
+const GC_CHAT_HARD_MS = 600_000
 
 async function agentChatWithTimeout(args: any): Promise<{ content: string; error?: string }> {
   const deadline = Date.now() + GC_CHAT_HARD_MS
@@ -73,10 +87,11 @@ async function agentChatWithTimeout(args: any): Promise<{ content: string; error
 
     // 长上下文下 LLM 推理可能超过 60s
     //   从 60s 提升到 180s，与后端 socialMode 300s 超时对齐
+    // 🔧 v9.2: 300s→600s，与 GC_CHAT_HARD_MS 对齐，避免双重超时不一致
     const result = await Promise.race([
       p,
       new Promise<any>((_, reject) =>
-        setTimeout(() => reject(new Error('已中断（300秒无响应）')), 300_000)
+        setTimeout(() => reject(new Error(`已中断（${GC_CHAT_HARD_MS / 1000}秒无响应）`)), GC_CHAT_HARD_MS)
       ),
     ])
 
@@ -90,6 +105,35 @@ async function agentChatWithTimeout(args: any): Promise<{ content: string; error
       error: e?.message || String(e),
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🔧 P2-fix: Visual Compact — 图片压缩工具
+//   避免 Computer Use/截图/OCR 数据撑爆上下文
+// ═══════════════════════════════════════════════════════════
+
+/** 压缩图片为 JPEG base64 */
+async function compressImage(dataUrl: string, maxWidth: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      let { width, height } = img
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width)
+        width = maxWidth
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+      const compressed = canvas.toDataURL('image/jpeg', quality)
+      URL.revokeObjectURL(img.src)
+      resolve(compressed)
+    }
+    img.onerror = () => reject(new Error('图片加载失败'))
+    img.src = dataUrl
+  })
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -116,9 +160,9 @@ function buildHistoryForAgent(
 ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
   const MAX_HISTORY_TOKENS = Math.floor((contextWindow || 262144) * 0.55)
   const PER_MSG_OVERHEAD = 8
-  const MAX_OTHER_MSGS = 5       // 其他 Agent 最多保留条数
-  const MAX_OWN_CHARS = 2000     // 自己/用户/系统消息上限
-  const MAX_OTHER_CHARS = 350    // 其他 Agent 压缩上限
+  const MAX_OTHER_MSGS = 30      // 🔧 P2-fix: 其他 Agent 最多保留条数（8→30，减少群聊上下文截断）
+  const MAX_OWN_CHARS = 4000     // 🔧 P2-fix: 自己/用户/系统消息上限（2000→4000，保留更多细节）
+  const MAX_OTHER_CHARS = 1500   // 🔧 P2-fix: 其他 Agent 压缩上限（350→1500，减少信息丢失）
 
   // 预计算 Agent ID 集合
   const AGENT_IDS = new Set(AGENTS.map(a => a.id))
@@ -161,15 +205,38 @@ function buildHistoryForAgent(
     } else if (isUser) {
       role = 'user'
       text = (m.content || '').slice(0, MAX_OWN_CHARS)
-      // 附件描述（沿用原 historyForLLM 的处理）
+      // v10.9: 附件处理 — 支持图片多模态
       if (m.attachments && m.attachments.length > 0) {
-        const descs = m.attachments.map((a, i) => {
-          const sizeStr = a.size > 1024 * 1024
-            ? `${(a.size / (1024 * 1024)).toFixed(1)}MB`
-            : `${(a.size / 1024).toFixed(1)}KB`
-          return `[附件${i + 1}: ${a.name} (${sizeStr})]`
-        }).join('\n')
-        text = text + '\n\n--- 上传文件 ---\n' + descs
+        // 检查是否有图片附件
+        const imageAttachments = m.attachments.filter(a => a.imageDataUrl)
+        const otherAttachments = m.attachments.filter(a => !a.imageDataUrl)
+        
+        // 其他附件描述
+        if (otherAttachments.length > 0) {
+          const descs = otherAttachments.map((a, i) => {
+            const sizeStr = a.size > 1024 * 1024
+              ? `${(a.size / (1024 * 1024)).toFixed(1)}MB`
+              : `${(a.size / 1024).toFixed(1)}KB`
+            return `[附件${i + 1}: ${a.name} (${sizeStr})]`
+          }).join('\n')
+          text = text + '\n\n--- 上传文件 ---\n' + descs
+        }
+        
+        // v10.9: 图片多模态 — 如果有图片，返回 content 数组格式
+        if (imageAttachments.length > 0) {
+          const contentArray: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+            { type: 'text', text }
+          ]
+          for (const img of imageAttachments) {
+            contentArray.push({
+              type: 'image_url',
+              image_url: { url: img.imageDataUrl! }
+            })
+          }
+          // 暂存到 _visionContent 供后续使用
+          result.unshift({ role, content: contentArray } as any)
+          continue
+        }
       }
     } else if (isTarget) {
       role = 'assistant'
@@ -195,15 +262,23 @@ function buildHistoryForAgent(
 
   // 追加协作摘要（runningHistory）— 仅主回复使用
   if (runningHistory && runningHistory.length > 0) {
-    if (tokenEst + 8 <= MAX_HISTORY_TOKENS) {
-      tokenEst += 8
-      result.push({ role: 'user' as const, content: '[--- 以下为团队协作阶段的结构化摘要 ---]' })
-    }
+    // 🔧 2026-08-14: 去重 — 记录已存在的内容摘要（前 80 字符），避免 runningHistory 与 messages 重复
+    const existingSummaries = new Set(
+      result.map(m => (m.content || '').slice(0, 80).trim())
+    )
+    let addedSummaryHeader = false
     for (const entry of runningHistory) {
       const clipped = (entry.content || '').slice(0, 3000)
+      const summaryKey = clipped.slice(0, 80).trim()
+      if (existingSummaries.has(summaryKey)) continue // 跳过已在 messages 中出现的条目
       const est = Math.ceil(clipped.length / 4) + PER_MSG_OVERHEAD
       if (tokenEst + est > MAX_HISTORY_TOKENS) break
       tokenEst += est
+      if (!addedSummaryHeader && tokenEst + 8 <= MAX_HISTORY_TOKENS) {
+        result.push({ role: 'user' as const, content: '[--- 以下为团队协作阶段的结构化摘要 ---]' })
+        tokenEst += 8
+        addedSummaryHeader = true
+      }
       result.push({ role: entry.role, content: clipped })
     }
   }
@@ -220,61 +295,33 @@ function buildHistoryForAgent(
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 🆕 v10.1: 剥离 LLM 回复开头的"自言自语"推理文本
+ * 🆕 v10.8: 剥离 LLM 回复开头的"自言自语"推理文本
  * 
- * 某些 LLM 在回复时会先输出推理过程再给出正式回答，例如：
- *   "用户问我是谁。我应该直接回答这个问题，介绍自己。根据系统提示...
- *    让我友好地回答这个问题。\n\n你好！我是..."
- * 
- * 本函数检测这类模式并剥离，只保留正式回答。
+ * 🔧 v10.8 修复：之前 17 种模式过于激进，会错误剥离模型的有用推理过程，
+ * 导致用户看到残缺回复，像是"一问二不知"。
+ * 现在只剥离**明确的、无信息量的自言自语**，保留有用的推理内容。
  */
-/** 🔧 v10.5: 剥离 LLM 回复开头的推理/分析文本 — 通用强化版 */
 function stripReasoningPrefix(text: string): string {
-  // 推理检测模式组 — 覆盖各种语言模型"自言自语"的常见开头
-  const patterns = [
-    // ============ 具体模式 ============
-    // ① 用户行为分析: "用户又发/发了/发了个/收到/看到/说/讲了..."
-    /^用户[又收发看说讲发问][^。]*?。[\s\S]*?(?:\n\n|$)/s,
-    // ② "我[需要/应该/要][保持/注意/用/按照/作为]..."
-    /^我[需要应该要][^。]*?(?:保持|注意|用|按照|作为|确保|让|给)[^。]*?。[\s\S]*?(?:\n\n|$)/s,
-    // ③ "这是一个...场景/群聊/对话"
-    /^这是[一一个][^。]*?(?:群聊|对话|场景|情况|通知|[^。]{2,})?。[\s\S]*?(?:需要|应该|作为|根据|所以|因此).*?。\s*/s,
-    // ④ "作为[角色名]...我[需要/应该]..."
-    /^作为[^。]*?(?:Lumina|猫娘|AI|助手|agent|Agent|热茶|Yak)[^。]*?[，,]\s*我[^。]*?(?:需要|要|应该|得).*?。\s*/s,
-    // ⑤ "根据[设定/规则/系统提示/角色/铁则/原则]...（含编号列举）"
-    /^根据.*?(?:设定|规则|系统提示|角色|身份|性格|铁则|原则|要求|规定|协议).*?(?:[：:]\s*\n|[\s\S]*?。)[\s\S]*?(?:但|不过|然而|所以|因此|从|用户|我).*?。\s*/s,
-    // ⑥ "用户[问说让要我收发看]...让我来回答..."
-    /^用户[问说让要我收发看][^。]*。[\s\S]*?(?:我[应该需要要]|让[我我来]|我来)[^。]*?(?:回答|回复|介绍|说明).*?。\s*/s,
-    // ⑦ "让我[想想/看看/来]...分析/决定/判断..."
-    /^(?:让我|我来)[^。]*?(?:想想|看看|分析|决定|判断|考虑|计划|梳理)[^。]*?。[\s\S]*?(?:\n\n|$)/s,
-    // ⑧ "看起来/看来/显然/很明显..." → 推理句式
-    /^(?:看起来|看来|显然|很明显|这显然|这明显)[^。]*?。[\s\S]*?(?:所以我|因此|我建议|我决定|让我).*?。\s*/s,
-    // ============ 新增通用模式 ============
-    // ⑨ "等等/等一下/嗯/唔...让我[想想/分析/理解/重新]" → 犹豫+推理
-    /^(?:等等|等一下|嗯[，,。]|唔[，,。]|让我想想|让我分析|让我理解|让我重新).*?[\s\S]*?(?:\n\n|$)/s,
-    // ⑩ "这里有点奇怪/这里的情况是比较/这似乎/这看起来像是" → 场景分析
-    /^(?:这里|这似乎|这看起来|这个情况|这种情况|这种场景).*?[。，][\s\S]*?(?:用户|我|热茶|Lumina|Yak).*?[\s\S]*?(?:需要|应该|可以|可能|觉得|认为|是).*?。\s*/s,
-    // ⑪ "用户[在/正在/刚才/刚刚][说/描述/告诉/提到/发了/问了]" → 场景复述
-    /^用户[在正在刚才刚刚][说描述告诉提到发了问了][^。]*。[\s\S]*?(?:所以|因此|我|让我).*?。\s*/s,
-    // ⑫ "从上下文看/根据上下文/从用户的话/从这个角度" → 分析开场
-    /^(?:从(?:上下文|用户的话|这个角度|整体)|根据(?:上下文|对话|场景)).*?[，,][\s\S]*?(?:用户|我|可能|应该是|所以).*?。\s*/s,
-    // ⑬ "热茶（就是我自己）/Yak（我）/作为热茶的我" → 自我指涉推理
-    /^[^。]*?(?:热茶|Yak|Lumina)[（(](?:就是|即|这个)[）)].*?[\s\S]*?(?:需要|应该|可以|可能|觉得|认为|要).*?。\s*/s,
-    // ⑭ 通用思维链: "我觉得最可能的是/我认为/我想/我猜/可能是指" + 分析句
-    /^(?:我觉得|我认为|我想|我猜|可能[是指是]).*?[\s\S]*?(?:因为|所以|因此|但是|不过|然而).*?[\s\S]*?(?:\n\n|。\s*।$)/s,
-    // ⑮ "等一下/让我重新[理解/梳理/分析/想想]" 
-    /^(?:等一下|让我重新|我需要重新).*?[理解梳理分析想想].*?[\s\S]*?(?:\n\n|$)/s,
-    // ⑯ 选项枚举: "可能的遗漏点/可能的情况/可能的解释" → 123 列举
-    /^[^。]{2,30}?[：:]\s*[\s\S]*?(?:\n\d[.、。]\s|或者|或是|要么).*?\n.*?(?:\n\n|$)/s,
-    // ⑰ "不管怎样/无论如何/核心是/总之" → 推理结论
-    /^(?:不管怎样|无论如何|核心是|总之|总结一下|说到底).*?。[\s\S]*?(?:\n\n|$)/s,
+  // 只剥离**明确无信息量**的自言自语模式
+  //   每个模式必须满足：(1) 完全不含知识内容 (2) 后面有实际回答
+  const safePatterns = [
+    // ① "用户问/说/让我...。" → 纯场景复述，无知识价值
+    /^用户[问说让要我收发看][^。\n]*。[\s\S]*?(?:\n\n|$)/s,
+    // ② "让我想想/看看/来分析...。" → 纯犹豫/计划，无知识价值
+    /^(?:让我想想|让我看看|让我来分析|让我分析|等我看看|等一下|嗯[，,。]?)[^。\n]*。[\s\S]*?(?:\n\n|$)/s,
+    // ③ "作为[角色]...我需要/应该...。" → 角色自述，无知识价值
+    /^作为[^。\n]*(?:Lumina|猫娘|AI|助手|agent|Agent|热茶|Yak)[^。\n]*(?:需要|要|应该|得)[^。\n]*。[\s\S]*?(?:\n\n|$)/s,
+    // ④ "这是一个...场景/群聊/对话。" → 场景复述，无知识价值
+    /^这是[一一个][^。\n]*(?:群聊|对话|场景|情况|通知)[^。\n]*。[\s\S]*?(?:\n\n|$)/s,
   ]
 
-  for (const pattern of patterns) {
+  for (const pattern of safePatterns) {
     const match = text.match(pattern)
     if (match && match[0]) {
       const remaining = text.slice(match[0].length).trim()
-      if (remaining.length >= 3) return remaining
+      // 🔧 提高最小长度阈值：剥离后剩余内容必须 ≥ 10 字才执行剥离
+      //   防止误剥离后只剩残片
+      if (remaining.length >= 10) return remaining
     }
   }
 
@@ -344,15 +391,87 @@ function deduplicateLLMContent(text: string): string {
   return text
 }
 
+/**
+ * 🔧 2026-08-11: 话题专属人设 — 与 TASK_TYPE_CARDS 的 7 个话题对应
+ * 在 agent 基础 system prompt 之上追加话题指令，让 Lumina 团队在对应话题下
+ * 以「领域专家」的姿态工作，而不是通用闲聊。返回空串表示无额外指令（日常聊天）。
+ */
+function getTaskTypeInstruction(taskType?: TaskType | null): string {
+  switch (taskType) {
+    case 'learn':
+      return [
+        '',
+        '## 📚 学习辅导模式（持续生效）',
+        '你现在是用户的学习辅导老师：',
+        '- 讲解结构化：概念 → 原理 → 例子 → 验证',
+        '- 抽象概念先用类比讲明白，再给严谨定义',
+        '- 主动检查理解，用户说「不懂/再讲一遍」时换一种讲法，不要重复原话',
+        '- 耐心优先，不嘲讽、不省略基础步骤',
+      ].join('\n')
+    case 'write':
+      return [
+        '',
+        '## ✍️ 写作创作模式（持续生效）',
+        '你现在是用户的写作创作搭档：',
+        '- 动手前先确认文体、受众、语气；信息不足时给出可选假设',
+        '- 直接给出可用的成稿，不要只给大纲；成稿后附 1-2 条修改建议',
+        '- 润色时说明改了什么、为什么改',
+      ].join('\n')
+    case 'code':
+      return [
+        '',
+        '## 💻 代码开发模式（持续生效）',
+        '你现在是用户的资深工程师搭档：',
+        '- 直接动手写代码或改 bug，不要只给建议',
+        '- 关键设计决策说明理由，指出代码里的潜在坑',
+        '- 完成后总结改了哪些文件、如何验证',
+      ].join('\n')
+    case 'design':
+      return [
+        '',
+        '## 🎨 商业设计模式（持续生效）',
+        '你现在是用户的商业设计顾问：',
+        '- 从用户目标与受众出发给方案，不只谈审美',
+        '- 给具体可执行的建议：配色值、字号层级、布局结构、交互细节',
+        '- 每个建议附一句设计依据，并给出 1 个备选方案',
+      ].join('\n')
+    case 'intel':
+      return [
+        '',
+        '## 🛡️ 情报监控模式（持续生效）',
+        '你现在是用户的情报分析师：',
+        '- 时效优先：需要核实的信息先 web_search，并注明来源与日期',
+        '- 区分「事实」与「推测」，不确定就明说',
+        '- 输出结构化摘要：要点 → 影响 → 建议关注',
+      ].join('\n')
+    case 'work':
+      return [
+        '',
+        '## 📋 职场办公模式（持续生效）',
+        '你现在是用户的职场办公助手：',
+        '- 输出专业、可直接使用的内容：会议纪要、周报、邮件、日程',
+        '- 结构化呈现：结论先行，分点展开',
+        '- 主动给出下一步动作建议',
+      ].join('\n')
+    default:
+      return ''
+  }
+}
+
 export default function GroupChatView() {
   const llmConfig = useStore(s => s.llmConfig)
+  const getAgentLlmConfig = useStore(s => s.getAgentLlmConfig)
+  const loadAgentLlmConfigs = useStore(s => s.loadAgentLlmConfigs)
   const activePanel = useStore(s => s.activePanel)
   const ttsMuted = useStore(s => s.ttsMuted)
   const addTokenUsage = useStore(s => s.addTokenUsage)  // 🔧 v2.17: 团队聊天 token 追踪
   const ttsToggle = useStore(s => s.ttsToggle)
   const profile = useStore(s => s.profile)   // v2.14: 气泡颜色
 
-  // LLM 配置检?
+  // 🆕 v10.8: 启动时加载 per-agent LLM 配置
+  useEffect(() => { loadAgentLlmConfigs() }, [])
+
+  // LLM 配置检测
   const llmReady = !!(llmConfig.model && llmConfig.apiKey)
   const isCloudAPI = llmConfig.apiKey?.startsWith('sk-') || llmConfig.baseUrl?.includes('api.openai.com') || llmConfig.baseUrl?.includes('api.moonshot') || llmConfig.baseUrl?.includes('api.deepseek')
   const isLocalLLM = llmConfig.baseUrl?.includes('localhost') || llmConfig.baseUrl?.includes('127.0.0.1') || llmConfig.baseUrl?.includes('ollama')
@@ -398,6 +517,21 @@ export default function GroupChatView() {
   const [showDecision, setShowDecision] = useState(false)
   const [showTeamMembers, setShowTeamMembers] = useState(false)  // 🔥 v2.7.1: 团队成员面板
   const [showAcpPanel, setShowAcpPanel] = useState(false)  // 🆕 ACP 添加成员面板
+  const [closingTeam, setClosingTeam] = useState(false)
+  const [closingAcp, setClosingAcp] = useState(false)
+
+  // 🆕 DevTools 紧凑模式（DevTools 打开 OR 简约模式）
+  const compactMode = useStore((s) => s.compactMode)
+  const [devtoolsOpen, setDevtoolsOpen] = useState(false)
+  const compact = compactMode || devtoolsOpen
+  useEffect(() => {
+    const api = (window as any).luminaAPI
+    if (!api?.onDevToolsChanged) return
+    return api.onDevToolsChanged((opened: boolean) => setDevtoolsOpen(opened))
+  }, [])
+
+  const closeTeamPanel = () => { setClosingTeam(true); setTimeout(() => { setShowTeamMembers(false); setClosingTeam(false) }, 250) }
+  const closeAcpPanel = () => { setClosingAcp(true); setTimeout(() => { setShowAcpPanel(false); setClosingAcp(false) }, 250) }
   // 🆕 ACP 添加成员表单
   const [acpFormData, setAcpFormData] = useState({
     id: '', name: '', icon: '🌐', description: '',
@@ -439,16 +573,34 @@ export default function GroupChatView() {
   // 首次加载 ACP 成员
   useEffect(() => { loadAcpMembers() }, [])
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)  // 🔥 v2.8.1: 展开详细资料
-  const [teamTab, setTeamTab] = useState<'chat' | 'tasks' | 'moments' | 'theater' | 'daily' | 'milestone' | 'yak'>('chat')
+  const [teamTab, setTeamTab] = useState<'chat' | 'tasks' | 'loop' | 'moments' | 'theater' | 'daily' | 'milestone' | 'yak'>('chat')
+  // 🌸 外部（桌宠"生活"入口）切换 朋友圈 / 剧场 / 日报 tab
+  useEffect(() => {
+    const onTeamTab = (e: Event) => {
+      const tab = (e as CustomEvent).detail?.tab
+      if (tab === 'moments' || tab === 'theater' || tab === 'daily') setTeamTab(tab)
+    }
+    window.addEventListener('lumina:team-tab', onTeamTab as EventListener)
+    return () => window.removeEventListener('lumina:team-tab', onTeamTab as EventListener)
+  }, [])
   const teamTabs = [
     { key: 'chat' as const, label: '群聊', icon: '💬' },
     { key: 'tasks' as const, label: '任务', icon: '📋' },
+    { key: 'loop' as const, label: 'Loop', icon: '🔁' },  // 🆕 自驱任务看板
     { key: 'moments' as const, label: '朋友圈', icon: '🌸' },
     { key: 'theater' as const, label: '剧场', icon: '🎬' },
     { key: 'daily' as const, label: '日报', icon: '🌅' },
     { key: 'milestone' as const, label: '纪念日', icon: '💝' },
     { key: 'yak' as const, label: 'Yak 笔记', icon: '📘' },
   ]
+
+  // 📋 角色选择界面控制
+  const [showRoleSelector, setShowRoleSelector] = useState(() => messages.length <= 1)
+  const [selectedRole, setSelectedRole] = useState<TaskType | null>(null)
+  // 🔧 2026-08-11: 话题持续生效 — selectedRole 是持久话题（点卡片进入，← 退出）。
+  //   ref 让 send/triggerDecision 等闭包始终读到最新话题，避免依赖数组膨胀。
+  const selectedRoleRef = useRef<TaskType | null>(null)
+  useEffect(() => { selectedRoleRef.current = selectedRole }, [selectedRole])
   const [decQuestion, setDecQuestion] = useState('')
   const [decContext, setDecContext] = useState('')
   const [decLoading, setDecLoading] = useState(false)
@@ -491,6 +643,18 @@ export default function GroupChatView() {
     return window.luminaAPI.onAgentEvent(cb)
   }, [])
 
+  // 🆕 全局监听 token_update 事件，更新上下文用量指示器
+  useEffect(() => {
+    const unsub = window.luminaAPI.onAgentEvent((ev: any) => {
+      if (ev.type === 'token_update' && ev.promptTokens > 0) {
+        const llmConfig = useStore.getState().llmConfig
+        const cw = ev.contextWindow || llmConfig.contextWindow || 0
+        useAgentRuntime.getState().setContextUsage(ev.promptTokens, cw)
+      }
+    })
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [])
+
   // fix: 使用 useRef 替代普通 let 变量，彻底解决协作阶段思考步骤串台
   //   问题：collabCurrentMsgId 是闭包中的 let 变量，IPC 事件异步触发时
   //   旧阶段的回调可能拿到新阶段的 msgId → 思考内容写错消息
@@ -502,6 +666,12 @@ export default function GroupChatView() {
 
   // 🍀 v1.0: Lucky 模式
   const luckyMode = useLuckyMode()
+
+  // 🔁 Loop 引擎 — 团队级自驱任务
+  const loopStore = useLoopStore()
+
+  // 📋 任务派发中心
+  const [showTaskDispatcher, setShowTaskDispatcher] = useState(false)
 
   // ═══ v2.14: TTS 排队播放 ═══
   const ttsQueueRef = useRef<Array<{text:string; voice:string}>>([])
@@ -578,12 +748,15 @@ export default function GroupChatView() {
   const [showGcVoicePicker, setShowGcVoicePicker] = useState(false) // 🔧 v2.9: 群聊TTS音色面板
   const [gcVoiceTarget, setGcVoiceTarget] = useState<string | null>(null) // 🔧 v2.9: 当前调整的Agent
   const [ttsToggling, setTtsToggling] = useState(false) // 🔧 v2.9: 静音切换动画
-  const [gcAttachments, setGcAttachments] = useState<Array<{name:string,size:number,text?:string}>>([])
+  const [gcAttachments, setGcAttachments] = useState<Array<{name:string,size:number,text?:string,imageDataUrl?:string}>>([])
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set())
   const [thinkingCollapsed, setThinkingCollapsed] = useState<Record<string, boolean>>({})
   const userExpandedRef = useRef<Set<string>>(new Set())
   const autoCollapsedThinkingRef = useRef<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 🆕 v9.2: 任务类型路由优先 — 用户选了任务卡片后，send() 应优先使用卡片指定的 agent，而非关键词自动匹配
+  const pendingTaskTypeRef = useRef<TaskType | null>(null)
+  const pendingAgentIdRef = useRef<string | null>(null)  // 任务派发中心指定的执行者
   // ════════════════════════════════
 
   // 监听会话切换事件，重置回复状态防止混淆
@@ -841,9 +1014,44 @@ export default function GroupChatView() {
         const isImage = f.type.startsWith('image/') || ['png','jpg','jpeg','gif','bmp','ico','webp','tiff','tif','psd'].includes(ext)
         const isBinary = BINARY_EXTS.has(ext) && !isImage
         if (isImage) {
+          // 🔧 P2-fix: Visual Compact — 压缩图片为 base64，避免大图撑爆上下文
+          //   策略：超过 1MB 的图片压缩到 1920px 宽，质量 0.7，输出 JPEG
+          //   超过 500KB 但小于 1MB 的图片压缩到 1280px 宽，质量 0.8
+          //   小于 500KB 的图片保持原样
+          const MAX_ORIGINAL_SIZE = 1024 * 1024 // 1MB
+          const COMPRESSED_WIDTH_LARGE = 1920
+          const COMPRESSED_WIDTH_MEDIUM = 1280
+          const COMPRESSED_QUALITY_LARGE = 0.7
+          const COMPRESSED_QUALITY_MEDIUM = 0.8
+
+          const imageDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = async () => {
+              const originalDataUrl = reader.result as string
+              // 小图直接使用，不压缩
+              if (f.size < 500 * 1024) {
+                resolve(originalDataUrl)
+                return
+              }
+              try {
+                const compressed = await compressImage(originalDataUrl, f.size > MAX_ORIGINAL_SIZE
+                  ? COMPRESSED_WIDTH_LARGE
+                  : COMPRESSED_WIDTH_MEDIUM,
+                  f.size > MAX_ORIGINAL_SIZE ? COMPRESSED_QUALITY_LARGE : COMPRESSED_QUALITY_MEDIUM)
+                resolve(compressed)
+              } catch {
+                // 压缩失败，回退到原图
+                resolve(originalDataUrl)
+              }
+            }
+            reader.onerror = () => resolve(`[图片: ${f.name} 读取失败]`)
+            reader.readAsDataURL(f)
+          })
+
           newAttachments.push({
             name: f.name, size: f.size,
-            text: `[图片: ${f.name} (${(f.size / 1024).toFixed(1)}KB), 请打开图片文件查看]`,
+            text: `[图片: ${f.name} (${(f.size / 1024).toFixed(1)}KB)]`,
+            imageDataUrl,  // v10.9: base64 图片数据，供视觉模型使用
           })
         } else if (isBinary) {
           const friendlyName: Record<string, string> = {
@@ -878,7 +1086,9 @@ export default function GroupChatView() {
           }
           newAttachments.push({
             name: f.name, size: f.size,
-            text: extractedText || `[${friendlyName[ext] || ext.toUpperCase() + ' 文件'}: ${f.name} (${(f.size / 1024).toFixed(1)}KB), 暂不支持文本提取]`,
+            text: extractedText || `[📎 上传了${friendlyName[ext] || ext.toUpperCase() + ' 文件'}: ${f.name} (${(f.size / 1024).toFixed(1)}KB)]
+⚠️ 文本提取失败，无法读取文件内容。
+请根据文件名和用户的问题，尽力回答。如果确实需要文件内容才能回答，告诉用户你暂时无法读取该文件，请他们手动复制粘贴关键内容给你。`,
           })
         } else {
           // 文本类文件：读取内容
@@ -1192,39 +1402,96 @@ export default function GroupChatView() {
   /** 根据任务类型返回 Agent 执行配置 */
   const getTaskConfig = (isCoding: boolean, override?: Partial<{
     maxToolCalls: number; mode: 'chat' | 'agent'; temperature: number; maxTokens: number
-  }>) => {
+  }>, taskTypeOverride?: TaskType | null) => {
     // fix: 群聊场景默认使用 agent 模式，确保工具调用可用
     //   如果调用方明确传入 mode='chat' 才使用 chat 模式
     const effectiveMode = override?.mode || 'agent'
+    // 🧠 v10.8: 根据任务类型动态调整温度 — 知识/代码任务需要确定性，聊天需要创造性
+    // 🔧 2026-08-11: pendingTaskTypeRef 在 send() 里被一次性消费置 null，
+    //   导致 getTaskConfig 内部读取时永远拿到 null → 学习辅导/情报监控/写作创作
+    //   的温度与工具轮次配置全部失效，全部退回默认 0.7 温度。
+    //   修复：由调用方显式传入 send() 开头已读取的 explicitTaskType。
+    const currentTaskType = taskTypeOverride !== undefined ? taskTypeOverride : pendingTaskTypeRef.current
 
+    // ── 代码开发：极低温度保证代码正确性 ──
     if (isCoding) {
-      // 编程任务 — 全部放行（工具名为 registry 实际注册名）
       const codingWhitelist = new Set([
         'file_read', 'file_write', 'file_edit', 'file_list',
         'shell_exec',
-        'open_file',       // 🆕 v3.6: 打开文件/程序/URL
+        'open_file',
         'git_status', 'git_diff', 'git_commit', 'git_log',
       ])
       const codingDisabled = teamDisabledTools.filter(t => !codingWhitelist.has(t))
       return {
         mode: effectiveMode as 'chat' | 'agent',
         maxToolCalls: override?.maxToolCalls ?? 12,
-        temperature: override?.temperature ?? 0.5,
+        temperature: override?.temperature ?? 0.05,  // 🧠 极低温度：代码必须准确
         maxTokens: override?.maxTokens ?? 262144,
         contextWindow: 262144,
         disabledTools: codingDisabled,
       }
     }
-    // 普通对话 — chat 模式 + 有限工具循环 (max 3 轮)
-    //   之前 maxToolCalls=8 → 10 轮 ReAct → 本地慢模型频繁超时
-    //   v5.3fix: maxToolCalls=3 → 简单对话 1 轮完成，搜索类 2-3 轮完成
-    //   CHAT_MODE_TOOLS 包含 web_search/web_fetch/memory/file，不含 browser/shell_exec
-    //   v8.1fix: 聊天模式强制禁用 shell_exec/系统工具，避免 Agent 尝试重复读取已上传文件
+
+    // ── 学习辅导：低温度保证知识准确性 ──
+    if (currentTaskType === 'learn') {
+      const chatModeDisabled = [...teamDisabledTools]
+      const CHAT_BLOCKED = ['system_info', 'process_list', 'notification', 'screenshot',
+        'mail_send', 'open_file',
+      ]
+      for (const t of CHAT_BLOCKED) {
+        if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+      }
+      return {
+        mode: effectiveMode as 'chat' | 'agent',
+        maxToolCalls: override?.maxToolCalls ?? 4,  // 学习场景不需要太多工具轮次
+        temperature: override?.temperature ?? 0.1,  // 🧠 低温度：知识必须准确
+        maxTokens: override?.maxTokens ?? 16384,   // 学习回答可以稍长
+        contextWindow: 262144,
+        disabledTools: chatModeDisabled,
+      }
+    }
+
+    // ── 情报监控 / 代码开发(task dispatch)：中低温度保证信息准确 ──
+    if (currentTaskType === 'intel' || currentTaskType === 'code') {
+      const chatModeDisabled = [...teamDisabledTools]
+      const CHAT_BLOCKED = ['system_info', 'process_list', 'notification', 'screenshot',
+        'mail_send', 'open_file',
+      ]
+      for (const t of CHAT_BLOCKED) {
+        if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+      }
+      return {
+        mode: effectiveMode as 'chat' | 'agent',
+        maxToolCalls: override?.maxToolCalls ?? 8,
+        temperature: override?.temperature ?? 0.2,  // 🧠 中低温度：信息/代码需要准确
+        maxTokens: override?.maxTokens ?? 262144,
+        contextWindow: 262144,
+        disabledTools: chatModeDisabled,
+      }
+    }
+
+    // ── 写作创作：中等温度平衡创意与质量 ──
+    if (currentTaskType === 'write') {
+      const chatModeDisabled = [...teamDisabledTools]
+      const CHAT_BLOCKED = ['system_info', 'process_list', 'notification', 'screenshot',
+        'mail_send', 'open_file',
+      ]
+      for (const t of CHAT_BLOCKED) {
+        if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+      }
+      return {
+        mode: effectiveMode as 'chat' | 'agent',
+        maxToolCalls: override?.maxToolCalls ?? 6,
+        temperature: override?.temperature ?? 0.5,  // 🧠 中等温度：写作需要一定创意
+        maxTokens: override?.maxTokens ?? 262144,
+        contextWindow: 262144,
+        disabledTools: chatModeDisabled,
+      }
+    }
+
+    // ── 默认（日常聊天 / 商业设计 / 职场办公）：保持较高温度 ──
     const chatModeDisabled = [...teamDisabledTools]
-    // 聊天模式永远禁 shell_exec，避免 Agent 重复读文件时出现中文路径/编码错误
-    const CHAT_BLOCKED = ['shell_exec', 'system_info', 'process_list', 'notification',
-      'desktop_see', 'desktop_act', 'desktop_click', 'desktop_type',
-      'keyboard_press', 'keyboard_type', 'clipboard_set', 'screenshot',
+    const CHAT_BLOCKED = ['system_info', 'process_list', 'notification', 'screenshot',
       'mail_send', 'open_file',
     ]
     for (const t of CHAT_BLOCKED) {
@@ -1232,13 +1499,48 @@ export default function GroupChatView() {
     }
     return {
       mode: effectiveMode as 'chat' | 'agent',
-      maxToolCalls: override?.maxToolCalls ?? 6,  // 🆕 v15.0-QwenPaw-fix: 群聊默认 6 轮，给搜索+总结留空间
-      temperature: override?.temperature ?? 0.7,
+      maxToolCalls: override?.maxToolCalls ?? 6,
+      temperature: override?.temperature ?? 0.7,  // 默认温度：日常聊天保持自然
       maxTokens: override?.maxTokens ?? 262144,
       contextWindow: 262144,
       disabledTools: chatModeDisabled,
     }
   }
+
+  /** 📋 任务派发中心 — 处理派发的回调 */
+  const handleTaskDispatch = useCallback((taskType: TaskType, agentId: string, prompt: string) => {
+    const card = TASK_TYPE_CARDS.find(c => c.id === taskType)
+    const agent = TEAM_MEMBERS.find(m => m.id === agentId)
+
+    if (!card || !agent) return
+
+    // 构造派发消息
+    const dispatchMsg = `📋 任务派发：${card.icon} ${card.name}\n\n` +
+      `🎯 任务：${prompt || card.desc}\n` +
+      `👤 执行者：${agent.icon} ${agent.name}\n\n` +
+      `💡 请${agent.name}开始处理此任务。`
+
+    // 在群聊中显示派发消息
+    setMessages(prev => [...prev, {
+      id: `dispatch-${Date.now()}`,
+      from: 'system',
+      fromIcon: '📋',
+      fromName: '任务派发',
+      content: dispatchMsg,
+      time: new Date().toLocaleTimeString('zh-CN'),
+    }])
+    setMsgCounter(c => c + 1)
+
+    // 🆕 v9.2: 记住任务类型和指定执行者，send() 会优先用它路由
+    pendingTaskTypeRef.current = taskType
+    pendingAgentIdRef.current = agentId
+
+    // 自动将 prompt 发送给指定的 agent
+    setTimeout(() => {
+      setInput(prompt)
+      setTimeout(() => { sendRef.current() }, 60)
+    }, 300)
+  }, [])
 
   const send = useCallback(async () => {
     if ((!input.trim() && gcAttachments.length === 0) || sending) return
@@ -1283,10 +1585,12 @@ export default function GroupChatView() {
     const userMsg: GCMsg = {
       id: `u${Date.now()}`, from: 'user', fromIcon: '👤', fromName: '我',
       content: userText,
+      // v10.9: 附件包含 imageDataUrl 供视觉模型使用
       attachments: currentAttachments.length > 0 ? currentAttachments.map(a => ({
         name: a.name,
         size: a.size,
         text: a.text,
+        imageDataUrl: (a as any).imageDataUrl,  // v10.9: base64 图片数据
       })) : undefined,
       time: new Date().toLocaleTimeString('zh-CN'),
     }
@@ -1300,15 +1604,87 @@ export default function GroupChatView() {
     proactiveChat.recordActivity()
     ttsEngine.unlock()
 
+    // ═══ 🔁 Loop 意图检测：「帮我每天做 XXX」→ 自动创建 Loop 任务 ═══
+    const loopIntent = detectLoopIntent(userText)
+    if (loopIntent) {
+      const loop = await useLoopStore.getState().createLoop(loopIntent.goal, {
+        agentId: undefined,  // 团队模式下不指定特定 Agent，让系统自动分配
+        suggestedTriggers: [loopIntent.trigger],
+      }).catch(() => null)
+      if (loop) {
+        const plan = loop.subtasks
+          .map((s, i) => `${i + 1}. ${s.title}：${s.description.slice(0, 60)}`)
+          .join('\n')
+        const freqLabel = loopIntent.trigger.type === 'interval'
+          ? (() => {
+              const h = Math.round((loopIntent.trigger.config?.intervalMs || 86400000) / 3600000)
+              return h === 24 ? '每天' : h === 168 ? '每周' : `每 ${h} 小时`
+            })()
+          : '定期'
+        // 在群聊中展示 Loop 创建结果
+        setMessages(prev => [...prev, {
+          id: `loop-${Date.now()}`,
+          from: 'system',
+          fromIcon: '🔁',
+          fromName: 'Loop 任务',
+          content:
+            `📋 已为你创建自动任务（待确认）：\n\n` +
+            `🎯 目标：${loopIntent.goal}\n⏰ 触发：${freqLabel}\n\n` +
+            `我会帮你做这些事：\n${plan}\n\n` +
+            `去「团队群聊 → Loop → 确认启动」后即可开始运转。`,
+          time: new Date().toLocaleTimeString('zh-CN'),
+        }])
+        setMsgCounter(c => c + 1)
+      }
+    }
+
     // ══════════════════════════════════════════════════════
     // 智能任务路由 — 按任务类型分配 Agent
     // ══════════════════════════════════════════════════════
     // v8.1fix: ⚠️ 任务意图只在用户输入文字上检测，不在文件内容上检测！
     //   fullText 包含提取的文档正文，若文档含"实现/代码/开发"等技术词→误判为 coding→走编程模式 shell_exec 可用→出错
     //   Agent 路由也用用户输入检测，避免上传技术文档时被路由到 Recha（编程Agent）
-    const taskIntent = userText.trim().length > 0 ? detectTaskIntent(userText) : 'chat'
-    const isCoding = taskIntent === 'coding' && userText.trim().length > 0
-    const codeScale = isCoding ? detectCodeScale(userText) : 'small'
+    // 🆕 v9.2: 优先使用用户选择的任务类型卡片路由，而非关键词自动匹配
+    //   场景：用户选了「写作创作」卡片 → 期望 Lumina 回复，但「帮我写封邮件」的「写」会匹配 coding→热茶
+    //   修复：pendingTaskTypeRef 记住了用户选的任务类型，优先用它决定 responder
+    let taskIntent: 'coding' | 'analysis' | 'chat' | 'discussion' = 'chat'
+    let isCoding = false
+    let codeScale: 'small' | 'medium' | 'large' = 'small'
+    let overrideResponder: typeof AGENTS[number] | null = null
+
+    // 🔧 2026-08-11: 话题持续生效 —
+    //   优先级：任务派发中心临时指定（一次性） > 持续话题（selectedRole）。
+    //   pendingTaskTypeRef/pendingAgentIdRef 由任务派发中心设置，仅用于当次消息；
+    //   selectedRoleRef 是用户点话题卡片进入的持续话题，直到用户点「←」退出。
+    const explicitTaskType = pendingTaskTypeRef.current || selectedRoleRef.current
+    const explicitAgentId = pendingAgentIdRef.current
+    // 消费一次性的任务类型上下文（只用于当前这条消息）
+    pendingTaskTypeRef.current = null
+    pendingAgentIdRef.current = null
+
+    if (explicitAgentId) {
+      // 任务派发中心指定了具体执行者 → 直接使用
+      overrideResponder = AGENTS.find(a => a.id === explicitAgentId) || null
+    } else if (explicitTaskType) {
+      // 用户选了任务类型卡片 → 用卡片的推荐 agent
+      const recommendedId = getRecommendedAgent(explicitTaskType)
+      overrideResponder = AGENTS.find(a => a.id === recommendedId) || null
+    }
+
+    if (!overrideResponder) {
+      // 没有显式选择 → 走原有的关键词自动匹配
+      taskIntent = userText.trim().length > 0 ? detectTaskIntent(userText) : 'chat'
+      isCoding = taskIntent === 'coding' && userText.trim().length > 0
+      codeScale = isCoding ? detectCodeScale(userText) : 'small'
+    }
+
+    // 🆕 v10.8: 获取该 agent 的独立 LLM 配置（per-agent 优先，fallback 到全局）
+    const effectiveAgentId = overrideResponder?.id || 'lumina'
+    const effectiveLlmConfig = getAgentLlmConfig(effectiveAgentId) || {
+      provider: llmConfig.provider, model: llmConfig.model,
+      endpoint: llmConfig.baseUrl, apiKey: llmConfig.apiKey,
+      contextWindow: 262144, timeout: 600,
+    }
 
     // ── 大型工程：全协作流水线（热茶编码→Yak审查→热茶修复→Lumina测试）──
     if (isCoding && codeScale === 'large' && llmReady) {
@@ -1421,7 +1797,7 @@ export default function GroupChatView() {
           }, collabCurrentMsgIdRef.current)
         } else if (ev.type === 'token_update' && ev.delta !== undefined && ev.delta > 0) {
           // 团队协作 token 追踪
-          addTokenUsage(llmConfig.model || 'unknown', ev.delta, 'recha')
+          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'recha')
         }
       })
       // fix: 使用 ref 替代 let 变量
@@ -1449,7 +1825,7 @@ export default function GroupChatView() {
             content: (m.content || '').slice(0, 24000),
           }))
         // token 动态截断：保留最新消息不超过上下文窗口 50%
-        const CONTEXT_WIN = llmConfig?.contextWindow || 262144
+        const CONTEXT_WIN = effectiveLlmConfig?.contextWindow || 262144
         const BUDGET = Math.floor(CONTEXT_WIN * 0.5)
         let est = 0
         const result: typeof raw = []
@@ -1542,9 +1918,9 @@ export default function GroupChatView() {
               mode: codingCfg.mode,
               isGroupChat: true,
               personaId: 'recha',
-              model: llmConfig.model,
-              baseUrl: llmConfig.baseUrl,
-              apiKey: llmConfig.apiKey,
+              model: effectiveLlmConfig.model,
+              baseUrl: effectiveLlmConfig.baseUrl,
+              apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
               maxTokens: 262144,
               maxToolCalls: codingIteration === 1 ? 12 : 15,
@@ -1605,9 +1981,9 @@ export default function GroupChatView() {
               mode: codingCfg.mode,
               isGroupChat: true,
               personaId: 'yak',
-              model: llmConfig.model,
-              baseUrl: llmConfig.baseUrl,
-              apiKey: llmConfig.apiKey,
+              model: effectiveLlmConfig.model,
+              baseUrl: effectiveLlmConfig.baseUrl,
+              apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
               maxTokens: 262144,
               maxToolCalls: 5,
@@ -1668,9 +2044,9 @@ export default function GroupChatView() {
                 mode: codingCfg.mode,
                 isGroupChat: true,
                 personaId: 'recha',
-                model: llmConfig.model,
-                baseUrl: llmConfig.baseUrl,
-                apiKey: llmConfig.apiKey,
+                model: effectiveLlmConfig.model,
+                baseUrl: effectiveLlmConfig.baseUrl,
+                apiKey: effectiveLlmConfig.apiKey,
                 temperature: 0.15,
                 maxTokens: 262144,
                 maxToolCalls: 8,
@@ -1733,9 +2109,9 @@ export default function GroupChatView() {
               mode: codingCfg.mode,
               isGroupChat: true,
               personaId: 'lumina',
-              model: llmConfig.model,
-              baseUrl: llmConfig.baseUrl,
-              apiKey: llmConfig.apiKey,
+              model: effectiveLlmConfig.model,
+              baseUrl: effectiveLlmConfig.baseUrl,
+              apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
               maxTokens: 262144,
               maxToolCalls: 6,
@@ -1760,6 +2136,12 @@ export default function GroupChatView() {
           setMessages(prev => prev.map(m => m.id === testMsgId
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
           animateTyping(testMsgId, testReply)
+
+          // 🔧 2026-08-14: 补全 Lumina 测试结果的 runningHistory，避免上下文断层
+          runningHistory.push(
+            { role: 'assistant' as const, content: `[Lumina 测试] ${testReply.slice(0, 3000)}` },
+          )
+          runningHistoryRef.current = runningHistory
 
           // 判断测试是否通过 — 决定是否继续循环
           const testFailed = /(error|错误|失败|报错|异常|❌|bug|崩溃|无法|不行|不能|没.*跑|没.*通过|fail|cannot|unable|traceback|exception)/i.test(testReply) &&
@@ -1905,7 +2287,7 @@ export default function GroupChatView() {
             timestamp: Date.now(),
           }, collabCurrentMsgIdRef.current)
         } else if (ev.type === 'token_update' && ev.delta !== undefined && ev.delta > 0) {
-          addTokenUsage(llmConfig.model || 'unknown', ev.delta, 'recha')
+          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'recha')
         }
       })
       collabCurrentMsgIdRef.current = ''
@@ -1924,7 +2306,7 @@ export default function GroupChatView() {
                 : 'assistant' as const,
             content: (m.content || '').slice(0, 24000),
           }))
-        const CONTEXT_WIN = llmConfig?.contextWindow || 262144
+        const CONTEXT_WIN = effectiveLlmConfig?.contextWindow || 262144
         const BUDGET = Math.floor(CONTEXT_WIN * 0.5)
         let est = 0
         const result: typeof raw = []
@@ -1998,9 +2380,9 @@ export default function GroupChatView() {
               mode: codingCfg.mode,
               isGroupChat: true,
               personaId: 'recha',
-              model: llmConfig.model,
-              baseUrl: llmConfig.baseUrl,
-              apiKey: llmConfig.apiKey,
+              model: effectiveLlmConfig.model,
+              baseUrl: effectiveLlmConfig.baseUrl,
+              apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
               maxTokens: 262144,
               maxToolCalls: codingIteration === 1 ? 12 : 15,
@@ -2058,9 +2440,9 @@ export default function GroupChatView() {
               mode: codingCfg.mode,
               isGroupChat: true,
               personaId: 'yak',
-              model: llmConfig.model,
-              baseUrl: llmConfig.baseUrl,
-              apiKey: llmConfig.apiKey,
+              model: effectiveLlmConfig.model,
+              baseUrl: effectiveLlmConfig.baseUrl,
+              apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
               maxTokens: 262144,
               maxToolCalls: 5,
@@ -2118,9 +2500,9 @@ export default function GroupChatView() {
                 mode: codingCfg.mode,
                 isGroupChat: true,
                 personaId: 'recha',
-                model: llmConfig.model,
-                baseUrl: llmConfig.baseUrl,
-                apiKey: llmConfig.apiKey,
+                model: effectiveLlmConfig.model,
+                baseUrl: effectiveLlmConfig.baseUrl,
+                apiKey: effectiveLlmConfig.apiKey,
                 temperature: 0.15,
                 maxTokens: 262144,
                 maxToolCalls: 8,
@@ -2203,10 +2585,15 @@ export default function GroupChatView() {
     // ── 🔧 v3.6: 智能路由 → 按任务类型分配 Agent ──
     // 🔧 fix: 移除 lastAgent 粘性路由 — 每次都按当前意图重新判断，
     //   避免上一个 Agent（如 热茶/Yak）被错误记住后，后续所有聊天都发给同一人导致跑题
+    // 🆕 v9.2: 如果用户选了任务卡片（overrideResponder），优先使用它
     const mentioned = parseMention(userText)
     let responder: typeof AGENTS[number]
+    // 🔧 2026-08-11: @ 显式指定最高优先（持续话题下用户仍可 @ 指定某人）
     if (mentioned) {
       responder = AGENTS.find(a => a.id === mentioned)!
+    } else if (overrideResponder) {
+      // 用户通过任务卡片/派发中心指定了 agent → 直接使用，跳过自动匹配
+      responder = overrideResponder
     } else {
       responder = routeToAgent(taskIntent)
     }
@@ -2351,7 +2738,7 @@ export default function GroupChatView() {
           })
         } else if (ev.type === 'token_update' && ev.delta !== undefined && ev.delta > 0) {
           // 独立 Agent token 追踪
-          addTokenUsage(llmConfig.model || 'unknown', ev.delta, responder.id)
+          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, responder.id)
         }
       })
 
@@ -2362,11 +2749,14 @@ export default function GroupChatView() {
         const lastAgentMsg = [...messages].reverse().find(m =>
           m.from !== 'system' && m.from !== 'user' && m.from !== responder.id
         )
+        // 🧠 v9.0: 智能工具分配 — 根据用户意图动态决定启用哪些工具
+        const toolIntent = detectToolIntent(fullText, currentAttachments.length > 0)
+        const intentToolsPrompt = getGCToolsPromptForIntent(teamSecurity, toolIntent)
         const systemPrompt = getAgentSystemPromptLite(
           responder.id,
           lastAgentMsg?.from,
           lastAgentMsg?.content?.slice(0, 150),
-          teamToolsPrompt,  // 🆕 v3.1
+          intentToolsPrompt,  // 🧠 v9.0: 用意图感知的工具提示替代全局提示
         )
         // 🧠 思考模式 — 严格模板格式
         //   修复: 之前指令太软，模型不遵守 → 改为 MUST-FOLLOW 模板
@@ -2378,15 +2768,17 @@ export default function GroupChatView() {
         const codingInstruction = isSmallCoding
           ? '\n\n## 📝 小型编程任务\n直接动手写代码，不准只说建议。读完需求后：\n1. file_read 查看现有代码\n2. file_write/shell_exec 直接编写和验证\n3. 完成时说清楚写/改了什么文件，结果如何'
           : ''
-        const finalSystemPrompt = systemPrompt + thinkingInstruction + codingInstruction
-        // 放宽历史 — 200字太短导致上下文丢失，agent 牛头不对马嘴
-        //   QwenPaw 不截断历史（依赖 compaction），Lumina 也应放宽
-        // fix: 历史文件仅保留文件名和大小，不附加提取的文本内容
-        //   避免后续上传新文件时 LLM 混淆不同文件的内容（用户反馈"死循环"问题）
-        //   当前消息的完整文件内容通过 fullText 传入，LLM 只看到"最新"文件的正文
-        // isCoding 已在外部检测，此处始终为 false（编程走协作流程）—— 但小型编码会走到这里
-        // 🆕 v3.7: 小型编码任务 → 使用编码工具配置（shell_exec/file_write 等可用）
-        const taskConfig = getTaskConfig(isSmallCoding, { mode: 'agent', maxToolCalls: isSmallCoding ? 12 : 6 })
+        // 🔧 2026-08-11: 追加话题专属人设（持续话题时每次生效）
+        const finalSystemPrompt = systemPrompt + thinkingInstruction + codingInstruction + getTaskTypeInstruction(explicitTaskType)
+        // 🧠 v9.0: 意图感知的工具调用上限
+        // v9.1: 简化 — 有附件时多给几轮（文件解析可能需要多步），其他情况默认 6 轮
+        const intentMaxToolCalls = (toolIntent.categories.includes('file') && currentAttachments.length > 0)
+          ? 8   // 有附件 → 文件解析可能需要多步
+          : 6   // 默认
+        const taskConfig = getTaskConfig(isSmallCoding, {
+          mode: 'agent',
+          maxToolCalls: isSmallCoding ? 12 : intentMaxToolCalls,
+        }, explicitTaskType)
         const activeAgentId = isSmallCoding ? 'recha' : responder.id
 
         // 🔧 2026-07-14: token 安全截断 — 根据上下文窗口动态计算最大条数
@@ -2414,18 +2806,29 @@ export default function GroupChatView() {
           runningHistoryRef.current,       // 协作摘要保留
           { skipSystem: true },            // 🔧 2026-07-31: 系统欢迎消息不进 LLM 历史
         )
+        // v10.9: 检查是否有图片附件，支持多模态
+        const imageAttachments = currentAttachments.filter(a => (a as any).imageDataUrl)
+        const textContent = fullText
+        const visionContent = imageAttachments.length > 0
+          ? [
+              { type: 'text', text: textContent },
+              ...imageAttachments.map(a => ({
+                type: 'image_url',
+                image_url: { url: (a as any).imageDataUrl }
+              }))
+            ]
+          : textContent
+
         const result = await agentChatWithTimeout({
-          // 简化用户消息格式 — 去掉嵌套的元信息包装
-          //   之前: [Lumina，用户在群聊中对你说话...]用户的问题
-          //   现在: 直接传用户问题，system prompt 已经说明了身份
-          text: fullText,
+          // v10.9: 支持多模态 — 图片以 base64 格式传给视觉模型
+          text: visionContent as any,
           config: {
             mode: 'agent' as const,  // 群聊普通回复必须用 agent 模式，否则无法调用搜索/文件等工具
             isGroupChat: true,
             personaId: activeAgentId,   // 🆕 v3.7: 小型编码→recha，其他→原路由
-            model: llmConfig.model,
-            baseUrl: llmConfig.baseUrl,
-            apiKey: llmConfig.apiKey,
+            model: effectiveLlmConfig.model,
+            baseUrl: effectiveLlmConfig.baseUrl,
+            apiKey: effectiveLlmConfig.apiKey,
             temperature: taskConfig.temperature,
             maxTokens: taskConfig.maxTokens,
             maxToolCalls: taskConfig.maxToolCalls,
@@ -2457,7 +2860,14 @@ export default function GroupChatView() {
           }
         }
         // 清洗 <thinking> 标签（无论是否开启都清理，防止标签泄露）
-        const cleanContent = (result.content || '').replace(/<thinking>[\s\S]*?<\/thinking>/g, '').replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').replace(/<\w+\s*\([^)]*\)\s*>/gi, '').trim()
+        // v10.9: 增加 <｜DSML｜|...> 等特殊模型输出格式的清理
+        const cleanContent = (result.content || '')
+          .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+          .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+          .replace(/<｜DSML｜[\s\S]*?<\/｜DSML｜>/gi, '')
+          .replace(/<｜DSML｜[\s\S]*$/gi, '')
+          .replace(/<\w+\s*\([^)]*\)\s*>/gi, '')
+          .trim()
         const reply = stripReasoningPrefix(
           (cleanContent || result.content || result.error || '抱歉，暂时无法生成有效回复。请试试说"继续"让我重新尝试。').trimStart()
         )
@@ -2498,6 +2908,35 @@ export default function GroupChatView() {
 
         // 内容去重 — 防止 LLM 重复输出同一回复
         const dedupedReply = deduplicateLLMContent(finalReply2)
+
+        // ═══ Lucky 模式检查 ═══
+        if (luckyMode.isActive && luckyMode.preset !== 'off') {
+          const { checkAfterReply } = await import('../services/luckyModeService')
+          const checkResult = checkAfterReply(dedupedReply)
+
+          // 死循环检测
+          if (checkResult.isDoomLoop && checkResult.doomLoopMessage) {
+            setMessages(prev => [...prev, {
+              id: `lucky-doom-${Date.now()}`,
+              from: 'system', fromIcon: '⚠️', fromName: 'Lucky 模式',
+              content: checkResult.doomLoopMessage ?? '',
+              time: new Date().toLocaleTimeString('zh-CN'),
+            }])
+            setMsgCounter(c => c + 1)
+          }
+
+          // 达到最大迭代次数
+          if (checkResult.shouldPause && checkResult.pauseReason) {
+            setMessages(prev => [...prev, {
+              id: `lucky-pause-${Date.now()}`,
+              from: 'system', fromIcon: '⏸️', fromName: 'Lucky 模式',
+              content: checkResult.pauseReason ?? '',
+              time: new Date().toLocaleTimeString('zh-CN'),
+            }])
+            setMsgCounter(c => c + 1)
+            luckyMode.pause(checkResult.pauseReason)
+          }
+        }
 
         // 将累积的思考步骤附加到消息
         // （event listener 已经在实时推送，这里做最终确认）
@@ -2595,7 +3034,7 @@ export default function GroupChatView() {
             try {
               // 链式回复（非编程场景）
               // fix: helper 链式回复也强制 agent 模式，保证工具可用
-              const chainTaskConfig = getTaskConfig(false, { mode: 'agent', maxToolCalls: 6 })
+              const chainTaskConfig = getTaskConfig(false, { mode: 'agent', maxToolCalls: 6 }, explicitTaskType)
               // 🆕 v1.0: 用 Per-Agent 隔离构建替代原来的 helperHistory
               //   - 链式 Agent（热茶/Yak）只看自己的 + 用户的 + 其他人摘要
               //   - 跳过系统消息（skipSystem: true，与原 filter 行为一致）
@@ -2613,16 +3052,17 @@ export default function GroupChatView() {
                   mode: chainTaskConfig.mode,
                   isGroupChat: true,
                   personaId: helper.id,
-                  model: llmConfig.model,
-                  baseUrl: llmConfig.baseUrl,
-                  apiKey: llmConfig.apiKey,
+                  model: effectiveLlmConfig.model,
+                  baseUrl: effectiveLlmConfig.baseUrl,
+                  apiKey: effectiveLlmConfig.apiKey,
                   temperature: chainTaskConfig.temperature,
                   maxTokens: chainTaskConfig.maxTokens,
                   maxToolCalls: chainTaskConfig.maxToolCalls,
                   disabledTools: chainTaskConfig.disabledTools,
                   skipApproval: teamSecurity.level === 'skip_all',  // 🔧 v2.16: 群聊 Agent 跳过安全审批
                   contextWindow: chainTaskConfig.contextWindow,
-                  systemPrompt: getAgentSystemPromptLite(helper.id, lastSpeakerId, lastReply.slice(0, 100), teamToolsPrompt)
+                  systemPrompt: getAgentSystemPromptLite(helper.id, lastSpeakerId, lastReply.slice(0, 100), intentToolsPrompt)
+                    + getTaskTypeInstruction(explicitTaskType)
                     + (thinkingMode ? '\n\n## 🧠 思考与回复格式\n先用 <thinking> 标签在心里简要梳理思路（这部分用户看不到），\n然后在 </thinking> 之后输出给用户的**完整自然回复**：针对用户的问题或话题作答，至少一句，语气符合你的角色。\n⚠️ 规则：\n- 推理过程放在 <thinking> 内\n- </thinking> 之后必须是给用户的真实回复，禁止留空、禁止只回"收到/好的/明白"、禁止复述这条格式指令\n\n📌 特别说明：本对话已开启「思考模式」，允许且必须使用 <thinking> 标签包裹推理过程；角色设定中「禁止输出 XML/HTML 标签」的条款，在本思考模式下对 <thinking> 标签不生效。' : ''),
                   socialMode: true,  // 🆕 v1.0: 链式回复是自动触发的，用短超时
                   trackReasoning: thinkingMode,  // 🧠 v10.6: 思考过程开关
@@ -2648,7 +3088,14 @@ export default function GroupChatView() {
                 }
               }
               // 链式火花 — 强化清洗（与主回复一致）
-              const helperCleanContent = (helperResult.content || '').replace(/<thinking>[\s\S]*?<\/thinking>/g, '').replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').replace(/<\w+\s*\([^)]*\)\s*>/gi, '').trim()
+              // v10.9: 增加 <｜DSML｜|...> 等特殊模型输出格式的清理
+              const helperCleanContent = (helperResult.content || '')
+                .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+                .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+                .replace(/<｜DSML｜[\s\S]*?<\/｜DSML｜>/gi, '')
+                .replace(/<｜DSML｜[\s\S]*$/gi, '')
+                .replace(/<\w+\s*\([^)]*\)\s*>/gi, '')
+                .trim()
               helperReply = stripReasoningPrefix(
                 (helperCleanContent || helperResult.content || '').trimStart()
               )
@@ -2770,7 +3217,7 @@ export default function GroupChatView() {
 
     setReplyingAgent(null)
     setSending(false)
-  }, [input, sending, messages, llmReady, llmConfig, lastAgent, gcAttachments, agentVoices, animateTyping, getEffectiveVoice])
+  }, [input, sending, messages, llmReady, llmConfig, getAgentLlmConfig, lastAgent, gcAttachments, agentVoices, animateTyping, getEffectiveVoice])
 
   // 用 ref 跟踪最新的 send，供 setTimeout 闭包使用
   const sendRef = useRef(send)
@@ -2799,9 +3246,15 @@ export default function GroupChatView() {
         setSending(true)
         abortRef.current = false
         const agentsToReply = AGENTS.map(a => a.id)
+        const effectiveLlmConfig = getAgentLlmConfig('lumina') || { model: '', baseUrl: '', apiKey: '' }
+        const toolIntent = detectToolIntent(decQuestion, false)
+        const intentToolsPrompt = getGCToolsPromptForIntent(teamSecurity, toolIntent)
         for (const agentId of agentsToReply) {
           if (abortRef.current) break
           const agent = AGENTS.find(a => a.id === agentId)!
+          const effectiveLlmConfig = getAgentLlmConfig(agentId) || { model: '', baseUrl: '', apiKey: '' }
+          const toolIntent = detectToolIntent(decQuestion, false)
+          const intentToolsPrompt = getGCToolsPromptForIntent(teamSecurity, toolIntent)
           setReplyingAgent(agentId)
           setLastAgent(agentId)
           updateEmotion(agentId, decQuestion, { isGroupChat: true })
@@ -2899,12 +3352,13 @@ export default function GroupChatView() {
               config: {
                 // fix: 决策讨论可能涉及事实核查，改用 agent 模式保证 web_search 可用
                 mode: 'agent',  // 🆕 v15.0: 决策讨论用 agent 模式
-                isGroupChat: true, personaId: agentId, model: llmConfig.model, baseUrl: llmConfig.baseUrl,
-                apiKey: llmConfig.apiKey, temperature: 0.8, maxTokens: 4096,
+                isGroupChat: true, personaId: agentId, model: effectiveLlmConfig.model, baseUrl: effectiveLlmConfig.baseUrl,
+                apiKey: effectiveLlmConfig.apiKey, temperature: 0.8, maxTokens: 4096,
                 maxToolCalls: 6,
                 disabledTools: teamDisabledTools,
                 skipApproval: teamSecurity.level === 'skip_all',
-                systemPrompt: getAgentSystemPromptLite(agentId, undefined, undefined, teamToolsPrompt)
+                systemPrompt: getAgentSystemPromptLite(agentId, undefined, undefined, intentToolsPrompt)
+                  + getTaskTypeInstruction(selectedRoleRef.current)
                   + (thinkingMode ? '\n\n## 🧠 思考与回复格式\n先用 <thinking> 标签在心里简要梳理思路（这部分用户看不到），\n然后在 </thinking> 之后输出给用户的**完整自然回复**：针对用户的问题或话题作答，至少一句，语气符合你的角色。\n⚠️ 规则：\n- 推理过程放在 <thinking> 内\n- </thinking> 之后必须是给用户的真实回复，禁止留空、禁止只回"收到/好的/明白"、禁止复述这条格式指令\n\n📌 特别说明：本对话已开启「思考模式」，允许且必须使用 <thinking> 标签包裹推理过程；角色设定中「禁止输出 XML/HTML 标签」的条款，在本思考模式下对 <thinking> 标签不生效。' : ''),
                 contextWindow: 262144,
                 trackReasoning: thinkingMode,  // 🧠 v10.6: 思考过程开关
@@ -2930,7 +3384,14 @@ export default function GroupChatView() {
               }
             }
             // 清洗 <thinking> 标签
-            const decCleanContent = (result.content || '').replace(/<thinking>[\s\S]*?<\/thinking>/g, '').replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').replace(/<\w+\s*\([^)]*\)\s*>/gi, '').trim()
+            // v10.9: 增加 <｜DSML｜|...> 等特殊模型输出格式的清理
+            const decCleanContent = (result.content || '')
+              .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+              .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+              .replace(/<｜DSML｜[\s\S]*?<\/｜DSML｜>/gi, '')
+              .replace(/<｜DSML｜[\s\S]*$/gi, '')
+              .replace(/<\w+\s*\([^)]*\)\s*>/gi, '')
+              .trim()
             const reply = stripReasoningPrefix(
               (decCleanContent || result.content || result.error || '抱歉，暂时无法生成有效回复。请试试说"继续"让我重新尝试。').trimStart()
             )
@@ -3216,7 +3677,7 @@ export default function GroupChatView() {
       onDragLeave={e => { e.preventDefault(); e.stopPropagation(); gcDragCounter.current--; if (gcDragCounter.current <= 0) { gcDragCounter.current = 0; setGcDragOver(false); setGcDragFiles([]) } }}
       onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
       onDrop={e => { gcDragCounter.current = 0; setGcDragFiles([]); handleGCDrop(e) }}
-      style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}
     >
       {/* v2.8.4: CSS 动画 */}
       <style>{`
@@ -3243,6 +3704,14 @@ export default function GroupChatView() {
         @keyframes sendSpin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes gcPanelIn {
+          from { opacity: 0; transform: scale(0.92) translateY(-8px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes gcPanelOut {
+          from { opacity: 1; transform: scale(1) translateY(0); }
+          to { opacity: 0; transform: scale(0.92) translateY(-8px); }
         }
         .tool-notice-bar {
           animation: toolSlideIn 0.3s ease, toolGlow 2s ease-in-out infinite;
@@ -3289,32 +3758,77 @@ export default function GroupChatView() {
       )}
       {/* 群聊工具栏 */}
       <div style={{
-        padding: '6px 12px', borderBottom: '1px solid var(--border-light)',
-        background: 'var(--surface-0)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
+        padding: compact ? '5px 10px' : '8px 14px', borderBottom: '1px solid var(--border-light)',
+        background: 'var(--surface-0)', display: 'flex', gap: compact ? 6 : 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
       }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>👥 团队群聊</span>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>| 随机回复 · @指定某人</span>
+        {/* ← 返回按钮：选中角色且不在角色选择界面时显示 */}
+        {selectedRole && !showRoleSelector && (
+          <button onClick={() => { setSelectedRole(null); setShowRoleSelector(true) }}
+            title="返回角色选择"
+            style={{
+              width: 28, height: 28, borderRadius: 8,
+              border: 'none', background: 'var(--accent-50)',
+              color: 'var(--accent-500)',
+              cursor: 'pointer', fontSize: 14, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.15s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-100)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent-50)' }}
+          >←</button>
+        )}
+        <span style={{ fontWeight: 600, fontSize: compact ? 12 : 14, color: 'var(--text-primary)' }}>👥 团队群聊</span>
+        {selectedRole && (() => {
+          const card = TASK_TYPE_CARDS.find(c => c.id === selectedRole)
+          return card ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '2px 8px', borderRadius: 10,
+              background: `${card.color}12`, border: `1px solid ${card.color}30`,
+              fontSize: 11, fontWeight: 600, color: card.color,
+            }}>
+              <span style={{ fontSize: 12 }}>{card.icon}</span>
+              {card.name}
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', background: card.color,
+                display: 'inline-block', marginLeft: 2,
+                boxShadow: `0 0 4px ${card.color}60`,
+              }} />
+            </span>
+          ) : null
+        })()}
+        {!compact && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>| 随机回复 · @指定某人</span>}
         <div style={{ flex: 1 }} />
 
                 {/* v2.9: 团队成员 — 悬浮层不挤压聊天区 */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <style>{`
+            .gc-tool-btn { transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), background 0.15s, border-color 0.15s, box-shadow 0.2s; }
+            .gc-tool-btn:hover { background: var(--surface-50) !important; border-color: #93c5fd !important; box-shadow: 0 2px 8px rgba(59,130,246,0.15); }
+            .gc-tool-btn:active { transform: scale(0.88); }
+            .gc-tool-btn-active { background: var(--accent-50) !important; border-color: #93c5fd !important; }
+            .gc-tool-btn-active:hover { background: var(--accent-100) !important; }
+          `}</style>
           <button onClick={() => setShowTeamMembers(!showTeamMembers)}
+            className={'gc-tool-btn' + (showTeamMembers ? ' gc-tool-btn-active' : '')}
             title="团队管理"
             style={{
-              border: '1px solid var(--border-light)', borderRadius: 6, padding: '3px 8px',
-              fontSize: 10, cursor: 'pointer', background: showTeamMembers ? 'var(--accent-50)' : 'var(--surface-0)', color: 'var(--text-secondary)',
-              display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
+              fontSize: 11, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
             👥 团队
           </button>
 
           {/* 🆕 ACP 添加成员按钮 */}
           <button onClick={() => setShowAcpPanel(!showAcpPanel)}
+            className={'gc-tool-btn' + (showAcpPanel ? ' gc-tool-btn-active' : '')}
             title="添加外部 Agent 为团队成员"
             style={{
-              border: '1px solid var(--border-light)', borderRadius: 6, padding: '3px 8px',
-              fontSize: 10, cursor: 'pointer', background: showAcpPanel ? 'var(--accent-50)' : 'var(--surface-0)', color: 'var(--text-secondary)',
-              display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
+              fontSize: 11, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
             🌐 添加成员
           </button>
@@ -3323,10 +3837,10 @@ export default function GroupChatView() {
           <button onClick={ttsToggle}
             title={ttsMuted ? '🔇 TTS 已静音，点击取消' : '🔊 TTS 开启，点击静音'}
             style={{
-              width: 26, height: 26, borderRadius: 6,
+              width: 28, height: 28, borderRadius: 6,
               border: `1.5px solid ${ttsMuted ? '#fca5a5' : '#86efac'}`,
               background: ttsMuted ? '#fef2f2' : 'var(--green-100)',
-              cursor: 'pointer', fontSize: 13, display: 'flex',
+              cursor: 'pointer', fontSize: 14, display: 'flex',
               alignItems: 'center', justifyContent: 'center',
               transition: 'all 0.3s ease', opacity: ttsMuted ? 0.7 : 1,
               flexShrink: 0,
@@ -3344,9 +3858,9 @@ export default function GroupChatView() {
             <button onClick={stopAllTTS}
               title="停止语音播放"
               style={{
-                width: 26, height: 26, borderRadius: 6,
+                width: 28, height: 28, borderRadius: 6,
                 border: '1.5px solid #fca5a5', background: 'var(--red-100)', color: '#ef4444',
-                cursor: 'pointer', fontSize: 11, display: 'flex',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
@@ -3358,14 +3872,16 @@ export default function GroupChatView() {
             </button>
           )}
 
-          {showTeamMembers && (
+          {(showTeamMembers || closingTeam) && (
             <>
-              <div style={{ position: 'fixed', inset: 0, zIndex: 98 }} onClick={() => setShowTeamMembers(false)} />
+              <div style={{ position: 'fixed', inset: 0, zIndex: 98 }} onClick={closeTeamPanel} />
               <div style={{
                 position: 'absolute', top: 34, right: 0, background: 'var(--surface-0)',
                 border: '1px solid var(--border-light)', borderRadius: 10, zIndex: 99,
                 boxShadow: '0 8px 30px rgba(0,0,0,.12)', width: 500, maxHeight: 560, overflow: 'hidden',
                 display: 'flex', flexDirection: 'column',
+                animation: closingTeam ? 'gcPanelOut 0.25s ease both' : 'gcPanelIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
+                transformOrigin: 'top right',
               }}>
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -3373,7 +3889,7 @@ export default function GroupChatView() {
                   flexShrink: 0, background: 'var(--surface-0)',
                 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>👥 团队管理</span>
-                  <button onClick={() => setShowTeamMembers(false)}
+                  <button onClick={closeTeamPanel}
                     style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1 }}>
                     ✕
                   </button>
@@ -3386,14 +3902,16 @@ export default function GroupChatView() {
           )}
 
           {/* 🆕 ACP 添加成员浮层 */}
-          {showAcpPanel && (
+          {(showAcpPanel || closingAcp) && (
             <>
-              <div style={{ position: 'fixed', inset: 0, zIndex: 98 }} onClick={() => setShowAcpPanel(false)} />
+              <div style={{ position: 'fixed', inset: 0, zIndex: 98 }} onClick={closeAcpPanel} />
               <div style={{
                 position: 'absolute', top: 34, right: 0, background: 'var(--surface-0)',
                 border: '1px solid #a78bfa', borderRadius: 10, zIndex: 99,
                 boxShadow: '0 8px 30px rgba(0,0,0,.12)', width: 480, maxHeight: 520, overflow: 'hidden',
                 display: 'flex', flexDirection: 'column',
+                animation: closingAcp ? 'gcPanelOut 0.25s ease both' : 'gcPanelIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
+                transformOrigin: 'top right',
               }}>
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -3401,7 +3919,7 @@ export default function GroupChatView() {
                   flexShrink: 0, background: 'var(--surface-0)',
                 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#7c3aed' }}>🌐 添加 ACP 成员</span>
-                  <button onClick={() => setShowAcpPanel(false)}
+                  <button onClick={closeAcpPanel}
                     style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1 }}>
                     ✕
                   </button>
@@ -3543,29 +4061,48 @@ export default function GroupChatView() {
       {/* 🔥 v2.7.1: 标签页切换 */}
       <div style={{
         display: 'flex', gap: 0, borderBottom: '2px solid var(--border-light)', flexShrink: 0,
-        padding: '0 8px', background: 'var(--surface-0)',
+        padding: compact ? '0 4px' : '0 8px', background: 'var(--surface-0)',
       }}>
         {teamTabs.map(tab => (
           <button key={tab.key} onClick={() => setTeamTab(tab.key)}
             style={{
-              padding: '8px 14px', border: 'none', borderBottom: teamTab === tab.key ? '2px solid #3b82f6' : '2px solid transparent',
-              background: 'none', cursor: 'pointer', fontSize: 12, fontWeight: teamTab === tab.key ? 600 : 400,
-              color: teamTab === tab.key ? '#3b82f6' : '#9ca3af', marginBottom: -2,
-              transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 5,
+              padding: compact ? '4px 6px' : '6px 10px', border: 'none',
+              borderBottom: teamTab === tab.key ? '2px solid var(--accent, #3b82f6)' : '2px solid transparent',
+              background: 'none', cursor: 'pointer',
+              fontSize: compact ? 10 : 11, fontWeight: teamTab === tab.key ? 600 : 400,
+              color: teamTab === tab.key ? 'var(--accent, #3b82f6)' : 'var(--text-secondary)',
+              marginBottom: -2, transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', gap: compact ? 2 : 4,
+              whiteSpace: 'nowrap',
             }}>
-            <span style={{ fontSize: 14 }}>{tab.icon}</span> {tab.label}
+            <span style={{ fontSize: compact ? 11 : 12 }}>{tab.icon}</span> {!compact && tab.label}
           </button>
         ))}
-        {/* v2.14: 决策讨论 → 移到 tab 栏 */}
-        {teamTab === 'chat' && (
+        {/* 📋 切换角色按钮 — 紧凑 */}
+        {teamTab === 'chat' && !compact && (
+          <button onClick={() => setShowRoleSelector(!showRoleSelector)}
+            style={{
+              marginLeft: 'auto', padding: '4px 10px', border: '1px solid var(--border-light)',
+              borderRadius: 6, fontSize: 11, cursor: 'pointer',
+              background: showRoleSelector ? 'var(--accent, #6366f1)' : 'var(--surface-100)',
+              color: showRoleSelector ? 'white' : 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 3,
+              alignSelf: 'center', whiteSpace: 'nowrap',
+              borderColor: showRoleSelector ? 'var(--accent, #6366f1)' : 'var(--border-light)',
+            }}>
+            🔄 切换角色
+          </button>
+        )}
+        {/* v2.14: 决策讨论 → 移到 tab 栏 — 紧凑 */}
+        {teamTab === 'chat' && !compact && (
           <button onClick={() => setShowDecision(!showDecision)}
             style={{
-              marginLeft: 'auto', padding: '6px 12px', border: '1px solid var(--border-light)',
+              padding: '4px 10px', border: '1px solid var(--border-light)',
               borderRadius: 6, fontSize: 11, cursor: 'pointer',
-              background: showDecision ? 'var(--accent-50)' : 'var(--surface-0)',
-              color: showDecision ? '#3b82f6' : '#6b7280',
-              display: 'flex', alignItems: 'center', gap: 4,
-              alignSelf: 'center',
+              background: showDecision ? 'var(--accent, #3b82f6)' : 'var(--surface-100)',
+              color: showDecision ? 'white' : 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 3,
+              alignSelf: 'center', whiteSpace: 'nowrap',
             }}>
             🎯 决策讨论
           </button>
@@ -3577,7 +4114,7 @@ export default function GroupChatView() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
           padding: '4px 12px', borderBottom: '1px solid var(--border-light)',
-          background: llmEnabled ? 'linear-gradient(90deg, var(--yellow-100), #fef9c3)' : '#f9fafb',
+          background: llmEnabled ? 'linear-gradient(90deg, var(--yellow-100), #fef9c3)' : 'var(--surface-100)',
           flexShrink: 0, fontSize: 11, transition: 'all 0.3s',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -3593,7 +4130,7 @@ export default function GroupChatView() {
                   boxShadow: '0 1px 3px rgba(0,0,0,.3)',
                 }} />
               </div>
-              <span style={{ color: llmEnabled ? '#92400e' : '#6b7280', fontSize: 12 }}>
+              <span style={{ color: llmEnabled ? 'var(--yellow-900, #92400e)' : 'var(--text-secondary)', fontSize: 12 }}>
                 🧠 自主模式
               </span>
             </label>
@@ -3678,12 +4215,7 @@ export default function GroupChatView() {
         </div>
       )}
 
-      {teamTab === 'chat' && (<>
-
-      {/* 🔥 v2.12: Agent 情绪状态栏 — 群聊多 Agent 紧凑模式 */}
-      <AgentEmotionBar mode="group" />
-
-      {/* 🔥 v2.7.1: 团队成员面板（v2.8.1: 可展开详细资料）*/}
+      {teamTab === 'chat' && (<>      {/* 🔥 v2.7.1: 团队成员面板（v2.8.1: 可展开详细资料）*/}
       
       {/* 🔥 v2.7.1 决策面板 — 紧凑输入，结果自然流入群聊 */}
       {showDecision && (
@@ -3705,7 +4237,7 @@ export default function GroupChatView() {
             <button onClick={triggerDecision} disabled={decLoading || !decQuestion.trim()}
               style={{
                 border: 'none', borderRadius: 6, padding: '5px 14px',
-                background: decQuestion.trim() ? '#3b82f6' : 'var(--border-light)', color: 'var(--surface-0)',
+                background: decQuestion.trim() ? 'var(--accent, #3b82f6)' : 'var(--border-light)', color: 'var(--surface-0)',
                 fontSize: 12, cursor: decQuestion.trim() ? 'pointer' : 'default', whiteSpace: 'nowrap',
               }}>
               {decLoading ? '讨论中…' : '发起讨论'}
@@ -3729,10 +4261,255 @@ export default function GroupChatView() {
         </div>
       )}
 
-      {/* 消息列表 */}
+      {/* 📋 全屏角色选择界面（带动画，对标 Lumina Agent） */}
+      {teamTab === 'chat' && showRoleSelector && (
+        <div style={{
+          flex: 1, overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          background: 'var(--surface-0)',
+          padding: '14px 24px',
+        }}>
+          <style>{`
+            @keyframes teamCardIn {
+              0% { opacity: 0; transform: translateY(14px) scale(0.96); }
+              100% { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            @keyframes teamIconBounce {
+              0% { transform: scale(0.7) rotate(-8deg); opacity: 0; }
+              60% { transform: scale(1.12) rotate(3deg); }
+              100% { transform: scale(1) rotate(0); opacity: 1; }
+            }
+            @keyframes teamTitleSlide {
+              0% { opacity: 0; transform: translateY(8px); }
+              100% { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes teamBadgePop {
+              0% { transform: scale(0); opacity: 0; }
+              70% { transform: scale(1.15); }
+              100% { transform: scale(1); opacity: 1; }
+            }
+            .team-role-card {
+              animation: teamCardIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
+              transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+            }
+            .team-role-card:hover {
+              transform: translateY(-4px) scale(1.015);
+              box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+              background: var(--surface-200);
+            }
+          `}</style>
+
+          {/* 标题区 */}
+          <div style={{ textAlign: 'center', marginBottom: 16, paddingTop: 8 }}>
+            <div style={{
+              fontSize: 44, marginBottom: 6,
+              animation: 'teamIconBounce 0.6s cubic-bezier(0.22,1,0.36,1) both',
+              filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.15))',
+            }}>🤝</div>
+            <div style={{
+              fontSize: 20, fontWeight: 800,
+              background: 'linear-gradient(135deg, #6366f1, #ec4899, #f59e0b)',
+              backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent',
+              animation: 'teamTitleSlide 0.5s ease 0.15s both',
+              marginBottom: 6,
+            }}>
+              Hello，你的Lumina team上线啦~~~
+            </div>
+            <div style={{
+              fontSize: 13, color: 'var(--text-secondary)',
+              animation: 'teamTitleSlide 0.5s ease 0.25s both',
+            }}>
+              选一个任务类型，我来帮你分配最合适的队友 ✨
+            </div>
+          </div>
+
+          {/* 任务类型卡片网格 — 3列自适应布局 */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12,
+            width: '100%', maxWidth: '90%',
+          }}>
+            {TASK_TYPE_CARDS.map((card, idx) => (
+              <div
+                key={card.id}
+                className="team-role-card"
+                onClick={() => {
+                  setSelectedRole(card.id)
+                  setShowRoleSelector(false)
+                }}
+                style={{
+                  animationDelay: `${idx * 55}ms`,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: '1.5px solid var(--border-light)',
+                  borderLeft: `3px solid ${card.color}`,
+                  background: 'var(--surface-100)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                  position: 'relative',
+                }}
+              >
+                <div style={{ fontSize: 26, marginBottom: 5, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))' }}>{card.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 6 }}>
+                  {card.desc}
+                </div>
+                {/* 技能标签 */}
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                  {card.quickPrompts.slice(0, 2).map((tag, i) => (
+                    <span key={i} style={{
+                      padding: '2px 8px', borderRadius: 10,
+                      background: 'var(--surface-200)', color: 'var(--text-secondary)',
+                      fontSize: 10, fontWeight: 500,
+                      border: '1px solid var(--border-light)',
+                    }}>
+                      {tag.length > 6 ? tag.slice(0, 6) + '…' : tag}
+                    </span>
+                  ))}
+                </div>
+                {/* 欢迎语 */}
+                <div style={{
+                  padding: '5px 8px',
+                  background: 'var(--surface-50)', borderRadius: 7,
+                  fontSize: 10.5, color: 'var(--text-secondary)', fontStyle: 'italic',
+                  lineHeight: 1.4,
+                  borderLeft: `2px solid ${card.color}`,
+                }}>
+                  "{card.quickPrompts[0].slice(0, 22)}{card.quickPrompts[0].length > 22 ? '…' : ''}"
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 底部提示 */}
+          <div style={{
+            marginTop: 14, textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)',
+            paddingBottom: 8,
+            animation: 'teamTitleSlide 0.5s ease 0.6s both',
+          }}>
+            <span>选中即可开始对话</span>
+            <span style={{ opacity: 0.4 }}> · </span>
+            <span>随时可「切换角色」重新选择</span>
+          </div>
+        </div>
+      )}
+
+      {/* 消息列表 — 角色选择界面时隐藏 */}
+      {teamTab === 'chat' && showRoleSelector ? null : (
       <div ref={scrollContainerRef} onScroll={handleScroll}
         style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
-        {messages.map((m, i) => (
+        {/* 🎯 选中角色后的欢迎氛围屏 */}
+        {teamTab === 'chat' && selectedRole && messages.filter(m => m.from === 'user').length === 0 && (() => {
+          const card = TASK_TYPE_CARDS.find(c => c.id === selectedRole)
+          if (!card) return null
+          const agent = TEAM_MEMBERS.find(m => m.id === getRecommendedAgent(selectedRole))
+          return (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              padding: '30px 20px 20px',
+            }}>
+              <style>{`
+                @keyframes readyPop {
+                  0% { opacity: 0; transform: scale(0.6) rotate(-10deg); }
+                  60% { transform: scale(1.15) rotate(4deg); }
+                  100% { opacity: 1; transform: scale(1) rotate(0); }
+                }
+                @keyframes readySlideUp {
+                  0% { opacity: 0; transform: translateY(16px); }
+                  100% { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes readyChip {
+                  0% { opacity: 0; transform: translateY(10px) scale(0.9); }
+                  100% { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                @keyframes readyPulse {
+                  0%, 100% { box-shadow: 0 0 0 0 ${card.color}20; }
+                  50% { box-shadow: 0 0 16px 4px ${card.color}25; }
+                }
+              `}</style>
+              <div style={{
+                fontSize: 52, marginBottom: 10,
+                animation: 'readyPop 0.6s cubic-bezier(0.22,1,0.36,1) both',
+                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.12))',
+              }}>{card.icon}</div>
+              <h3 style={{
+                margin: 0, fontSize: 20, fontWeight: 800, color: card.color,
+                animation: 'readySlideUp 0.5s ease 0.1s both',
+              }}>
+                {card.name} 已就绪
+              </h3>
+              <p style={{
+                margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center',
+                animation: 'readySlideUp 0.5s ease 0.2s both',
+              }}>
+                {card.desc}
+                {agent && <span> {agent.icon} {agent.name} 已就位</span>}
+              </p>
+              {/* 快捷指令按钮 */}
+              <div style={{
+                display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap', justifyContent: 'center',
+              }}>
+                {card.quickPrompts.slice(0, 3).map((prompt, i) => (
+                  <button
+                    key={i}
+                    className="ready-chip"
+                    onClick={() => {
+                      // 🆕 v9.2: 记住用户选择的任务类型，send() 会优先用它路由到正确的 Agent
+                      pendingTaskTypeRef.current = card.id
+                      // 设置输入文本，等待 React 渲染后再触发 send()
+                      setInput(prompt)
+                      setShowRoleSelector(false)
+                      setTimeout(() => { sendRef.current() }, 60)
+                    }}
+                    style={{
+                      padding: '9px 20px', borderRadius: 22,
+                      border: 'none',
+                      background: `${card.color}12`,
+                      color: card.color, fontSize: 13, fontWeight: 600,
+                      cursor: 'pointer', transition: 'all 0.2s',
+                      animation: `readyChip 0.4s ease ${0.35 + i * 0.08}s both`,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = `${card.color}22`
+                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.03)'
+                      e.currentTarget.style.boxShadow = `0 4px 14px ${card.color}30`
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = `${card.color}12`
+                      e.currentTarget.style.transform = 'translateY(0) scale(1)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
+                  >
+                    ✨ {prompt}
+                  </button>
+                ))}
+              </div>
+              {/* 提示文字 */}
+              <p style={{
+                margin: '16px 0 0', fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center',
+                animation: 'readySlideUp 0.4s ease 0.6s both',
+              }}>
+                点击快捷指令即可发送 · 也可以直接输入消息
+              </p>
+              {/* 简约提示条 */}
+              <div style={{
+                marginTop: 12, padding: '7px 16px',
+                background: 'var(--surface-100)', borderRadius: 8,
+                border: '1px solid var(--border-light)',
+                fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center',
+                lineHeight: 1.6, maxWidth: 420,
+                animation: 'readySlideUp 0.4s ease 0.7s both',
+              }}>
+                💡 直接发消息，{agent?.name || 'Lumina'} 会帮你处理<br/>
+                💡 输入 @{agent?.name || 'Lumina'} 指定回复者
+              </div>
+            </div>
+          )
+        })()}
+        {/* 选中角色后隐藏初始系统欢迎消息 */}
+        {messages.filter(m => !(selectedRole && m.id === '0')).map((m, i) => (
           <div key={m.id} className="msg-anim-in"
             onMouseEnter={() => m.from !== 'system' && setHoveredMsgId(m.id)}
             onMouseLeave={() => setHoveredMsgId(null)}
@@ -3746,7 +4523,7 @@ export default function GroupChatView() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
               fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
-              background: m.from === 'user' ? 'var(--accent-50)' : '#f9fafb',
+              background: m.from === 'user' ? 'var(--accent-50)' : 'var(--surface-50)',
               border: `1.5px solid ${
                 m.from === 'lumina' ? '#FFD4D4' : m.from === 'recha' ? '#D4E8FF' : m.from === 'yak' ? '#D4FFD6' : 'var(--border-light)'
               }`,
@@ -3756,7 +4533,7 @@ export default function GroupChatView() {
                 fontSize: 12, color: m.from === 'lumina' ? '#FF6B6B' : m.from === 'recha' ? '#448AFF' : m.from === 'yak' ? '#43A047' : '#3b82f6',
                 fontWeight: 600, marginBottom: 2,
               }}>
-                {m.fromName} <span style={{ color: '#d1d5db', fontWeight: 400 }}>{m.time}</span>
+                {m.fromName} <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>{m.time}</span>
                 {replyingAgent === m.from && (
                   <span className={`typing-dots ${agentSwitchClass}`} style={{ marginLeft: 6, display: 'inline-flex', verticalAlign: 'middle', padding: 0, gap: 3 }}>
                     <span style={{ width: 5, height: 5 }} />
@@ -3776,25 +4553,25 @@ export default function GroupChatView() {
               <div style={{
                 background: m.from === 'user'
                   ? (profile.bubbleColorUser || 'var(--accent-50)')
-                  : (profile.bubbleColorAgent || '#f9fafb'),
+                  : (profile.bubbleColorAgent || 'var(--surface-50)'),
                 borderRadius: 10, padding: '9px 14px', fontSize: 14, lineHeight: 1.7,
                 border: '1px solid var(--border-light)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                 minHeight: m.content ? undefined : 20,
                 display: m.content ? undefined : 'flex',
                 alignItems: m.content ? undefined : 'center',
-                color: m.content ? undefined : '#9ca3af',
+                color: m.content ? 'var(--text-primary)' : 'var(--text-secondary)',
                 fontStyle: m.content ? undefined : 'italic',
                 userSelect: 'text',
                 cursor: 'text',
-              }}>{m.content || (m._animDone ? '（内容为空）' : <span className="typing-dots" style={{ display: 'inline-flex', gap: 3, padding: 0 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#d1d5db', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#d1d5db', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#d1d5db', display: 'inline-block' }} /></span>)}</div>
+              }}>{m.content || (m._animDone ? '（内容为空）' : <span className="typing-dots" style={{ display: 'inline-flex', gap: 3, padding: 0 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /></span>)}</div>
               {/* 🆕 v10.3fix: 渲染思考过程（借鉴 QwenPaw） */}
               {m.thinkingSteps && m.thinkingSteps.length > 0 && (
-                <div style={{ marginTop: 6, marginBottom: 2, borderTop: '1px solid #f0f0f0', paddingTop: 4 }}>
+                <div style={{ marginTop: 6, marginBottom: 2, borderTop: '1px solid var(--border-light)', paddingTop: 4 }}>
                   <button
                     onClick={() => toggleThinking(m.id)}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer', fontSize: 13,
-                      color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0',
+                      color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0',
                     }}
                   >
                     <span style={{ fontSize: 14 }}>
@@ -3804,8 +4581,8 @@ export default function GroupChatView() {
                   </button>
                   {!(thinkingCollapsed[m.id] ?? false) && (
                     <div style={{
-                      marginTop: 4, padding: '8px 10px', borderRadius: 6, background: '#fafafa',
-                      border: '1px solid #f0f0f0', fontSize: 13, lineHeight: 1.6, maxHeight: 250,
+                      marginTop: 4, padding: '8px 10px', borderRadius: 6, background: 'var(--surface-50)',
+                      border: '1px solid var(--border-light)', fontSize: 13, lineHeight: 1.6, maxHeight: 250,
                       overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                     }}>
                       {m.thinkingSteps.map((step: any, idx: number) => (
@@ -3818,13 +4595,13 @@ export default function GroupChatView() {
                             {step.type === 'text' && '📝'}
                           </span>
                           <span style={{ flex: 1 }}>
-                            <span style={{ fontWeight: 500, color: '#374151' }}>{step.label}</span>
-                            {step.tool && <span style={{ color: '#9ca3af', marginLeft: 4 }}>[{step.tool}]</span>}
+                            <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{step.label}</span>
+                            {step.tool && <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>[{step.tool}]</span>}
                             {step.durationMs !== undefined && (
-                              <span style={{ color: '#9ca3af', marginLeft: 4 }}>({(step.durationMs / 1000).toFixed(1)}s)</span>
+                              <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>({(step.durationMs / 1000).toFixed(1)}s)</span>
                             )}
                             {step.result && (
-                              <div style={{ color: '#6b7280', marginTop: 1, fontSize: 10, whiteSpace: 'pre-wrap' }}>
+                              <div style={{ color: 'var(--text-secondary)', marginTop: 1, fontSize: 10, whiteSpace: 'pre-wrap' }}>
                                 {step.result}
                               </div>
                             )}
@@ -3845,7 +4622,7 @@ export default function GroupChatView() {
                       <div key={i} style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '4px 8px', borderRadius: 6,
-                        background: '#f8fafc', border: '1px solid #e2e8f0',
+                        background: 'var(--surface-50)', border: '1px solid var(--border-light)',
                         fontSize: 11, lineHeight: 1.4,
                       }}>
                         <span style={{ fontSize: 14 }}>{isImage ? '🖼️' : isBinary ? '📄' : '📝'}</span>
@@ -3909,8 +4686,11 @@ export default function GroupChatView() {
         )}
         <div ref={bottomRef} />
       </div>
+      )}
 
-      {/* 输入区 */}
+      {/* 输入区 — 角色选择界面时隐藏 */}
+      {teamTab === 'chat' && showRoleSelector ? null : (
+      <>
       {/* v2.8.3: 工具通知 — Agent 正在使用工具时显示 */}
       {toolNotice && (
         <div className="tool-notice-bar" style={{
@@ -4010,31 +4790,91 @@ export default function GroupChatView() {
         display: 'flex', flexDirection: 'column', gap: 6,
         transition: 'background 0.15s, border-color 0.15s',
         background: gcDragOver ? 'var(--accent-50)' : 'transparent',
-        borderColor: gcDragOver ? '#3b82f6' : 'var(--border-light)',
+        borderColor: gcDragOver ? 'var(--accent, #3b82f6)' : 'var(--border-light)',
         outline: gcDragOver ? '2px dashed #93c5fd' : 'none',
         outlineOffset: -4,
       }}>
-        <textarea
-          key={`gc-input-${inputKey}`}
-          ref={gcTextareaRef}
-          placeholder={llmReady ? '发消息... @Lumina @热茶 @Yak 指定回复者 （Shift+Enter 换行）' : '发消息...（模拟模式，配置LLM后解锁真实对话）'}
-          value={input}
-          onChange={e => { setInput(e.target.value); gcAutoResize() }}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          onDragOver={e => e.preventDefault()}
-          rows={1}
-          style={{
-            flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db',
-            fontSize: 13, outline: 'none', fontFamily: 'inherit',
-            resize: 'vertical', minHeight: 34,
-          }}
-        />
+        <div style={{ position: 'relative' }}>
+          <textarea
+            key={`gc-input-${inputKey}`}
+            ref={gcTextareaRef}
+            placeholder={llmReady ? '发消息... @Lumina @热茶 @Yak 指定回复者 （Shift+Enter 换行）' : '发消息...（模拟模式，配置LLM后解锁真实对话）'}
+            value={input}
+            onChange={e => { setInput(e.target.value); gcAutoResize() }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+            onDragOver={e => e.preventDefault()}
+            rows={1}
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-light)',
+              fontSize: 13, outline: 'none', fontFamily: 'inherit',
+              resize: 'vertical', minHeight: 52, paddingRight: 74,
+              boxSizing: 'border-box', lineHeight: 1.5,
+            }}
+          />
+          {/* ── 📋 任务派发按钮（发送按钮左侧） ── */}
+          <div style={{
+            position: 'absolute', right: 80, bottom: 8,
+          }}>
+            <button
+              onClick={() => setShowTaskDispatcher(true)}
+              style={{
+                width: 32, height: 32, borderRadius: 8,
+                border: '1.5px solid var(--border-light)', background: 'var(--surface-100)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 15, transition: 'all 0.2s',
+              }}
+              title="任务派发中心"
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-200)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--surface-100)' }}
+            >
+              📋
+            </button>
+          </div>
+          {/* ── 发送 / 中断（输入框内右下角） ── */}
+          <div style={{
+            position: 'absolute', right: 10, bottom: 8,
+            display: 'flex', alignItems: 'center',
+          }}>
+          {sending ? (
+            <button onClick={() => { abortRef.current = true; setSending(false); setReplyingAgent(null); window.luminaAPI.agentAbort() }}
+              title="中断回复"
+              style={{
+                padding: '4px 12px', borderRadius: 6,
+                border: '1.5px solid #fca5a5', background: 'var(--red-100)', color: '#ef4444',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit', fontWeight: 600,
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" style={{ animation: 'sendSpin 0.9s linear infinite' }}>
+                <circle cx="12" cy="12" r="10" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="50 50" strokeLinecap="round" />
+              </svg>
+              中断
+            </button>
+          ) : (
+            <button onClick={send} disabled={sending || !input.trim()}
+              className="btn-send-pulse"
+              title="发送消息"
+              style={{
+                border: 'none', borderRadius: 6, padding: '4px 12px',
+                background: input.trim() ? 'var(--accent, #3b82f6)' : 'var(--border-light)',
+                color: input.trim() ? '#fff' : 'var(--text-secondary)',
+                fontSize: 12, cursor: input.trim() ? 'pointer' : 'default', fontWeight: 600,
+                fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+              <IconSend size={14} />
+              发送
+            </button>
+          )}
+          </div>
+        </div>
         {/* ── 功能工具栏（小长方形按钮 + 微软雅黑标注） ── */}
         <div style={{
           display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
           fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
         }}>
-          {/* ── 🍀 Lucky 模式（第一位） ── */}
+          {/* ── 🧠 模型选择 ── */}
+          <ModelSelector />
+          {/* ── 🍀 Lucky 模式（第二位） ── */}
           <LuckyModeSelector
             currentPreset={luckyMode.preset}
             onPresetChange={luckyMode.setPreset}
@@ -4069,7 +4909,7 @@ export default function GroupChatView() {
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: `1.5px solid ${thinkingMode ? '#f59e0b' : 'var(--border-light)'}`,
-              background: thinkingMode ? '#fffbeb' : '#f9fafb',
+              background: thinkingMode ? 'var(--yellow-100)' : 'var(--surface-50)',
               cursor: 'pointer', fontSize: 12, display: 'flex',
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
               opacity: thinkingMode ? 1 : 0.6,
@@ -4085,7 +4925,7 @@ export default function GroupChatView() {
               style={{
                 padding: '4px 10px', borderRadius: 6,
                 border: `1.5px solid ${showEmoji ? '#93c5fd' : 'var(--border-light)'}`,
-                background: showEmoji ? 'var(--accent-50)' : '#f9fafb',
+                background: showEmoji ? 'var(--accent-50)' : 'var(--surface-50)',
                 cursor: 'pointer', fontSize: 12, display: 'flex',
                 alignItems: 'center', gap: 3, fontFamily: 'inherit',
                 transition: 'all .15s',
@@ -4187,11 +5027,11 @@ export default function GroupChatView() {
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: `1.5px solid ${gcAttachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
-              background: gcAttachments.length > 0 ? 'var(--accent-50)' : '#f9fafb',
+              background: gcAttachments.length > 0 ? 'var(--accent-50)' : 'var(--surface-50)',
               cursor: 'pointer', fontSize: 12, display: 'flex',
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
             }}>
-            📎 文件{gcAttachments.length > 0 ? <sup style={{ fontSize: 9, color: '#3b82f6', marginLeft: 1 }}>{gcAttachments.length}</sup> : null}
+            📎 文件{gcAttachments.length > 0 ? <sup style={{ fontSize: 9, color: 'var(--accent, #3b82f6)', marginLeft: 1 }}>{gcAttachments.length}</sup> : null}
           </button>
 
           {/* ── 🎙️ 实时语音对话 ── */}
@@ -4214,7 +5054,7 @@ export default function GroupChatView() {
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: `1.5px solid ${realtimeVoiceActive ? '#22c55e' : 'var(--border-light)'}`,
-              background: realtimeVoiceActive ? 'var(--green-100)' : '#f9fafb',
+              background: realtimeVoiceActive ? 'var(--green-100)' : 'var(--surface-50)',
               cursor: 'pointer', fontSize: 12, display: 'flex',
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
               boxShadow: realtimeVoiceActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
@@ -4239,7 +5079,7 @@ export default function GroupChatView() {
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: `1.5px solid ${computerUseActive ? '#a855f7' : 'var(--border-light)'}`,
-              background: computerUseActive ? '#faf5ff' : '#f9fafb',
+              background: computerUseActive ? 'var(--accent-50)' : 'var(--surface-50)',
               cursor: 'pointer', fontSize: 12, display: 'flex',
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
               boxShadow: computerUseActive ? '0 0 6px rgba(168,85,247,0.35)' : 'none',
@@ -4259,42 +5099,13 @@ export default function GroupChatView() {
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: '1.5px solid var(--border-light)',
-              background: '#f9fafb',
+              background: 'var(--surface-50)',
               cursor: 'pointer', fontSize: 12, display: 'flex',
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
             }}>
             ⏳ 胶囊
           </button>
-          {/* ── 弹性空间 ── */}
-          <div style={{ flex: 1 }} />
-          {/* ── 发送 / 中断 ── */}
-          {sending ? (
-            <button onClick={() => { abortRef.current = true; setSending(false); setReplyingAgent(null); window.luminaAPI.agentAbort() }}
-              title="中断回复"
-              style={{
-                padding: '4px 14px', borderRadius: 6,
-                border: '1.5px solid #fca5a5', background: 'var(--red-100)', color: '#ef4444',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit', fontWeight: 600,
-              }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" style={{ animation: 'sendSpin 0.9s linear infinite' }}>
-                <circle cx="12" cy="12" r="10" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="50 50" strokeLinecap="round" />
-              </svg>
-              中断
-            </button>
-          ) : (
-          <button onClick={send} disabled={sending || !input.trim()}
-            className="btn-send-pulse"
-            style={{
-              border: 'none', borderRadius: 6, padding: '4px 16px',
-              background: input.trim() ? '#3b82f6' : 'var(--border-light)',
-              color: input.trim() ? '#fff' : 'var(--text-secondary)',
-              fontSize: 12, cursor: input.trim() ? 'pointer' : 'default', fontWeight: 600,
-              fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
-            }}>
-            发送
-          </button>
-          )}
+
         </div>
       </div>
 
@@ -4308,9 +5119,20 @@ export default function GroupChatView() {
           {sttListening ? `🎤 语音中${sttStatus?.error ? ' (出错)' : ''}  ·  ` : ''}
           Shift+Enter 换行 · /help 查看命令
         </span>
+        {/* 🆕 上下文用量指示器 */}
+        <ContextUsageIndicator />
       </div>
-      </>)}
+      </>
+      )}
+      </>
+      )}
       {teamTab === 'tasks' && <AgentTaskBoard />}
+      {/* ═══ 🔁 Loop 视图：自驱任务看板 ═══ */}
+      {teamTab === 'loop' && (
+        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+          <AgentTaskBoard />
+        </div>
+      )}
       {teamTab === 'moments' && (
         <div style={{ flex: 1, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{
@@ -4427,8 +5249,51 @@ export default function GroupChatView() {
           onClose={() => luckyMode.setShowSettings(false)}
         />
       )}
+
+      {/* 📋 任务派发中心弹窗 */}
+      {showTaskDispatcher && (
+        <TaskDispatcher
+          onDispatch={handleTaskDispatch}
+          onClose={() => setShowTaskDispatcher(false)}
+        />
+      )}
     </div>
   )
+}
+
+// 团队群聊角色回复生成
+function generateTeamReply(userMsg: string, card: any, agent: any): string {
+  const lower = userMsg.toLowerCase()
+  const name = agent?.name || 'Lumina'
+  const icon = agent?.icon || '🐱'
+
+  if (lower.includes('你好') || lower.includes('hello') || lower.includes('hi')) {
+    return `${icon} 嗨！我是 ${name}，${card.desc.split('、')[0]}方面的专家～\n\n有什么需要帮忙的？直接告诉我就好！`
+  }
+
+  // 根据角色类型给出不同风格的回复
+  const roleReplies: Record<string, string[]> = {
+    chat: [`${icon} 收到！有什么想聊的？我随时在线～`, `${icon} 好嘞～让我想想怎么帮你～`, `${icon} 来了来了！说说看～`],
+    study: [`${icon} 好问题！让我帮你深入分析一下～`, `${icon} 这个知识点很重要，我来给你讲讲～`, `${icon} 学习模式启动！我们开始吧～`],
+    writing: [`${icon} 写作任务收到！让我来帮你搞定～`, `${icon} 好的，我来帮你润色一下～`, `${icon} 创意模式开启！让我给你写点什么～`],
+    code: [`${icon} 代码问题？让我看看～`, `${icon} 这个 bug 我来帮你找～`, `${icon} 技术问题交给我！让我分析一下～`],
+    design: [`${icon} 设计需求收到！让我想想方案～`, `${icon} 审美在线！我来帮你设计～`, `${icon} 好的，让我给你一些建议～`],
+    intel: [`${icon} 情报收集任务收到！让我看看～`, `${icon} 信息监控模式启动～`, `${icon} 好的，我来帮你分析一下～`],
+    office: [`${icon} 办公任务收到！让我来处理～`, `${icon} 日程管理交给我～`, `${icon} 好的，我来帮你整理一下～`],
+  }
+
+  const replies = roleReplies[card.id] || roleReplies.chat
+  const randomReply = replies[Math.floor(Math.random() * replies.length)]
+
+  // 如果包含具体任务关键词，给出更具体的回复
+  if (lower.includes('写') || lower.includes('代码') || lower.includes('bug')) {
+    return `${randomReply}\n\n> 💡 你可以把具体需求或代码贴给我，我来帮你处理！`
+  }
+  if (lower.includes('分析') || lower.includes('学习') || lower.includes('讲解')) {
+    return `${randomReply}\n\n> 💡 告诉我你想了解什么，我来帮你深入分析～`
+  }
+
+  return randomReply
 }
 
 function generateMockReply(name: string, userMsg: string): string {

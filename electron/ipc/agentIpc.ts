@@ -20,7 +20,12 @@ import { fetchWithRetry } from '../llmRetry'
 import type { AgentRunConfig, AgentEvent } from '../tools/types'
 import { getCommandRouter, CommandRouter } from '../chatCommands'
 import { setActiveAgentRef, registerCommandHandlers } from './commandIpc'
+import { notifyAgentReply } from '../agentNotify'
 import { llmCoordinator } from '../llmCoordinator'
+// 静态导入 gamification 模块（打包后动态 require 路径解析不到）
+import { xpManager, XP_RULES } from '../gamification/levels'
+import { achievementManager } from '../gamification/achievements'
+import * as emotionBridge from '../gamification/emotionBridge'
 
 // ═══════════════════════════════════════════════════════════
 // LLM API 响应类型
@@ -36,6 +41,37 @@ let activeAgentRunning = false  // 🆕 v5.4: 追踪当前 agent 是否仍在执
 let lastConfigSig: string = ''  // 🔧 v2.10.x: 检测配置变化，防止串台
 let teamSocialInitialized = false  // 🆕 v2.6
 let agentIpcHandlersRegistered = false  // 🔧 v6.4: 防止 IPC handler 重复注册
+
+/**
+ * 🔧 2026-08-11: 多模态 text 归一化
+ * 前端群聊在带图片附件时会把 text 传成 OpenAI content 数组（v10.9 视觉支持），
+ * 但 AgentRunner.sendMessage 内部大量使用 text.trim()/text.slice()，只接受 string。
+ * 数组直接传入会在命令检测或预处理时抛 "input.trimStart is not a function"。
+ * 这里提取纯文本，图片转为描述占位，保证 LLM 至少"知道"用户发了图，
+ * 且不会让整个 agent:chat 调用崩溃。
+ */
+function normalizeAgentText(text: unknown): string {
+  if (typeof text === 'string') return text
+  if (Array.isArray(text)) {
+    const parts: string[] = []
+    let imgCount = 0
+    for (const block of text) {
+      if (block && typeof block === 'object') {
+        const b = block as { type?: string; text?: unknown }
+        if (b.type === 'text' && typeof b.text === 'string') {
+          parts.push(b.text)
+        } else if (b.type === 'image_url') {
+          imgCount++
+        }
+      }
+    }
+    if (imgCount > 0) parts.push(`[用户上传了 ${imgCount} 张图片附件，当前会话暂不支持直接查看图片]`)
+    const merged = parts.join('\n').trim()
+    return merged || '[用户发送了附件消息]'
+  }
+  if (text == null) return ''
+  return String(text)
+}
 
 /**
  * 注册 Agent 相关 IPC handler（只注册一次）
@@ -83,19 +119,24 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
   // ─── Agent ──────────────────────────────────────────
 
   ipcMain.handle('agent:chat', async (event, params: {
-    text: string; config: AgentRunConfig
+    text: string; config: AgentRunConfig; sessionId?: string; compactedContext?: string
     conversationHistory?: Array<{ role: string; content: string }>
   }) => {
     // 标记用户活跃，暂停后台 LLM 调用
     llmCoordinator.markUserActive()
     try {
       // 斜杠命令拦截 — 先检查是否为命令，路由到 CommandRouter
-      if (CommandRouter.isCommand(params.text)) {
+      // 🔧 2026-08-11: 防御 — 前端多模态附件会把 text 传成 OpenAI content 数组，
+      //   直接调用 trimStart() 会抛 "input.trimStart is not a function"。
+      //   只有纯字符串输入才做命令检测；数组输入归一化为纯文本。
+      const rawText = params.text
+      const safeText = normalizeAgentText(rawText)
+      if (typeof rawText === 'string' && CommandRouter.isCommand(safeText)) {
         const router = getCommandRouter()
-        const parsed = router.parse(params.text)
+        const parsed = router.parse(safeText)
 
         if (!parsed) {
-          return { success: false, message: `未知命令: ${params.text}\n输入 /help 查看可用命令` }
+          return { success: false, message: `未知命令: ${safeText}\n输入 /help 查看可用命令` }
         }
 
         setActiveAgentRef(() => activeAgent)
@@ -223,7 +264,8 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
         }
         runConfig = {
           ...params.config,
-          mode: 'agent',
+          // 前端显式指定 mode 时尊重之（桌宠陪伴会话传 'chat' 轻量工具集）；其余调用方默认 'agent'
+          mode: params.config.mode || 'agent',
         }
       }
 
@@ -238,7 +280,7 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
         text: params.text?.slice(0, 40),
       }))
 
-      activeAgent = new AgentRunner(runConfig)
+      activeAgent = new AgentRunner(runConfig, { sessionId: params.sessionId })
       lastConfigSig = JSON.stringify({
         model: runConfig.model,
         baseUrl: runConfig.baseUrl,
@@ -247,17 +289,24 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
       const agent = activeAgent
       // 同步传入的对话历史
       if (params.conversationHistory) {
-        agent.setHistory(params.conversationHistory)
+        agent.setHistory(params.conversationHistory, params.compactedContext)
       }
       agent.setEventCallback((ev: AgentEvent) => {
         event.sender.send('agent:event', ev)
       })
       let result: string
       try {
-        result = await agent.sendMessage(params.text)
+        result = await agent.sendMessage(safeText)
       } finally {
         activeAgentRunning = false  // 🆕 v5.4: 确保无论成功或失败都重置状态
       }
+
+      // 🔔 Agent 回复完成 → 后台 Windows 通知（前台不打扰，多条自动合并）
+      notifyAgentReply(mainWindow, {
+        personaId: isGroupChat ? (params.config.personaId as string) : undefined,
+        isGroupChat,
+        body: result,
+      })
 
       // v6.0: 群聊模式下首次成功对话后，三 Agent 全配 LLM → 初始化社交引擎
       if (isGroupChat && !teamSocialInitialized) {
@@ -277,20 +326,19 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
 
       // 对话获得 XP
       try {
-        const { xpManager, XP_RULES } = require('../gamification/levels')
-        const { achievementManager } = require('../gamification/achievements')
-        xpManager.addXp(XP_RULES.PER_MESSAGE, '对话')
+        const xpResult = xpManager.addXp(XP_RULES.PER_MESSAGE, '对话')
         const currentStats = achievementManager.getStats()
         achievementManager.updateStats({
           totalChats: currentStats.totalChats + 1,
           totalMessages: currentStats.totalMessages + 1,
         })
-        achievementManager.checkAndUnlock()
+        achievementManager.checkAchievements()
+        console.log(`[Gamification] +${xpResult.baseXp} XP (${xpResult.multiplier}x) → total ${xpManager.totalXp} XP (Lv.${xpManager.level})`)
       } catch (e) {
-        // gamification 模块未加载时不阻塞对话
+        console.error('[Gamification] XP 累积失败:', e)
       }
 
-      return { success: true, content: result, totalTokens: agent.getTotalTokens() }
+      return { success: true, content: result, totalTokens: agent.getTotalTokens(), compactedContext: agent.getCompactedSummary(), contextWindow: (agent as any).config?.contextWindow || 0 }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
@@ -317,7 +365,7 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
   // 🆕 Phase 2: 读取当前情绪乘数（前端情绪加成展示用）
   ipcMain.handle('gamification:getEmotionXp', async () => {
     try {
-      const { getEmotionXpMultiplier, getEmotionLabel, getCurrentEmotion } = require('../gamification/emotionBridge')
+      const { getEmotionXpMultiplier, getEmotionLabel, getCurrentEmotion } = emotionBridge
       return {
         success: true,
         multiplier: getEmotionXpMultiplier(),
@@ -456,7 +504,7 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
     title: string; prompt: string; config: AgentRunConfig
   }) => {
     try {
-      const taskId = taskManager.submit(params.title, params.prompt, params.config)
+      const taskId = taskManager.submit(params.prompt, params.config, { title: params.title })
       return { taskId }
     } catch (err: any) {
       return { error: err.message }

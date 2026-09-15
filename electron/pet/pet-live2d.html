@@ -1,0 +1,2857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Lumina Live2D 桌宠</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+  #pet-container {
+    position: relative; width: 100%; height: 100%;
+    display: flex; align-items: flex-end; justify-content: center;
+    -webkit-app-region: no-drag;
+  }
+  #stage { position: absolute; inset: 0; }
+
+  /* 情绪气泡 */
+  .emotion-bubble {
+    position: fixed; top: 0; left: 0;
+    padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,0.6);
+    color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap;
+    opacity: 0; transition: opacity .4s ease; pointer-events: none; z-index: 50;
+  }
+  .emotion-bubble.show { opacity: 1; }
+
+  /* 对话气泡 */
+  .speech-bubble {
+    position: fixed; left: 0; top: 0;
+    padding: 6px 12px; border-radius: 12px;
+    background: rgba(0,0,0,0.78); color: #fff; font-size: 12px;
+    max-width: min(240px, calc(100vw - 24px)); min-width: 40px; box-sizing: border-box;
+    text-align: left; white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+    opacity: 0; transition: opacity .3s ease; pointer-events: none; z-index: 50; line-height: 1.45;
+  }
+  .speech-bubble::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: rgba(0,0,0,0.78); }
+  .speech-bubble.show { opacity: 1; }
+
+  /* 🤵 主动秘书搭话卡片（N.E.K.O 风格：文本 + A/B/C 快捷回复） */
+  #proactive-card {
+    position: fixed; left: 0; top: 0; z-index: 58; width: 268px;
+    background: rgba(255,255,255,0.97); backdrop-filter: blur(16px);
+    border: 1px solid rgba(236,72,153,0.28); border-radius: 16px;
+    box-shadow: 0 10px 36px rgba(190,24,93,0.22);
+    padding: 11px 12px 10px; color: #3a2a3c; font-size: 12.5px; line-height: 1.5;
+    visibility: hidden; opacity: 0; transform: translateY(6px) scale(.96);
+    transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1), visibility 0s linear .22s;
+    pointer-events: none;
+  }
+  #proactive-card.show { visibility: visible; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto;
+    transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1); }
+  #proactive-card .pc-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #be185d; margin-bottom: 6px; font-size: 12px; }
+  #proactive-card .pc-kind { font-size: 10px; color: #db2777; opacity: .72; font-weight: 600; }
+  #proactive-card .pc-close { margin-left: auto; cursor: pointer; border: none; background: rgba(0,0,0,.05);
+    border-radius: 50%; width: 20px; height: 20px; text-align: center; color: #888; font-size: 11px; }
+  #proactive-card .pc-close:hover { background: rgba(0,0,0,.1); }
+  #proactive-card .pc-text { margin-bottom: 8px; white-space: normal; }
+  #proactive-card .pc-opt { display: block; width: 100%; text-align: left; margin-top: 6px; padding: 7px 10px;
+    border-radius: 10px; border: 1px solid rgba(236,72,153,.22);
+    background: linear-gradient(135deg,#fdf2f8,#fce7f3); color: #9d174d; font-size: 12px; cursor: pointer;
+    transition: transform .1s, background .15s; }
+  #proactive-card .pc-opt:hover { background: linear-gradient(135deg,#fce7f3,#fbcfe8); transform: translateX(2px); }
+  /* 🌸 朋友圈 / 🎬剧场 / 📰日报 三入口小菜单 */
+  #life-menu { position: fixed; z-index: 59; display: none; flex-direction: column; gap: 2px; min-width: 140px;
+    padding: 6px; background: rgba(255,255,255,.98); border: 1px solid rgba(0,0,0,.08); border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+  #life-menu.show { display: flex; }
+  #life-menu .lm-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+    cursor: pointer; font-size: 12.5px; color: #374151; }
+  #life-menu .lm-item:hover { background: #fdf2f8; color: #be185d; }
+
+  /* 名称标签 */
+  .name-tag {
+    position: fixed; top: 0; left: 0;
+    padding: 2px 10px; border-radius: 10px; background: rgba(0,0,0,0.45);
+    font-size: 11px; color: #fff; white-space: nowrap; z-index: 50;
+    transition: opacity .5s; pointer-events: none;
+  }
+  .name-tag.idle { opacity: 0.5; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 4px; }
+  .ct-hint { position: absolute; top: 4px; right: 4px; font-size: 8px; color: rgba(255,255,255,0.35); pointer-events: none; z-index: 4; }
+
+  /* 右键自定义菜单 */
+  #pet-menu {
+    position: fixed; z-index: 60; min-width: 168px;
+    background: rgba(22,24,38,0.92); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+    padding: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    font-size: 12px; color: #e6e8ff; user-select: none;
+  }
+  #pet-menu .pm-title { padding: 4px 10px 6px; font-size: 11px; color: #8b8faa; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px; }
+  #pet-menu .pm-item { padding: 6px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  #pet-menu .pm-item:hover { background: rgba(124,111,247,0.28); }
+  #pet-menu .pm-item .pm-mark { color: #7c6ff7; font-weight: 700; }
+  #pet-menu .pm-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px 6px; }
+  #pet-menu .pm-slider { padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #8b8faa; }
+  #pet-menu .pm-slider input[type="range"] { flex: 1; accent-color: #7c6ff7; cursor: pointer; }
+  #pet-menu .pm-slider #pm-scale-val { min-width: 34px; text-align: right; color: #e6e8ff; }
+
+  /* 迷你聊天面板（N.E.K.O / AIRI 风格） */
+  #chat-panel {
+    position: fixed; z-index: 55; width: 420px;
+    background: rgba(245,247,255,0.95); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.6); border-radius: 18px;
+    box-shadow: 0 12px 40px rgba(40,60,120,0.25); overflow: hidden;
+    display: flex; flex-direction: column;
+    font-size: 13px; color: #2a3a5c; user-select: text;
+    transform-origin: bottom left;
+    visibility: hidden; opacity: 0; transform: scale(0.92) translateY(8px);
+    transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1), visibility 0s linear .22s;
+    pointer-events: none;
+  }
+  #chat-panel.show {
+    visibility: visible; opacity: 1; transform: scale(1) translateY(0);
+    pointer-events: auto; transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1), visibility 0s;
+  }
+  #chat-panel.closing {
+    opacity: 0; transform: scale(0.92) translateY(8px);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  #chat-panel .cp-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, rgba(74,158,255,0.15), rgba(107,181,255,0.10));
+    border-bottom: 1px solid rgba(100,130,180,0.12);
+    font-weight: 700; font-size: 13px; cursor: move;
+  }
+  #chat-panel .cp-head .cp-title { display: flex; align-items: center; gap: 8px; }
+  #chat-panel .cp-head .cp-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #4a9eff, #6bb5ff);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    box-shadow: 0 2px 8px rgba(74,158,255,0.3);
+  }
+  #chat-panel .cp-head .cp-name { display: flex; flex-direction: column; gap: 1px; }
+  #chat-panel .cp-head .cp-name .cp-status { font-size: 10px; font-weight: 500; color: #5a9a5a; display: flex; align-items: center; gap: 4px; }
+  #chat-panel .cp-head .cp-name .cp-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #5ac85a; }
+  #chat-panel .cp-head .cp-actions { display: flex; gap: 4px; }
+  #chat-panel .cp-head .cp-btn {
+    width: 26px; height: 26px; border-radius: 8px; border: none;
+    background: rgba(100,130,180,0.1); color: #5a7aaa; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    transition: all .15s;
+  }
+  #chat-panel .cp-head .cp-btn:hover { background: rgba(74,158,255,0.2); color: #2a6abb; }
+  #chat-panel #chat-log {
+    max-height: 340px; min-height: 200px; overflow-y: auto;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    background: rgba(255,255,255,0.3);
+  }
+  #chat-panel #chat-log::-webkit-scrollbar { width: 5px; }
+  #chat-panel #chat-log::-webkit-scrollbar-thumb { background: rgba(100,130,180,0.25); border-radius: 3px; }
+  #chat-panel .cp-msg {
+    max-width: 82%; padding: 8px 12px; border-radius: 14px; line-height: 1.5; word-break: break-word;
+    position: relative; font-size: 13px;
+    animation: msgIn .25s ease;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  #chat-panel .cp-msg.user {
+    align-self: flex-end; background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 2px 8px rgba(74,158,255,0.25);
+  }
+  #chat-panel .cp-msg.pet {
+    align-self: flex-start; background: rgba(255,255,255,0.85); color: #2a3a5c;
+    border-bottom-left-radius: 4px;
+    border: 1px solid rgba(100,130,180,0.1);
+    box-shadow: 0 1px 4px rgba(40,60,120,0.06);
+  }
+  #chat-panel .cp-msg.pet .cp-msg-avatar {
+    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(135deg, #4a9eff, #6bb5ff); color: #fff;
+    align-items: center; justify-content: center; font-size: 12px;
+    margin-right: 6px; vertical-align: middle;
+  }
+  #chat-panel .cp-typing {
+    align-self: flex-start; background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(100,130,180,0.1); border-radius: 14px;
+    border-bottom-left-radius: 4px; padding: 10px 14px;
+    display: none; gap: 4px; align-items: center;
+  }
+  #chat-panel .cp-typing.show { display: flex; }
+  #chat-panel .cp-typing span {
+    width: 7px; height: 7px; border-radius: 50%; background: #8aa0c8;
+    animation: typingBounce 1.2s infinite ease-in-out;
+  }
+  #chat-panel .cp-typing span:nth-child(2) { animation-delay: 0.15s; }
+  #chat-panel .cp-typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-5px); opacity: 1; } }
+  #chat-panel .cp-quick {
+    display: flex; gap: 6px; padding: 8px 12px 0; flex-wrap: wrap;
+  }
+  #chat-panel .cp-quick .cp-quick-btn {
+    padding: 4px 12px; border-radius: 999px; font-size: 11px;
+    border: 1px solid rgba(74,158,255,0.3); background: rgba(74,158,255,0.08);
+    color: #2a6abb; cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  #chat-panel .cp-quick .cp-quick-btn:hover { background: rgba(74,158,255,0.18); }
+  #chat-panel .cp-input-row {
+    display: flex; gap: 8px; padding: 10px 12px 12px;
+    border-top: 1px solid rgba(100,130,180,0.1);
+    background: rgba(255,255,255,0.4); align-items: flex-end;
+  }
+  #chat-panel #pet-chat-input {
+    flex: 1; padding: 9px 12px; border-radius: 12px;
+    border: 1px solid rgba(100,130,180,0.15); background: rgba(255,255,255,0.8);
+    color: #2a3a5c; outline: none; font-size: 13px; font-family: inherit;
+    resize: none; min-height: 36px; max-height: 80px; line-height: 1.4;
+    transition: border-color .15s;
+  }
+  #chat-panel #pet-chat-input:focus { border-color: rgba(74,158,255,0.5); }
+  #chat-panel #pet-chat-input::placeholder { color: #9aaccc; }
+  #chat-panel .cp-input-btn {
+    width: 36px; height: 36px; border-radius: 10px; border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: all .15s; flex: none;
+  }
+  #chat-panel #pet-chat-emoji { background: rgba(100,130,180,0.1); color: #5a7aaa; }
+  #chat-panel #pet-chat-emoji:hover { background: rgba(100,130,180,0.2); }
+  #chat-panel #pet-chat-send {
+    background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
+    box-shadow: 0 2px 8px rgba(74,158,255,0.3);
+  }
+  #chat-panel #pet-chat-send:hover { filter: brightness(1.1); transform: scale(1.05); }
+  #chat-panel .cp-emoji-panel {
+    display: none; padding: 8px 12px; gap: 6px; flex-wrap: wrap;
+    border-top: 1px solid rgba(100,130,180,0.1); background: rgba(255,255,255,0.5);
+    max-height: 100px; overflow-y: auto;
+  }
+  #chat-panel .cp-emoji-panel.show { display: flex; }
+  #chat-panel .cp-emoji-panel .cp-emoji-item {
+    font-size: 18px; cursor: pointer; padding: 3px 6px; border-radius: 8px; transition: background .15s;
+  }
+  #chat-panel .cp-emoji-panel .cp-emoji-item:hover { background: rgba(74,158,255,0.15); }
+  /* 消息流内可点选项（N.E.K.O 选择项聊天） */
+  #chat-panel .cp-msg-options { display: flex; flex-direction: column; gap: 5px; padding: 0 12px 2px 44px; }
+  #chat-panel .cp-opt-btn { text-align: left; padding: 6px 11px; border-radius: 10px; font-size: 12px; cursor: pointer;
+    border: 1px solid rgba(74,158,255,0.3); background: rgba(74,158,255,0.07); color: #2a6abb; transition: all .15s; }
+  #chat-panel .cp-opt-btn:hover { background: rgba(74,158,255,0.16); transform: translateX(2px); }
+  /* 聊天框内 朋友圈/剧场/日报 生活视图 */
+  #chat-panel #chat-life-view { display: none; min-height: 200px; max-height: 340px; flex-direction: column; overflow: hidden; }
+  #chat-panel #chat-life-view.show { display: flex; }
+  #chat-life-view .clv-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(100,130,180,.12); font-weight: 700; font-size: 13px; color: #1a2a4c; }
+  #chat-life-view .clv-back, #chat-life-view .clv-open-main { border: none; background: rgba(100,130,180,.14); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 15px; color: #2a6abb; }
+  #chat-life-view .clv-back:hover, #chat-life-view .clv-open-main:hover { background: rgba(74,158,255,.22); }
+  #chat-life-view .clv-title { flex: 1; }
+  #chat-life-view .clv-list { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,.3); }
+  #chat-life-view .clv-item { background: rgba(255,255,255,.78); border: 1px solid rgba(100,130,180,.14); border-radius: 12px; padding: 9px 11px; }
+  #chat-life-view .clv-item-head { font-weight: 600; font-size: 12.5px; color: #1a2a4c; margin-bottom: 3px; }
+  #chat-life-view .clv-item-meta { font-size: 10.5px; color: #8a9aba; margin-bottom: 4px; }
+  #chat-life-view .clv-item-body { font-size: 12px; color: #3a4a6c; line-height: 1.55; white-space: pre-wrap; }
+  #chat-life-view .clv-empty, #chat-life-view .clv-loading { text-align: center; color: #8a9aba; font-size: 12px; padding: 34px 10px; }
+  #chat-panel .cp-btn#chat-life { font-size: 13px; }
+
+  /* ═══════ 模型旁工具栏 ═══════ */
+  #neko-toolbar {
+    position: fixed; z-index: 58; display: flex; flex-direction: column; gap: 6px;
+    pointer-events: auto;
+    padding: 6px 4px;
+    background: rgba(30,40,70,0.35); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 22px;
+    box-shadow: 0 4px 16px rgba(20,30,60,0.25);
+    transition: opacity .35s cubic-bezier(.4,0,.2,1),
+                padding .35s cubic-bezier(.4,0,.2,1),
+                gap .35s cubic-bezier(.4,0,.2,1),
+                width .35s cubic-bezier(.4,0,.2,1);
+    overflow: hidden;
+  }
+  #neko-toolbar .tb-btn, #neko-toolbar .tb-sep {
+    transition: opacity .3s ease, max-height .4s cubic-bezier(.4,0,.2,1),
+                transform .35s cubic-bezier(.4,0,.2,1),
+                margin .35s ease, padding .35s ease;
+    transform-origin: center center;
+  }
+  #neko-toolbar.collapsed .tb-btn:not(.tb-collapse),
+  #neko-toolbar.collapsed .tb-sep {
+    opacity: 0; max-height: 0; margin: 0; padding: 0;
+    transform: scale(0.2) rotate(-20deg); pointer-events: none;
+    overflow: hidden; border-width: 0;
+  }
+  #neko-toolbar.collapsed { padding: 4px; gap: 0; }
+  /* 收缩时逐个按钮延迟消失，展开时逐个出现 */
+  #neko-toolbar.collapsed .tb-btn:nth-child(2) { transition-delay: 0ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(4) { transition-delay: 30ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(5) { transition-delay: 60ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(6) { transition-delay: 90ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(7) { transition-delay: 120ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(9) { transition-delay: 150ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(10) { transition-delay: 180ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(11) { transition-delay: 210ms; }
+  #neko-toolbar.collapsed .tb-btn:nth-child(12) { transition-delay: 240ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(2) { transition-delay: 200ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(4) { transition-delay: 170ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(5) { transition-delay: 140ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(6) { transition-delay: 110ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(7) { transition-delay: 80ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(9) { transition-delay: 50ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(10) { transition-delay: 30ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(11) { transition-delay: 10ms; }
+  #neko-toolbar:not(.collapsed) .tb-btn:nth-child(12) { transition-delay: 0ms; }
+  .tb-collapse svg { transition: transform .4s cubic-bezier(.4,0,.2,1); }
+  #neko-toolbar.collapsed .tb-collapse svg { transform: rotate(180deg); }
+  #tb-collapsed {
+    position: fixed; z-index: 58; width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(30,40,70,0.55); backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(255,255,255,0.2); color: #fff;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; pointer-events: auto;
+    transition: all .3s cubic-bezier(.34,1.56,.64,1);
+    animation: tb-pop .4s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes tb-pop {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  #tb-collapsed:hover { background: rgba(74,158,255,0.55); transform: scale(1.15) rotate(10deg); }
+  .tb-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    background: rgba(40,50,80,0.5); color: #fff;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .18s ease; position: relative;
+  }
+  .tb-btn:hover { background: rgba(74,158,255,0.55); border-color: rgba(160,210,255,0.7); transform: scale(1.1); }
+  .tb-btn:active { transform: scale(0.92); }
+  .tb-btn.active { background: linear-gradient(135deg, #4a9eff, #6bb5ff); border-color: rgba(160,210,255,0.9); box-shadow: 0 0 10px rgba(74,158,255,0.5); }
+  .tb-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tb-btn .tb-badge {
+    position: absolute; top: -1px; right: -1px; width: 9px; height: 9px;
+    border-radius: 50%; background: #ff5555; border: 1.5px solid rgba(30,40,70,0.6);
+  }
+  .tb-sep { width: 22px; height: 1px; background: rgba(255,255,255,0.12); margin: 1px auto; }
+  .tb-play {
+    position: absolute; right: -5px; top: -5px; width: 17px; height: 17px;
+    border-radius: 50%; background: linear-gradient(135deg, #4a9eff, #6bb5ff);
+    border: 1.5px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .tb-play svg { width: 8px; height: 8px; fill: #fff; stroke: none; }
+  .tb-collapse svg { width: 16px; height: 16px; }
+
+  /* ═══════ N.E.K.O 风格弹出面板 ═══════ */
+  .nk-panel {
+    position: fixed; z-index: 57; min-width: 240px;
+    background: rgba(200,215,240,0.88); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.5); border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(40,60,120,0.25);
+    padding: 14px 16px; color: #2a3a5c; font-size: 13px;
+    user-select: none;
+    max-height: min(640px, calc(100vh - 28px)); overflow-y: auto; overscroll-behavior: contain;
+    visibility: hidden; opacity: 0; transform: scale(0.92) translateY(-6px);
+    transform-origin: top left;
+    transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34,1.3,0.64,1), visibility 0s linear 0.22s;
+    pointer-events: none;
+  }
+  .nk-panel.show { visibility: visible; opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34,1.3,0.64,1), visibility 0s; }
+  #panel-settings { width: 288px; max-width: calc(100vw - 20px); }
+  .nk-panel::-webkit-scrollbar { width: 6px; }
+  .nk-panel::-webkit-scrollbar-thumb { background: rgba(100,130,180,0.35); border-radius: 3px; }
+  .nk-panel::-webkit-scrollbar-track { background: transparent; }
+  .nk-panel .nk-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: #1a2a4c; }
+  .nk-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 0; gap: 12px;
+  }
+  .nk-row + .nk-row { border-top: 1px solid rgba(100,130,180,0.12); }
+  .nk-row .nk-label { display: flex; flex-direction: column; gap: 1px; }
+  .nk-row .nk-label span:first-child { font-weight: 600; font-size: 13px; }
+  .nk-row .nk-label .nk-hint { font-size: 11px; color: #6a7a9a; }
+  .nk-row .nk-val { font-size: 12px; color: #4a7acc; font-weight: 600; min-width: 50px; text-align: right; }
+
+  /* 开关 */
+  .nk-switch { position: relative; display: inline-block; width: 44px; height: 25px; flex: none; }
+  .nk-switch input { opacity: 0; width: 0; height: 0; }
+  .nk-switch .nk-sl { position: absolute; cursor: pointer; inset: 0; background: rgba(100,120,160,0.3); transition: background .3s cubic-bezier(.4,0,.2,1), box-shadow .3s; border-radius: 25px; }
+  .nk-switch .nk-sl:before { position: absolute; content: ""; height: 19px; width: 19px; left: 3px; bottom: 3px; background: #fff; transition: transform .3s cubic-bezier(.34,1.56,.64,1), left .3s ease; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+  .nk-switch input:checked + .nk-sl { background: linear-gradient(135deg, #4a9eff, #6bb5ff); box-shadow: 0 0 8px rgba(74,158,255,0.35); }
+  .nk-switch input:checked + .nk-sl:before { transform: translateX(19px); }
+
+  /* 滑块 */
+  .nk-slider { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: rgba(100,130,180,0.25); outline: none; margin: 6px 0; padding: 0; border: none; cursor: pointer; transition: background .2s; }
+  .nk-slider:hover { background: rgba(100,130,180,0.35); }
+  .nk-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #4a9eff, #6bb5ff); cursor: pointer; border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 1px 6px rgba(74,158,255,0.4); transition: transform .15s, box-shadow .15s; }
+  .nk-slider::-webkit-slider-thumb:hover { transform: scale(1.15); box-shadow: 0 2px 10px rgba(74,158,255,0.55); }
+  .nk-slider::-webkit-slider-thumb:active { transform: scale(1.05); }
+  .nk-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #4a9eff, #6bb5ff); cursor: pointer; border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 1px 6px rgba(74,158,255,0.4); }
+  .nk-slider::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(100,130,180,0.25); }
+  .nk-select {
+    background: rgba(255,255,255,0.55); border: 1px solid rgba(100,130,180,0.3);
+    border-radius: 8px; padding: 5px 28px 5px 10px; font-size: 12px; color: #2a3a5c;
+    outline: none; cursor: pointer; max-width: 150px;
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a7acc' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+    transition: border-color .2s, box-shadow .2s, background-color .2s;
+  }
+  .nk-select:hover { border-color: rgba(74,158,255,0.6); background-color: rgba(255,255,255,0.75); }
+  .nk-select:focus { border-color: rgba(74,158,255,0.8); box-shadow: 0 0 0 3px rgba(74,158,255,0.15); }
+  .nk-select option { background: #f0f4ff; color: #2a3a5c; padding: 4px 8px; }
+
+  /* 卡片网格导航 */
+  .nk-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .nk-card {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 14px 8px; border-radius: 12px; cursor: pointer; text-align: center;
+    background: rgba(255,255,255,0.45); border: 1.5px solid rgba(100,130,180,0.15);
+    transition: all .25s cubic-bezier(.4,0,.2,1); backdrop-filter: blur(8px);
+  }
+  .nk-card:hover { background: rgba(255,255,255,0.7); border-color: rgba(74,158,255,0.4); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74,158,255,0.15); }
+  .nk-card:active { transform: translateY(0); }
+  .nk-card-active { border-color: rgba(74,158,255,0.7); background: rgba(74,158,255,0.12); box-shadow: 0 0 0 2px rgba(74,158,255,0.2); }
+  .nk-card-icon { font-size: 24px; line-height: 1; }
+  .nk-card-label { font-size: 11px; font-weight: 600; color: #3a4a6c; white-space: nowrap; }
+  .nk-card-sub { font-size: 9px; color: #7a8aaa; }
+  .nk-section-title { font-size: 11px; font-weight: 700; color: #5a6a8a; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 6px; }
+
+  /* 复选框列表（对话设置） */
+  .nk-checklist { display: flex; flex-direction: column; gap: 2px; }
+  .nk-check {
+    display: flex; align-items: center; gap: 8px; padding: 5px 0;
+    cursor: pointer; font-size: 13px;
+  }
+  .nk-check input { display: none; }
+  .nk-check .nk-cbox {
+    width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(100,130,180,0.35);
+    display: flex; align-items: center; justify-content: center; flex: none;
+    transition: all .15s;
+  }
+  .nk-check input:checked + .nk-cbox { background: linear-gradient(135deg, #4a9eff, #6bb5ff); border-color: transparent; }
+  .nk-check input:checked + .nk-cbox::after { content: '✓'; color: #fff; font-size: 12px; font-weight: 700; }
+
+  /* 子面板导航项 */
+  .nk-nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+    cursor: pointer; border-radius: 8px; transition: background .15s;
+  }
+  .nk-nav-item:hover { background: rgba(74,158,255,0.1); }
+  .nk-nav-item .nk-nav-icon { width: 28px; height: 28px; border-radius: 8px; background: rgba(74,158,255,0.15); display: flex; align-items: center; justify-content: center; flex: none; }
+  .nk-nav-item .nk-nav-icon svg { width: 16px; height: 16px; stroke: #4a7acc; }
+  .nk-nav-item .nk-nav-label { flex: 1; font-weight: 600; }
+  .nk-nav-item .nk-nav-arrow { color: #8a9aba; font-size: 14px; }
+  .nk-back { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #4a7acc; margin-bottom: 8px; }
+  .nk-back:hover { text-decoration: underline; }
+
+  /* 掉券动画层 */
+  #drop-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+  .drop-item { position: absolute; font-size: 22px; animation: dropFall linear forwards; }
+  @keyframes dropFall {
+    0% { transform: translateY(-30px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(360deg); opacity: 0.6; }
+  }
+
+  #pet-error { display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#fff;padding:10px 14px;border-radius:10px;font-size:12px;z-index:99;white-space:nowrap; }
+</style>
+<script src="assets/libs/pixi.min.js"></script>
+<script src="assets/libs/core.min.js"></script>
+<script src="assets/libs/live2d.min.js"></script>
+<script src="assets/libs/index.min.js"></script>
+</head>
+<body>
+<div id="pet-container">
+  <canvas id="stage"></canvas>
+  <div class="emotion-bubble" id="emotion-bubble"></div>
+  <div class="speech-bubble" id="speech-bubble"></div>
+  <div id="proactive-card"></div>
+  <div id="life-menu"></div>
+
+  <!-- 迷你聊天面板（N.E.K.O / AIRI 风格） -->
+  <div id="chat-panel">
+    <div class="cp-head" id="chat-head">
+      <span class="cp-title">
+        <span class="cp-avatar">🐱</span>
+        <span class="cp-name">
+          <span>Lumina Virtual Pet</span>
+          <span class="cp-status">在线</span>
+        </span>
+      </span>
+      <span class="cp-actions">
+        <button class="cp-btn" id="chat-life" title="朋友圈 / 剧场 / 日报">🌸</button>
+        <button class="cp-btn" id="chat-clear" title="清空聊天">🗑</button>
+        <button class="cp-btn cp-close" id="chat-close" title="关闭">✕</button>
+      </span>
+    </div>
+    <div id="chat-log"></div>
+    <div id="chat-life-view">
+      <div class="clv-head">
+        <button class="clv-back" id="clv-back" title="返回聊天">‹</button>
+        <span class="clv-title" id="clv-title">朋友圈</span>
+        <button class="clv-open-main" id="clv-open-main" title="在主窗口打开">⤢</button>
+      </div>
+      <div class="clv-list" id="clv-list"></div>
+    </div>
+    <div class="cp-typing" id="chat-typing"><span></span><span></span><span></span></div>
+    <div class="cp-quick" id="chat-quick">
+      <button class="cp-quick-btn" data-text="你好呀 Lumina！">👋 打招呼</button>
+      <button class="cp-quick-btn" data-text="今天心情怎么样？">💭 聊聊天</button>
+      <button class="cp-quick-btn" data-text="挥挥手！">👋 挥挥手</button>
+      <button class="cp-quick-btn" data-text="讲个笑话吧">😂 讲笑话</button>
+    </div>
+    <div class="cp-emoji-panel" id="chat-emoji-panel">
+      <span class="cp-emoji-item">😺</span><span class="cp-emoji-item">😸</span><span class="cp-emoji-item">😻</span>
+      <span class="cp-emoji-item">😽</span><span class="cp-emoji-item">🙀</span><span class="cp-emoji-item">😿</span>
+      <span class="cp-emoji-item">❤️</span><span class="cp-emoji-item">✨</span><span class="cp-emoji-item">🌟</span>
+      <span class="cp-emoji-item">🎵</span><span class="cp-emoji-item">🌸</span><span class="cp-emoji-item">🎀</span>
+      <span class="cp-emoji-item">🐟</span><span class="cp-emoji-item">🍰</span><span class="cp-emoji-item">☕</span>
+      <span class="cp-emoji-item">🌙</span><span class="cp-emoji-item">☀️</span><span class="cp-emoji-item">💤</span>
+      <span class="cp-emoji-item">👍</span><span class="cp-emoji-item">🎉</span><span class="cp-emoji-item">🤔</span>
+    </div>
+    <div class="cp-input-row">
+      <button class="cp-input-btn" id="pet-chat-emoji" title="表情">😊</button>
+      <input id="pet-chat-input" type="text" placeholder="和 Lumina 说点什么…" autocomplete="off" />
+      <button class="cp-input-btn" id="pet-chat-send" title="发送">➤</button>
+    </div>
+  </div>
+
+  <div class="name-tag" id="name-tag"><span class="status-dot"></span>Lumina <span id="idle-msg" style="margin-left:4px;font-size:10px;opacity:0.7;">| ฅ^•ﻌ•^ฅ</span></div>
+  <div id="pet-error"></div>
+</div>
+
+<!-- 掉券动画层 -->
+<div id="drop-layer"></div>
+
+<!-- ═══════ 模型旁工具栏 ═══════ -->
+<div id="neko-toolbar">
+  <div class="tb-btn tb-collapse" id="tb-collapse" title="收起工具栏">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-btn" id="tb-chat" title="聊天">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  </div>
+  <div class="tb-btn" id="tb-screenshare" title="屏幕分享">
+    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+  </div>
+  <div class="tb-btn" id="tb-mic" title="麦克风">
+    <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
+  </div>
+  <div class="tb-btn" id="tb-voice" title="语音设置" style="background:linear-gradient(135deg,#4a9eff,#6bb5ff);border-color:rgba(160,210,255,0.8);">
+    <svg viewBox="0 0 24 24"><path d="M3 12h2l3-8 4 16 3-10 2 4h4"/></svg>
+    <div class="tb-play" id="tb-voice-play"><svg viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg></div>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-btn" id="tb-tools" title="Lumina Pet Handling">
+    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+  </div>
+  <div class="tb-btn" id="tb-settings" title="设置">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </div>
+  <div class="tb-btn" id="tb-sparkle" title="特效 / 互动">
+    <svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/></svg>
+  </div>
+  <div class="tb-btn" id="tb-life" title="朋友圈 / 剧场 / 日报">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="12" r="1.1"/><circle cx="12" cy="12" r="1.1"/><circle cx="16" cy="12" r="1.1"/></svg>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-btn" id="tb-lock" title="锁定 / 穿透模式">
+    <svg viewBox="0 0 24 24" id="tb-lock-icon"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+  </div>
+</div>
+
+<!-- 收缩状态的小爪印按钮 -->
+<div id="tb-collapsed" title="展开工具栏" style="display:none;">🐾</div>
+
+<!-- ═══════ 弹出面板容器 ═══════ -->
+<div class="nk-panel" id="panel-audio"></div>
+<div class="nk-panel" id="panel-tools"></div>
+<div class="nk-panel" id="panel-settings"></div>
+<div class="nk-panel" id="panel-sparkle"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   Lumina Live2D 桌宠渲染器 v3.0 (N.E.K.O 风格)
+   ════════════════════════════════════════════════════════════ */
+
+/* ── IPC 探测 ────────────────────────────────────────────── */
+let ipc = null;
+try { ipc = require('electron').ipcRenderer; } catch (e) {}
+if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer; } catch (e) {} }
+if (!ipc && window.ipcRenderer) ipc = window.ipcRenderer;
+if (!ipc && window.electron) ipc = window.electron.ipcRenderer;
+const HAS_IPC = !!ipc;
+
+function sendEvent(type, data) { if (HAS_IPC) try { ipc.send('pet:event', { type, timestamp: Date.now(), data }); } catch (e) {} }
+
+/* ── N.E.K.O 风格偏好 ────────────────────────────────────── */
+let prefs = {
+  bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
+  mouseTrack: true, fullscreenTrack: false, fps: 0, quality: 'high',
+  voiceOn: false, volume: 100, spatial: true,
+  breathing: false, hoverFade: false, dropEffects: true, naturalExpression: true,
+  autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
+  screenShare: false, voiceRecognition: false, micDevice: '', playbackDevice: '',
+  catpaw: { master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false },
+};
+function applyPrefs() {
+  if (app && app.ticker) app.ticker.maxFPS = prefs.fps || 0;
+  const tag = document.getElementById('name-tag');
+  if (tag) tag.style.display = (prefs.catpaw && prefs.catpaw.hud === false) ? 'none' : '';
+  // 工具栏按钮状态
+  const tbSs = document.getElementById('tb-screenshare');
+  const tbMic = document.getElementById('tb-mic');
+  if (tbSs) tbSs.classList.toggle('active', !!prefs.screenShare);
+  if (tbMic) tbMic.classList.toggle('active', !!prefs.voiceRecognition);
+  // 锁定图标
+  updateLockIcon();
+  // 悬停淡化
+  applyHoverFade();
+  // 注意：不在此处 refreshPanels()，否则用户拖动滑块/切换开关时面板会被重建导致中断
+}
+if (HAS_IPC) {
+  ipc.invoke('pet:prefs').then(p => {
+    if (!p) return;
+    prefs = Object.assign(prefs, p);
+    prefs.catpaw = Object.assign({ master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false }, p.catpaw || {});
+    applyPrefs();
+  }).catch(() => {});
+  ipc.on('pet:prefs-changed', (_e, p) => {
+    if (!p) return;
+    prefs = Object.assign(prefs, p);
+    prefs.catpaw = Object.assign(prefs.catpaw || {}, p.catpaw || {});
+    applyPrefs();
+    // 外部（独立设置窗口）改了偏好 → 刷新打开的面板以同步显示
+    // 但如果是本地 livePref 刚发出的更新回传（500ms 内），跳过重建以避免打断 CSS 动画
+    if (Date.now() - _lastLocalPrefAt > 500) refreshPanels();
+  });
+}
+
+/* ── 渲染器 ───────────────────────────────────────────────── */
+const Live2DModel = (window.PIXI && window.PIXI.live2d && window.PIXI.live2d.Live2DModel) || window.Live2DModel;
+let model = null, baseY = 0, bobT = 0;
+let app = null;
+
+function showPetError(msg) {
+  const el = document.getElementById('pet-error');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+  console.error('[Pet] ERROR:', msg);
+}
+
+function initPixi() {
+  const stageEl = document.getElementById('stage');
+  if (!stageEl) return false;
+  try {
+    app = new PIXI.Application({
+      view: stageEl, resizeTo: window, autoStart: true,
+      transparent: true, backgroundAlpha: 0,
+      resolution: prefs.quality === 'low' ? 1 : (window.devicePixelRatio || 1),
+      autoDensity: true,
+    });
+    applyPrefs();
+    window.__petApp = app;
+    return true;
+  } catch (e) { console.error('[Pet] PIXI.Application failed:', e); return false; }
+}
+
+const state = { walking: false, targetX: 0, speed: 2.2, mood: '平静', name: 'Mao', sleeping: false, naturalW: 300, naturalH: 300, autoLevel: 'light', floating: false, floatY: 0, jumpStart: 0, jumpEnd: 0, lastPlaceAt: 0, locked: false, lockedX: 0, lockedY: 0 };
+const MOTION_GROUPS = ['TapBody', 'Idle', ''];
+const IDLE_MESSAGES = ['ฅ^•ﻌ•^ฅ', '发呆中...', '(=^･ω･^=)', '等你回家~', '呼噜呼噜...', '盯——👀', '今天想我了吗?', 'ε٩( ºωº )۶з'];
+const SPEECH_POOL = ['今天过得怎么样？', '喵~想你啦！', '要一起玩吗？', '你是我的光！', '要不要喝热茶？', '悄悄话……', '吃饱了就想你~'];
+
+const EMOTION_PARAM = {
+  '超开心 🎉': { angleX: -10, angleZ: 8,  eye: 1.15, say: '耶！好开心！' },
+  '兴奋 🤩':  { angleX: -12, angleZ: 10, eye: 1.2,  say: '哇~有什么好玩的！' },
+  '幸福 💖':  { angleX: -8,  angleZ: 0,  eye: 1.0,  say: '嘻嘻，幸福~' },
+  '开心 😊':  { angleX: -8,  angleZ: 0,  eye: 1.0,  say: '主人你来啦~' },
+  '平静 😐':  { angleX: 0,   angleZ: 0,  eye: 1.0,  say: '' },
+  '闷闷不乐 😕': { angleX: 6,  angleZ: -4, eye: 0.7, say: '唔…有点小情绪' },
+  '低落 😔':  { angleX: 8,   angleZ: -6, eye: 0.6, say: '唉…' },
+  '难过 😢':  { angleX: 10,  angleZ: -8, eye: 0.4, say: '呜呜…' },
+  '疲惫 😩':  { angleX: 12,  angleZ: -4, eye: 0.3, say: '好困哦…' },
+};
+
+function setParam(id, v) { try { model.internalModel.coreModel.setParameterValueById(id, v); } catch (e) {} }
+
+/* ── 👀 注视系统：回归 pixi-live2d-display 标准链路（对齐 N.E.K.O 的 model.focus 与 AIRI 的柔和幅度/空闲眼动）──
+   不再用 setParam 覆盖眼球和头，而是把鼠标方向交给 model.focus → FocusController 做带加减速、
+   帧率无关的惯性插值 → Cubism InternalModel 每帧用 addParameterValueById 把“同一个焦点”叠加到
+   眼球(EyeBallX/Y)、头(AngleX/Y/Z)、身体(BodyAngleX)。眼头身天然协同、与呼吸/待机动作叠加而不打架。 */
+const GAZE_AMP = 0.55;          // 注视幅度（AIRI 取 0.5；桌宠 0.5~0.6 最自然：看得出来又不会一直瞪眼/歪头）
+const GAZE_IDLE_MS = 800;       // 鼠标静止多久后进入空闲（平滑回中 / 偶尔轻飘一眼）
+const gazeState = { lastMove: 0, nextIdle: 0 };
+function focusControllerOf() { return (model && model.internalModel) ? model.internalModel.focusController : null; }
+// 模型“眼睛”在画布里的纵向位置（相对模型几何中心上移的比例，占显示高度）：
+// Mao 是半身立绘（眼睛接近画布中部）。
+const GAZE_HEAD_RATIO = { Mao: 0.08 };
+const GAZE_DEAD_PX = 26; // 固定屏幕像素死区（不再按模型尺寸，避免全身立绘死区过大、看起来不跟随）
+// 鼠标移动：以模型“眼睛”为参考点算方位，喂给 FocusController（仍走 pixi 标准惯性 + 每帧叠加链路）
+function driveGaze(clientX, clientY) {
+  if (!model) return;
+  const fc = focusControllerOf(); if (!fc) return;
+  const now = performance.now();
+  gazeState.lastMove = now; gazeState.nextIdle = now + 1400;
+  const headRatio = GAZE_HEAD_RATIO[state.name] != null ? GAZE_HEAD_RATIO[state.name] : 0.12;
+  const eyeX = model.x;
+  const eyeY = model.y - Math.abs(model.height || 1) * headRatio;
+  const dx = clientX - eyeX, dy = clientY - eyeY;
+  if (Math.hypot(dx, dy) < GAZE_DEAD_PX) { fc.focus(0, 0, false); return; }
+  // 与打包版 pixi-live2d-display 的 model.focus 同约定：atan2(屏幕dy, dx)，第二参对 sin 取反；
+  // atan2 内不能再对 dy 取反，否则纵向反向（上下看反、左右正常）。
+  const ang = Math.atan2(dy, dx);
+  fc.focus(Math.cos(ang) * GAZE_AMP, -Math.sin(ang) * GAZE_AMP, false);
+}
+// 每帧：鼠标静止后平滑回中，并偶尔轻轻飘一眼（saccade），让角色像活人一样有神
+function gazeFrame() {
+  const fc = focusControllerOf(); if (!fc) return;
+  const now = performance.now();
+  if (now - gazeState.lastMove < GAZE_IDLE_MS) return;
+  if (now < gazeState.nextIdle) return;
+  if (Math.random() < 0.32) {
+    fc.focus((Math.random() * 2 - 1) * 0.16, (Math.random() * 2 - 1) * 0.12 - 0.04, false);
+  } else { fc.focus(0, 0, false); }
+  gazeState.nextIdle = now + 1600 + Math.random() * 2600;
+}
+function gazeCenter() { const fc = focusControllerOf(); if (fc) fc.focus(0, 0, false); }
+
+let userScale = 1;
+function fitScale() {
+  const fitH = Math.max(innerHeight * 0.70, 100);
+  const fitW = Math.max(innerWidth * 0.6, 100);
+  return Math.min(fitH / state.naturalH, fitW / state.naturalW);
+}
+function applyScale() { if (!model) return; model.scale.set(fitScale() * userScale); clampPosition(); }
+let _persistScaleTimer = null;
+function setUserScale(v, persist) {
+  userScale = Math.min(1.6, Math.max(0.4, v));
+  applyScale();
+  if (persist && HAS_IPC) {
+    clearTimeout(_persistScaleTimer);
+    _persistScaleTimer = setTimeout(() => {
+      ipc.invoke('pet:update-config', { scale: Math.round(userScale * 100) / 100 }).catch(() => {});
+    }, 400);
+  }
+}
+function modelHalfW() { return Math.abs(model ? model.width : 0) / 2; }
+function groundY() { return innerHeight - 6 - Math.abs(model.height) / 2; }
+function clampPosition() {
+  if (!model) return;
+  const hw = modelHalfW() + 4;
+  if (model.x < hw) model.x = hw;
+  else if (model.x > innerWidth - hw) model.x = innerWidth - hw;
+  if (!state.floating) { state.floatY = groundY(); model.y = state.floatY; }
+  else { const hh = Math.abs(model.height) / 2 + 4; state.floatY = Math.min(innerHeight - hh, Math.max(hh, state.floatY)); }
+}
+function positionOverlays() {
+  if (!model) return;
+  const hw = modelHalfW();
+  const modelTop = model.y - Math.abs(model.height) / 2;
+  const modelBottom = model.y + Math.abs(model.height) / 2;
+
+  // 对话气泡 — 模型头顶上方
+  const b = document.getElementById('speech-bubble');
+  if (b) {
+    const _bw = b.offsetWidth || 80;
+    b.style.left = Math.max(_bw / 2 + 8, Math.min(innerWidth - _bw / 2 - 8, model.x)) + 'px';
+    b.style.top = Math.max(6, modelTop - (b.offsetHeight || 24) - 10) + 'px';
+    b.style.transform = 'translateX(-50%)';
+  }
+
+  // 情绪气泡 — 模型头顶更上方
+  const eb = document.getElementById('emotion-bubble');
+  if (eb) {
+    eb.style.left = model.x + 'px';
+    eb.style.top = Math.max(6, modelTop - 22) + 'px';
+    eb.style.transform = 'translateX(-50%)';
+  }
+
+  // 名称标签 — 模型脚下
+  const nt = document.getElementById('name-tag');
+  if (nt) {
+    nt.style.left = model.x + 'px';
+    nt.style.top = Math.min(innerHeight - 20, modelBottom + 4) + 'px';
+    nt.style.transform = 'translateX(-50%)';
+  }
+
+  positionToolbar();
+  positionProactiveCard();
+}
+
+/* 工具栏跟随模型定位（模型右侧，空间不够则左侧） */
+function positionToolbar() {
+  const tb = document.getElementById('neko-toolbar');
+  const collapsed = document.getElementById('tb-collapsed');
+  if (!tb || !model) return;
+  const isCollapsed = tb.classList.contains('collapsed');
+  if (isCollapsed) {
+    tb.style.display = 'none';
+    collapsed.style.display = 'flex';
+  } else {
+    tb.style.display = 'flex';
+    collapsed.style.display = 'none';
+  }
+  const activeEl = isCollapsed ? collapsed : tb;
+  const tbW = activeEl.offsetWidth || 46;
+  const tbH = activeEl.offsetHeight || 300;
+  const hw = modelHalfW();
+  const modelTop = model.y - Math.abs(model.height) / 2;
+  let y = modelTop + Math.abs(model.height) * 0.18;
+  y = Math.max(8, Math.min(innerHeight - tbH - 8, y));
+  const gap = 12;
+  let x = model.x + hw + gap;
+  if (x + tbW > innerWidth - 8) x = model.x - hw - tbW - gap;
+  x = Math.max(8, x);
+  activeEl.style.left = x + 'px';
+  activeEl.style.top = y + 'px';
+  // 面板打开时跟随重新定位
+  document.querySelectorAll('.nk-panel.show').forEach(p => {
+    const btnId = p.dataset.anchor;
+    if (btnId) { const btn = document.getElementById(btnId); if (btn) positionPanel(p, btn); }
+  });
+}
+
+function applyEmotion(label) {
+  const cfg = EMOTION_PARAM[label] || EMOTION_PARAM['平静 😐'];
+  state.mood = label;
+  setParam('ParamAngleX', cfg.angleX);
+  setParam('ParamAngleZ', cfg.angleZ);
+  setParam('ParamEyeLOpen', cfg.eye);
+  setParam('ParamEyeROpen', cfg.eye);
+  // 🎭 同步面部表情（支持表情的模型生效，如 Mao）
+  applyMoodExpression(label);
+  const b = document.getElementById('emotion-bubble');
+  if (b && prefs.bubbles !== false) { b.textContent = label; b.classList.add('show'); clearTimeout(window._eb); window._eb = setTimeout(() => b.classList.remove('show'), 2800); }
+}
+
+function fetchEmotion() {
+  if (!HAS_IPC) return;
+  ipc.invoke('gamification:getEmotionXp').then(res => {
+    if (res && res.label) applyEmotion(res.label);
+  }).catch(() => {});
+}
+
+/* ── 动作引擎 ────────────────────────────────────────────── */
+function say(text) {
+  let t = text || SPEECH_POOL[Math.floor(Math.random() * SPEECH_POOL.length)];
+  if (prefs.nekoSounds !== false && Math.random() < 0.3 && !/喵/.test(t)) t += ' 喵~';
+  if (prefs.bubbles !== false) {
+    const b = document.getElementById('speech-bubble');
+    if (b) {
+      b.textContent = t; b.classList.add('show');
+      if (typeof positionOverlays === 'function') requestAnimationFrame(() => { try { positionOverlays(); } catch (e) {} });
+      clearTimeout(window._sp);
+      window._sp = setTimeout(() => b.classList.remove('show'), 4000);
+    }
+  }
+  speakTts(t);
+}
+
+/* ── 🤵 主动秘书搭话卡片（文本 + A/B/C 快捷回复 + 收起）── */
+const KIND_LABEL = { observe: '看到了', suggest: '小建议', ask: '问你一下', praise: '夸夸' };
+let _pcTimer = null;
+function showProactiveCard(cmd) {
+  // N.E.K.O 风格：主动搭话直接进入聊天消息流，并在下方内嵌 A/B/C 选择项
+  const text = (cmd && cmd.text || '').trim();
+  if (!text) return;
+  const opts = Array.isArray(cmd.options) ? cmd.options.slice(0, 3).filter(x => typeof x === 'string' && x.trim()) : [];
+  if (!chatOpenNow()) toggleChat(true);
+  addChatMsg('pet', text);
+  if (opts.length) addChatOptions(opts);
+  speakTts(text);
+}
+// 在聊天流末尾追加一条可点的 A/B/C 选项（选择项聊天，点了即作为用户回复）
+function addChatOptions(options) {
+  if (!chatLog) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'cp-msg-options';
+  (options || []).slice(0, 3).forEach(function(o, i){
+    const b = document.createElement('button');
+    b.className = 'cp-opt-btn';
+    b.textContent = String.fromCharCode(65 + i) + '. ' + o;
+    b.onclick = function(){ replyProactive(o); };
+    wrap.appendChild(b);
+  });
+  chatLog.appendChild(wrap);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+function closeProactiveCard() {
+  const card = document.getElementById('proactive-card');
+  if (card) card.classList.remove('show');
+  clearTimeout(_pcTimer);
+}
+function replyProactive(text) {
+  closeProactiveCard();
+  if (!chatOpenNow()) toggleChat(true);
+  addChatMsg('user', text);
+  showTyping(true);
+  if (typeof patchInteraction === 'function') patchInteraction();
+  if (HAS_IPC) {
+    try { ipc.send('pet:sync-send', { text }); } catch (e) {}
+    ipc.invoke('pet:chat', { text }).catch(function(){ showTyping(false); });  // typing 等主 Agent 回复(pet:sync-reply)再关，避免提前消失
+  } else { showTyping(false); }
+}
+function positionProactiveCard() {
+  const card = document.getElementById('proactive-card');
+  if (!card || !model || !card.classList.contains('show')) return;
+  const w = card.offsetWidth || 268, h = card.offsetHeight || 120;
+  const hw = modelHalfW();
+  // 聊天窗打开时卡片摆到模型对侧，避免与 420px 聊天面板重叠
+  let x;
+  if (typeof chatOpenNow === 'function' && chatOpenNow()) {
+    x = model.x - hw - 14 - w;
+    if (x < 8) x = model.x + hw + 14;
+  } else {
+    x = model.x + hw + 14;
+    if (x + w > innerWidth - 8) x = model.x - hw - 14 - w;
+  }
+  x = Math.max(8, x);
+  let y = model.y - h / 2;
+  y = Math.max(8, Math.min(innerHeight - h - 8, y));
+  card.style.left = x + 'px'; card.style.top = y + 'px';
+}
+function toggleLifeMenu(anchorEl) {
+  const menu = document.getElementById('life-menu');
+  if (!menu) return;
+  const showing = menu.classList.contains('show');
+  if (showing) { menu.classList.remove('show'); return; }
+  menu.innerHTML =
+    '<div class="lm-item" data-life="moments">🌸 朋友圈</div>' +
+    '<div class="lm-item" data-life="theater">🎬 剧场</div>' +
+    '<div class="lm-item" data-life="daily">📰 日报</div>';
+  menu.querySelectorAll('.lm-item').forEach(function(it){
+    it.onclick = function(){
+      const t = it.getAttribute('data-life');
+      menu.classList.remove('show');
+      openLifeView(t);
+    };
+  });
+  const r = anchorEl ? anchorEl.getBoundingClientRect() : { left: model.x, bottom: model.y };
+  let mx = r.left || 8; let my = (r.bottom || 8) + 6;
+  if (mx + 150 > innerWidth) mx = innerWidth - 154;
+  if (my + 120 > innerHeight) my = (r.top || innerHeight) - 126;
+  menu.style.left = Math.max(6, mx) + 'px'; menu.style.top = Math.max(6, my) + 'px';
+  menu.classList.add('show');
+}
+
+/* ── 🌸 聊天框内 朋友圈/剧场/日报（数据实时取自主窗口，与主界面互通）── */
+const LIFE_META = {
+  moments: { title: '🌸 朋友圈', empty: '还没有动态，去主界面发一条吧～' },
+  theater: { title: '🎬 记忆剧场', empty: '还没有记忆剧集，多聊聊天就会长出来～' },
+  daily: { title: '📰 Lumina 日报', empty: '今天还没有日报，去主界面生成一份吧～' },
+};
+let lifeCurrent = null;
+function openLifeView(target) {
+  const view = document.getElementById('chat-life-view');
+  if (!view) return;
+  if (!chatOpenNow()) toggleChat(true);
+  lifeCurrent = target;
+  const meta = LIFE_META[target] || LIFE_META.moments;
+  const titleEl = document.getElementById('clv-title');
+  if (titleEl) titleEl.textContent = meta.title;
+  const list = document.getElementById('clv-list');
+  if (list) list.innerHTML = '<div class="clv-loading">正在从主界面同步…</div>';
+  view.classList.add('show');
+  if (chatLog) chatLog.style.display = 'none';
+  const q = document.getElementById('chat-quick'); if (q) q.style.display = 'none';
+  const tp = document.getElementById('chat-typing'); if (tp) tp.style.display = 'none';
+  if (!HAS_IPC) { renderLife([], meta.empty); return; }
+  ipc.invoke('pet:life-data', target).then(function(res){
+    if (lifeCurrent !== target) return;
+    renderLife((res && res.items) || [], meta.empty);
+  }).catch(function(){ if (lifeCurrent === target) renderLife([], meta.empty); });
+}
+function closeLifeView() {
+  const view = document.getElementById('chat-life-view');
+  if (view) view.classList.remove('show');
+  if (chatLog) chatLog.style.display = '';
+  const q = document.getElementById('chat-quick'); if (q) q.style.display = '';
+  const tp = document.getElementById('chat-typing'); if (tp) tp.style.display = '';
+  lifeCurrent = null;
+}
+function renderLife(items, emptyText) {
+  const list = document.getElementById('clv-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!items || !items.length) {
+    const e = document.createElement('div'); e.className = 'clv-empty';
+    e.textContent = emptyText || '暂无内容'; list.appendChild(e); return;
+  }
+  items.forEach(function(it){
+    const card = document.createElement('div'); card.className = 'clv-item';
+    if (it.title) { const h = document.createElement('div'); h.className = 'clv-item-head'; h.textContent = (it.icon ? it.icon + ' ' : '') + it.title; card.appendChild(h); }
+    if (it.meta) { const m = document.createElement('div'); m.className = 'clv-item-meta'; m.textContent = it.meta; card.appendChild(m); }
+    if (it.body) { const b = document.createElement('div'); b.className = 'clv-item-body'; b.textContent = it.body; card.appendChild(b); }
+    list.appendChild(card);
+  });
+  list.scrollTop = 0;
+}
+
+/* ── AI 语音 ─────────────────────────────────────────────── */
+let _audioCtx = null, _lastSpeakAt = 0;
+async function speakTts(text) {
+  if (!HAS_IPC || prefs.voiceOn !== true) return;
+  if (!text || text.length > 40) return;
+  const now = Date.now();
+  if (now - _lastSpeakAt < 4000) return;
+  _lastSpeakAt = now;
+
+  const engine = prefs.ttsEngine || 'edge-tts';
+  if (engine === 'indextts') {
+    // IndexTTS-2.5 本地服务
+    try {
+      const res = await fetch('http://127.0.0.1:18927/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, lang: 'ZH' }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.audio) {
+          // hex → WAV ArrayBuffer → blob URL
+          const hex = data.audio;
+          const bytes = new Uint8Array(hex.length / 2);
+          for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+          const blob = new Blob([bytes], { type: 'audio/wav' });
+          playAudioDataUrl(URL.createObjectURL(blob));
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[TTS] IndexTTS 失败，降级到 Edge-TTS:', e.message);
+    }
+  }
+
+  // Edge-TTS（默认/降级）
+  ipc.invoke('edge-tts:speak', { text }).then(res => {
+    if (res && res.audio) playAudioDataUrl(res.audio);
+  }).catch(() => {});
+}
+function playAudioDataUrl(url) {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    fetch(url).then(r => r.arrayBuffer()).then(buf => ctx.decodeAudioData(buf)).then(audio => {
+      const src = ctx.createBufferSource(); src.buffer = audio;
+      const gain = ctx.createGain(); gain.gain.value = (Number(prefs.volume) || 100) / 100;
+      src.connect(gain); let out = gain;
+      if (prefs.spatial !== false && model && ctx.createStereoPanner) {
+        const pan = ctx.createStereoPanner();
+        pan.pan.value = Math.max(-0.8, Math.min(0.8, (model.x / innerWidth) * 2 - 1));
+        gain.connect(pan); out = pan;
+      }
+      out.connect(ctx.destination); src.start();
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+function walk(dir) {
+  if (state.locked) return; // 锁定时不移动
+  if (state.floating) { state.floating = false; state.floatY = groundY(); }
+  state.walking = true;
+  const hw = modelHalfW() + 8;
+  state.targetX = Math.min(innerWidth - hw, Math.max(hw, model.x + dir * (60 + Math.random() * 80)));
+  const s = Math.abs(model.scale.x); model.scale.x = dir > 0 ? s : -s;
+  sendEvent('walk-start');
+}
+function emote(i) {
+  markActionBusy(2500);
+  // 优先用检测到的动作组，回退到默认 MOTION_GROUPS
+  const groups = Object.keys(modelMotions).length > 0 ? Object.keys(modelMotions) : MOTION_GROUPS;
+  const grp = groups[Math.floor(Math.random() * groups.length)];
+  const cnt = modelMotions[grp] || 10;
+  try { model.motion(grp, (Number(i) || 0) % cnt); } catch (e) {}
+}
+function localIntent() {
+  const stayPlaced = state.floating || Date.now() - state.lastPlaceAt < 60_000;
+  const r = Math.random();
+  if (r < 0.30 && !stayPlaced) return { action: 'walk', dir: Math.random() < 0.5 ? -1 : 1 };
+  if (r < 0.60) return { action: 'emote', motion: Math.floor(Math.random() * 10) };
+  if (r < 0.85) return { action: 'say' };
+  return { action: 'idle' };
+}
+
+const ACTION_DEBOUNCE = 180;
+let _lastActionAt = 0;
+function _canAct() { const now = Date.now(); if (now - _lastActionAt < ACTION_DEBOUNCE) return false; _lastActionAt = now; return true; }
+
+const tweens = [];
+function animateParam(id, to, dur, cb) {
+  const from = (() => { try { return model.internalModel.coreModel.getParameterValueById(id); } catch (e) { return 0; } })();
+  tweens.push({ id, from, to, start: Date.now(), dur: dur || 500, cb });
+}
+function tickTweens() {
+  if (!model) { tweens.length = 0; return; }
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const t = tweens[i];
+    const p = Math.min(1, (Date.now() - t.start) / t.dur);
+    const eased = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    const v = t.from + (t.to - t.from) * eased;
+    setParam(t.id, v);
+    if (p >= 1) { tweens.splice(i, 1); if (t.cb) t.cb(); }
+  }
+}
+function resetPoseParams() { ['ParamAngleX', 'ParamAngleY', 'ParamAngleZ'].forEach(id => animateParam(id, 0, 400)); }
+
+function doNod(times) {
+  if (!_canAct()) return;
+  const n = Math.min(6, times || 2); let i = 0;
+  const step = () => { if (i >= n) { animateParam('ParamAngleY', 0, 200); resetPoseParams(); return; } const target = i % 2 === 0 ? 8 : -8; animateParam('ParamAngleY', target, 180, step); i++; };
+  step();
+}
+function doShake(times) {
+  if (!_canAct()) return;
+  const n = Math.min(4, times || 2); let i = 0;
+  const step = () => { if (i >= n) { animateParam('ParamAngleX', 0, 200); resetPoseParams(); return; } const target = i % 2 === 0 ? 10 : -10; animateParam('ParamAngleX', target, 160, step); i++; };
+  step();
+}
+function doThink() {
+  if (!_canAct()) return;
+  animateParam('ParamAngleZ', -14, 350); animateParam('ParamAngleY', 5, 350);
+  setTimeout(() => resetPoseParams(), 1800);
+}
+function doWave() {
+  if (!_canAct()) return;
+  markActionBusy(1000);
+  // 尝试播放内置动作
+  playRandomMotion('TapBody');
+  animateParam('ParamBodyAngleZ', 14, 200); animateParam('ParamAngleZ', 10, 200);
+  setTimeout(() => { animateParam('ParamBodyAngleZ', -14, 200); animateParam('ParamAngleZ', -8, 200); }, 240);
+  setTimeout(() => { animateParam('ParamBodyAngleZ', 12, 200); }, 480);
+  setTimeout(() => { animateParam('ParamBodyAngleZ', 0, 260); animateParam('ParamAngleZ', 0, 260); }, 720);
+}
+function doHappy() {
+  if (!_canAct()) return;
+  markActionBusy(1500);
+  applyEmotion('超开心 🎉'); setFace('joy');
+  // 尝试播放内置动作（如果模型有）
+  playRandomMotion('TapBody');
+  // 连续跳两下
+  state.jumpStart = Date.now(); state.jumpEnd = Date.now() + 500;
+  setTimeout(() => { state.jumpStart = Date.now(); state.jumpEnd = Date.now() + 500; }, 550);
+  // 身体摇摆
+  animateParam('ParamBodyAngleZ', 12, 200);
+  setTimeout(() => animateParam('ParamBodyAngleZ', -12, 200), 250);
+  setTimeout(() => animateParam('ParamBodyAngleZ', 8, 200), 500);
+  setTimeout(() => animateParam('ParamBodyAngleZ', 0, 300), 750);
+  if (prefs.dropEffects) spawnDropEffect();
+}
+function doSurprised() {
+  if (!_canAct()) return;
+  markActionBusy(900);
+  applyEmotion('兴奋 🤩'); setFace('surprise');
+  animateParam('ParamAngleZ', 0, 100);
+  animateParam('ParamBodyAngleZ', 0, 100);
+  // 身体后倾
+  animateParam('ParamAngleX', -8, 200);
+  setTimeout(() => animateParam('ParamAngleX', 0, 400), 600);
+}
+function doDance() {
+  if (!_canAct()) return;
+  markActionBusy(2000);
+  applyEmotion('超开心 🎉'); setFace('joy');
+  // 尝试播放内置动作
+  playRandomMotion('TapBody');
+  let count = 0;
+  const danceStep = () => {
+    if (count >= 4) { animateParam('ParamBodyAngleZ', 0, 300); animateParam('ParamAngleZ', 0, 300); return; }
+    const dir = count % 2 === 0 ? 15 : -15;
+    animateParam('ParamBodyAngleZ', dir, 200);
+    animateParam('ParamAngleZ', dir * 0.5, 200);
+    state.jumpStart = Date.now(); state.jumpEnd = Date.now() + 200;
+    count++;
+    setTimeout(danceStep, 250);
+  };
+  danceStep();
+}
+function doClap() {
+  if (!_canAct()) return;
+  markActionBusy(1200);
+  applyEmotion('开心 😊');
+  // 尝试播放内置拍手动作
+  try { model.motion('TapBody', 0); } catch (e) {}
+  animateParam('ParamAngleZ', 8, 200);
+  setTimeout(() => animateParam('ParamAngleZ', -8, 200), 300);
+  setTimeout(() => animateParam('ParamAngleZ', 0, 300), 600);
+}
+function setSleep(customText) {
+  animateParam('ParamEyeLOpen', 0, 800); animateParam('ParamEyeROpen', 0, 800);
+  state.sleeping = true; say(customText || '呼噜呼噜…');
+}
+function setWake(customText) {
+  animateParam('ParamEyeLOpen', 1, 500); animateParam('ParamEyeROpen', 1, 500);
+  state.sleeping = false; document.body.style.opacity = '1'; resetPoseParams(); say(customText || '唔…醒啦！');
+}
+function doBlink() {
+  animateParam('ParamEyeLOpen', 0, 90); animateParam('ParamEyeROpen', 0, 90);
+  setTimeout(() => { animateParam('ParamEyeLOpen', 1, 140); animateParam('ParamEyeROpen', 1, 140); }, 110);
+}
+
+const FACE_EXPR_MAP = { happy: 'exp_02', sad: 'exp_05', angry: 'exp_08', joy: 'exp_04', blush: 'exp_06', surprise: 'exp_07', calm: 'exp_01', shy: 'exp_03' };
+function setFace(exprName) {
+  const exprId = FACE_EXPR_MAP[exprName] || (typeof exprName === 'string' && exprName.startsWith('exp_') ? exprName : null);
+  if (!exprId) return;
+  try { if (model.internalModel?.coreModel?.setExpression) model.internalModel.coreModel.setExpression(exprId); } catch (e) {}
+}
+
+/* ═══════ 🎬 内置动作系统（LLM 驱动 Live2D 原生 motion）═══════ */
+let modelMotions = {};   // { groupName: count }
+let modelHasExpr = false;
+let _idleMotionTimer = null;
+let _actionBusyUntil = 0;
+
+/** 检测模型支持的动作组和表情 */
+function detectModelCapabilities() {
+  modelMotions = {};
+  modelHasExpr = false;
+  if (!model) return;
+  try {
+    const mm = model.internalModel?.motionManager;
+    if (mm) {
+      // pixi-live2d-display: motionManager.definitions 是数组
+      const defs = mm.definitions || mm._definitions || [];
+      if (Array.isArray(defs)) {
+        for (const d of defs) {
+          if (d && d.group != null) {
+            const cnt = Array.isArray(d.motions) ? d.motions.length : (d.count || 1);
+            modelMotions[d.group] = cnt;
+          }
+        }
+      }
+      // 兜底：从 settings.motions 读取
+      if (Object.keys(modelMotions).length === 0) {
+        const settings = model.internalModel?.settings;
+        if (settings && settings.motions) {
+          for (const [grp, arr] of Object.entries(settings.motions)) {
+            modelMotions[grp] = Array.isArray(arr) ? arr.length : 1;
+          }
+        }
+      }
+    }
+    // 检测表情支持
+    const core = model.internalModel?.coreModel;
+    if (core && typeof core.setExpression === 'function') {
+      const exprCount = core.getExpressionCount ? core.getExpressionCount() : 0;
+      modelHasExpr = exprCount > 0;
+    }
+  } catch (e) { console.warn('[Pet] 动作检测失败:', e); }
+  console.log('[Pet] 模型能力:', { motions: modelMotions, expressions: modelHasExpr });
+}
+
+/** 安全播放内置动作 */
+function playBuiltinMotion(group, index) {
+  if (!model) return false;
+  try {
+    if (typeof model.motion === 'function') {
+      model.motion(group, index);
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+/** 从指定组随机播放一个动作 */
+function playRandomMotion(group) {
+  const cnt = modelMotions[group];
+  if (!cnt) return false;
+  return playBuiltinMotion(group, Math.floor(Math.random() * cnt));
+}
+
+/** 启动空闲动作循环（定期播放 Idle 组动作，让模型"活"起来） */
+function startIdleMotionLoop() {
+  if (_idleMotionTimer) clearInterval(_idleMotionTimer);
+  const hasIdle = !!(modelMotions['Idle'] || modelMotions['']);
+  if (!hasIdle) return;
+  _idleMotionTimer = setInterval(() => {
+    if (!model || state.sleeping || state.walking) return;
+    if (Date.now() < _actionBusyUntil) return;  // 动作冷却中
+    if (menuOpen || anyPanelOpen() || chatOpenNow()) return;
+    // 优先 Idle 组，没有就用空名组
+    const grp = modelMotions['Idle'] ? 'Idle' : '';
+    playRandomMotion(grp);
+  }, 6000 + Math.random() * 5000);  // 6~11 秒随机
+}
+
+/** 初始化动作系统（模型加载后调用） */
+function initMotionSystem() {
+  detectModelCapabilities();
+  startIdleMotionLoop();
+}
+
+/** 标记动作忙碌时间（在此期间不插空闲动作） */
+function markActionBusy(ms) { _actionBusyUntil = Date.now() + ms; }
+
+/** 根据情绪设置面部表情（仅支持表情的模型生效） */
+function applyMoodExpression(moodLabel) {
+  if (!modelHasExpr) return;
+  const map = {
+    '超开心 🎉': 'joy', '兴奋 🤩': 'happy', '幸福 💖': 'blush', '开心 😊': 'happy',
+    '闷闷不乐 😕': 'sad', '低落 😔': 'sad', '难过 😢': 'sad', '疲惫 😩': 'calm',
+    '平静 😐': 'calm',
+  };
+  const face = map[moodLabel];
+  if (face) setFace(face);
+}
+
+/* 自然微表情：偶尔眨眼/歪头 */
+function naturalMicroExpression() {
+  if (!model || state.sleeping || !prefs.naturalExpression) return;
+  const r = Math.random();
+  if (r < 0.5) doBlink();
+  else if (r < 0.7) { animateParam('ParamAngleZ', (Math.random() - 0.5) * 6, 400); setTimeout(() => resetPoseParams(), 1200); }
+}
+
+function switchModel(modelName) {
+  // 目前仅保留 Mao（虹色 Mao）一个 Live2D 模型
+  const name = modelName === 'Mao' ? 'Mao' : null;
+  if (!name || name === state.name) return;
+  if (HAS_IPC) { ipc.invoke('pet:set-model', name).finally(() => location.reload()); }
+  else location.reload();
+}
+
+function execIntent(it) {
+  if (!it || !it.action) return;
+  // 统一应用情绪
+  if (it.mood) applyEmotion(it.mood);
+  const hasSpeech = it.speech && String(it.speech).trim();
+  switch (it.action) {
+    case 'walk':
+      walk(it.dir || 1);
+      if (hasSpeech) setTimeout(() => say(it.speech), 300);
+      break;
+    case 'emote':
+      emote(it.motion || 0);
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'say':
+      say(hasSpeech ? it.speech : undefined);
+      break;
+    case 'wave':
+      doWave();
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'nod':
+      doNod(it.times);
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'shake':
+      doShake(it.times);
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'think':
+      doThink();
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'sleep':
+      state.sleeping = true;
+      setSleep(hasSpeech ? it.speech : undefined);
+      break;
+    case 'wake':
+      state.sleeping = false;
+      setWake(hasSpeech ? it.speech : undefined);
+      break;
+    case 'happy':
+      doHappy();
+      if (hasSpeech) setTimeout(() => say(it.speech), 200);
+      break;
+    case 'sad':
+      markActionBusy(1500);
+      applyEmotion(it.mood || '难过 😢'); setFace('sad');
+      playRandomMotion('Idle');
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'angry':
+      markActionBusy(1500);
+      applyEmotion(it.mood || '闷闷不乐 😕'); setFace('angry');
+      playRandomMotion('Idle');
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'surprised':
+      doSurprised();
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'dance':
+      doDance();
+      if (hasSpeech) setTimeout(() => say(it.speech), 200);
+      break;
+    case 'clap':
+      doClap();
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'blink':
+      doBlink();
+      if (hasSpeech) say(it.speech);
+      break;
+    case 'idle':
+      state.walking = false; resetPoseParams();
+      break;
+    case 'set-model':
+      switchModel(it.model);
+      break;
+    case 'operate':
+      if (HAS_IPC && it.cu) ipc.invoke('pet:test-intent', { action: 'operate', cu: it.cu });
+      break;
+    default:
+      if (hasSpeech) say(it.speech);
+      break;
+  }
+}
+
+let lastLLMActAt = 0;
+let autonomyTimer = null;
+function startAutonomyLoop() {
+  if (autonomyTimer) clearInterval(autonomyTimer);
+  autonomyTimer = setInterval(async () => {
+    if (!model || state.sleeping) return;
+    if (state.autoLevel === 'off') return;
+    if (prefs.focusMode && document.hasFocus && !document.hasFocus()) return;
+    if (Date.now() - lastLLMActAt < 20_000) return;
+    if (menuOpen || anyPanelOpen() || chatOpenNow()) return;
+    lastLLMActAt = Date.now();
+    if (HAS_IPC) {
+      try {
+        const res = await ipc.invoke('pet:autonomy:tick');
+        if (res && res.ok && res.intent && !res.skipped) {
+          // pet:command 事件已经执行了 intent，这里不需要重复
+        }
+      } catch (e) {
+        // LLM 失败时降级本地动作
+        execIntent(localIntent());
+      }
+    } else {
+      execIntent(localIntent());
+    }
+  }, 8000);
+}
+startAutonomyLoop();
+
+/* ── 渲染循环 ────────────────────────────────────────────── */
+function startRenderLoop() {
+  app.ticker.add((dt) => {
+    tickTweens();
+    if (!model) return;
+    // 🔒 锁定时强制固定位置（禁止任何移动，包括走路/浮动）
+    if (state.locked) {
+      model.x = state.lockedX; model.y = state.lockedY; state.walking = false;
+      positionOverlays();
+      return;
+    }
+    if (state.walking) {
+      const dx = state.targetX - model.x;
+      if (Math.abs(dx) < 3) { state.walking = false; sendEvent('walk-stop'); }
+      else model.x += Math.sign(dx) * state.speed * dt;
+      bobT += dt * 0.25;
+    } else bobT += dt * 0.06;
+    const hw = modelHalfW() + 4;
+    if (model.x < hw) model.x = hw;
+    else if (model.x > innerWidth - hw) model.x = innerWidth - hw;
+    model.y += (state.floatY - model.y) * 0.25;
+    if (state.walking) model.y += Math.sin(bobT) * 2;  // 仅走路时轻微起伏
+    // 呼吸动画：仅在 prefs.breathing 开启时使用 ParamBreath（默认关闭，不再跳动）
+    if (prefs.breathing) {
+      try { setParam('ParamBreath', (Math.sin(bobT * 0.9) + 1) / 2); } catch (e) {}
+    } else {
+      try { setParam('ParamBreath', 0); } catch (e) {}
+    }
+    if (state.jumpEnd) {
+      const now = Date.now();
+      if (now < state.jumpEnd) {
+        const jt = (now - state.jumpStart) / (state.jumpEnd - state.jumpStart);
+        model.y -= Math.sin(Math.PI * Math.min(1, Math.max(0, jt))) * 70;
+      } else state.jumpEnd = 0;
+    }
+    positionOverlays();
+  });
+}
+
+/* ── 交互 & 穿透唤醒 ─────────────────────────────────────── */
+let ctMode = true;
+let menuOpen = false;
+const lastMouse = { x: -1, y: -1 };
+
+function overModel(x, y, pad) {
+  if (!model) return false;
+  const p = pad == null ? 60 : pad;
+  const hw = modelHalfW() + p;
+  const hh = Math.abs(model.height) / 2 + p;
+  return x > model.x - hw && x < model.x + hw && y > model.y - hh && y < model.y + hh;
+}
+
+/* 检查鼠标是否在某个 DOM 元素上 */
+function isMouseOverEl(el) {
+  if (!el || lastMouse.x < 0) return false;
+  const r = el.getBoundingClientRect();
+  return lastMouse.x >= r.left && lastMouse.x <= r.right && lastMouse.y >= r.top && lastMouse.y <= r.bottom;
+}
+
+/* 检查是否有弹出面板打开 */
+function anyPanelOpen() {
+  return document.querySelectorAll('.nk-panel.show').length > 0;
+}
+
+/* 检查鼠标是否在任何 UI 元素上（工具栏/面板/聊天/菜单） */
+function overAnyUI() {
+  const toolbar = document.getElementById('neko-toolbar');
+  const collapsed = document.getElementById('tb-collapsed');
+  if (isMouseOverEl(toolbar)) return true;
+  if (isMouseOverEl(collapsed)) return true;
+  if (anyPanelOpen()) {
+    for (const p of document.querySelectorAll('.nk-panel.show')) {
+      if (isMouseOverEl(p)) return true;
+    }
+  }
+  if (chatOpenNow() && isMouseOverEl(chatPanel)) return true;
+  if (menuOpen && isMouseOverEl(petMenu)) return true;
+  return false;
+}
+
+function inInteractiveZone() {
+  if (!model) return true;
+  if (dragging || chatDragOff) return true;
+  if (menuOpen) return true;
+  if (overAnyUI()) return true;
+  return overModel(lastMouse.x, lastMouse.y, ctMode ? 60 : 160);
+}
+
+if (HAS_IPC) {
+  let lastIgnore = null;
+  document.addEventListener('mousemove', (e) => {
+    lastMouse.x = e.clientX; lastMouse.y = e.clientY;
+    // 眼神/头部跟随：交给 pixi 标准 focus 链路（全屏跟随，眼头身协同）
+    if (model && !dragging && !state.walking) {
+      if (prefs.mouseTrack !== false) driveGaze(e.clientX, e.clientY);
+      else gazeCenter();
+    }
+    const ignore = (dragging || chatDragOff) ? false : !inInteractiveZone();
+    if (ignore !== lastIgnore) {
+      lastIgnore = ignore;
+      ipc.send('pet:set-ignore-mouse', ignore);
+      applyHoverFade();
+    }
+  });
+}
+
+/* ── 悬停淡化（已按用户要求禁用，模型始终保持不透明）────────── */
+function applyHoverFade() {
+  if (!model) return;
+  document.body.style.opacity = '1';
+}
+
+/* ── 拖拽移动模型 ────────────────────────────────────────── */
+let dragging = false, dragMoved = 0, dragOffX = 0, dragOffY = 0;
+function fromUi(e) { return !!(e.target && e.target.closest && (e.target.closest('#chat-panel') || e.target.closest('#pet-menu') || e.target.closest('#neko-toolbar') || e.target.closest('#tb-collapsed') || e.target.closest('.nk-panel'))); }
+document.getElementById('pet-container').addEventListener('mousedown', (e) => {
+  if (e.button !== 0 || !model || menuOpen) return;
+  if (fromUi(e)) return;
+  if (!overModel(e.clientX, e.clientY)) return;
+  if (state.locked) { say('我被固定住啦喵~'); return; }  // 🔒 锁定时禁止拖拽
+  dragging = true; dragMoved = 0;
+  dragOffX = e.clientX - model.x; dragOffY = e.clientY - model.y;
+  state.walking = false;
+  if (HAS_IPC && ctMode) ipc.send('pet:set-ignore-mouse', false);
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dragging || !model) return;
+  dragMoved += Math.abs(e.movementX || 1) + Math.abs(e.movementY || 1);
+  const hw = modelHalfW() + 4, hh = Math.abs(model.height) / 2 + 4;
+  model.x = Math.min(innerWidth - hw, Math.max(hw, e.clientX - dragOffX));
+  model.y = Math.min(innerHeight - hh, Math.max(hh, e.clientY - dragOffY));
+  state.floatY = model.y;
+  state.targetX = model.x;
+});
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  if (dragMoved > 4) {
+    state.floating = model.y < groundY() - 24;
+    if (!state.floating) state.floatY = groundY();
+    state.lastPlaceAt = Date.now();
+    sendEvent('drag-end');
+  }
+});
+
+document.getElementById('pet-container').addEventListener('click', (e) => {
+  if (menuOpen) return;
+  if (fromUi(e)) return;
+  if (dragMoved > 4) return;
+  if (chatJustDragged) return;  // 刚拖完聊天框，不触发
+  if (!overModel(e.clientX, e.clientY)) return;
+  toggleChat();
+  sendEvent('click', { x: e.clientX, y: e.clientY });
+});
+document.getElementById('pet-container').addEventListener('dblclick', (e) => {
+  if (fromUi(e)) return;
+  if (!overModel(e.clientX, e.clientY)) return;
+  sendEvent('double-click', { x: e.clientX, y: e.clientY });
+});
+
+/* ── 右键菜单 ────────────────────────────────────────────── */
+const petMenu = document.createElement('div');
+petMenu.id = 'pet-menu'; petMenu.style.display = 'none';
+document.body.appendChild(petMenu);
+
+function buildMenuHtml() {
+  const mark = (n) => state.name === n ? '<span class="pm-mark">✓</span>' : '';
+  const ttsLabel = prefs.ttsEngine === 'indextts' ? 'IndexTTS-2.5' : 'Edge TTS';
+  return `
+    <div class="pm-title">🐾 Lumina 桌宠 · 自定义</div>
+    <div class="pm-item pm-has-sub" data-cmd="model-submenu">
+      🎭 切换模型 <span style="margin-left:auto;color:#8a9aba;">›</span>
+    </div>
+    <div class="pm-submenu" id="pm-model-sub" style="display:none;">
+      <div class="pm-item" data-cmd="model-Mao" style="padding-left:24px;">🌈 虹色 Mao ${mark('Mao')}</div>
+    </div>
+    <div class="pm-sep"></div>
+    <div class="pm-item" data-cmd="scale-up">🔍 放大一点</div>
+    <div class="pm-item" data-cmd="scale-down">🔎 缩小一点</div>
+    <div class="pm-item" data-cmd="scale-reset">↺ 恢复默认大小</div>
+    <div class="pm-slider"><span>大小</span><input id="pm-scale" type="range" min="40" max="160" step="5" value="${Math.round(userScale * 100)}" /><span id="pm-scale-val">${Math.round(userScale * 100)}%</span></div>
+    <div class="pm-sep"></div>
+    <div class="pm-item pm-has-sub" data-cmd="actions-submenu">
+      🎬 动作测试 <span style="margin-left:auto;color:#8a9aba;">›</span>
+    </div>
+    <div class="pm-submenu" id="pm-actions-sub" style="display:none;">
+      <div class="pm-item" data-cmd="act-wave" style="padding-left:24px;">👋 挥挥手</div>
+      <div class="pm-item" data-cmd="act-nod" style="padding-left:24px;">🙂 点点头</div>
+      <div class="pm-item" data-cmd="act-shake" style="padding-left:24px;">🤨 摇摇头</div>
+      <div class="pm-item" data-cmd="act-think" style="padding-left:24px;">💭 思考一下</div>
+      <div class="pm-item" data-cmd="act-happy" style="padding-left:24px;">🎉 开心跳</div>
+      <div class="pm-item" data-cmd="act-sad" style="padding-left:24px;">😢 难过</div>
+      <div class="pm-item" data-cmd="act-angry" style="padding-left:24px;">😤 生气</div>
+      <div class="pm-item" data-cmd="act-surprised" style="padding-left:24px;">😲 惊讶</div>
+      <div class="pm-item" data-cmd="act-dance" style="padding-left:24px;">💃 跳舞</div>
+      <div class="pm-item" data-cmd="act-clap" style="padding-left:24px;">👏 鼓掌</div>
+      <div class="pm-item" data-cmd="act-blink" style="padding-left:24px;">😉 眨眼</div>
+      <div class="pm-item" data-cmd="act-walk" style="padding-left:24px;">🚶 走两步</div>
+      <div class="pm-item" data-cmd="act-sleep" style="padding-left:24px;">😴 去睡觉</div>
+      <div class="pm-item" data-cmd="act-wake" style="padding-left:24px;">☀️ 醒过来</div>
+    </div>
+    <div class="pm-sep"></div>
+    <div class="pm-item pm-has-sub" data-cmd="tts-submenu">
+      🔊 TTS 引擎 <span style="margin-left:auto;color:#8a9aba;font-size:11px;">${ttsLabel} ›</span>
+    </div>
+    <div class="pm-submenu" id="pm-tts-sub" style="display:none;">
+      <div class="pm-item" data-cmd="tts-edge" style="padding-left:24px;">Edge TTS ${prefs.ttsEngine !== 'indextts' ? '<span class="pm-mark">✓</span>' : ''}</div>
+      <div class="pm-item" data-cmd="tts-indextts" style="padding-left:24px;">IndexTTS-2.5 ${prefs.ttsEngine === 'indextts' ? '<span class="pm-mark">✓</span>' : ''}</div>
+    </div>
+    <div class="pm-sep"></div>
+    <div class="pm-item" data-cmd="chat">💬 聊天</div>
+    <div class="pm-item" data-cmd="lock">${state.locked ? '🔓 解锁位置' : '🔒 锁定位置'}</div>
+    <div class="pm-item" data-cmd="settings">⚙️ 打开设置面板</div>
+    <div class="pm-item" data-cmd="close">🌙 收起桌宠</div>`;
+}
+function openMenu(x, y) {
+  petMenu.innerHTML = buildMenuHtml(); petMenu.style.display = 'block'; menuOpen = true;
+  const mw = petMenu.offsetWidth, mh = petMenu.offsetHeight;
+  petMenu.style.left = Math.min(innerWidth - mw - 8, Math.max(8, x)) + 'px';
+  petMenu.style.top = Math.min(innerHeight - mh - 8, Math.max(8, y)) + 'px';
+  if (HAS_IPC && ctMode) ipc.send('pet:set-ignore-mouse', false);
+}
+function closeMenu() { if (!menuOpen) return; petMenu.style.display = 'none'; menuOpen = false; }
+document.addEventListener('contextmenu', (e) => {
+  if (menuOpen || !model || !ctMode || overModel(e.clientX, e.clientY)) {
+    e.preventDefault();
+    if (menuOpen) closeMenu(); else openMenu(e.clientX, e.clientY);
+  }
+});
+petMenu.addEventListener('click', (e) => {
+  const item = e.target.closest('.pm-item'); if (!item) return;
+  e.stopPropagation();
+  const cmd = item.dataset.cmd;
+  // 子菜单展开/收起
+  if (cmd === 'model-submenu') {
+    const sub = document.getElementById('pm-model-sub');
+    if (sub) sub.style.display = sub.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  if (cmd === 'actions-submenu') {
+    const sub = document.getElementById('pm-actions-sub');
+    if (sub) sub.style.display = sub.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  if (cmd === 'tts-submenu') {
+    const sub = document.getElementById('pm-tts-sub');
+    if (sub) sub.style.display = sub.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  const keepOpen = cmd.startsWith('scale-') || cmd.startsWith('act-') || cmd.startsWith('tts-') || cmd === 'model-Mao';
+  if (!keepOpen) closeMenu();
+  switch (cmd) {
+    case 'model-Mao': switchModel(cmd.slice(6)); say('换装中…喵'); break;
+    case 'scale-up': setUserScale(userScale + 0.15, true); syncScaleSlider(); break;
+    case 'scale-down': setUserScale(userScale - 0.15, true); syncScaleSlider(); break;
+    case 'scale-reset': setUserScale(1, true); syncScaleSlider(); break;
+    case 'act-wave': execIntent({ action: 'wave', mood: '开心 😊', speech: '嗨~主人！' }); break;
+    case 'act-nod': execIntent({ action: 'nod', mood: '开心 😊', speech: '嗯嗯！' }); break;
+    case 'act-shake': execIntent({ action: 'shake', mood: '闷闷不乐 😕', speech: '不对不对喵~' }); break;
+    case 'act-think': execIntent({ action: 'think', mood: '平静 😐', speech: '唔…让我想想' }); break;
+    case 'act-happy': execIntent({ action: 'happy', mood: '超开心 🎉', speech: '好开心喵！' }); break;
+    case 'act-sad': execIntent({ action: 'sad', mood: '难过 😢', speech: '呜…难过喵' }); break;
+    case 'act-angry': execIntent({ action: 'angry', mood: '闷闷不乐 😕', speech: '哼！生气了喵！' }); break;
+    case 'act-surprised': execIntent({ action: 'surprised', mood: '兴奋 🤩', speech: '诶？！真的吗喵！' }); break;
+    case 'act-dance': execIntent({ action: 'dance', mood: '超开心 🎉', speech: '跳舞啦喵~' }); break;
+    case 'act-clap': execIntent({ action: 'clap', mood: '幸福 💖', speech: '好棒好棒喵！' }); break;
+    case 'act-blink': execIntent({ action: 'blink', mood: '开心 😊', speech: '喵~' }); break;
+    case 'act-walk': execIntent({ action: 'walk', dir: Math.random() < 0.5 ? -1 : 1, mood: '兴奋 🤩', speech: '走两步喵~' }); break;
+    case 'act-sleep': execIntent({ action: 'sleep', mood: '疲惫 😩', speech: '呼噜呼噜…' }); break;
+    case 'act-wake': execIntent({ action: 'wake', mood: '开心 😊', speech: '唔…醒啦！' }); break;
+    case 'tts-edge': livePref({ ttsEngine: 'edge-tts' }); say('已切换到 Edge TTS 喵~'); break;
+    case 'tts-indextts': livePref({ ttsEngine: 'indextts' }); say('已切换到 IndexTTS 喵~'); break;
+    case 'chat': toggleChat(true); break;
+    case 'lock':
+      state.locked = !state.locked;
+      if (state.locked) {
+        state.walking = false;
+        state.lockedX = model.x; state.lockedY = model.y; state.floating = false; state.floatY = model.y;
+        say('我固定在这里啦喵~');
+      } else { say('可以自由活动啦喵~'); }
+      updateLockIcon();
+      break;
+    case 'settings': if (HAS_IPC) ipc.invoke('pet:open-settings').catch(() => {}); break;
+    case 'close': if (HAS_IPC) ipc.invoke('pet:toggle', false).catch(() => {}); break;
+  }
+});
+function syncScaleSlider() {
+  const s = document.getElementById('pm-scale'), lab = document.getElementById('pm-scale-val');
+  if (s) s.value = String(Math.round(userScale * 100));
+  if (lab) lab.textContent = Math.round(userScale * 100) + '%';
+}
+petMenu.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'pm-scale') {
+    setUserScale(Number(e.target.value) / 100, true);
+    const lab = document.getElementById('pm-scale-val');
+    if (lab) lab.textContent = e.target.value + '%';
+  }
+});
+document.addEventListener('click', (e) => { if (menuOpen && !petMenu.contains(e.target)) closeMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMenu(); closeAllPanels(); } });
+
+/* ── 迷你聊天面板 ────────────────────────────────────────── */
+const chatPanel = document.getElementById('chat-panel');
+const chatLog = document.getElementById('chat-log');
+const chatInput = document.getElementById('pet-chat-input');
+function chatOpenNow() { return chatPanel ? chatPanel.classList.contains('show') : false; }
+function positionChatPanel() {
+  if (!chatPanel || !model) return;
+  const w = 420, h = chatPanel.offsetHeight || 480;
+  let x = model.x + modelHalfW() + 24;
+  if (x + w > innerWidth - 8) x = model.x - modelHalfW() - 24 - w;
+  chatPanel.style.left = Math.max(8, Math.min(innerWidth - w - 8, x)) + 'px';
+  chatPanel.style.top = Math.max(8, Math.min(innerHeight - h - 8, model.y - h / 2)) + 'px';
+}
+function addChatMsg(role, text) {
+  if (!chatLog) return;
+  const d = document.createElement('div');
+  d.className = 'cp-msg ' + role;
+  if (role === 'pet') {
+    d.innerHTML = '<span class="cp-msg-avatar">🐱</span>';
+    const span = document.createElement('span');
+    span.textContent = text;
+    d.appendChild(span);
+  } else {
+    d.textContent = text;
+  }
+  chatLog.appendChild(d);
+  while (chatLog.children.length > 30) chatLog.removeChild(chatLog.firstChild);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+function showTyping(show) {
+  const t = document.getElementById('chat-typing');
+  if (t) t.classList.toggle('show', show);
+  if (show && chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+  if (!show) clearIntentFallback();
+}
+// 意图台词兜底：主 Agent 回复未到时暂存短句，超时再显示
+let _intentFallbackTimer = null, _pendingIntentSpeech = null;
+function armIntentFallback(speech) {
+  _pendingIntentSpeech = speech;
+  clearTimeout(_intentFallbackTimer);
+  _intentFallbackTimer = setTimeout(() => {
+    if (_pendingIntentSpeech && chatOpenNow()) addChatMsg('pet', _pendingIntentSpeech);
+    _pendingIntentSpeech = null;
+    showTyping(false);
+  }, 12000);
+}
+function clearIntentFallback() {
+  clearTimeout(_intentFallbackTimer); _intentFallbackTimer = null; _pendingIntentSpeech = null;
+}
+function clearChat() {
+  if (chatLog) chatLog.innerHTML = '';
+}
+function toggleChat(force) {
+  if (!chatPanel) return;
+  const show = typeof force === 'boolean' ? force : !chatOpenNow();
+  if (show) {
+    chatPanel.classList.remove('closing');
+    chatPanel.classList.add('show');
+    positionChatPanel();
+    setTimeout(() => chatInput && chatInput.focus(), 150);
+    if (HAS_IPC && ctMode) ipc.send('pet:set-ignore-mouse', false);
+  } else {
+    chatPanel.classList.remove('show');
+    chatPanel.classList.add('closing');
+    setTimeout(() => { chatPanel.classList.remove('closing'); }, 200);
+  }
+}
+function submitChat() {
+  const text = (chatInput && chatInput.value || '').trim();
+  if (!text) return;
+  addChatMsg('user', text);
+  if (chatInput) chatInput.value = '';
+  showTyping(true);
+  if (HAS_IPC) {
+    // 1) 同步到主窗口 Lumina Agent 聊天
+    try { ipc.send('pet:sync-send', { text }); } catch(e) {}
+    // 2) 桌宠意图系统（驱动动作/表情）
+    //    dispatchIntent 在主进程已通过 pet:command 下发执行，这里只处理错误情况
+    ipc.invoke('pet:chat', { text }).then(res => {
+      // typing 等主 Agent 回复(pet:sync-reply)或 12s 意图兜底再关，这里不提前关
+      if (!res || !res.ok) {
+        addChatMsg('pet', '呜…脑子转不动了喵…');
+        showTyping(false);
+      }
+      // 如果 LLM 不可用降级了，pet:command 事件会执行 intent
+      // 如果 source 是 llm，dispatchIntent 也已经下发了
+    }).catch(() => {
+      showTyping(false);
+      addChatMsg('pet', '喵…连接出了点问题…');
+    });
+  } else {
+    showTyping(false);
+    addChatMsg('pet', '喵~');
+  }
+  patchInteraction && patchInteraction();
+}
+if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitChat(); } });
+const chatSendBtn = document.getElementById('pet-chat-send');
+if (chatSendBtn) chatSendBtn.addEventListener('click', submitChat);
+const chatCloseBtn = document.getElementById('chat-close');
+if (chatCloseBtn) chatCloseBtn.addEventListener('click', () => toggleChat(false));
+const chatClearBtn = document.getElementById('chat-clear');
+if (chatClearBtn) chatClearBtn.addEventListener('click', () => clearChat());
+
+// 表情面板
+const emojiBtn = document.getElementById('pet-chat-emoji');
+const emojiPanel = document.getElementById('chat-emoji-panel');
+if (emojiBtn && emojiPanel) {
+  emojiBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    emojiPanel.classList.toggle('show');
+  });
+  emojiPanel.querySelectorAll('.cp-emoji-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (chatInput) { chatInput.value += item.textContent; chatInput.focus(); }
+    });
+  });
+  document.addEventListener('click', (e) => {
+    if (!emojiPanel.contains(e.target) && e.target !== emojiBtn) emojiPanel.classList.remove('show');
+  });
+}
+
+// 快捷回复
+document.querySelectorAll('.cp-quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (chatInput) chatInput.value = btn.dataset.text || '';
+    submitChat();
+  });
+});
+/* 聊天框内 朋友圈/剧场/日报 入口绑定 */
+(function(){
+  const lifeBtn = document.getElementById('chat-life');
+  if (lifeBtn) lifeBtn.onclick = function(e){ if (e && e.stopPropagation) e.stopPropagation(); toggleLifeMenu(lifeBtn); };
+  const back = document.getElementById('clv-back');
+  if (back) back.onclick = closeLifeView;
+  const openMain = document.getElementById('clv-open-main');
+  if (openMain) openMain.onclick = function(){ if (lifeCurrent && HAS_IPC) ipc.invoke('pet:open-life', lifeCurrent).catch(function(){}); };
+})();
+
+/* 聊天面板拖拽 —— 修复：记录拖动距离，拖动后抑制 click 事件；边界使用面板实际宽高 */
+const chatHead = document.getElementById('chat-head');
+let chatDragOff = null;
+let chatDragMoved = 0;
+let chatJustDragged = false;
+let _chatJustDraggedTimer = null;
+if (chatHead) {
+  chatHead.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.cp-close')) return;
+    chatDragOff = { dx: e.clientX - chatPanel.offsetLeft, dy: e.clientY - chatPanel.offsetTop };
+    chatDragMoved = 0;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!chatDragOff || !chatPanel) return;
+    chatDragMoved += Math.abs(e.movementX || 1) + Math.abs(e.movementY || 1);
+    const pw = chatPanel.offsetWidth || 320;
+    const ph = chatPanel.offsetHeight || 300;
+    chatPanel.style.left = Math.max(4, Math.min(innerWidth - pw - 4, e.clientX - chatDragOff.dx)) + 'px';
+    chatPanel.style.top = Math.max(4, Math.min(innerHeight - ph - 4, e.clientY - chatDragOff.dy)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (chatDragOff && chatDragMoved > 4) {
+      // 标记刚拖动完，抑制接下来的 click 事件（防止点击模型关闭聊天框）
+      chatJustDragged = true;
+      clearTimeout(_chatJustDraggedTimer);
+      _chatJustDraggedTimer = setTimeout(() => { chatJustDragged = false; }, 100);
+    }
+    chatDragOff = null;
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   N.E.K.O 风格工具栏 & 弹出面板系统
+   ════════════════════════════════════════════════════════════ */
+
+function closeAllPanels() {
+  document.querySelectorAll('.nk-panel').forEach(p => p.classList.remove('show'));
+  document.querySelectorAll('.tb-btn').forEach(b => b.classList.remove('active'));
+  // 重新应用工具栏按钮的持久状态
+  applyPrefs();
+}
+
+function togglePanel(panelId, btnId) {
+  const panel = document.getElementById(panelId);
+  const btn = document.getElementById(btnId);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('show');
+  closeAllPanels();
+  if (!isOpen) {
+    // 构建面板内容
+    if (panelId === 'panel-audio') { panel.innerHTML = buildAudioPanel(); bindAudioPanel(); }
+    else if (panelId === 'panel-tools') { panel.innerHTML = buildToolsPanel(); bindToolsPanel(); }
+    else if (panelId === 'panel-settings') { panel.innerHTML = buildSettingsPanel(); bindSettingsPanel(); }
+    else if (panelId === 'panel-sparkle') { panel.innerHTML = buildSparklePanel(); bindSparklePanel(); }
+    panel.dataset.anchor = btnId;
+    if (btn) btn.classList.add('active');
+    positionPanel(panel, btn);
+    // 强制 reflow 后再加 .show，确保入场动画触发
+    void panel.offsetWidth;
+    panel.classList.add('show');
+    if (HAS_IPC) ipc.send('pet:set-ignore-mouse', false);
+  }
+}
+
+function positionPanel(panel, anchorBtn) {
+  if (!panel || !anchorBtn) return;
+  const place = () => {
+    const r = anchorBtn.getBoundingClientRect();
+    const pw = panel.offsetWidth || 240;
+    const ph = panel.offsetHeight || 200;
+    let x = r.right + 10;
+    if (x + pw > innerWidth - 8) x = r.left - pw - 10;
+    x = Math.max(8, Math.min(innerWidth - pw - 8, x));
+    let y;
+    if (ph >= innerHeight - 16) y = 8;
+    else y = r.top + r.height / 2 - ph / 2;
+    y = Math.max(8, Math.min(innerHeight - ph - 8, y));
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+  };
+  place();
+  requestAnimationFrame(place);
+}
+
+function livePref(patch) {
+  if (HAS_IPC) ipc.invoke('pet:update-prefs', patch).catch(() => {});
+  // 本地立即应用
+  prefs = Object.assign(prefs, patch);
+  if (patch.catpaw) prefs.catpaw = Object.assign(prefs.catpaw || {}, patch.catpaw);
+  applyPrefs();
+  // 标记本地刚更新，抑制 pet:prefs-changed 回传时的面板重建（避免打断开关/滑块动画）
+  _lastLocalPrefAt = Date.now();
+}
+let _lastLocalPrefAt = 0;
+
+/* ── 开关/滑块/复选 HTML 辅助 ────────────────────────────── */
+function nkSwitch(checked, onToggle) {
+  return `<label class="nk-switch"><input type="checkbox" ${checked ? 'checked' : ''} onchange="(${onToggle})(this.checked)"><span class="nk-sl"></span></label>`;
+}
+function nkCheck(checked, onToggle) {
+  return `<label class="nk-check"><input type="checkbox" ${checked ? 'checked' : ''} onchange="(${onToggle})(this.checked)"><span class="nk-cbox"></span>`;
+}
+
+/* ── 面板：音频设置（图2）────────────────────────────────── */
+function buildAudioPanel() {
+  const p = prefs;
+  return `
+    <div class="nk-title">音频设置</div>
+    <div class="nk-row">
+      <div class="nk-label"><span>屏幕分享</span><span class="nk-hint">屏幕</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.screenShare ? 'checked' : ''} id="ap-ss"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row" id="ap-mic-row" style="cursor:pointer;">
+      <div class="nk-label"><span>选择麦克风设备</span><span class="nk-hint" id="ap-mic-name">系统默认麦克风</span></div>
+      <span style="color:#8a9aba;">›</span>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>语音识别</span><span class="nk-hint" id="ap-vr-hint">${p.voiceRecognition ? '当前使用语音识别中…' : '点击开启'}</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.voiceRecognition ? 'checked' : ''} id="ap-vr"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row" id="ap-pb-row" style="cursor:pointer;">
+      <div class="nk-label"><span>选择播放设备</span><span class="nk-hint" id="ap-pb-name">系统默认播放设备</span></div>
+      <span style="color:#8a9aba;">›</span>
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">扬声器音量</span><span class="nk-val" id="ap-vol-val">${p.volume}%</span></div>
+      <input type="range" class="nk-slider" id="ap-vol" min="0" max="100" value="${p.volume}">
+      <span class="nk-hint">调节 AI 语音的播放音量</span>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>空间音频</span><span class="nk-hint">根据猫娘窗口相对主屏的位置做立体声与距离衰减</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.spatial !== false ? 'checked' : ''} id="ap-spatial"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>AI 语音</span><span class="nk-hint">开启后 AI 回复会朗读出来</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.voiceOn ? 'checked' : ''} id="ap-voice"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">TTS 引擎</span></div>
+      <select id="ap-tts-engine" class="nk-select" style="width:100%;">
+        <option value="edge-tts" ${p.ttsEngine !== 'indextts' ? 'selected' : ''}>Edge TTS（在线）</option>
+        <option value="indextts" ${p.ttsEngine === 'indextts' ? 'selected' : ''}>IndexTTS-2.5（本地）</option>
+      </select>
+      <span class="nk-hint">IndexTTS 需先启动本地服务（python\start_indextts.bat）</span>
+    </div>`;
+}
+
+function bindAudioPanel() {
+  const $ = id => document.getElementById(id);
+  $('ap-ss').onchange = e => livePref({ screenShare: e.target.checked });
+  $('ap-vr').onchange = e => { livePref({ voiceRecognition: e.target.checked }); $('ap-vr-hint').textContent = e.target.checked ? '当前使用语音识别中…' : '点击开启'; };
+  $('ap-spatial').onchange = e => livePref({ spatial: e.target.checked });
+  $('ap-voice').onchange = e => livePref({ voiceOn: e.target.checked });
+  $('ap-tts-engine').onchange = e => livePref({ ttsEngine: e.target.value });
+  $('ap-vol').oninput = e => { $('ap-vol-val').textContent = e.target.value + '%'; };
+  $('ap-vol').onchange = e => livePref({ volume: Number(e.target.value) });
+  // 设备选择（枚举系统音频设备）
+  $('ap-mic-row').onclick = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      if (!mics.length) { alert('未找到麦克风设备'); return; }
+      const names = mics.map((d, i) => `${i + 1}. ${d.label || '麦克风 ' + (i + 1)}`).join('\n');
+      const choice = prompt('选择麦克风（输入编号）：\n' + names, '1');
+      if (choice != null) {
+        const idx = Math.max(0, Math.min(mics.length - 1, parseInt(choice) - 1));
+        if (!isNaN(idx)) { livePref({ micDevice: mics[idx].deviceId }); $('ap-mic-name').textContent = mics[idx].label || '麦克风 ' + (idx + 1); }
+      }
+    } catch (err) { alert('枚举设备失败：' + err.message); }
+  };
+  $('ap-pb-row').onclick = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const speakers = devices.filter(d => d.kind === 'audiooutput');
+      if (!speakers.length) { alert('未找到播放设备'); return; }
+      const names = speakers.map((d, i) => `${i + 1}. ${d.label || '扬声器 ' + (i + 1)}`).join('\n');
+      const choice = prompt('选择播放设备（输入编号）：\n' + names, '1');
+      if (choice != null) {
+        const idx = Math.max(0, Math.min(speakers.length - 1, parseInt(choice) - 1));
+        if (!isNaN(idx)) { livePref({ playbackDevice: speakers[idx].deviceId }); $('ap-pb-name').textContent = speakers[idx].label || '扬声器 ' + (idx + 1); }
+      }
+    } catch (err) { alert('枚举设备失败：' + err.message); }
+  };
+}
+
+/* ── 面板：Lumina Pet Handling ────────────────────────── */
+function buildToolsPanel() {
+  const cp = prefs.catpaw || {};
+  return `
+    <div class="nk-title" style="text-align:center;">${cp.master ? '🐾 Lumina Pet Handling 已开启' : '🐾 Lumina Pet Handling'}</div>
+    <div class="nk-row">
+      <div class="nk-label"><span>总开关</span><span class="nk-hint">开启后 Lumina 才能获得电脑操作权限</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.master ? 'checked' : ''} id="tp-master"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>显示悬浮窗</span><span class="nk-hint">模型上方显示名称标签</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.hud !== false ? 'checked' : ''} id="tp-hud"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>键鼠控制</span><span class="nk-hint">允许 Lumina 点击、输入、按键、滚动</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.kbm ? 'checked' : ''} id="tp-kbm"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>浏览器控制</span><span class="nk-hint">允许 Lumina 打开和操作浏览器</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.browser ? 'checked' : ''} id="tp-browser"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>屏幕感知</span><span class="nk-hint">截屏理解你在做什么，主动搭话</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.perception !== false ? 'checked' : ''} id="tp-perc"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>专属桌面</span><span class="nk-hint">为 Lumina 创建独立虚拟桌面（Win10/11）</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.desktop ? 'checked' : ''} id="tp-desktop"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>应用开发</span><span class="nk-hint">开启插件开发模式，加载 JS 插件扩展能力</span></div>
+      <label class="nk-switch"><input type="checkbox" ${cp.plugins ? 'checked' : ''} id="tp-plugins"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row" id="tp-plugins-panel" style="display:${cp.plugins ? 'flex' : 'none'};flex-direction:column;align-items:stretch;gap:6px;padding:8px 0;">
+      <div style="display:flex;gap:6px;">
+        <button id="tp-plugin-open" style="flex:1;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(74,158,255,0.2);color:#e8ecf5;font-size:11px;cursor:pointer;">📂 打开插件目录</button>
+        <button id="tp-plugin-reload" style="flex:1;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.08);color:#e8ecf5;font-size:11px;cursor:pointer;">🔄 重新加载</button>
+      </div>
+      <div id="tp-plugin-list" style="font-size:10px;color:#8a9aba;max-height:80px;overflow-y:auto;"></div>
+    </div>`;
+}
+
+function bindToolsPanel() {
+  const $ = id => document.getElementById(id);
+  $('tp-master').onchange = e => livePref({ catpaw: { master: e.target.checked } });
+  $('tp-hud').onchange = e => livePref({ catpaw: { hud: e.target.checked } });
+  $('tp-kbm').onchange = e => livePref({ catpaw: { kbm: e.target.checked } });
+  $('tp-browser').onchange = e => livePref({ catpaw: { browser: e.target.checked } });
+  $('tp-desktop').onchange = e => {
+    livePref({ catpaw: { desktop: e.target.checked } });
+    if (HAS_IPC) ipc.invoke('pet:virtual-desktop', { enable: e.target.checked }).then(r => {
+      if (r && !r.ok) say(r.error || '虚拟桌面操作失败');
+    }).catch(() => {});
+  };
+  $('tp-plugins').onchange = e => {
+    livePref({ catpaw: { plugins: e.target.checked } });
+    const panel = $('tp-plugins-panel');
+    if (panel) panel.style.display = e.target.checked ? 'flex' : 'none';
+    if (e.target.checked && HAS_IPC) {
+      ipc.invoke('pet:plugins', { action: 'list' }).then(r => updatePluginList(r)).catch(() => {});
+    }
+  };
+  $('tp-perc').onchange = e => livePref({ catpaw: { perception: e.target.checked } });
+  const openBtn = $('tp-plugin-open');
+  if (openBtn) openBtn.onclick = () => { if (HAS_IPC) ipc.invoke('pet:plugins', { action: 'open-dir' }); };
+  const reloadBtn = $('tp-plugin-reload');
+  if (reloadBtn) reloadBtn.onclick = () => {
+    if (HAS_IPC) ipc.invoke('pet:plugins', { action: 'reload' }).then(r => { updatePluginList(r); say('插件已重新加载喵~'); }).catch(() => {});
+  };
+}
+
+function updatePluginList(r) {
+  const list = document.getElementById('tp-plugin-list');
+  if (!list) return;
+  if (!r || !r.ok) { list.textContent = r?.error || '暂无插件'; return; }
+  const plugins = r.plugins || [];
+  if (!plugins.length) { list.textContent = '插件目录为空，把 .js 文件放进去即可'; return; }
+  list.innerHTML = plugins.map(p => `<div style="padding:2px 0;">${p.enabled ? '✅' : '⚠️'} ${p.name} — ${p.desc || '无描述'}</div>`).join('');
+}
+
+/* ── 面板：设置（图4 主设置 + 图5 动画 + 对话子面板）────── */
+let settingsSubPage = 'main';
+function buildSettingsPanel() {
+  if (settingsSubPage === 'animation') return buildAnimSubPanel();
+  if (settingsSubPage === 'dialogue') return buildDialogueSubPanel();
+  if (settingsSubPage === 'persona') return buildPersonaSubPanel();
+  return buildSettingsMain();
+}
+
+const PERSONA_NAMES = { '': '默认猫娘', bingruo: '病弱妹妹', zhixin: '知心姐姐', dushe: '毒舌学妹', shadiao: '沙雕网友' };
+
+function buildSettingsMain() {
+  const p = prefs;
+  return `
+    <div class="nk-section-title">快捷设置</div>
+    <div class="nk-row">
+      <div class="nk-label"><span>主动搭话</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.proactive !== false ? 'checked' : ''} id="sp-proactive"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:600;">🤵 主动秘书</span>
+        <label class="nk-switch"><input type="checkbox" ${(!p.secretary || p.secretary.enabled !== false) ? 'checked' : ''} id="sc-enabled"><span class="nk-sl"></span></label>
+      </div>
+      <div style="display:flex;justify-content:space-between;"><span class="nk-hint">最低搭话间隔</span><span class="nk-val" id="sc-interval-val">${(p.secretary && p.secretary.minIntervalSec) || 45}s</span></div>
+      <input type="range" class="nk-slider" id="sc-interval" min="15" max="300" step="15" value="${(p.secretary && p.secretary.minIntervalSec) || 45}">
+      <div class="nk-checklist" style="margin-top:2px;">
+        <label class="nk-check"><input type="checkbox" ${(!p.secretary || !p.secretary.sources || p.secretary.sources.screen !== false) ? 'checked' : ''} id="sc-src-screen"><span class="nk-cbox"></span>屏幕观察</label>
+        <label class="nk-check"><input type="checkbox" ${(!p.secretary || !p.secretary.sources || p.secretary.sources.window !== false) ? 'checked' : ''} id="sc-src-window"><span class="nk-cbox"></span>当前窗口</label>
+        <label class="nk-check"><input type="checkbox" ${(p.secretary && p.secretary.sources && p.secretary.sources.video) ? 'checked' : ''} id="sc-src-video"><span class="nk-cbox"></span>视频网站</label>
+        <label class="nk-check"><input type="checkbox" ${(p.secretary && p.secretary.sources && p.secretary.sources.news) ? 'checked' : ''} id="sc-src-news"><span class="nk-cbox"></span>新闻热点</label>
+        <label class="nk-check"><input type="checkbox" ${(p.secretary && p.secretary.sources && p.secretary.sources.personal) ? 'checked' : ''} id="sc-src-personal"><span class="nk-cbox"></span>个人动态</label>
+        <label class="nk-check"><input type="checkbox" ${(p.secretary && p.secretary.sources && p.secretary.sources.music) ? 'checked' : ''} id="sc-src-music"><span class="nk-cbox"></span>音乐推荐</label>
+      </div>
+      <button id="sc-now" style="margin-top:4px;padding:7px 10px;border-radius:10px;border:1px solid rgba(236,72,153,.3);background:linear-gradient(135deg,#fdf2f8,#fce7f3);color:#be185d;font-weight:600;cursor:pointer;">💬 立即搭话一次</button>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>隐私模式</span><span class="nk-hint">不截屏、不记录屏幕内容</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.privacyMode ? 'checked' : ''} id="sp-privacy"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>AI 语音</span><span class="nk-hint">朗读 AI 回复</span></div>
+      <label class="nk-switch"><input type="checkbox" ${p.voiceOn ? 'checked' : ''} id="sp-voiceon"><span class="nk-sl"></span></label>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>TTS 引擎</span></div>
+      <select id="sp-tts-select" class="nk-select">
+        <option value="edge-tts" ${p.ttsEngine !== 'indextts' ? 'selected' : ''}>Edge TTS</option>
+        <option value="indextts" ${p.ttsEngine === 'indextts' ? 'selected' : ''}>IndexTTS-2.5</option>
+      </select>
+    </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>当前模型</span></div>
+      <select id="sp-model-select" class="nk-select">
+        <option value="Mao" selected>🌈 虹色 Mao</option>
+      </select>
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">模型大小</span><span class="nk-val" id="sp-scale-val">${Math.round(userScale * 100)}%</span></div>
+      <input type="range" class="nk-slider" id="sp-scale" min="40" max="160" step="5" value="${Math.round(userScale * 100)}">
+    </div>
+    <div class="nk-section-title">功能设置</div>
+    <div class="nk-card-grid">
+      <div class="nk-card" id="sp-dialogue">
+        <div class="nk-card-icon">💬</div>
+        <div class="nk-card-label">对话设置</div>
+      </div>
+      <div class="nk-card" id="sp-anim">
+        <div class="nk-card-icon">🎬</div>
+        <div class="nk-card-label">动画设置</div>
+      </div>
+      <div class="nk-card" id="sp-persona">
+        <div class="nk-card-icon">🐱</div>
+        <div class="nk-card-label">角色设置</div>
+      </div>
+      <div class="nk-card" id="sp-audio">
+        <div class="nk-card-icon">🔊</div>
+        <div class="nk-card-label">音频设备</div>
+      </div>
+      <div class="nk-card" id="sp-catpaw">
+        <div class="nk-card-icon">🐾</div>
+        <div class="nk-card-label">Pet Handling</div>
+      </div>
+      <div class="nk-card" id="sp-full-settings">
+        <div class="nk-card-icon">⚙️</div>
+        <div class="nk-card-label">完整设置</div>
+      </div>
+    </div>
+    <div class="nk-section-title">跳转</div>
+    <div class="nk-card-grid">
+      <div class="nk-card" id="sp-apikey">
+        <div class="nk-card-icon">🔑</div>
+        <div class="nk-card-label">API 密钥</div>
+        <div class="nk-card-sub">主程序设置</div>
+      </div>
+      <div class="nk-card" id="sp-memory">
+        <div class="nk-card-icon">📜</div>
+        <div class="nk-card-label">聊天记录</div>
+        <div class="nk-card-sub">主程序查看</div>
+      </div>
+    </div>`;
+}
+
+function buildDialogueSubPanel() {
+  const p = prefs;
+  return `
+    <div class="nk-back" id="sp-back">‹ 返回</div>
+    <div class="nk-checklist">
+      <label class="nk-check"><input type="checkbox" ${p.mergeMessages ? 'checked' : ''} id="dl-merge"><span class="nk-cbox"></span>合并消息</label>
+      <label class="nk-check"><input type="checkbox" ${p.allowInterrupt !== false ? 'checked' : ''} id="dl-interrupt"><span class="nk-cbox"></span>允许打断</label>
+      <label class="nk-check"><input type="checkbox" ${p.bubbles !== false ? 'checked' : ''} id="dl-bubbles"><span class="nk-cbox"></span>表情气泡</label>
+      <label class="nk-check"><input type="checkbox" ${p.focusMode !== false ? 'checked' : ''} id="dl-focus"><span class="nk-cbox"></span>凝神模式</label>
+      <label class="nk-check"><input type="checkbox" ${p.naturalExpression !== false ? 'checked' : ''} id="dl-natural"><span class="nk-cbox"></span>自然表达</label>
+      <label class="nk-check"><input type="checkbox" ${p.autoTransform !== false ? 'checked' : ''} id="dl-transform"><span class="nk-cbox"></span>自动变猫</label>
+      <label class="nk-check"><input type="checkbox" ${p.nekoSounds !== false ? 'checked' : ''} id="dl-neko"><span class="nk-cbox"></span>猫猫音效</label>
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">回复长度上限</span><span class="nk-val" id="dl-tok-val">${p.maxTokens || 300} 词元</span></div>
+      <input type="range" class="nk-slider" id="dl-tok" min="50" max="500" step="10" value="${p.maxTokens || 300}">
+      <span class="nk-hint">按 tiktoken 统计；仅对文本回复有效，不影响语音对话</span>
+    </div>`;
+}
+
+function buildAnimSubPanel() {
+  const p = prefs;
+  const fpsLabel = p.fps === 0 ? '无限制 (VSync)' : String(p.fps);
+  const qualityPct = p.quality === 'low' ? 50 : 100;
+  return `
+    <div class="nk-back" id="sp-back">‹ 返回</div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">画质</span><span class="nk-val" id="an-q-val">${p.quality === 'low' ? '低' : '高'}</span></div>
+      <input type="range" class="nk-slider" id="an-quality" min="0" max="100" step="50" value="${qualityPct}">
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">帧率</span><span class="nk-val" id="an-fps-val">${fpsLabel}</span></div>
+      <input type="range" class="nk-slider" id="an-fps" min="0" max="120" step="30" value="${p.fps || 0}">
+    </div>
+    <div class="nk-checklist" style="margin-top:6px;">
+      <label class="nk-check"><input type="checkbox" ${p.mouseTrack !== false ? 'checked' : ''} id="an-mtrack"><span class="nk-cbox"></span>跟踪鼠标</label>
+      <label class="nk-check"><input type="checkbox" ${p.fullscreenTrack ? 'checked' : ''} id="an-fstrack"><span class="nk-cbox"></span>全屏跟踪</label>
+      <label class="nk-check"><input type="checkbox" ${p.dropEffects !== false ? 'checked' : ''} id="an-drop"><span class="nk-cbox"></span>掉券动画与音效</label>
+      <label class="nk-check"><input type="checkbox" ${p.breathing ? 'checked' : ''} id="an-breath"><span class="nk-cbox"></span>呼吸动画</label>
+    </div>`;
+}
+
+function buildPersonaSubPanel() {
+  const personas = [
+    { id: '', icon: '🐱', name: '默认猫娘', desc: '活泼可爱的猫娘' },
+    { id: 'bingruo', icon: '💊', name: '病弱妹妹', desc: '温柔体弱的妹妹' },
+    { id: 'zhixin', icon: '🌸', name: '知心姐姐', desc: '成熟体贴的姐姐' },
+    { id: 'dushe', icon: '😏', name: '毒舌学妹', desc: '嘴硬心软的学妹' },
+    { id: 'shadiao', icon: '🤪', name: '沙雕网友', desc: '搞笑幽默的网友' },
+  ];
+  return `
+    <div class="nk-back" id="sp-back">‹ 返回</div>
+    <div class="nk-section-title">选择角色性格</div>
+    <div class="nk-card-grid">
+      ${personas.map(pe => `
+        <div class="nk-card ${prefs.persona === pe.id ? 'nk-card-active' : ''}" data-persona="${pe.id}" style="cursor:pointer;">
+          <div class="nk-card-icon">${pe.icon}</div>
+          <div class="nk-card-label">${pe.name}</div>
+          <div class="nk-card-sub">${pe.desc}</div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function bindSettingsPanel() {
+  const $ = id => document.getElementById(id);
+  // 主面板
+  const dlg = $('sp-dialogue'); if (dlg) dlg.onclick = () => { settingsSubPage = 'dialogue'; refreshPanel('panel-settings'); };
+  const anim = $('sp-anim'); if (anim) anim.onclick = () => { settingsSubPage = 'animation'; refreshPanel('panel-settings'); };
+  const pro = $('sp-proactive'); if (pro) pro.onchange = e => livePref({ proactive: e.target.checked });
+  // 🤵 主动秘书配置
+  const ensureSec = () => { prefs.secretary = Object.assign({ enabled: true, minIntervalSec: 45, sources: {} }, prefs.secretary || {}); return prefs.secretary; };
+  const scEn = $('sc-enabled');
+  if (scEn) scEn.onchange = e => { ensureSec(); livePref({ secretary: Object.assign({}, prefs.secretary, { enabled: e.target.checked }) }); };
+  const scIv = $('sc-interval');
+  if (scIv) {
+    scIv.oninput = e => { const v = $('sc-interval-val'); if (v) v.textContent = e.target.value + 's'; };
+    scIv.onchange = e => { ensureSec(); livePref({ secretary: Object.assign({}, prefs.secretary, { minIntervalSec: Number(e.target.value) }) }); };
+  }
+  const bindScSrc = (id, key) => { const el = $(id); if (el) el.onchange = e => { ensureSec(); const sources = Object.assign({}, prefs.secretary.sources, { [key]: e.target.checked }); livePref({ secretary: Object.assign({}, prefs.secretary, { sources }) }); }; };
+  bindScSrc('sc-src-screen', 'screen'); bindScSrc('sc-src-window', 'window'); bindScSrc('sc-src-video', 'video');
+  bindScSrc('sc-src-news', 'news'); bindScSrc('sc-src-personal', 'personal'); bindScSrc('sc-src-music', 'music');
+  const scNow = $('sc-now');
+  if (scNow) scNow.onclick = async () => {
+    if (!HAS_IPC) return;
+    say('让我看看你在做什么喵~');
+    const oldLabel = scNow.textContent; scNow.disabled = true; scNow.textContent = '观察中…';
+    try {
+      const r = await ipc.invoke('pet:secretary:now');
+      if (r && (r.skipped || r.ok === false)) {
+        const hint = r.reason === 'no-llm' ? '呜，我还没连上大脑，先去「设置→LLM模型」配好并保存喵~'
+          : r.reason === 'privacy' ? '隐私模式下我不能看屏幕哦~'
+          : r.reason === 'parse-fail' ? '大脑这次没说清，再点一次试试好不好喵~'
+          : '这次没找到合适的话题，等一下再试喵~';
+        if (chatOpenNow()) addChatMsg('pet', hint); else say(hint);
+      }
+    } catch (e) { const m = '呜，脑子卡了一下，稍后再试喵~'; if (chatOpenNow()) addChatMsg('pet', m); else say(m); }
+    scNow.disabled = false; scNow.textContent = oldLabel;
+  };
+  const priv = $('sp-privacy'); if (priv) priv.onchange = e => livePref({ privacyMode: e.target.checked });
+  const von = $('sp-voiceon'); if (von) von.onchange = e => { livePref({ voiceOn: e.target.checked }); if (e.target.checked) say('语音已开启喵~'); };
+  const ttsSel = $('sp-tts-select');
+  if (ttsSel) ttsSel.onchange = e => {
+    livePref({ ttsEngine: e.target.value });
+    say(e.target.value === 'indextts' ? '已切换到 IndexTTS 语音喵~' : '已切换到 Edge TTS 语音喵~');
+  };
+  const mdlSel = $('sp-model-select');
+  if (mdlSel) mdlSel.onchange = e => {
+    if (HAS_IPC) {
+      ipc.invoke('pet:set-model', e.target.value).then(() => {
+        say('换装中…喵');
+        setTimeout(() => location.reload(), 600);
+      });
+    }
+  };
+  const sc = $('sp-scale');
+  if (sc) {
+    sc.oninput = e => {
+      const v = Number(e.target.value) / 100;
+      setUserScale(v, false); // 实时预览，不保存
+      $('sp-scale-val').textContent = e.target.value + '%';
+    };
+    sc.onchange = e => {
+      setUserScale(Number(e.target.value) / 100, true); // 释放时保存
+    };
+  }
+  const persona = $('sp-persona'); if (persona) persona.onclick = () => { settingsSubPage = 'persona'; refreshPanel('panel-settings'); };
+  const audioNav = $('sp-audio'); if (audioNav) audioNav.onclick = () => togglePanel('panel-audio', 'tb-voice');
+  const catpawNav = $('sp-catpaw'); if (catpawNav) catpawNav.onclick = () => togglePanel('panel-tools', 'tb-tools');
+  const fullSet = $('sp-full-settings'); if (fullSet) fullSet.onclick = () => { if (HAS_IPC) { ipc.invoke('pet:open-settings'); closeAllPanels(); } };
+  const apikey = $('sp-apikey'); if (apikey) apikey.onclick = () => { if (HAS_IPC) { ipc.send('pet:open-main-settings', 'llm'); closeAllPanels(); } };
+  const mem = $('sp-memory'); if (mem) mem.onclick = () => { if (HAS_IPC) { ipc.send('pet:open-main-settings', 'memory'); closeAllPanels(); } };
+  // 返回
+  const back = $('sp-back'); if (back) back.onclick = () => { settingsSubPage = 'main'; refreshPanel('panel-settings'); };
+  // 角色卡片选择
+  document.querySelectorAll('.nk-card[data-persona]').forEach(card => {
+    card.onclick = () => {
+      const pid = card.getAttribute('data-persona') || '';
+      livePref({ persona: pid });
+      say(`切换为${PERSONA_NAMES[pid] || '默认'}性格喵~`);
+      refreshPanel('panel-settings');
+    };
+  });
+  // 对话子面板
+  const merge = $('dl-merge'); if (merge) merge.onchange = e => livePref({ mergeMessages: e.target.checked });
+  const interrupt = $('dl-interrupt'); if (interrupt) interrupt.onchange = e => livePref({ allowInterrupt: e.target.checked });
+  const bubbles = $('dl-bubbles'); if (bubbles) bubbles.onchange = e => livePref({ bubbles: e.target.checked });
+  const focus = $('dl-focus'); if (focus) focus.onchange = e => livePref({ focusMode: e.target.checked });
+  const natural = $('dl-natural'); if (natural) natural.onchange = e => livePref({ naturalExpression: e.target.checked });
+  const transform = $('dl-transform'); if (transform) transform.onchange = e => livePref({ autoTransform: e.target.checked });
+  const neko = $('dl-neko'); if (neko) neko.onchange = e => livePref({ nekoSounds: e.target.checked });
+  const tok = $('dl-tok');
+  if (tok) {
+    tok.oninput = e => { $('dl-tok-val').textContent = e.target.value + ' 词元'; };
+    tok.onchange = e => livePref({ maxTokens: Number(e.target.value) });
+  }
+  // 动画子面板
+  const q = $('an-quality');
+  if (q) {
+    q.oninput = e => { $('an-q-val').textContent = Number(e.target.value) >= 100 ? '高' : '低'; };
+    q.onchange = e => { livePref({ quality: Number(e.target.value) >= 100 ? 'high' : 'low' }); };
+  }
+  const f = $('an-fps');
+  if (f) {
+    f.oninput = e => { const v = Number(e.target.value); $('an-fps-val').textContent = v === 0 ? '无限制 (VSync)' : String(v); };
+    f.onchange = e => livePref({ fps: Number(e.target.value) });
+  }
+  const mt = $('an-mtrack'); if (mt) mt.onchange = e => livePref({ mouseTrack: e.target.checked });
+  const ft = $('an-fstrack'); if (ft) ft.onchange = e => livePref({ fullscreenTrack: e.target.checked });
+  const dr = $('an-drop'); if (dr) dr.onchange = e => livePref({ dropEffects: e.target.checked });
+  const br = $('an-breath'); if (br) br.onchange = e => livePref({ breathing: e.target.checked });
+}
+
+/* ── 面板：特效/互动 ─────────────────────────────────────── */
+function buildSparklePanel() {
+  return `
+    <div class="nk-title">✨ 互动特效</div>
+    <div class="nk-row" style="cursor:pointer;" id="sk-wave"><div class="nk-label"><span>👋 挥挥手</span></div></div>
+    <div class="nk-row" style="cursor:pointer;" id="sk-happy"><div class="nk-label"><span>🎉 开心一下</span></div></div>
+    <div class="nk-row" style="cursor:pointer;" id="sk-think"><div class="nk-label"><span>💭 思考</span></div></div>
+    <div class="nk-row" style="cursor:pointer;" id="sk-fish"><div class="nk-label"><span>🐟 撒小鱼干</span></div></div>
+    <div class="nk-row" style="cursor:pointer;" id="sk-ground"><div class="nk-label"><span>⬇️ 回到地面</span></div></div>
+    <div class="nk-row" style="cursor:pointer;" id="sk-chat"><div class="nk-label"><span>💬 打开聊天</span></div></div>`;
+}
+function bindSparklePanel() {
+  const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+  bind('sk-wave', () => execIntent({ action: 'wave', speech: '嗨~主人！' }));
+  bind('sk-happy', () => execIntent({ action: 'happy' }));
+  bind('sk-think', () => execIntent({ action: 'think', speech: '唔…让我想想' }));
+  bind('sk-fish', () => { spawnDropEffect(); say('小鱼干！喵~'); });
+  bind('sk-ground', () => { state.floating = false; state.floatY = groundY(); });
+  bind('sk-chat', () => { closeAllPanels(); toggleChat(true); });
+}
+
+/* ── 面板刷新 ────────────────────────────────────────────── */
+function refreshPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel || !panel.classList.contains('show')) return;
+  const btnId = { 'panel-audio': 'tb-voice', 'panel-tools': 'tb-tools', 'panel-settings': 'tb-settings', 'panel-sparkle': 'tb-sparkle' }[panelId];
+  if (panelId === 'panel-audio') panel.innerHTML = buildAudioPanel();
+  else if (panelId === 'panel-tools') panel.innerHTML = buildToolsPanel();
+  else if (panelId === 'panel-settings') panel.innerHTML = buildSettingsPanel();
+  else if (panelId === 'panel-sparkle') panel.innerHTML = buildSparklePanel();
+  // 重新绑定
+  if (panelId === 'panel-audio') bindAudioPanel();
+  else if (panelId === 'panel-tools') bindToolsPanel();
+  else if (panelId === 'panel-settings') bindSettingsPanel();
+  else if (panelId === 'panel-sparkle') bindSparklePanel();
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.classList.add('active'); positionPanel(panel, btn); }
+}
+
+function refreshPanels() {
+  ['panel-audio', 'panel-tools', 'panel-settings', 'panel-sparkle'].forEach(id => refreshPanel(id));
+}
+
+/* ── 工具栏按钮绑定 ──────────────────────────────────────── */
+document.getElementById('tb-collapse').onclick = () => {
+  const tb = document.getElementById('neko-toolbar');
+  tb.classList.add('collapsed');
+  closeAllPanels();
+  positionToolbar();
+};
+document.getElementById('tb-collapsed').onclick = () => {
+  const tb = document.getElementById('neko-toolbar');
+  tb.classList.remove('collapsed');
+  positionToolbar();
+};
+// 聊天按钮：打开/关闭聊天面板
+document.getElementById('tb-chat').onclick = () => {
+  closeAllPanels();
+  toggleChat();
+};
+// TTS 引擎切换移到右键菜单
+document.getElementById('tb-voice').onclick = (e) => {
+  if (e.target.closest('.tb-play')) return;
+  togglePanel('panel-audio', 'tb-voice');
+};
+document.getElementById('tb-tools').onclick = () => togglePanel('panel-tools', 'tb-tools');
+document.getElementById('tb-settings').onclick = () => { settingsSubPage = 'main'; togglePanel('panel-settings', 'tb-settings'); };
+document.getElementById('tb-sparkle').onclick = () => togglePanel('panel-sparkle', 'tb-sparkle');
+document.getElementById('tb-life').onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); toggleLifeMenu(document.getElementById('tb-life')); };
+document.addEventListener('mousedown', (e) => {
+  const menu = document.getElementById('life-menu');
+  if (menu && menu.classList.contains('show') && e.target.closest && !e.target.closest('#life-menu') && !e.target.closest('#tb-life')) menu.classList.remove('show');
+});
+
+// 屏幕分享按钮：直接切换
+document.getElementById('tb-screenshare').onclick = () => {
+  livePref({ screenShare: !prefs.screenShare });
+  say(prefs.screenShare ? '屏幕分享已开启喵~' : '屏幕分享已关闭');
+};
+// 麦克风按钮：直接切换语音识别
+document.getElementById('tb-mic').onclick = () => {
+  livePref({ voiceRecognition: !prefs.voiceRecognition });
+  say(prefs.voiceRecognition ? '语音识别已开启喵~' : '语音识别已关闭');
+};
+// 播放按钮：测试语音
+document.getElementById('tb-voice-play').onclick = (e) => {
+  e.stopPropagation();
+  if (prefs.voiceOn) { say('测试语音喵~你好呀主人！'); }
+  else { livePref({ voiceOn: true }); setTimeout(() => say('语音已开启喵~你好呀！'), 300); }
+};
+// 锁定按钮：切换位置锁定（锁定后模型不能自主移动）
+document.getElementById('tb-lock').onclick = () => {
+  state.locked = !state.locked;
+  if (state.locked) {
+    state.walking = false;
+    state.lockedX = model.x; state.lockedY = model.y; state.floating = false; state.floatY = model.y;
+    say('我固定在这里啦喵~');
+  } else {
+    say('可以自由活动啦喵~');
+  }
+  updateLockIcon();
+};
+function updateLockIcon() {
+  const icon = document.getElementById('tb-lock-icon');
+  const btn = document.getElementById('tb-lock');
+  if (!icon || !btn) return;
+  if (state.locked) {
+    icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+    btn.classList.add('active');
+    btn.title = '已锁定位置（点击解锁）';
+  } else {
+    icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
+    btn.classList.remove('active');
+    btn.title = '锁定位置（禁止自主移动）';
+  }
+}
+
+/* ── 掉券动画（小鱼干/星星掉落）──────────────────────────── */
+function spawnDropEffect() {
+  const layer = document.getElementById('drop-layer');
+  if (!layer) return;
+  const items = ['🐟', '⭐', '💖', '✨', '🐾'];
+  for (let i = 0; i < 8; i++) {
+    const el = document.createElement('div');
+    el.className = 'drop-item';
+    el.textContent = items[Math.floor(Math.random() * items.length)];
+    el.style.left = (model ? model.x + (Math.random() - 0.5) * 120 : Math.random() * innerWidth) + 'px';
+    el.style.top = (model ? model.y - Math.abs(model.height) / 2 : 100) + 'px';
+    el.style.animationDuration = (1.5 + Math.random() * 1.5) + 's';
+    el.style.fontSize = (16 + Math.random() * 14) + 'px';
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+}
+
+/* ── 点击面板外关闭面板 ──────────────────────────────────── */
+document.addEventListener('mousedown', (e) => {
+  if (!anyPanelOpen()) return;
+  if (e.target.closest('.nk-panel') || e.target.closest('.tb-btn')) return;
+  closeAllPanels();
+});
+
+/* ── 主进程命令 ──────────────────────────────────────────── */
+if (HAS_IPC) {
+  ipc.on('pet:command', (_e, cmd) => {
+    if (!cmd) return;
+    if (cmd.type === 'set-emotion' && cmd.emotion) applyEmotion(cmd.emotion.label || cmd.emotion);
+    if (cmd.type === 'say') say(cmd.text || '喵~');
+    if (cmd.type === 'proactive-card') showProactiveCard(cmd);
+    if (cmd.type === 'walk') cmd.enable ? walk(1) : (state.walking = false);
+    if (cmd.type === 'set-opacity') document.body.style.opacity = cmd.value;
+    if (cmd.type === 'set-tooltip') say(cmd.text);
+    if (cmd.type === 'set-scale' && typeof cmd.value === 'number') setUserScale(cmd.value, false);
+    if (cmd.type === 'set-click-through') {
+      ctMode = !!cmd.value;
+      updateLockIcon();
+      if (HAS_IPC) ipc.send('pet:set-ignore-mouse', !inInteractiveZone());
+    }
+    if (cmd.type === 'set-locked') {
+      state.locked = !!cmd.value;
+      if (state.locked) { state.walking = false; state.lockedX = model.x; state.lockedY = model.y; state.floating = false; state.floatY = model.y; }
+      updateLockIcon();
+    }
+    if (cmd.type === 'set-auto') {
+      if (cmd.value === 'off' || cmd.value === 'light' || cmd.value === 'heavy') state.autoLevel = cmd.value;
+    }
+    if (cmd.type === 'intent') {
+      try { console.log('%c[Brain] LLM 驱动身体 → ' + JSON.stringify(cmd.intent), 'color:#7aa2f7;font-weight:bold'); } catch (e) {}
+      lastLLMActAt = Date.now();
+      if (chatOpenNow() && cmd.intent && cmd.intent.speech) {
+        // 主 Agent 回复正在路上（typing 中）时，意图台词先不入气泡，避免一句话冒出两个回复；
+        // 12 秒后主回复仍没来（如主窗口未开），用意图台词兜底，不让聊天冷场。
+        const typingEl = document.getElementById('chat-typing');
+        if (typingEl && typingEl.classList.contains('show')) armIntentFallback(cmd.intent.speech);
+        else addChatMsg('pet', cmd.intent.speech);
+      }
+      execIntent(cmd.intent);
+    }
+  });
+  // 主窗口 Lumina Agent 回复 → 显示在桌宠聊天中
+  ipc.on('pet:sync-reply', (_e, data) => {
+    showTyping(false);
+    if (data && data.text) {
+      addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
+      if (data.role !== 'user' && Array.isArray(data.options) && data.options.length) addChatOptions(data.options);
+      // 如果聊天面板没打开，显示气泡提示
+      if (data.role !== 'user' && !chatOpenNow()) {
+        say(data.text.slice(0, 80));
+      }
+    }
+  });
+  // 历史记录回复 → 批量加载到聊天面板
+  ipc.on('pet:sync-history-reply', (_e, messages) => {
+    if (!Array.isArray(messages) || messages.length === 0) return;
+    if (chatLog) {
+      chatLog.innerHTML = '';
+      for (const m of messages) {
+        addChatMsg(m.role === 'user' ? 'user' : 'pet', m.content);
+      }
+    }
+  });
+  // 请求历史记录
+  if (HAS_IPC) {
+    try { ipc.send('pet:sync-history-request'); } catch {}
+  }
+}
+
+/* ── 闲时消息轮播 ────────────────────────────────────────── */
+let msgIdx = 0;
+setInterval(() => {
+  msgIdx = (msgIdx + 1) % IDLE_MESSAGES.length;
+  const el = document.getElementById('idle-msg');
+  if (el) el.textContent = '| ' + IDLE_MESSAGES[msgIdx];
+}, 8000);
+
+/* ── 自然微表情定时器 ────────────────────────────────────── */
+setInterval(() => {
+  if (!model || state.sleeping || state.walking) return;
+  if (prefs.naturalExpression !== false && Math.random() < 0.3) naturalMicroExpression();
+}, 6000);
+
+/* ── 启动 ────────────────────────────────────────────────── */
+async function boot() {
+  const reportProgress = (p, s) => { if (HAS_IPC) try { ipc.send('pet:startup-progress', { progress: p, stage: s }); } catch(e){} };
+  reportProgress(20, '正在初始化渲染引擎…');
+  if (!initPixi()) { showPetError('渲染器初始化失败，请检查控制台'); return; }
+  startRenderLoop();
+  reportProgress(35, '正在读取配置…');
+  const MODEL_PATHS = { Mao: 'assets/Mao/mao_pro.model3.json' };
+  const candidates = [MODEL_PATHS.Mao];
+  let loaded = false;
+  reportProgress(50, '正在加载 Live2D 模型…');
+  for (const src of candidates) {
+    try {
+      model = await Live2DModel.from(src, { autoInteract: false, autoFocus: false });
+      loaded = true;
+      state.name = 'Mao';
+      break;
+    } catch (e) { console.warn('[Pet] 模型加载失败，尝试下一个:', src, e); }
+  }
+  if (!loaded) { showPetError('模型加载失败，请检查 assets 目录'); reportProgress(0, '模型加载失败'); return; }
+  reportProgress(80, '正在初始化模型…');
+
+  // N.E.K.O 遮罩修复
+  if (model.internalModel && model.internalModel.renderer && model.internalModel.renderer._clippingManager) {
+    model.internalModel.renderer._clippingManager._renderTextureCount = 3;
+    if (typeof model.internalModel.renderer._clippingManager.initialize === 'function') {
+      model.internalModel.renderer._clippingManager.initialize(
+        model.internalModel.coreModel, model.internalModel.coreModel.getDrawableCount(),
+        model.internalModel.coreModel.getDrawableMasks(), model.internalModel.coreModel.getDrawableMaskCounts(), 3
+      );
+    }
+  }
+  app.stage.addChild(model);
+  // 👀 每帧驱动“空闲注视/回中”；鼠标跟随走 mousemove→driveGaze→model.focus 标准链路
+  try { model.on('beforeModelUpdate', gazeFrame); } catch (e) {}
+  try { gazeState.lastMove = 0; gazeState.nextIdle = 0; } catch (e) {}
+  try { model.anchor.set(0.5, 0.5); } catch (e) {}
+  state.naturalW = model.width || 300; state.naturalH = model.height || 300;
+  applyScale();
+  model.x = innerWidth / 2; state.targetX = innerWidth / 2;
+  clampPosition();
+  positionOverlays();
+  try { window.__live2dModel = model; } catch (e) {}
+
+  // 🎬 检测模型内置动作组 & 表情，启动空闲动作循环
+  initMotionSystem();
+
+  if (HAS_IPC) {
+    ipc.invoke('pet:config').then(cfg => {
+      if (cfg && typeof cfg.scale === 'number') setUserScale(cfg.scale, false);
+      if (cfg && (cfg.auto === 'off' || cfg.auto === 'light' || cfg.auto === 'heavy')) state.autoLevel = cfg.auto;
+      if (cfg && typeof cfg.clickThrough === 'boolean') { ctMode = cfg.clickThrough; updateLockIcon(); }
+    }).catch(() => {});
+  }
+
+  setTimeout(() => { say('右键我可以自定义，旁边工具栏有更多功能喵~'); }, 2500);
+  fetchEmotion();
+  startAutoBehavior();
+  reportProgress(100, '启动完成喵~');
+}
+setInterval(fetchEmotion, 15000);
+window.addEventListener('resize', () => {
+  applyScale();
+  const hw = model ? modelHalfW() + 8 : 20;
+  state.targetX = Math.min(innerWidth - hw, Math.max(hw, state.targetX));
+  // 重新定位打开的面板
+  document.querySelectorAll('.nk-panel.show').forEach(p => {
+    const btnId = { 'panel-audio': 'tb-voice', 'panel-tools': 'tb-tools', 'panel-settings': 'tb-settings', 'panel-sparkle': 'tb-sparkle' }[p.id];
+    if (btnId) positionPanel(p, document.getElementById(btnId));
+  });
+});
+
+/* ── 自主行为 ────────────────────────────────────────────── */
+function startAutoBehavior() {
+  tickDayNightCycle();
+  setInterval(tickDayNightCycle, 60 * 1000);
+
+  let autonomyTickNo = 0;
+  setInterval(() => {
+    if (state.sleeping || !HAS_IPC) return;
+    if (state.autoLevel === 'off' || prefs.proactive === false) return;
+    if (prefs.privacyMode) return;
+    autonomyTickNo++;
+    if (state.autoLevel === 'light' && autonomyTickNo % 2 !== 0) return;
+    ipc.invoke('pet:autonomy:tick').catch(() => {});
+  }, 30 * 1000);
+
+  setInterval(() => {
+    if (state.sleeping || state.autoLevel === 'off' || prefs.proactive === false) return;
+    if (prefs.focusMode && document.hasFocus && !document.hasFocus()) return;
+    if (Math.random() < 0.25) {
+      const pool = ['想不想吃小蛋糕？', '要不要休息一下？', '今天也要加油喵~', '尾巴摇啊摇~', '刚刚做了一个梦…'];
+      say(pool[Math.floor(Math.random() * pool.length)]);
+    }
+  }, 45 * 1000);
+
+  setInterval(() => {
+    if (state.sleeping || state.autoLevel !== 'heavy') return;
+    const stayPlaced = state.floating || Date.now() - state.lastPlaceAt < 60_000;
+    const r = Math.random();
+    if (r < 0.35 && !stayPlaced) { walk(Math.random() > 0.5 ? 1 : -1); }
+    else if (r < 0.6) { doBlink(); }
+    else if (r < 0.75) { doWave(); }
+  }, 18 * 1000);
+
+  setInterval(() => {
+    if (state.sleeping || state.autoLevel === 'off' || prefs.proactive === false) return;
+    if (prefs.focusMode && document.hasFocus && !document.hasFocus()) return;
+    if (Math.random() < 0.35) {
+      const topics = ['主人~你在忙什么呀？', '要不要起来走一走喵？', '我发现一个有意思的事想告诉你…', '要不要喝口水？别太累了喵。', '今天的心情怎么样呀？'];
+      const text = topics[Math.floor(Math.random() * topics.length)];
+      say(text); sendEvent('proactive-speak', { text });
+    }
+  }, 90 * 1000);
+
+  setInterval(() => {
+    if (state.sleeping || state.autoLevel === 'off' || prefs.privacyMode) return;
+    if (HAS_IPC) ipc.invoke('pet:perception:tick').catch(() => {});
+  }, 120 * 1000);
+
+  // 🤵 主动秘书心跳：每 10s 询问一次，是否真的搭话由主进程按"总开关 + 最低间隔"节流
+  setInterval(() => {
+    if (state.sleeping || prefs.privacyMode) return;
+    const sec = prefs.secretary || {};
+    if (sec.enabled === false || prefs.proactive === false) return;
+    if (HAS_IPC) ipc.invoke('pet:secretary:tick').catch(() => {});
+  }, 10 * 1000);
+}
+
+function tickDayNightCycle() {
+  const h = new Date().getHours();
+  const shouldSleep = h >= 23 || h < 7;
+  if (shouldSleep && !state.sleeping) execIntent({ action: 'sleep' });
+  else if (!shouldSleep && state.sleeping) execIntent({ action: 'wake' });
+  if (!state.sleeping) {
+    if (h >= 0 && h < 6) applyEmotion('疲惫 😩');
+    else if (h >= 6 && h < 9) applyEmotion('平静 😐');
+    else if (h >= 9 && h < 18) applyEmotion('开心 😊');
+    else applyEmotion('幸福 💖');
+  }
+}
+
+let lastInteractionTs = Date.now(), interactionCount = 0, lastMoodTick = Date.now();
+function moodEngine() {
+  const now = Date.now();
+  if (now - lastMoodTick < 90_000) return;
+  lastMoodTick = now;
+  const idle = now - lastInteractionTs;
+  if (state.sleeping) return;
+  if (idle > 20 * 60_000) applyEmotion('低落 😔');
+  else if (idle > 10 * 60_000) applyEmotion('闷闷不乐 😕');
+  else if (interactionCount > 8) applyEmotion('兴奋 🤩');
+  else if (interactionCount > 4) applyEmotion('开心 😊');
+}
+setInterval(moodEngine, 90_000);
+
+const patchInteraction = () => { interactionCount++; lastInteractionTs = Date.now(); };
+document.getElementById('pet-container').addEventListener('click', patchInteraction);
+document.getElementById('pet-container').addEventListener('dblclick', patchInteraction);
+if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') patchInteraction(); });
+
+/* ── 插件系统 ───────────────────────────────────────────── */
+const PetPlugins = {
+  _hooks: {},
+  loaded: [],
+  /** 注册事件钩子 */
+  on(event, cb) { (this._hooks[event] = this._hooks[event] || []).push(cb); },
+  /** 触发钩子 */
+  emit(event, data) { (this._hooks[event] || []).forEach(cb => { try { cb(data); } catch (e) { console.warn('[Plugin] hook error:', e); } }); },
+  /** 加载插件代码 */
+  load(code, filename) {
+    try {
+      const api = {
+        say: (t) => say(t),
+        execIntent: (i) => execIntent(i),
+        addChatMsg: (r, t) => addChatMsg(r, t),
+        setState: (k, v) => { state[k] = v; },
+        getState: () => ({ ...state }),
+        getPrefs: () => ({ ...prefs }),
+        on: (ev, cb) => this.on(ev, cb),
+        sendCommand: (cmd) => { if (HAS_IPC) ipc.send('pet:send-command', cmd); },
+        log: (...args) => console.log(`[Plugin:${filename}]`, ...args),
+      };
+      // 沙箱化执行
+      const fn = new Function('Lumina', `"use strict";\n${code}`);
+      fn(api);
+      this.loaded.push({ name: filename, code });
+      console.log(`[Plugin] 已加载: ${filename}`);
+      return true;
+    } catch (e) {
+      console.error(`[Plugin] 加载失败 ${filename}:`, e);
+      return false;
+    }
+  },
+  /** 批量加载 */
+  loadAll(codes) {
+    codes.forEach((code, i) => this.load(code, `plugin-${i}.js`));
+  },
+};
+
+// 接收主进程的插件重载
+if (HAS_IPC) {
+  ipc.on('pet:plugins-reload', (_e, codes) => {
+    PetPlugins.loaded = [];
+    PetPlugins._hooks = {};
+    if (Array.isArray(codes)) PetPlugins.loadAll(codes);
+    say(`已重新加载 ${codes?.length || 0} 个插件喵~`);
+  });
+  // 启动时自动加载插件（如果开启了应用开发模式）
+  setTimeout(() => {
+    if (prefs.catpaw?.plugins) {
+      ipc.invoke('pet:plugins', { action: 'list' }).then(r => {
+        if (r?.ok && r.plugins?.length) {
+          ipc.invoke('pet:plugins', { action: 'reload' }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }, 3000);
+}
+
+boot().catch(err => {
+  console.error('[Pet] boot failed:', err);
+  showPetError('启动失败：' + (err && err.message ? err.message : String(err)));
+});
+</script>
+</body>
+</html>

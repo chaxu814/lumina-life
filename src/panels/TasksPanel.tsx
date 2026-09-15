@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useStore, type CronTask } from '../stores/appStore'
 import { IconPlus, IconPlay, IconPause, IconTrash, IconCheck } from '../components/Icons'
 
@@ -26,6 +26,8 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
   const addAuditLog = useStore((s) => s.addAuditLog)
 
   const [form, setForm] = useState({ name: '', cron: '', action: '' })
+  const [asyncTasks, setAsyncTasks] = useState<any[]>([])
+  const [taskProgress, setTaskProgress] = useState<Record<string, any>>({})
   const [selectedPreset, setSelectedPreset] = useState('')
   const [formError, setFormError] = useState('')
 
@@ -34,6 +36,34 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
     setForm({ ...form, cron })
     setFormError('')
   }
+
+  // P2: 加载异步任务列表
+  useEffect(() => {
+    const loadAsyncTasks = async () => {
+      try {
+        const api = (window as any).luminaAPI
+        if (!api?.asyncTaskList) return
+        const tasks = await api.asyncTaskList()
+        setAsyncTasks(tasks.tasks || [])
+      } catch {}
+    }
+    loadAsyncTasks()
+    const interval = setInterval(loadAsyncTasks, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // P2: 监听任务进度
+  useEffect(() => {
+    const handler = (e: any) => {
+      const data = e.detail
+      setTaskProgress(prev => ({ ...prev, [data.taskId]: data }))
+      setAsyncTasks(prev => prev.map(t => 
+        t.id === data.taskId ? { ...t, status: data.status, progress: data.progress } : t
+      ))
+    }
+    window.addEventListener('task:progress', handler)
+    return () => window.removeEventListener('task:progress', handler)
+  }, [])
 
   const handleCreate = () => {
     if (!form.name.trim()) { setFormError('请输入任务名称'); return }
@@ -69,6 +99,39 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
     })
   }
 
+  // P2: 提交异步任务
+  const handleSubmitAsync = async () => {
+    if (!form.name.trim() || !form.action.trim()) return
+    try {
+      const api = (window as any).luminaAPI
+      const result = await api.asyncTaskSubmit?.({ 
+        title: form.name, 
+        prompt: form.action, 
+        config: { model: 'default' } 
+      })
+      if (result?.taskId) {
+        setForm({ name: '', cron: '', action: '' })
+        const tasks = await api.asyncTaskList?.()
+        setAsyncTasks(tasks?.tasks || [])
+      }
+    } catch (err) {
+      console.error('提交异步任务失败:', err)
+    }
+  }
+
+  // P2: 取消异步任务
+  const handleCancelAsync = async (taskId: string) => {
+    try {
+      const api = (window as any).luminaAPI
+      await api.asyncTaskCancel?.(taskId)
+      setAsyncTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, status: 'cancelled' } : t
+      ))
+    } catch (err) {
+      console.error('取消任务失败:', err)
+    }
+  }
+
   const handleDelete = (task: CronTask) => {
     removeCronTask(task.id)
     addAuditLog({
@@ -84,6 +147,56 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
         <div className="panel-header">
           <div className="panel-title">⏰ 定时任务</div>
           <div className="panel-subtitle">{cronTasks.length} 个任务 · Cron 定时调度</div>
+        </div>
+      )}
+
+      {/* P2: 异步后台任务 */}
+      {asyncTasks.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--text-primary)' }}>
+            后台任务 ({asyncTasks.filter(t => t.status === 'running' || t.status === 'queued').length} 运行中)
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {asyncTasks.filter(t => t.status === 'running' || t.status === 'queued').map((task) => {
+              const progress = taskProgress[task.id]
+              const percent = progress?.progressPercent ?? task.progressPercent ?? 0
+              return (
+                <div key={task.id} className="card" style={{ padding: '12px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{task.title}</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ 
+                        fontSize: 11, 
+                        color: task.status === 'running' ? 'var(--green-600)' : 'var(--text-tertiary)',
+                        fontWeight: 600
+                      }}>
+                        {task.status === 'running' ? '运行中' : '排队中'}
+                      </span>
+                      <button className="btn btn-ghost btn-xs" onClick={() => handleCancelAsync(task.id)} title="取消">
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    {task.progress || '准备中...'}
+                  </div>
+                  <div style={{ 
+                    width: '100%', height: 6, borderRadius: 3, 
+                    background: 'rgba(0,0,0,0.06)', overflow: 'hidden' 
+                  }}>
+                    <div style={{ 
+                      width: Math.min(100, Math.max(0, percent)) + '%', 
+                      height: '100%', borderRadius: 3,
+                      background: task.status === 'running' 
+                        ? 'linear-gradient(90deg, #3b82f6, #8b5cf6)' 
+                        : 'var(--text-disabled)',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

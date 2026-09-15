@@ -6,8 +6,17 @@
 //   而非简单截断或规则摘要
 // ============================================================
 
-import type { HookRegistration, BeforeReasoningInput, OnCompactionInput, HookContext } from './types'
+import type { HookRegistration, BeforeReasoningInput, OnCompactionInput, HookContext, AgentMessage } from './types'
 import { TokenEstimator } from '../tokenEstimator'
+
+/** 将 AgentMessage content 安全转为字符串 */
+function toText(content: AgentMessage['content']): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(part => part.text || '').join('')
+  }
+  return ''
+}
 
 // v4.0: Per-Agent 独立压缩阈值（借鉴 QwenPaw 独立上下文管理）
 //   - 每个 Agent 有独立的压缩阈值，互不影响
@@ -45,12 +54,12 @@ const MAX_SUMMARY_LENGTH = 3000              // 摘要最大字符数
 /** LLM 驱动的上下文压缩 */
 async function compactWithLLM(
   ctx: HookContext,
-  messages: Array<{ role: string; content: string }>,
+  messages: AgentMessage[],
 ): Promise<string | null> {
   // 构建压缩请求
   const conversation = messages
     .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => `[${m.role}]: ${m.content.slice(0, 500)}`)
+    .map(m => `[${m.role}]: ${toText(m.content).slice(0, 500)}`)
     .join('\n\n')
 
   const compactPrompt = `你是一个对话压缩助手。将以下对话压缩为结构化摘要，保留关键信息：
@@ -111,13 +120,13 @@ ${conversation.slice(0, 8000)}
 
 /** 规则摘要（降级方案） */
 function ruleBasedCompact(
-  messages: Array<{ role: string; content: string }>,
+  messages: AgentMessage[],
 ): string {
   const userMsgs = messages.filter(m => m.role === 'user')
   const assistantMsgs = messages.filter(m => m.role === 'assistant')
 
-  const goal = userMsgs[0]?.content?.slice(0, 200) || '(未识别)'
-  const lastAction = assistantMsgs[assistantMsgs.length - 1]?.content?.slice(0, 300) || '(无)'
+  const goal = toText(userMsgs[0]?.content).slice(0, 200) || '(未识别)'
+  const lastAction = toText(assistantMsgs[assistantMsgs.length - 1]?.content).slice(0, 300) || '(无)'
 
   return [
     `### 目标\n${goal}`,

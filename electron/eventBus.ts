@@ -128,6 +128,9 @@ export const BusEvents = {
   PROACTIVE_MESSAGE: 'proactive:message',
   PROACTIVE_CONFIG: 'proactive:config',
 
+  // 社交引擎事件
+  SOCIAL_TRIGGER: 'social:trigger',
+
   // ── v5.0 模式事件 ──────────────────────────────────
 
   /** Agent 模式切换 */

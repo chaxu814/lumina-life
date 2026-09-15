@@ -56,24 +56,26 @@ interface NewsDigestConfig {
   lastPushedAt: Record<number, number>
 }
 
-type CategoryFilter = 'all' | 'tech' | 'finance' | 'trending' | 'oss' | 'general'
+type CategoryFilter = 'all' | 'ai' | 'tech' | 'finance' | 'trending' | 'oss' | 'paper' | 'general'
 
 // ── EMOJI 映射 ──
 
 const CAT_EMOJI: Record<string, string> = {
-  tech: '💻', finance: '💰', trending: '🔥', oss: '🔧', general: '📰',
+  ai: '🤖', tech: '💻', finance: '💰', trending: '🔥', oss: '🔧', paper: '📄', general: '📰',
 }
 
 const CAT_LABEL: Record<string, string> = {
-  tech: '科技', finance: '财经', trending: '热搜', oss: '开源', general: '综合',
+  ai: 'AI', tech: '科技', finance: '财经', trending: '热搜', oss: '开源', paper: '论文', general: '综合',
 }
 
 // ── v2.0「换装」：分类彩色标签 ──
 const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  ai:       { bg: 'bg-purple-100', text: 'text-purple-600', dot: 'bg-purple-500' },
   tech:     { bg: 'bg-accent-50',  text: 'text-accent-600', dot: 'bg-accent-500' },
   finance:  { bg: 'bg-yellow-100', text: 'text-yellow-600', dot: 'bg-yellow-500' },
   trending: { bg: 'bg-red-100',    text: 'text-red-600',    dot: 'bg-red-500' },
   oss:      { bg: 'bg-green-100',  text: 'text-green-600',  dot: 'bg-green-500' },
+  paper:    { bg: 'bg-blue-100',   text: 'text-blue-600',   dot: 'bg-blue-500' },
   general:  { bg: 'bg-surface-100',text: 'text-text-secondary', dot: 'bg-text-tertiary' },
 }
 
@@ -83,13 +85,26 @@ const SLOT_LABEL: Record<PushTimeSlot, string> = {
 
 // ── 组件 ──
 
+// 模块级缓存：切换面板时组件会卸载，用缓存保留已采集的新闻，避免重复采集
+const NEWS_CACHE_TTL = 30 * 60 * 1000 // 30 分钟内有效
+let _newsCache: { digest: NewsDigest; ts: number } | null = null
+let _quotesCache: { data: { indices: any[]; stocks: any[]; updatedAt?: string }; ts: number } | null = null
+
 export default function NewsPanel() {
-  const [digest, setDigest] = useState<NewsDigest | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [digest, setDigestState] = useState<NewsDigest | null>(_newsCache?.digest ?? null)
+  const [loading, setLoading] = useState(!_newsCache)
   const [collecting, setCollecting] = useState(false)
   const [filter, setFilter] = useState<CategoryFilter>('all')
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  // 统一 setDigest：同时更新缓存
+  const setDigest = useCallback((d: NewsDigest | null) => {
+    if (d) {
+      _newsCache = { digest: d, ts: Date.now() }
+    }
+    setDigestState(d)
+  }, [])
 
   // 🐛 修复「闪一下」：采集操作防重复锁 + 组件挂载标记
   const fetchLockRef = useRef<'idle' | 'auto' | 'manual'>('idle')
@@ -98,10 +113,17 @@ export default function NewsPanel() {
 
   // 「雷达」：行情 Tab
   const [activeTab, setActiveTab] = useState<'news' | 'quotes' | 'mcp'>('news')
-  const [quotesData, setQuotesData] = useState<{
+  const [quotesData, setQuotesDataState] = useState<{
     indices: any[]; stocks: any[]; updatedAt?: string
-  } | null>(null)
+  } | null>(_quotesCache?.data ?? null)
   const [quotesLoading, setQuotesLoading] = useState(false)
+
+  const setQuotesData = useCallback((d: { indices: any[]; stocks: any[]; updatedAt?: string } | null) => {
+    if (d) {
+      _quotesCache = { data: d, ts: Date.now() }
+    }
+    setQuotesDataState(d)
+  }, [])
 
   // ── 配置状态 ──
   const [showConfig, setShowConfig] = useState(false)
@@ -121,10 +143,18 @@ export default function NewsPanel() {
   }, [])
 
   // ── 采集并筛选 ──
-  const fetchNews = useCallback(async () => {
+  const fetchNews = useCallback(async (force = false) => {
     // 如果手动采集正在进行，自动采集跳过
     if (fetchLockRef.current === 'manual') {
       console.log('[NewsPanel] 手动采集进行中，跳过自动加载')
+      return
+    }
+    // 缓存命中且未过期：直接使用，不重新采集
+    if (!force && _newsCache && Date.now() - _newsCache.ts < NEWS_CACHE_TTL) {
+      if (mountedRef.current) {
+        setDigestState(_newsCache.digest)
+        setLoading(false)
+      }
       return
     }
     fetchLockRef.current = 'auto'
@@ -143,7 +173,7 @@ export default function NewsPanel() {
       if (fetchLockRef.current === 'auto') fetchLockRef.current = 'idle'
       if (mountedRef.current) setLoading(false)
     }
-  }, [])
+  }, [setDigest])
 
   useEffect(() => { fetchNews() }, [fetchNews])
 
@@ -159,8 +189,7 @@ export default function NewsPanel() {
           console.log(`[NewsPanel] ✅ 已推送 ${result.pushedToMail} 条新闻到邮箱`)
         }
       }
-    } catch (err: any) {
-      if (mountedRef.current) setError(err.message || '采集+推送失败')
+    } catch (err: any) {      if (mountedRef.current) setError(err.message || '采集+推送失败')
     } finally {
       fetchLockRef.current = 'idle'
       if (mountedRef.current) setCollecting(false)
@@ -400,18 +429,24 @@ export default function NewsPanel() {
   )
 
   // ── 📡 v2.0「雷达」：行情数据 ──
-  const fetchQuotes = useCallback(async () => {
+  const QUOTES_CACHE_TTL = 5 * 60 * 1000 // 行情 5 分钟缓存
+  const fetchQuotes = useCallback(async (force = false) => {
+    // 缓存命中且未过期
+    if (!force && _quotesCache && Date.now() - _quotesCache.ts < QUOTES_CACHE_TTL) {
+      setQuotesDataState(_quotesCache.data)
+      return
+    }
     setQuotesLoading(true)
     try {
       const res = await (window.luminaAPI as any).newsFetchQuotes()
       if (res.ok) setQuotesData({ indices: res.indices, stocks: res.stocks, updatedAt: res.updatedAt })
     } catch (err: any) { console.warn('[NewsPanel] 行情获取失败:', err)
     } finally { setQuotesLoading(false) }
-  }, [])
+  }, [setQuotesData])
 
   useEffect(() => {
-    if (activeTab === 'quotes' && !quotesData) fetchQuotes()
-  }, [activeTab, quotesData, fetchQuotes])
+    if (activeTab === 'quotes') fetchQuotes()
+  }, [activeTab, fetchQuotes])
 
   // ── 筛选 ──
   const filteredItems = digest?.items.filter(item => {
@@ -604,7 +639,7 @@ export default function NewsPanel() {
           </div>
         )}
         {activeTab === 'quotes' && (
-          <Button variant="primary" size="sm" onClick={fetchQuotes} loading={quotesLoading}>
+          <Button variant="primary" size="sm" onClick={() => fetchQuotes(true)} loading={quotesLoading}>
             <IconRefresh className={quotesLoading ? 'animate-spin' : ''} /> {quotesLoading ? '加载...' : '刷新'}
           </Button>
         )}
@@ -636,7 +671,7 @@ export default function NewsPanel() {
 
         {/* 分类筛选 chips */}
         <div className="flex gap-1.5 mb-3 flex-wrap">
-          {(['all', 'tech', 'finance', 'trending', 'oss', 'general'] as CategoryFilter[]).map(cat => (
+          {(['all', 'ai', 'tech', 'finance', 'oss', 'trending', 'paper', 'general'] as CategoryFilter[]).map(cat => (
             <button key={cat}
               className={clsx('chip text-2xs', filter === cat && 'chip-active')}
               onClick={() => setFilter(cat)}
@@ -651,7 +686,7 @@ export default function NewsPanel() {
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-red-100 text-red-600 text-xs">
             ⚠️ {error}
-            <Button size="sm" variant="ghost" onClick={fetchNews}>重试</Button>
+            <Button size="sm" variant="ghost" onClick={() => fetchNews(true)}>重试</Button>
           </div>
         )}
 

@@ -6,7 +6,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { LuckyModePreset } from '../components/LuckyModeSelector'
-import type { LuckyRuntimeInfo, LuckySettingsConfig } from '../services/luckyModeService'
+import type { LuckyRuntimeInfo } from '../services/luckyModeService'
+import type { LuckySettingsConfig } from '../components/LuckyModeSettings'
 import { getDefaultSettings } from '../components/LuckyModeSettings'
 
 export interface UseLuckyModeReturn {
@@ -93,7 +94,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
 
   const getMaxIteration = (cfg: LuckySettingsConfig): number => {
     if (cfg.preset === 'goal') return cfg.goal.maxIterations
-    if (cfg.preset === 'mission') return cfg.mission.bypassIterationLimit ? cfg.maxIterations * 2 : cfg.maxIterations
+    if (cfg.preset === 'mission') return cfg.goal.bypassIterationLimit ? cfg.maxIterations * 2 : cfg.maxIterations
     return cfg.maxIterations
   }
 
@@ -105,7 +106,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
       preset: p,
       isActive: p !== 'off',
       currentIteration: p !== preset ? 0 : prev.currentIteration,
-      maxIteration: p === 'goal' ? settings.goal.maxIterations : p === 'mission' ? (settings.mission.bypassIterationLimit ? settings.maxIterations * 2 : settings.maxIterations) : settings.maxIterations,
+      maxIteration: p === 'goal' ? settings.goal.maxIterations : p === 'mission' ? (settings.goal.bypassIterationLimit ? settings.maxIterations * 2 : settings.maxIterations) : settings.maxIterations,
       isPaused: false,
       pauseReason: null,
     }))

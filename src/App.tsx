@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 import ChatPanel from './panels/ChatPanel'
@@ -19,15 +19,73 @@ import MoreSettingsModal from './components/MoreSettingsModal'  // ⚙️ v1.0: 
 import TeamCommunityModal from './components/TeamCommunityModal'  // 👥 v1.0: 团队社区弹窗
 import PersonalModal from './components/PersonalModal'  // 👤 v1.0: 个性化弹窗
 import NewsPanel from './panels/NewsPanel'  // 🆕 v1.1: 新闻早报
-import TeamPanel from './panels/TeamPanel'  // 🆕 v1.0: AI 小团队面板
+
 import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8.1: 插件面板
 import Toast from './components/Toast'
 import { showToast } from './components/Toast'
 import ProactiveToast from './components/ProactiveToast'  // 🆕 v3.8.1
+import LoopToast from './components/LoopToast'  // 🔁 Phase 4: Loop 完成通知
 import OnboardingWizard from './components/OnboardingWizard'  // 🆕 v1.0: 首次运行引导
 import ModeTransition from './components/ModeTransition'  // 🆕 v2.0: 场景模式过渡动画
+import PetChatSync from './components/PetChatSync'  // 🐾 桌宠聊天同步
 import { useStore, type PanelType } from './stores/appStore'
 import { generateReport } from './services/reportGenerator'
+
+// ═══════ 桌宠聊天框内"朋友圈/剧场/日报"数据组装（取自主界面同一 store / localStorage，实时互通）═══════
+type PetLifeItem = { icon?: string; title: string; body?: string; meta?: string }
+function fmtLifeTime(ts?: number): string {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前'
+  if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前'
+  const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()}`
+}
+function buildMomentsItems(): PetLifeItem[] {
+  let posts: any[] = []
+  try { posts = JSON.parse(localStorage.getItem('lumina_moments') || '[]') } catch { posts = [] }
+  const iconMap: Record<string, string> = { lumina: '🐱', recha: '🍵', yak: '📊', user: '👤' }
+  return posts.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 20).map((p: any) => ({
+    icon: iconMap[p.author] || '✨', title: p.authorName || p.author || 'Agent',
+    meta: fmtLifeTime(p.timestamp) + (p.likes ? ` · ♥${p.likes}` : ''), body: p.content || '',
+  }))
+}
+function buildTheaterItems(): PetLifeItem[] {
+  const st = useStore.getState() as any
+  const items: PetLifeItem[] = []
+  const convs = [...(st.conversations || [])].sort((a: any, b: any) => (a.createdAt || 0) - (b.createdAt || 0))
+  if (convs[0]) items.push({ icon: '🌟', title: '一切的开始', meta: fmtLifeTime(convs[0].createdAt), body: `第一次对话"${convs[0].name || '未命名'}"，三个 Agent 从这里开始了解你。` })
+  const total = (st.conversations || []).reduce((n: number, c: any) => n + (c.messages?.length || 0), 0)
+  if (total >= 5) items.push({ icon: '💬', title: `已交流 ${total} 条消息`, meta: '里程碑', body: '每一条消息都在让 Lumina 更懂你。' })
+  const lessons = st.structuredMemory?.memory?.lessons
+  if (Array.isArray(lessons)) lessons.slice(0, 6).forEach((l: string) => items.push({ icon: '💡', title: '学到的经验', meta: '发现', body: String(l).slice(0, 180) }))
+  return items.slice(0, 14)
+}
+async function buildDailyItems(): Promise<PetLifeItem[]> {
+  let reports: any[] = []
+  try { reports = JSON.parse(localStorage.getItem('lumina_daily_report') || '[]') } catch { reports = [] }
+  try {
+    const r = await window.luminaAPI?.reportList?.({ type: 'daily', limit: 15 })
+    if (r?.reports?.length) {
+      const have = new Set(reports.map((x: any) => x.date))
+      r.reports.forEach((rp: any) => {
+        const d = rp.date || rp.period
+        if (d && !have.has(d)) reports.push({ date: d, content: rp.summary || rp.content || '', generated: true })
+      })
+    }
+  } catch { /* localStorage 兜底即可 */ }
+  return reports.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 15).map((r: any) => ({
+    icon: '📰', title: `${r.date || ''} 日报`, meta: r.generated === false ? '草稿' : '已生成', body: r.content || r.summary || '',
+  }))
+}
+async function buildPetLifeData(target: string): Promise<PetLifeItem[]> {
+  try {
+    if (target === 'moments') return buildMomentsItems()
+    if (target === 'theater') return buildTheaterItems()
+    if (target === 'daily') return await buildDailyItems()
+  } catch (e) { console.warn('[pet-life] 组装失败', e) }
+  return []
+}
 
 const panelMap: Record<string, React.FC> = {
   chat: ChatPanel,
@@ -43,7 +101,7 @@ const panelMap: Record<string, React.FC> = {
   social: SocialPanel, // 🌐 v3.0: 跨用户社交
   familytree: FamilyTreePanel, // 🌳 v3.0: Agent 家谱
   news: NewsPanel, // 🆕 v1.1: 新闻早报
-  team: TeamPanel, // 🆕 v1.0: AI 小团队面板
+
   plugins: PluginPanelContainer, // 🆕 v8.1: 插件面板
   more: MoreSettingsPanel, // ⚙️ v1.0: 更多设置（整合入口）
 }
@@ -51,6 +109,7 @@ const panelMap: Record<string, React.FC> = {
 export default function App() {
   const activePanel = useStore((s) => s.activePanel)
   const setActivePanel = useStore((s) => s.setActivePanel)
+  const [settingsTab, setSettingsTab] = useState<string>('llm')
   const activeConversationId = useStore((s) => s.activeConversationId)
   const clearMessages = useStore((s) => s.clearCurrentMessages)
   const addMessage = useStore((s) => s.addMessage)
@@ -176,6 +235,44 @@ export default function App() {
         store.addMessage(store.activeConversationId, 'user', '📸 请分析我当前屏幕的内容，告诉我你在屏幕上看到了什么')
       }, 100)
     }))
+    // 桌宠开关
+    cleanups.push(window.luminaAPI?.onMenuEvent('menu:toggle-pet', async () => {
+      try {
+        const on = await window.luminaAPI?.petStatus()
+        const next = !on
+        await window.luminaAPI?.petToggle(next)
+        addMessage(activeConversationId, 'system', next ? '🐱 桌宠已开启' : '💤 桌宠已关闭')
+      } catch (e) {
+        addMessage(activeConversationId, 'system', '❌ 桌宠切换失败：' + ((e as Error)?.message || String(e)))
+      }
+    }))
+    // 桌宠跳转：设置页指定 tab
+    cleanups.push(window.luminaAPI?.onMenuEvent('settings:goto', (tab: string) => {
+      setSettingsTab(tab)
+      setActivePanel('settings')
+    }))
+    // 桌宠跳转：指定对话
+    cleanups.push(window.luminaAPI?.onMenuEvent('pet:goto-conversation', (convId: string) => {
+      setActivePanel('chat')
+      const store = useStore.getState()
+      const conv = store.conversations.find((c: any) => c.id === convId)
+      if (conv) store.switchConversation(convId)
+    }))
+    // 🌸 桌宠"生活"入口：唤起主窗口的 朋友圈 / 剧场 / 日报（均在团队群聊对应 tab）
+    cleanups.push(window.luminaAPI?.onMenuEvent('life:open', (data: { target: 'moments' | 'theater' | 'daily' | 'news' }) => {
+      if (data?.target === 'news') { setActivePanel('news'); return }
+      setActivePanel('chat')
+      const store = useStore.getState()
+      const team = store.conversations.find((c: any) => c.id === '__team_group_chat__')
+      if (team) store.switchConversation(team.id)
+      const tab = data?.target === 'theater' ? 'theater' : data?.target === 'daily' ? 'daily' : 'moments'
+      setTimeout(() => window.dispatchEvent(new CustomEvent('lumina:team-tab', { detail: { tab } })), 160)
+    }))
+    // 🌸 桌宠聊天框内生活视图请求：从主界面同一数据源取数后回传
+    cleanups.push(window.luminaAPI?.onMenuEvent('life:data-request', async (data: { reqId: string; target: string }) => {
+      const items = await buildPetLifeData(data?.target || 'moments')
+      window.luminaAPI?.lifeProvideData({ reqId: data.reqId, items })
+    }))
     return () => cleanups.forEach((fn) => fn?.())
   }, [])
 
@@ -256,6 +353,8 @@ export default function App() {
           <main className="main-content">
             <Toast />
             <ProactiveToast />
+            <LoopToast />
+            <PetChatSync />
             {/* 保持 ChatPanel 始终挂载，确保 TTS 和 Agent 事件正常 */}
             <div style={{ display: activePanel === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
               <ChatPanel />
@@ -266,7 +365,7 @@ export default function App() {
       </ModeTransition>
       {/* 设置弹窗 — 覆盖在所有内容之上 */}
       {activePanel === 'settings' && (
-        <SettingsModal open onClose={() => setActivePanel('chat')} />
+        <SettingsModal open onClose={() => setActivePanel('chat')} initialTab={settingsTab} />
       )}
       {/* Lumina团队社区弹窗 — 覆盖在所有内容之上 */}
       {activePanel === 'teamcommunity' && (

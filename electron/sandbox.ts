@@ -21,6 +21,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { getApprovalService } from './approvalService'
+import { ApprovalDecision } from './approvalTypes'
 import type { TeamMemberId } from './agentTeamTypes'
 
 // ═══════════════════════════════════════════════════════════
@@ -364,7 +365,7 @@ export class SandboxManager {
           if (request) {
             // 等待用户决策
             const decision = await approvalService.waitForDecision(request.id, 60000)
-            if (decision === 'approved' || decision === 'approved_once') {
+            if (decision === ApprovalDecision.APPROVED) {
               return { allowed: true, needsApproval: false, reason: '用户已授权此写入操作', approvalRequestId: request.id }
             }
             return { allowed: false, needsApproval: true, reason: '用户未批准此写入操作', approvalRequestId: request.id }
@@ -391,7 +392,7 @@ export class SandboxManager {
         })
         if (request) {
           const decision = await approvalService.waitForDecision(request.id, 60000)
-          if (decision === 'approved' || decision === 'approved_once') {
+          if (decision === ApprovalDecision.APPROVED) {
             return { allowed: true, needsApproval: true, reason: '用户已授权读取敏感文件', approvalRequestId: request.id }
           }
           return { allowed: false, needsApproval: true, reason: '用户未批准读取敏感文件', approvalRequestId: request.id }
@@ -442,7 +443,7 @@ export class SandboxManager {
       })
       if (request) {
         const decision = await approvalService.waitForDecision(request.id, 60000)
-        if (decision === 'approved' || decision === 'approved_once') {
+        if (decision === ApprovalDecision.APPROVED) {
           return { allowed: true, needsApproval: true, reason: '用户已授权编辑此文件', approvalRequestId: request.id }
         }
         return { allowed: false, needsApproval: true, reason: '用户未批准编辑此文件', approvalRequestId: request.id }

@@ -10,9 +10,51 @@
 //   - 统一事件通道: pet:event / pet:command
 // ============================================================
 
-import { BrowserWindow, app, screen, ipcMain } from 'electron'
+import { BrowserWindow, app, screen, ipcMain, desktopCapturer } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
+import { getAgentConfig } from '../agentConfig'
+import { LLMProvider } from '../core/llmProvider'
+import { detectScene } from '../sceneDetector'
+import { getProviderManager } from '../core/providerManager'
+
+/**
+ * 桌宠"大脑"LLM 配置解析：
+ *   1) 优先 Lumina Team 成员 lumina 的独立配置；
+ *   2) 没配时兜底到设置页的"全局激活供应商"（很多用户只配了全局，之前这里直接放弃，
+ *      导致意图系统/主动秘书全部静默降级成本地写死规则——表现为"LLM 没有驱动身体"）。
+ * 返回 null 表示确实一处都没配。
+ */
+export function resolvePetBrainConfig(): { endpoint: string; model: string; apiKey: string; maxContextTokens?: number; source: 'team' | 'global' } | null {
+  try {
+    const ac = getAgentConfig()
+    if (ac.isConfigured('lumina')) {
+      const c = ac.get('lumina')
+      if (c.endpoint && c.model) {
+        return { endpoint: c.endpoint, model: c.model, apiKey: c.apiKey || '', maxContextTokens: c.maxContextTokens, source: 'team' }
+      }
+    }
+    const active = getProviderManager().getActiveConfig()?.config
+    if (active && active.baseUrl && active.model && active.enabled) {
+      return { endpoint: active.baseUrl, model: active.model, apiKey: active.apiKey || '', maxContextTokens: active.maxContextTokens, source: 'global' }
+    }
+  } catch (e: any) {
+    console.warn('[PetBrain] 配置解析失败:', e?.message || e)
+  }
+  return null
+}
+
+/** 构造一个桌宠用 LLMProvider（社交模式：短超时、轻量） */
+export function createPetLLM(cfg: { endpoint: string; model: string; apiKey: string; maxContextTokens?: number }): LLMProvider {
+  return new LLMProvider({
+    baseUrl: cfg.endpoint,
+    apiKey: cfg.apiKey || '',
+    model: cfg.model,
+    maxContextTokens: cfg.maxContextTokens || 4096,
+    socialMode: true,
+    personaId: 'lumina',
+  } as any)
+}
 
 // ═══════════════════════════════════════════════════════════
 // 接口 & 类型
@@ -23,6 +65,7 @@ export interface PetConfig {
   autoRestart: boolean    // 崩溃后自动恢复
   opacity: number         // 透明度 0~1
   scale: number           // 缩放 0.5~2.0
+  auto: 'off' | 'light' | 'heavy'  // 自主行为级别：off 关闭 / light 轻度 / heavy 重度
 }
 
 export interface PetEvent {
@@ -39,21 +82,169 @@ let petWindow: BrowserWindow | null = null
 let petEnabled = false
 let petMainWindow: BrowserWindow | null = null  // 主窗口引用，用于转发事件
 
-const PET_WINDOW_WIDTH = 160
-const PET_WINDOW_HEIGHT = 200
 const MAX_RESTART_ATTEMPTS = 3
 const RESTART_COOLDOWN_MS = 2000
 const IDLE_THRESHOLD_MS = 60_000  // 1 分钟无交互视为"久置"
 
 let config: PetConfig = {
-  clickThrough: false,
+  clickThrough: true,   // 全屏舞台默认鼠标穿透，仅在模型/菜单区域唤醒，不打扰桌面操作
   autoRestart: true,
   opacity: 1.0,
   scale: 1.0,
+  auto: 'light',
+}
+
+// ── 桌宠设置持久化（重启不丢配置 / 记住上次模型）──────────────
+function petStatePath(): string {
+  return path.join(app.getPath('userData'), 'pet-config.json')
+}
+function readPersistedPetState(): { config?: Partial<PetConfig>; model?: string; prefs?: Partial<PetPrefs> } {
+  try {
+    const p = petStatePath()
+    if (!fs.existsSync(p)) return {}
+    return JSON.parse(fs.readFileSync(p, 'utf8'))
+  } catch (e) {
+    console.warn('[PetWindow] 读取 pet-config.json 失败:', e)
+    return {}
+  }
+}
+function writePersistedPetState(next: { config?: Partial<PetConfig>; model?: string; prefs?: Partial<PetPrefs> }): void {
+  try {
+    fs.writeFileSync(petStatePath(), JSON.stringify(next, null, 2))
+  } catch (e) {
+    console.warn('[PetWindow] 写入 pet-config.json 失败:', e)
+  }
+}
+
+// ── N.E.K.O 风格偏好（对话/动画/声音/Pet Handling/人格）──────
+export interface PetPrefs {
+  persona?: string            // 人格 id（'' = 默认猫娘）
+  onboardingDone?: boolean    // 新手引导已完成
+  bubbles?: boolean           // 表情/对话气泡
+  nekoSounds?: boolean        // 猫猫音效（句尾喵）
+  proactive?: boolean         // 主动搭话
+  allowInterrupt?: boolean    // 允许打断
+  maxTokens?: number          // 回复长度上限
+  mouseTrack?: boolean        // 眼神/头部跟踪鼠标
+  fullscreenTrack?: boolean   // 全屏跟踪（鼠标在屏幕任何位置都跟踪）
+  fps?: number                // 帧率（0 = 无限制/VSync）
+  quality?: 'high' | 'low'    // 画质
+  voiceOn?: boolean           // AI 语音开关
+  volume?: number             // 音量 0-100
+  spatial?: boolean           // 空间音频（按模型位置声像）
+  breathing?: boolean         // 呼吸动画（ParamBreath）
+  hoverFade?: boolean         // 锁定悬停淡化（鼠标离开时模型半透明）
+  dropEffects?: boolean       // 掉券动画与音效
+  naturalExpression?: boolean // 自然表达（随机微表情）
+  autoTransform?: boolean     // 自动变猫
+  mergeMessages?: boolean     // 合并消息
+  focusMode?: boolean         // 凝神模式（专注时不打扰）
+  privacyMode?: boolean       // 隐私模式（不截屏/不记录）
+  screenShare?: boolean       // 屏幕分享
+  voiceRecognition?: boolean  // 语音识别
+  micDevice?: string          // 麦克风设备 ID
+  playbackDevice?: string     // 播放设备 ID
+  ttsEngine?: 'edge-tts' | 'indextts'  // TTS 引擎选择
+  catpaw?: {                  // Lumina Pet Handling（电脑权限）
+    master?: boolean; kbm?: boolean; browser?: boolean; perception?: boolean; hud?: boolean
+    desktop?: boolean; plugins?: boolean
+  }
+  secretary?: {               // 主动秘书（N.E.K.O 式主动搭话：观察用户在做什么并主动评价/建议/问话）
+    enabled?: boolean         // 主动搭话总开关
+    minIntervalSec?: number   // 两次主动搭话的最低间隔（秒）
+    sources?: {               // 触发源（对应主动搭话设置面板的勾选项）
+      screen?: boolean        // 屏幕观察（截屏 + 多模态理解）
+      window?: boolean        // 当前活动窗口 / 应用
+      news?: boolean          // 新闻 / 热点
+      video?: boolean         // 视频网站
+      personal?: boolean      // 个人动态
+      music?: boolean         // 音乐推荐
+    }
+  }
+}
+const DEFAULT_PREFS: PetPrefs = {
+  persona: '', onboardingDone: true,
+  bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
+  mouseTrack: true, fullscreenTrack: false, fps: 0, quality: 'high',
+  voiceOn: false, volume: 100, spatial: true,
+  breathing: false, hoverFade: false, dropEffects: true, naturalExpression: true,
+  autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
+  screenShare: false, voiceRecognition: false, micDevice: '', playbackDevice: '',
+  ttsEngine: 'edge-tts',
+  catpaw: { master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false },
+  secretary: {
+    enabled: true, minIntervalSec: 45,
+    sources: { screen: true, window: true, news: false, video: true, personal: false, music: false },
+  },
+}
+export function getPetPrefs(): PetPrefs {
+  const saved = readPersistedPetState().prefs || {}
+  const merged = {
+    ...DEFAULT_PREFS, ...saved,
+    catpaw: { ...DEFAULT_PREFS.catpaw, ...(saved.catpaw || {}) },
+    secretary: {
+      ...DEFAULT_PREFS.secretary, ...(saved.secretary || {}),
+      sources: { ...DEFAULT_PREFS.secretary!.sources, ...((saved.secretary || {}).sources || {}) },
+    },
+  }
+  // 用户明确不需要鼠标离开变淡效果，强制关闭（覆盖旧版本保存的 true）
+  merged.hoverFade = false
+  return merged
+}
+export function updatePetPrefs(patch: Partial<PetPrefs>): PetPrefs {
+  const s = readPersistedPetState()
+  const cur = getPetPrefs()
+  const next: PetPrefs = {
+    ...cur, ...patch,
+    catpaw: { ...cur.catpaw, ...(patch.catpaw || {}) },
+    secretary: {
+      ...cur.secretary, ...(patch.secretary || {}),
+      sources: { ...(cur.secretary?.sources || {}), ...((patch.secretary || {}).sources || {}) },
+    },
+  }
+  s.prefs = next
+  writePersistedPetState(s)
+  if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:prefs-changed', next)
+  return next
+}
+let petConfigLoaded = false
+function ensurePetConfigLoaded(): void {
+  if (petConfigLoaded) return
+  petConfigLoaded = true
+  const saved = readPersistedPetState().config || {}
+  if (typeof saved.clickThrough === 'boolean') config.clickThrough = saved.clickThrough
+  if (typeof saved.opacity === 'number') config.opacity = saved.opacity
+  if (typeof saved.scale === 'number') config.scale = saved.scale
+  if (typeof saved.autoRestart === 'boolean') config.autoRestart = saved.autoRestart
+  if (saved.auto === 'off' || saved.auto === 'light' || saved.auto === 'heavy') config.auto = saved.auto
+}
+function persistPetConfig(): void {
+  const s = readPersistedPetState()
+  s.config = config
+  writePersistedPetState(s)
+}
+function loadPersistedPetModel(): 'Mao' | null {
+  const s = readPersistedPetState()
+  if (s.model === 'Hiyori') { s.model = 'Mao'; writePersistedPetState(s) }  // Hiyori（桃濑日和）已移除，历史选择自动迁移到 Mao
+  return s.model === 'Mao' ? s.model : null
+}
+function persistPetModel(model: string): void {
+  const s = readPersistedPetState()
+  s.model = model
+  writePersistedPetState(s)
 }
 let restartAttempts = 0
 let crashRecoveryTimer: ReturnType<typeof setTimeout> | null = null
 let lastInteractionTime = Date.now()
+
+// ── 互动历史（LLM 自主思考心跳的上下文）─────────────────────
+const recentEvents: Array<{ type: string; ts: number }> = []
+export function getPetRecentEvents(): Array<{ type: string; ts: number }> {
+  return recentEvents.slice()
+}
+export function getPetLastInteraction(): number {
+  return lastInteractionTime
+}
 
 // ═══════════════════════════════════════════════════════════
 // 生成桌宠 HTML（动态注入配置）
@@ -546,20 +737,92 @@ ipcRenderer.on('pet:command', (_event, command) => {
 function getPetHtmlPath(): string {
   const dir = path.join(app.getPath('userData'), 'pet-assets')
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const htmlPath = path.join(dir, 'pet.html')
-  fs.writeFileSync(htmlPath, generatePetHtml(), 'utf-8')
-  return htmlPath
+  // 只在 pet.html 不存在或源文件更新时才复制，避免每次都复制
+  const petHtmlPath = path.join(dir, 'pet.html')
+  const src = findPetSourceDir()
+  if (src) {
+    const srcHtml = path.join(src, 'pet-live2d.html')
+    const srcMtime = fs.existsSync(srcHtml) ? fs.statSync(srcHtml).mtimeMs : 0
+    const dstMtime = fs.existsSync(petHtmlPath) ? fs.statSync(petHtmlPath).mtimeMs : 0
+    if (dstMtime < srcMtime) {
+      copyPetAssets(dir)
+    }
+  }
+  return petHtmlPath
+}
+
+/**
+ * 把 Live2D 桌宠渲染器（pet-live2d.html）与 assets/ 拷贝到用户数据目录。
+ * 源文件位于 petWindow.js 同级的 pet-live2d.html 与 assets/，
+ * 需在构建时一并打包（electron-vite / electron-builder 配置）。
+ */
+function findPetSourceDir(): string | null {
+  // 运行时 __dirname 可能是 out/main 或 out/main/chunks（被 rollup 拆 chunk），
+  // 逐个候选查找 pet-live2d.html，保证 dev / build / 打包后都能找到。
+  const candidates = [
+    __dirname,
+    path.join(__dirname, '..'),
+    path.join(__dirname, '..', '..'),
+    path.join(process.resourcesPath || '', 'pet'),          // 打包后：resources/pet（extraResources）
+    path.join(app.getAppPath(), 'electron', 'pet'),
+    path.join(process.cwd(), 'electron', 'pet'),
+  ]
+  for (const c of candidates) {
+    if (c && fs.existsSync(path.join(c, 'pet-live2d.html'))) return c
+  }
+  return null
+}
+
+function copyPetAssets(dir: string): void {
+  const src = findPetSourceDir()
+  if (!src) {
+    console.warn('[PetWindow] 未找到 pet-live2d.html 源，桌宠将不可用')
+    return
+  }
+  try {
+    fs.copyFileSync(path.join(src, 'pet-live2d.html'), path.join(dir, 'pet.html'))
+    const assetsSrc = path.join(src, 'assets')
+    if (fs.existsSync(assetsSrc)) {
+      fs.cpSync(assetsSrc, path.join(dir, 'assets'), { recursive: true })
+    }
+    // 复制设置面板
+    const settingsSrc = path.join(src, 'settings.html')
+    if (fs.existsSync(settingsSrc)) {
+      fs.copyFileSync(settingsSrc, path.join(dir, 'settings.html'))
+    }
+    // 复制新手引导页
+    const onboardSrc = path.join(src, 'onboarding.html')
+    if (fs.existsSync(onboardSrc)) {
+      fs.copyFileSync(onboardSrc, path.join(dir, 'onboarding.html'))
+    }
+  } catch (e: any) {
+    console.error('[PetWindow] copyPetAssets error:', e)
+  }
+}
+
+function resolvePreloadPath(): string {
+  const candidates = [
+    path.join(__dirname, '..', 'preload', 'index.js'),
+    path.join(__dirname, '..', '..', 'preload', 'index.js'),
+    path.join(__dirname, 'preload', 'index.js'),
+  ]
+  for (const c of candidates) if (fs.existsSync(c)) return c
+  return path.join(__dirname, '..', 'preload', 'index.js')
 }
 
 function setWindowClickThrough(enable: boolean): void {
   if (!petWindow || petWindow.isDestroyed()) return
-  // 开启穿透: 鼠标事件穿透窗口（但窗口仍然可以接收键盘事件）
-  // 关闭穿透: 正常交互
-  petWindow.setIgnoreMouseEvents(enable, { forward: true })
+  // 全屏舞台始终保持「穿透+转发」：桌面永远可操作；
+  // 渲染页通过 pet:set-ignore-mouse 在悬停模型/菜单/聊天时动态接管鼠标。
+  // clickThrough 开关只影响唤醒区域宽度（窄=仅模型，宽=模型周围一圈）。
+  petWindow.setIgnoreMouseEvents(true, { forward: true })
+  // 同步穿透状态到渲染页（页面据此选择唤醒区域宽度）
+  petWindow.webContents.send('pet:command', { type: 'set-click-through', value: enable })
   // 更新 HTML 中的样式
+  // 注意：全屏舞台绝不能设置 -webkit-app-region: drag，
+  // 否则整个屏幕变成原生窗口拖拽手柄，吞掉所有点击/右键事件
   petWindow.webContents.executeJavaScript(`
     document.body.style.cursor = '${enable ? "default" : "pointer"}';
-    document.getElementById('pet-container').style.webkitAppRegion = '${enable ? "no-drag" : "drag"}';
     document.querySelector('.ct-hint')?.remove();
     if (${enable}) {
       const hint = document.createElement('div');
@@ -580,33 +843,41 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   }
 
   if (mainWin) petMainWindow = mainWin
+  ensurePetConfigLoaded()
 
   const display = screen.getPrimaryDisplay()
-  const { width: screenWidth, height: screenHeight } = display.workAreaSize
+  // 全屏舞台：覆盖整个屏幕（含任务栏区域），桌宠可在整块屏幕上活动
+  const { x: workX, y: workY, width: screenWidth, height: screenHeight } = display.bounds
 
   petWindow = new BrowserWindow({
-    width: PET_WINDOW_WIDTH,
-    height: PET_WINDOW_HEIGHT,
-    x: screenWidth - PET_WINDOW_WIDTH - 20,
-    y: screenHeight - PET_WINDOW_HEIGHT - 60,
+    width: screenWidth,
+    height: screenHeight,
+    x: workX,
+    y: workY,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
     hasShadow: false,
-    focusable: false,
+    focusable: true,
+    backgroundColor: '#00000000',
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'index.js'),
+      preload: resolvePreloadPath(),
       sandbox: false,
-      contextIsolation: true,
+      contextIsolation: false,
+      nodeIntegration: true,
     },
   })
+  // 调试用：自动打开开发者工具（正式发布前注释掉）
+  // petWindow.webContents.openDevTools({ mode: 'detach' })
 
-  // 加载生成的 HTML
-  petWindow.loadFile(getPetHtmlPath())
-  // 应用穿透模式
-  setWindowClickThrough(config.clickThrough)
+  // 加载生成的 HTML（页面就绪后再应用穿透模式，确保渲染页收到状态同步）
+  petWindow.loadFile(getPetHtmlPath()).then(() => {
+    setWindowClickThrough(config.clickThrough)
+  }).catch(err => {
+    console.error('[PetWindow] loadFile failed:', err)
+  })
 
   // ── 窗口事件 ──────────────────────────────────────
   petWindow.on('closed', () => {
@@ -667,11 +938,17 @@ export function closePetWindow(): void {
  */
 export function togglePet(enable: boolean, mainWin?: BrowserWindow | null): boolean {
   if (enable) {
+    broadcastPetProgress(5, '正在创建窗口…')
     createPetWindow(mainWin)
     petEnabled = true
+    broadcastPetProgress(15, '正在加载渲染器…')
   } else {
     closePetWindow()
     petEnabled = false
+  }
+  // 广播状态，侧栏开关即时同步
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('pet:state', petEnabled)
   }
   return petEnabled
 }
@@ -681,6 +958,13 @@ export function togglePet(enable: boolean, mainWin?: BrowserWindow | null): bool
  */
 export function isPetEnabled(): boolean {
   return petEnabled && petWindow !== null && !petWindow.isDestroyed()
+}
+
+/** 广播启动进度到所有窗口（用于 UI 进度条） */
+function broadcastPetProgress(progress: number, stage: string): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('pet:startup-progress', { progress, stage })
+  }
 }
 
 /**
@@ -695,13 +979,18 @@ export function getPetConfig(): PetConfig {
  */
 export function updatePetConfig(partial: Partial<PetConfig>, mainWin?: BrowserWindow | null): PetConfig {
   config = { ...config, ...partial }
+  persistPetConfig()
   if (partial.clickThrough !== undefined && petWindow && !petWindow.isDestroyed()) {
     setWindowClickThrough(config.clickThrough)
-    // 重载 HTML 更新 UI 提示
-    petWindow.loadFile(getPetHtmlPath())
   }
   if (partial.opacity !== undefined && petWindow && !petWindow.isDestroyed()) {
     petWindow.webContents.executeJavaScript(`document.body.style.opacity = ${config.opacity}`)
+  }
+  if (partial.scale !== undefined && petWindow && !petWindow.isDestroyed()) {
+    sendPetCommand({ type: 'set-scale', value: config.scale })
+  }
+  if (partial.auto !== undefined && petWindow && !petWindow.isDestroyed()) {
+    sendPetCommand({ type: 'set-auto', value: config.auto })
   }
   return config
 }
@@ -735,6 +1024,66 @@ export function registerPetIpc(): void {
     }
   })
 
+  // ── 穿透唤醒（渲染页悬停模型时接管/释放鼠标）────────────
+  ipcMain.on('pet:set-ignore-mouse', (e, ignore: boolean) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (win && !win.isDestroyed()) {
+      win.setIgnoreMouseEvents(!!ignore, { forward: true })
+    }
+  })
+
+  // ── 启动进度（渲染页加载 PIXI/模型时上报，转发给主窗口显示进度条）──
+  ipcMain.on('pet:startup-progress', (_e, data: { progress: number; stage: string }) => {
+    broadcastPetProgress(data.progress, data.stage)
+    if (data.progress >= 100) {
+      // 模型加载完成，广播运行状态
+      setTimeout(() => {
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send('pet:state', true)
+        }
+      }, 300)
+    }
+  })
+
+  // ── 聊天同步：pet ↔ 主窗口 Lumina Agent ──────────────
+  ipcMain.on('pet:sync-send', (_e, data: { text: string }) => {
+    // 桌宠发消息 → 转发给主窗口注入聊天
+    let target = petMainWindow
+    if (!target || target.isDestroyed()) {
+      target = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w !== petWindow) || null
+    }
+    if (target && !target.isDestroyed()) {
+      target.webContents.send('pet:sync-message', { text: data.text, from: 'pet' })
+    }
+  })
+  ipcMain.on('pet:sync-reply', (_e, data: { text: string; role: string }) => {
+    // 主窗口 Agent 回复 → 转发给桌宠显示
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('pet:sync-reply', data)
+    }
+  })
+  // 桌宠请求历史记录 → 转发给主窗口
+  ipcMain.on('pet:sync-history-request', () => {
+    let target = petMainWindow
+    if (!target || target.isDestroyed()) {
+      target = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w !== petWindow) || null
+    }
+    if (target && !target.isDestroyed()) {
+      target.webContents.send('pet:sync-history-request')
+    }
+  })
+  // 主窗口返回历史记录 → 转发给桌宠
+  ipcMain.on('pet:sync-history-reply', (_e, messages: Array<{ role: string; content: string }>) => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('pet:sync-history-reply', messages)
+    }
+  })
+
+  // ── 读取持久化模型（渲染页启动时调用）────────────
+  ipcMain.handle('pet:get-model', () => {
+    return loadPersistedPetModel()
+  })
+
   // ── 状态 ────────────────────────────────────────
   ipcMain.handle('pet:status', () => {
     try {
@@ -762,6 +1111,9 @@ export function registerPetIpc(): void {
 
   // ── 桌宠事件（桌宠 → 主进程）───────────────────
   ipcMain.on('pet:event', (_e, event: PetEvent) => {
+    // 记录互动历史（LLM 自主思考上下文）
+    recentEvents.push({ type: event.type, ts: Date.now() })
+    if (recentEvents.length > 12) recentEvents.shift()
     // 转发到主窗口渲染进程
     if (petMainWindow && !petMainWindow.isDestroyed()) {
       petMainWindow.webContents.send('pet:event', event)
@@ -781,5 +1133,510 @@ export function registerPetIpc(): void {
   })
 
   // ── 向桌宠发送命令（主进程 → 桌宠）─────────────
-  // 通过 petMainWindow?.webContents.send('pet:command', cmd) 调用
+  ipcMain.handle('pet:send-command', (_e, cmd: any) => {
+    const ok = sendPetCommand(cmd)
+    return { ok }
+  })
+
+  // ── 设置面板（主进程 → 独立窗口）─────────────
+  ipcMain.handle('pet:open-settings', () => {
+    try {
+      const settingsPath = path.join(path.dirname(getPetHtmlPath()), 'settings.html')
+      if (!fs.existsSync(settingsPath)) {
+        return { ok: false, error: 'settings.html not found' }
+      }
+      const settingsWin = new BrowserWindow({
+        width: 560,
+        height: 780,
+        title: 'Lumina 桌宠设置',
+        alwaysOnTop: true,
+        resizable: true,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        webPreferences: {
+          preload: resolvePreloadPath(),
+          sandbox: false,
+          contextIsolation: false,
+          nodeIntegration: true,
+        },
+      })
+      settingsWin.loadFile(settingsPath)
+      settingsWin.on('closed', () => {})
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e) }
+    }
+  })
+
+  // ── 模型切换（持久化后由渲染页重载加载）─────────────
+  ipcMain.handle('pet:set-model', (_e, model: 'Mao') => {
+    try {
+      if (model === 'Mao') {
+        persistPetModel(model)
+      }
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e) }
+    }
+  })
+
+  // ── 屏幕感知 tick（桌宠 → 主进程，触发截屏+分析）─────────────
+  ipcMain.handle('pet:perception:tick', async () => {
+    try {
+      const prefs = getPetPrefs()
+      const cp = prefs.catpaw || {}
+      if (prefs.privacyMode) return { ok: true, skipped: true }  // 隐私模式：不截屏
+      if (cp.perception === false) return { ok: true, skipped: true }  // Pet Handling - 屏幕感知关闭
+      const wins = BrowserWindow.getAllWindows()
+      const target = wins.find(w => !w.isDestroyed() && w !== petWindow) || null
+      if (!target) return { ok: true, skipped: true }
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 800, height: 450 } })
+      const src = sources[0]
+      if (!src) return { ok: true, skipped: true }
+      const dataUrl = src.thumbnail.toDataURL()
+      console.log('[Pet] perception tick: 已截屏，size=', src.thumbnail.getSize())
+      // 用已配置 LLM 做多模态分析；纯文本模型/调用失败时降级为"活动窗口标题文本观察"
+      try {
+        const cfg = resolvePetBrainConfig()
+        if (cfg) {
+          const provider = createPetLLM(cfg)
+          let res = await provider.call({
+            messages: [
+              { role: 'system', content: '你是桌宠 Lumina。根据屏幕截图，给出一句简短、可爱的反应（20字以内），只输出 JSON：{"speech":"..."}' },
+              { role: 'user', content: '这是用户当前屏幕截图，请用 JSON 回复。', images: [dataUrl] },
+            ],
+            temperature: 0.8,
+            maxTokens: 120,
+          } as any)
+          let speech = ''
+          try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') speech = obj.speech } catch {}
+          // 视觉失败 → 纯文本：用活动窗口标题做轻量观察，保证开了"屏幕感知"就一定有反应
+          if (!speech) {
+            let titleLine = ''
+            try { const sc = await detectScene(); if (sc?.windowTitle) titleLine = `用户当前活动窗口："${String(sc.windowTitle).slice(0, 80)}"（进程 ${sc.processName || '未知'}）。` } catch {}
+            res = await provider.call({
+              messages: [
+                { role: 'system', content: '你是桌宠 Lumina。你看不到屏幕截图，只知道用户的活动窗口。用一句 20 字以内、可爱自然的话轻量搭话或关心，只输出 JSON：{"speech":"..."}' },
+                { role: 'user', content: titleLine || '读不到活动窗口信息，请轻轻问一句用户在忙什么。' },
+              ],
+              temperature: 0.85, maxTokens: 120,
+            } as any)
+            try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') speech = obj.speech } catch {}
+          }
+          if (speech) { sendPetCommand({ type: 'say', text: speech }); return { ok: true, speech } }
+        }
+      } catch (e) {
+        console.warn('[Pet] perception LLM 分析失败:', (e as Error)?.message || e)
+      }
+      return { ok: true, skipped: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e) }
+    }
+  })
+
+  // 🤵 主动秘书：定时心跳（最低间隔由主进程节流）
+  ipcMain.handle('pet:secretary:tick', async () => runSecretaryTick({ force: false }))
+  // 🤵 主动秘书：立即搭话一次（跳过间隔，设置面板按钮用）
+  ipcMain.handle('pet:secretary:now', async () => runSecretaryTick({ force: true }))
+  // 🌸 桌宠 → 唤起主窗口的 朋友圈 / 剧场 / 日报
+  ipcMain.handle('pet:open-life', async (_e, target: 'moments' | 'theater' | 'daily' | 'news') => {
+    try {
+      const wins = BrowserWindow.getAllWindows()
+      const main = wins.find(w => !w.isDestroyed() && w !== petWindow) || wins.find(w => !w.isDestroyed())
+      if (!main) return { ok: false, error: '主窗口未打开' }
+      if (!main.isVisible()) main.show()
+      main.focus()
+      main.webContents.send('life:open', { target })
+      return { ok: true }
+    } catch (e: any) { return { ok: false, error: String(e) } }
+  })
+
+  // 🌸 桌宠生活视图数据桥：桌宠请求 → 向主窗口要同一 store 的数据 → 回传（独立视图、数据互通）
+  const lifeWaiters = new Map<string, { resolve: (v: any) => void; timer: ReturnType<typeof setTimeout> }>()
+  ipcMain.on('life:data-response', (_e, payload: { reqId: string; items?: any[] }) => {
+    const w = lifeWaiters.get(payload?.reqId)
+    if (w) w.resolve({ items: Array.isArray(payload?.items) ? payload.items : [] })
+  })
+  ipcMain.handle('pet:life-data', async (_e, target: string) => {
+    return await new Promise((resolve) => {
+      try {
+        const wins = BrowserWindow.getAllWindows()
+        const main = wins.find(w => !w.isDestroyed() && w !== petWindow) || wins.find(w => !w.isDestroyed())
+        if (!main) return resolve({ items: [] })
+        const reqId = 'life_' + Date.now() + '_' + Math.floor(Math.random() * 1e6)
+        const timer = setTimeout(() => { lifeWaiters.delete(reqId); resolve({ items: [] }) }, 3000)
+        lifeWaiters.set(reqId, {
+          resolve: (data: any) => { clearTimeout(timer); lifeWaiters.delete(reqId); resolve(data) }, timer,
+        })
+        main.webContents.send('life:data-request', { reqId, target })
+      } catch { resolve({ items: [] }) }
+    })
+  })
+
+  // ── 设置面板 IPC（设置页 → 桌宠 / 主进程）─────────────
+  ipcMain.handle('pet:settings', (_e, cfg: any) => {
+    try {
+      if (cfg?.model) {
+        sendPetCommand({ type: 'set-model', model: cfg.model })
+      }
+      if (typeof cfg?.scale === 'number') {
+        const wins = BrowserWindow.getAllWindows()
+        const mainWin = wins.find(w => !w.isDestroyed() && w !== petWindow) || null
+        updatePetConfig({ scale: cfg.scale }, mainWin)
+      }
+      if (typeof cfg?.penetrate === 'boolean') {
+        const partial: any = { clickThrough: cfg.penetrate }
+        const wins = BrowserWindow.getAllWindows()
+        const mainWin = wins.find(w => !w.isDestroyed() && w !== petWindow) || null
+        updatePetConfig(partial, mainWin)
+      }
+      if (cfg?.auto === 'off' || cfg?.auto === 'light' || cfg?.auto === 'heavy') {
+        const wins = BrowserWindow.getAllWindows()
+        const mainWin = wins.find(w => !w.isDestroyed() && w !== petWindow) || null
+        updatePetConfig({ auto: cfg.auto }, mainWin)
+      }
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e) }
+    }
+  })
+
+  // ── N.E.K.O 风格偏好读写 ─────────────
+  ipcMain.handle('pet:prefs', () => getPetPrefs())
+  ipcMain.handle('pet:update-prefs', (_e, patch: Partial<PetPrefs>) => {
+    try {
+      return { ok: true, prefs: updatePetPrefs(patch || {}) }
+    } catch (e: any) {
+      return { ok: false, error: String(e) }
+    }
+  })
+  ipcMain.handle('pet:set-persona', (_e, params: { persona?: string; skip?: boolean }) => {
+    const patch: Partial<PetPrefs> = { onboardingDone: true }
+    if (params?.persona) patch.persona = params.persona
+    updatePetPrefs(patch)
+    return { ok: true }
+  })
+  ipcMain.handle('pet:open-onboarding', () => openOnboarding())
+
+  // ── 音频设备枚举（麦克风/扬声器列表）─────────────
+  ipcMain.handle('pet:audio-devices', async () => {
+    try {
+      const { systemPreferences } = await import('electron')
+      // 触发权限请求（macOS 需要）
+      if (process.platform === 'darwin') {
+        try { await systemPreferences.askForMediaAccess('microphone') } catch {}
+      }
+      // 通过渲染进程的 navigator.mediaDevices 枚举更可靠；
+      // 这里主进程用 desktopCapturer 做兜底，返回空数组让渲染页自己枚举
+      return { ok: true, devices: [] }
+    } catch (e: any) {
+      return { ok: false, error: String(e), devices: [] }
+    }
+  })
+
+  // ── 屏幕列表（屏幕分享选择）─────────────
+  ipcMain.handle('pet:screens', async () => {
+    try {
+      const displays = screen.getAllDisplays()
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 160, height: 90 } })
+      return {
+        ok: true,
+        screens: displays.map((d, i) => ({
+          id: String(d.id),
+          label: `屏幕 ${i + 1}${d.internal ? '（主显示器）' : ''}`,
+          bounds: d.bounds,
+          thumb: sources[i]?.thumbnail?.toDataURL() || '',
+        })),
+      }
+    } catch (e: any) {
+      return { ok: false, error: String(e), screens: [] }
+    }
+  })
+
+  // ── 打开主窗口设置（API 密钥 / 记忆浏览等）─────────────
+  ipcMain.on('pet:open-main-settings', (_e, target?: string) => {
+    try {
+      if (petMainWindow && !petMainWindow.isDestroyed()) {
+        petMainWindow.show()
+        petMainWindow.focus()
+        if (target === 'llm') {
+          // 跳转到 LLM 模型设置
+          petMainWindow.webContents.send('menu:switch-panel', 'settings')
+          petMainWindow.webContents.send('settings:goto', 'llm')
+        } else if (target === 'memory') {
+          // 跳转到 Live2D 桌宠对话
+          petMainWindow.webContents.send('pet:goto-conversation', 'conv-pet-live2d')
+        } else {
+          petMainWindow.webContents.send('menu:switch-panel', 'settings')
+        }
+      }
+    } catch (e) { console.warn('[PetWindow] open-main-settings failed:', e) }
+  })
+
+  // ── 专属桌面：Windows 虚拟桌面 ─────────────────────
+  ipcMain.handle('pet:virtual-desktop', async (_e, params: { enable: boolean }) => {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: '专属桌面仅支持 Windows 10/11' }
+    }
+    try {
+      const { execFileSync } = await import('child_process')
+      if (params.enable) {
+        // 创建新虚拟桌面：Ctrl+Win+D
+        execFileSync('powershell.exe', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^#{D}')",
+        ], { windowsHide: true, timeout: 5000 })
+        return { ok: true }
+      } else {
+        // 关闭当前虚拟桌面：Ctrl+Win+F4
+        execFileSync('powershell.exe', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^#{F4}')",
+        ], { windowsHide: true, timeout: 5000 })
+        return { ok: true }
+      }
+    } catch (e: any) {
+      return { ok: false, error: `虚拟桌面操作失败: ${e.message}` }
+    }
+  })
+
+  // ── 应用开发：插件系统 ─────────────────────────────
+  ipcMain.handle('pet:plugins', async (_e, params: { action: string }) => {
+    const path = await import('path')
+    const fs = await import('fs')
+    const pluginsDir = path.join(app.getPath('userData'), 'pet-plugins')
+    try {
+      if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true })
+    } catch {}
+
+    if (params.action === 'open-dir') {
+      try {
+        const { shell } = await import('electron')
+        shell.openPath(pluginsDir)
+        return { ok: true }
+      } catch (e: any) { return { ok: false, error: e.message } }
+    }
+
+    if (params.action === 'list' || params.action === 'reload') {
+      try {
+        const files = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'))
+        const plugins: any[] = []
+        for (const file of files) {
+          try {
+            const content = fs.readFileSync(path.join(pluginsDir, file), 'utf-8')
+            const nameMatch = content.match(/@name\s+(.+)/) || content.match(/name\s*:\s*['"](.+?)['"]/)
+            const descMatch = content.match(/@description\s+(.+)/) || content.match(/description\s*:\s*['"](.+?)['"]/)
+            plugins.push({
+              name: nameMatch?.[1] || file.replace('.js', ''),
+              desc: descMatch?.[1] || '',
+              file,
+              enabled: true,
+            })
+          } catch {}
+        }
+        // 重新加载插件到渲染进程
+        if (params.action === 'reload' && petWindow && !petWindow.isDestroyed()) {
+          const pluginCodes = files.map(f => {
+            try { return fs.readFileSync(path.join(pluginsDir, f), 'utf-8') } catch { return '' }
+          }).filter(Boolean)
+          petWindow.webContents.send('pet:plugins-reload', pluginCodes)
+        }
+        return { ok: true, plugins }
+      } catch (e: any) { return { ok: false, error: e.message, plugins: [] } }
+    }
+
+    return { ok: false, error: '未知操作' }
+  })
+
+  // 注：pet:test-intent / pet:chat 由 intentDispatcher.ts 统一注册，避免重复注册抛错
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🤵 主动秘书：观察用户在做什么 → 评价/建议/主动问话 → 推送搭话卡片
+// ═══════════════════════════════════════════════════════════
+let _lastSecretaryAt = 0
+let _secretaryRunning = false
+let _lastSecretarySpeech = ''
+
+const SECRETARY_SYSTEM_PROMPT = `你是住在用户电脑里、会主动开口的 AI 伙伴"Lumina"，你能看到用户当前的活动窗口（必要时还有屏幕截图）。
+【核心要求】
+1. 必须先"看懂"屏幕：具体点出你看到的内容——在哪个应用/网站、在写什么代码或文档、在看什么视频或页面、大概进展到哪；严禁"看起来你在忙"这类空泛套话。若看不清屏幕，就只针对窗口标题做轻量观察，绝不编造细节。
+2. 再选一种最贴切的姿态开口（kind）：observe 点出观察 / suggest 给一条具体、可立刻执行的建议 / ask 主动问一个能推进对话的问题 / praise 夸一句或轻松吐槽——可以像朋友那样小小"挑刺"、调侃，但不刻薄、不说教。
+3. speech 20~60 字，口语、有信息量、像真人随口搭话，不要书面腔，不要复述窗口标题原文。
+4. options 给三个"用户此刻最可能想点"的回应，必须具体承接当前场景（针对这段代码/这个视频/这份文档），三个方向尽量不同（如：让你深入帮忙 / 我自己来 / 轻松岔开），各不超过 12 字，禁止"好的""谢谢""收到"这类万能空话。
+只输出一行 JSON，不要 markdown、不要多余解释：
+{"speech":"...","options":["...","...","..."],"kind":"observe|suggest|ask|praise"}`
+
+async function runSecretaryTick(opts?: { force?: boolean }): Promise<{ ok: boolean; skipped?: boolean; speech?: string; reason?: string }> {
+  try {
+    const prefs = getPetPrefs()
+    const sec = prefs.secretary || {}
+    if (prefs.privacyMode) return { ok: true, skipped: true, reason: 'privacy' }
+    if (sec.enabled === false) return { ok: true, skipped: true, reason: 'disabled' }
+    const minMs = Math.max(10, sec.minIntervalSec || 45) * 1000
+    if (!opts?.force && Date.now() - _lastSecretaryAt < minMs) return { ok: true, skipped: true, reason: 'interval' }
+    if (_secretaryRunning) return { ok: true, skipped: true, reason: 'busy' }
+    _secretaryRunning = true
+
+    const sources = sec.sources || {}
+    // 1) 活动窗口（轻量）
+    let sceneInfo: any = null
+    let windowLine = ''
+    if (sources.window !== false) {
+      try { sceneInfo = await detectScene(); } catch { /* ignore */ }
+      if (sceneInfo && sceneInfo.windowTitle) {
+        windowLine = `活动窗口："${String(sceneInfo.windowTitle).slice(0, 80)}"（进程 ${sceneInfo.processName || '未知'}，场景 ${sceneInfo.scene}）。`
+      }
+    }
+    // 2) 屏幕截图（多模态）
+    let dataUrl: string | undefined
+    if (sources.screen !== false) {
+      try {
+        const srcs = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } })
+        if (srcs[0]) dataUrl = srcs[0].thumbnail.toDataURL()
+      } catch { /* ignore */ }
+    }
+    // 3) 触发源提示
+    const srcTags: string[] = []
+    if (sources.news) srcTags.push('可结合近期科技/新闻热点')
+    if (sources.video) srcTags.push('若在看视频可一起聊或提醒时长')
+    if (sources.music) srcTags.push('若在听音乐可聊聊音乐')
+    if (sources.personal) srcTags.push('可结合用户个人动态主动关心')
+
+    const cfg = resolvePetBrainConfig()
+    if (!cfg) { _secretaryRunning = false; return { ok: true, skipped: true, reason: 'no-llm' } }
+    console.log('[Secretary] brain source:', cfg.source, cfg.model, '@', cfg.endpoint, dataUrl ? '(with-screen)' : '(text-only)')
+
+    const nowD = new Date()
+    const avoidLine = _lastSecretarySpeech ? `你上一次搭话说的是"${_lastSecretarySpeech.slice(0, 60)}"，这次换个角度、不要重复意思。` : ''
+    const userContent = `现在 ${nowD.getHours()}:${String(nowD.getMinutes()).padStart(2, '0')}。${windowLine}${srcTags.length ? '提示：' + srcTags.join('；') + '。' : ''}${dataUrl ? '附带当前屏幕截图，请先看清屏幕里的具体内容。' : ''}${avoidLine}请观察并主动搭话。`
+    const messages: any[] = [
+      { role: 'system', content: SECRETARY_SYSTEM_PROMPT },
+      { role: 'user', content: userContent, ...(dataUrl ? { images: [dataUrl] } : {}) },
+    ]
+
+    const provider = createPetLLM(cfg)
+    let res = await provider.call({ messages, temperature: 0.95, maxTokens: 260 } as any)
+    // 纯文本模型看不懂截图（会报错或说胡话）：调用失败或输出不是 JSON 时，去掉截图、只凭活动窗口文本重试一次
+    const looksBroken = (r: any) => !!(r?.error) || !((r?.text || '').includes('{') && (r?.text || '').includes('}'))
+    if (dataUrl && looksBroken(res)) {
+      console.warn('[Secretary] vision call failed (model may be text-only), fallback to window-title text. reason:', String(res?.error || 'not-json').slice(0, 160))
+      const textMessages: any[] = [
+        { role: 'system', content: SECRETARY_SYSTEM_PROMPT },
+        { role: 'user', content: `现在 ${nowD.getHours()}:${String(nowD.getMinutes()).padStart(2, '0')}。${windowLine || '暂时读不到活动窗口标题。'}${srcTags.length ? '提示：' + srcTags.join('；') + '。' : ''}${avoidLine}你看不到屏幕截图，请只根据活动窗口信息做轻量观察并主动搭话，不要编造屏幕细节。` },
+      ]
+      res = await provider.call({ messages: textMessages, temperature: 0.95, maxTokens: 260 } as any)
+    }
+    let speech = ''
+    let options: string[] = []
+    let kind = 'observe'
+    // 健壮提取：兼容模型用 ```json 包裹、前后带解释文字等情况，避免"该说话时沉默"
+    let parsed: any = null
+    const rawText = (res?.text || '').trim()
+    try { parsed = JSON.parse(rawText) } catch {
+      const i = rawText.indexOf('{'), j = rawText.lastIndexOf('}')
+      if (i >= 0 && j > i) { try { parsed = JSON.parse(rawText.slice(i, j + 1)) } catch { parsed = null } }
+    }
+    const obj = parsed || {}
+    if (typeof obj.speech === 'string') speech = obj.speech.trim().slice(0, 90)
+    if (Array.isArray(obj.options)) options = obj.options
+      .filter((x: any) => typeof x === 'string' && x.trim())
+      .map((x: string) => x.trim().slice(0, 20))
+      .slice(0, 3)
+    if (['observe', 'suggest', 'ask', 'praise'].includes(String(obj.kind))) kind = String(obj.kind)
+    _secretaryRunning = false
+    if (!speech) return { ok: true, skipped: true, reason: 'parse-fail' }
+
+    _lastSecretaryAt = Date.now()
+    _lastSecretarySpeech = speech
+    sendPetCommand({
+      type: 'proactive-card', text: speech, options, kind,
+      scene: sceneInfo ? { scene: sceneInfo.scene, title: sceneInfo.windowTitle, process: sceneInfo.processName } : null,
+    })
+    return { ok: true, speech }
+  } catch (e: any) {
+    _secretaryRunning = false
+    console.warn('[Secretary] 主动秘书 tick 失败:', e?.message || e)
+    return { ok: false, reason: String(e) }
+  }
+}
+
+/**
+ * 向桌宠窗口发送命令（主进程 → 桌宠渲染进程）
+ * 命令协议与 pet-live2d.html 的 `pet:command` 监听一致：
+ *   { type: 'intent', intent: { action, speech, mood, ... } }
+ *   { type: 'say', text } | { type: 'set-emotion', emotion }
+ *   { type: 'walk', enable } | { type: 'set-opacity', value }
+ */
+export function sendPetCommand(cmd: any): boolean {
+  if (!petWindow || petWindow.isDestroyed()) {
+    console.warn('[PetWindow] 桌宠窗口未就绪，忽略命令:', cmd?.type || cmd?.intent?.action)
+    return false
+  }
+  try {
+    petWindow.webContents.send('pet:command', cmd)
+    return true
+  } catch (e: any) {
+    console.error('[PetWindow] sendPetCommand 失败:', e)
+    return false
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 新手引导（N.E.K.O 风格初始人格选择）
+// ═══════════════════════════════════════════════════════════
+
+let onboardingWin: BrowserWindow | null = null
+export function openOnboarding(): { ok: boolean } {
+  if (onboardingWin && !onboardingWin.isDestroyed()) {
+    onboardingWin.focus()
+    return { ok: true }
+  }
+  const p = path.join(path.dirname(getPetHtmlPath()), 'onboarding.html')
+  if (!fs.existsSync(p)) return { ok: false }
+  onboardingWin = new BrowserWindow({
+    width: 780,
+    height: 640,
+    title: 'Lumina Virtual Pet · 初始人格',
+    alwaysOnTop: true,
+    resizable: false,
+    webPreferences: {
+      preload: resolvePreloadPath(),
+      sandbox: false,
+      contextIsolation: false,
+      nodeIntegration: true,
+    },
+  })
+  onboardingWin.loadFile(p)
+  onboardingWin.on('closed', () => { onboardingWin = null })
+  return { ok: true }
+}
+export function maybeShowOnboarding(): void {
+  // 新手引导已取消自动弹出；人格选择仍可从设置中手动打开
+}
+
+// ═══════════════════════════════════════════════════════════
+// Lumina Pet Handling：桌宠请求操作电脑（权限门控 + ComputerUse 执行）
+// ═══════════════════════════════════════════════════════════
+
+export async function tryPetOperate(cu: { type?: string; params?: Record<string, any> }): Promise<{ ok: boolean; error?: string }> {
+  const cp = getPetPrefs().catpaw || {}
+  if (!cp.master) return { ok: false, error: 'Lumina Pet Handling 未开启' }
+  if (!cp.kbm) return { ok: false, error: '键鼠控制未开启' }
+  const t = cu?.type
+  if (!t || !['open_app', 'keypress', 'type', 'wait', 'click', 'screenshot', 'scroll'].includes(t)) {
+    return { ok: false, error: '不支持的操作类型' }
+  }
+  const appName = String(cu.params?.app || cu.params?.text || '')
+  if (!cp.browser && /chrome|edge|firefox|browser|浏览器/i.test(appName)) {
+    return { ok: false, error: '浏览器控制未开启' }
+  }
+  try {
+    const { getComputerUse } = await import('../computerUse')
+    const ok = await getComputerUse().executeAction({ type: t as any, params: (cu.params || {}) as Record<string, string | number> })
+    return { ok }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) }
+  }
 }

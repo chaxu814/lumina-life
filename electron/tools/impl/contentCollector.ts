@@ -102,7 +102,7 @@ export async function collectUrls(
 
   for (const url of urls) {
     try {
-      const res = await httpGet(url, 12000)
+      const res = await httpGet(url, {}, 12000)
       if (!res.ok) {
         items.push({ url, title: url, content: '', charCount: 0, success: false, error: `HTTP ${res.status}` })
         continue

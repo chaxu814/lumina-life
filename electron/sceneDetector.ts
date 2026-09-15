@@ -93,6 +93,30 @@ const PROCESS_RULES: SceneKeywordRule[] = [
 ]
 
 // ═══════════════════════════════════════════════════════════
+// Lumina 自身窗口识别（不应被归类为任何场景）
+// ═══════════════════════════════════════════════════════════
+
+const SELF_WINDOW_PATTERNS = [
+  'lumina',           // Lumina 主窗口、桌宠、设置等
+  'qwenpaw',          // QwenPaw（参考项目，同样排除）
+]
+
+const SELF_PROCESS_NAMES = [
+  'lumina',           // Lumina 主进程
+  'qwenpaw-desktop',  // QwenPaw
+  'qwenpaw-backend',
+  'qwenpaw',
+]
+
+function isSelfWindow(title: string, process: string): boolean {
+  const t = title.toLowerCase()
+  const p = process.toLowerCase()
+  if (SELF_PROCESS_NAMES.some(name => p.includes(name))) return true
+  if (SELF_WINDOW_PATTERNS.some(pat => t.includes(pat))) return true
+  return false
+}
+
+// ═══════════════════════════════════════════════════════════
 // Windows 活跃窗口检测（PowerShell）
 // ═══════════════════════════════════════════════════════════
 
@@ -239,6 +263,18 @@ export function classifyScene(
     }
   }
 
+  // 🔧 FIX: Lumina 自身窗口不参与场景判定（桌宠、主界面、设置等）
+  if (isSelfWindow(windowInfo.title, windowInfo.process)) {
+    return {
+      scene: 'idle',
+      confidence: 80,
+      windowTitle: windowInfo.title,
+      processName: windowInfo.process,
+      detectedAt: now,
+      reason: `Lumina 自身窗口 "${windowInfo.title.slice(0, 30)}"，跳过场景检测`,
+    }
+  }
+
   const titleScores = matchRules(windowInfo.title, TITLE_RULES)
   const processScores = matchRules(windowInfo.process, PROCESS_RULES)
 
@@ -248,6 +284,7 @@ export function classifyScene(
   for (const s of processScores) combined[s.scene] = (combined[s.scene] || 0) + s.score * 0.7
 
   // 如果没有匹配任何规则 → 浏览器默认工作，其他默认空闲
+  // 🔧 FIX: 未知窗口不再默认"娱乐"，改为"空闲"更合理
   if (Object.keys(combined).length === 0) {
     // 浏览器类进程默认工作
     const browserProcesses = ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe']
@@ -262,12 +299,12 @@ export function classifyScene(
       }
     }
     return {
-      scene: 'fun',
+      scene: 'idle',
       confidence: 30,
       windowTitle: windowInfo.title,
       processName: windowInfo.process,
       detectedAt: now,
-      reason: `未匹配规则的窗口 "${windowInfo.process}"，默认为娱乐`,
+      reason: `未匹配规则的窗口 "${windowInfo.process}"，默认为空闲`,
     }
   }
 

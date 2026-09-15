@@ -16,6 +16,7 @@
 // ============================================================
 
 import { Notification } from 'electron'
+import { stripMarkdown } from '../utils/stripMarkdown'
 
 // ═══════════════════════════════════════════════════════════
 // 配置
@@ -138,7 +139,7 @@ async function generateDingTalkSign(timestamp: number, secret: string): Promise<
  */
 function sendNotification(title: string, body: string): void {
   try {
-    const n = new Notification({ title, body })
+    const n = new Notification({ title: stripMarkdown(title), body: stripMarkdown(body) })
     n.show()
   } catch (e) {
     console.error('[PushService] ❌ 系统通知失败:', e)
