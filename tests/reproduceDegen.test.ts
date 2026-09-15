@@ -19,7 +19,10 @@ beforeAll(() => {
   }))
 })
 
-describe('二次调用退化复现', () => {
+// agentRunner 依赖链较重，冷加载约 5~6s，超过 vitest 默认 5s 用例超时会导致
+// 首个用例动态 import 超时、后续用例拿到不完整模块而报 "AgentRunner is not a constructor"。
+// 因此为本套件整体放宽超时到 30s（与业务逻辑无关，仅是加载耗时）。
+describe('二次调用退化复现', { timeout: 30000 }, () => {
   it('AgentRunner 每次新建时 setHistory 不崩溃', async () => {
     // 模拟从 frontend 发送的 conversationHistory
     const historyForLLM = [

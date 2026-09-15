@@ -149,5 +149,6 @@ pet-poc/
 
 # ── Runtime-generated local state ──
 /lumina-quests.json
+/async-tasks.json
 electron/MEMORY.md
 
