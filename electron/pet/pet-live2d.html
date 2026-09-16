@@ -790,8 +790,8 @@ function gazeCenter() { const fc = focusControllerOf(); if (fc) fc.focus(0, 0, f
 
 let userScale = 1;
 function fitScale() {
-  const fitH = Math.max(innerHeight * 0.70, 100);
-  const fitW = Math.max(innerWidth * 0.6, 100);
+  const fitH = Math.max(innerHeight * 0.62, 100);
+  const fitW = Math.max(innerWidth * 0.5, 100);
   return Math.min(fitH / state.naturalH, fitW / state.naturalW);
 }
 function applyScale() { if (!model) return; model.scale.set(fitScale() * userScale); clampPosition(); }
@@ -1604,7 +1604,7 @@ function inInteractiveZone() {
   if (dragging || chatDragOff) return true;
   if (menuOpen) return true;
   if (overAnyUI()) return true;
-  return overModel(lastMouse.x, lastMouse.y, ctMode ? 60 : 160);
+  return overModel(lastMouse.x, lastMouse.y, ctMode ? 36 : 72);
 }
 
 if (HAS_IPC) {
