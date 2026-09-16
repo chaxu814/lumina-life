@@ -16,8 +16,11 @@ import * as os from 'os'
 import * as fs from 'fs'
 import * as https from 'https'
 import * as http from 'http'
+import { clipboard, screen } from 'electron'
 import screenshot from 'screenshot-desktop'
 import type { ToolDef, ToolResult } from '../types'
+import { getAgentConfig } from '../../agentConfig'
+import { normToPx, pngDimensions } from './cuGeometry'
 
 // ──────────────────────────────────────────────────────────
 // 1. 截屏 (v2.10: screenshot-desktop 原生绑定，~50ms)
@@ -83,11 +86,33 @@ function fileToB64(f: string): string {
 // 2. VLM 调用 (OpenAI 兼容接口 + 图片)
 // ──────────────────────────────────────────────────────────
 
-function getVLMConfig() {
+function getVLMConfig(): { url: string; key: string; model: string } {
+  // 1) 视觉专用环境变量最高优先（显式覆盖）
+  const envUrl = process.env.LUMINA_VLM_BASE_URL
+  const envKey = process.env.LUMINA_VLM_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || ''
+  const envModel = process.env.LUMINA_VLM_MODEL
+  if (envUrl && envKey) {
+    return { url: envUrl.replace(/\/+$/, ''), key: envKey, model: envModel || process.env.LLM_MODEL || 'gpt-4o' }
+  }
+  // 2) 复用设置中 Lumina 的 LLM 配置（与桌宠 / 主 Agent 同一处，开箱即用）
+  try {
+    const cfg = getAgentConfig()
+    if (cfg.isConfigured('lumina')) {
+      const lumina = cfg.get('lumina')
+      if (lumina && lumina.endpoint && lumina.apiKey) {
+        return {
+          url: String(lumina.endpoint).replace(/\/+$/, ''),
+          key: lumina.apiKey,
+          model: envModel || lumina.model || 'gpt-4o',
+        }
+      }
+    }
+  } catch { /* 配置模块在测试 / 特殊环境不可用，降级到环境变量 */ }
+  // 3) 兜底（保持旧行为；key 可能为空，由上层报“未配置视觉模型”）
   return {
-    url: (process.env.LUMINA_VLM_BASE_URL || process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
-    key: process.env.LUMINA_VLM_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '',
-    model: process.env.LUMINA_VLM_MODEL || process.env.LLM_MODEL || 'gpt-4o',
+    url: (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    key: process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '',
+    model: process.env.LLM_MODEL || 'gpt-4o',
   }
 }
 
@@ -224,12 +249,20 @@ async function doClick(x: number, y: number, btn: 'left'|'right', dbl: boolean):
 async function doType(text: string): Promise<string> {
   const plat = process.platform
   if (plat === 'win32') {
-    const safe = text.replace(/'/g, "''")
+    // SendKeys 无法输入中文 / 长文本 / 特殊字符，改用“写剪贴板 + Ctrl+V 粘贴”。
+    // 先备份用户原剪贴板内容，粘贴后恢复（剪贴板守卫），避免污染用户剪贴板。
+    if (!text) return '输入完成'
+    let backup = ''
+    try { backup = clipboard.readText() } catch { /* 忽略读取失败 */ }
+    try { clipboard.writeText(text) } catch (e: any) { return `输入失败:剪贴板${e?.message || e}` }
     const r = await runPS([
       'Add-Type -AssemblyName System.Windows.Forms',
-      `[System.Windows.Forms.SendKeys]::SendWait('${safe}')`,
+      "[System.Windows.Forms.SendKeys]::SendWait('^v')",
       "Write-Output 'OK'",
     ])
+    // 给目标程序一点时间读取剪贴板完成粘贴，再还原
+    await new Promise(res => setTimeout(res, 120))
+    try { clipboard.writeText(backup) } catch { /* 还原失败不影响输入结果 */ }
     return r.startsWith('ERR:') ? `输入失败:${r.slice(4)}` : '输入完成'
   }
 
@@ -321,6 +354,9 @@ async function doDrag(x1: number, y1: number, x2: number, y2: number): Promise<s
 interface VLMAction {
   thought: string
   action_type: string
+  // 归一化坐标 0–100（首选，免疫分辨率/DPI）
+  nx?: number; ny?: number; nx2?: number; ny2?: number
+  // 像素坐标（向后兼容：模型偶尔仍输出像素时兜底）
   x?: number; y?: number; text?: string
   scroll_amount?: number; drag_end_x?: number; drag_end_y?: number
   wait_seconds?: number; summary?: string
@@ -433,50 +469,69 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
       steps.push(`❌ 截图失败: ${e.message}`)
       break
     }
-    let b64 = ''
-    try { b64 = fileToB64(f); fs.unlinkSync(f) } catch (e: any) {
+    let b64 = ''; let imgW = 0; let imgH = 0
+    try {
+      const imgBuf = fs.readFileSync(f)
+      b64 = imgBuf.toString('base64')
+      const dims = pngDimensions(imgBuf) // 模型所见截图的真实像素尺寸
+      if (dims) { imgW = dims.w; imgH = dims.h }
+      fs.unlinkSync(f)
+    } catch (e: any) {
       try { fs.unlinkSync(f) } catch {}
       steps.push(`❌ 读取截图失败: ${e.message}`)
       break
+    }
+    // PNG 头解析失败时，用主显示器物理分辨率兜底（逻辑尺寸 × scaleFactor）
+    if (!imgW || !imgH) {
+      try {
+        const d = screen.getPrimaryDisplay()
+        imgW = Math.round(d.size.width * d.scaleFactor)
+        imgH = Math.round(d.size.height * d.scaleFactor)
+      } catch { /* 取不到则保持 0，坐标回退为像素模式 */ }
     }
 
     // 2) VLM 规划
     const sysPrompt = `你是一个计算机操作助手 (Computer Use Agent)。
 你的任务是根据屏幕截图和用户指令，输出下一步要执行的鼠标/键盘操作。
 
-屏幕坐标系: 左上角为 (0,0)，x 轴向右增大，y 轴向下增大。
-请仔细观察截图中的UI元素，精确估计它们的像素坐标。
+屏幕坐标使用【归一化坐标 0–100】（与分辨率无关，程序会自动换算成真实像素）：
+- nx：横向位置，0=最左边，50=水平正中，100=最右边
+- ny：纵向位置，0=最上边，50=垂直正中，100=最下边
+- 先在心里把画面横向、纵向各平分成 100 格，判断目标元素【中心点】落在哪一格
+- 例如屏幕正中的按钮约 nx=50,ny=50；左下角开始按钮约 nx=5,ny=97
 
 你必须输出一个JSON对象，格式如下：
 {
   "thought": "你观察到了什么？接下来打算做什么？（中文）",
   "action_type": "操作类型",
-  "x": 数字坐标,
-  "y": 数字坐标,
+  "nx": 0到100的横向位置,
+  "ny": 0到100的纵向位置,
   "text": "要输入的文本（仅type操作需要）",
   "scroll_amount": 滚动量（仅scroll操作需要，正数向下，负数向上）,
-  "drag_end_x": 拖拽终点x（仅drag操作需要）,
-  "drag_end_y": 拖拽终点y（仅drag操作需要）,
+  "nx2": 拖拽终点横向位置（仅drag操作需要）,
+  "ny2": 拖拽终点纵向位置（仅drag操作需要）,
   "wait_seconds": 等待秒数（仅wait操作需要）,
   "summary": "完成后的总结（仅done操作需要）"
 }
 
 操作类型 action_type 必须是以下之一：
-- click: 左键点击，需要 x 和 y
-- double_click: 双击，需要 x 和 y
-- right_click: 右键点击，需要 x 和 y
+- click: 左键点击，需要 nx 和 ny
+- double_click: 双击，需要 nx 和 ny
+- right_click: 右键点击，需要 nx 和 ny
 - type: 键盘输入，需要 text
 - scroll: 鼠标滚轮，需要 scroll_amount
-- drag: 拖拽，需要 x,y 和 drag_end_x,drag_end_y
+- drag: 鼠标拖拽，需要 nx,ny 和 nx2,ny2
 - wait: 等待，需要 wait_seconds
 - done: 任务已完成，需要 summary
 
 规则：
 1. 每次只返回一个操作
-2. 仔细观察截图，根据UI元素位置估计坐标
-3. 如果截图上看不到目标元素，选择 done 并说明原因
-4. 如果任务很明显已完成，选择 done
-5. 坐标必须是整数，尽量精确`
+2. 一律用归一化坐标 nx/ny（0–100）定位元素【中心】，不要输出像素坐标
+3. 先找屏幕边缘、任务栏、窗口边框等明显参照物，再据此估算目标的相对位置
+4. 点文字或图标要点正中心，不要点在边缘
+5. 如果截图上看不到目标元素，选择 done 并说明原因
+6. 如果任务很明显已完成，选择 done
+7. nx、ny 必须是 0–100 的整数`
     
     const userPrompt = `用户指令: ${instruction}\n\n这是第 ${step + 1}/${maxSteps} 步。请分析当前屏幕截图，输出下一步操作。`
     
@@ -507,27 +562,35 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
       break
     }
 
+    // 坐标换算：优先归一化 nx/ny(0–100，按本次截图真实像素映射)，兼容模型偶发输出的像素 x/y
+    const toPxX = (n?: number, px?: number): number =>
+      typeof n === 'number' && Number.isFinite(n) ? normToPx(n, imgW) : Math.max(0, Math.round(Number(px) || 0))
+    const toPxY = (n?: number, px?: number): number =>
+      typeof n === 'number' && Number.isFinite(n) ? normToPx(n, imgH) : Math.max(0, Math.round(Number(px) || 0))
+    const hasNorm = (a: VLMAction): boolean => typeof a.nx === 'number' && typeof a.ny === 'number'
+    const hasPx = (a: VLMAction): boolean => typeof a.x === 'number' && typeof a.y === 'number'
+
     let result = ''
     switch (act.action_type) {
       case 'click':
-        if (act.x === undefined || act.y === undefined) {
+        if (!hasNorm(act) && !hasPx(act)) {
           result = '❌ 缺少坐标'
         } else {
-          result = await doClick(act.x!, act.y!, 'left', false)
+          result = await doClick(toPxX(act.nx, act.x), toPxY(act.ny, act.y), 'left', false)
         }
         break
       case 'double_click':
-        if (act.x === undefined || act.y === undefined) {
+        if (!hasNorm(act) && !hasPx(act)) {
           result = '❌ 缺少坐标'
         } else {
-          result = await doClick(act.x!, act.y!, 'left', true)
+          result = await doClick(toPxX(act.nx, act.x), toPxY(act.ny, act.y), 'left', true)
         }
         break
       case 'right_click':
-        if (act.x === undefined || act.y === undefined) {
+        if (!hasNorm(act) && !hasPx(act)) {
           result = '❌ 缺少坐标'
         } else {
-          result = await doClick(act.x!, act.y!, 'right', false)
+          result = await doClick(toPxX(act.nx, act.x), toPxY(act.ny, act.y), 'right', false)
         }
         break
       case 'type':
@@ -540,13 +603,19 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
       case 'scroll':
         result = await doScroll(act.scroll_amount || 3)
         break
-      case 'drag':
-        if (act.x === undefined || act.y === undefined || act.drag_end_x === undefined || act.drag_end_y === undefined) {
+      case 'drag': {
+        const endNorm = typeof act.nx2 === 'number' && typeof act.ny2 === 'number'
+        const endPx = typeof act.drag_end_x === 'number' && typeof act.drag_end_y === 'number'
+        if ((!hasNorm(act) && !hasPx(act)) || (!endNorm && !endPx)) {
           result = '❌ 缺少拖拽坐标'
         } else {
-          result = await doDrag(act.x!, act.y!, act.drag_end_x!, act.drag_end_y!)
+          result = await doDrag(
+            toPxX(act.nx, act.x), toPxY(act.ny, act.y),
+            toPxX(act.nx2, act.drag_end_x), toPxY(act.ny2, act.drag_end_y),
+          )
         }
         break
+      }
       case 'wait':
         result = `等待 ${act.wait_seconds || 1} 秒`
         break

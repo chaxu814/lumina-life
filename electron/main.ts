@@ -559,7 +559,18 @@ const socialLlmCall = async (
   initKnowledgeBase()
 
   // 3.9 🖥️ v3.10: 桌面操控引擎初始化
-  initComputerUse({ safetyLevel: 'ask' })
+  try {
+    const _cuAgentCfg = getAgentConfig()
+    const _cuLumina = _cuAgentCfg.isConfigured('lumina') ? _cuAgentCfg.get('lumina') : null
+    initComputerUse({
+      safetyLevel: 'ask',
+      llmBaseUrl: _cuLumina?.endpoint || process.env.LUMINA_VLM_BASE_URL || process.env.LLM_BASE_URL,
+      llmApiKey: _cuLumina?.apiKey || process.env.LUMINA_VLM_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '',
+      llmModel: process.env.LUMINA_VLM_MODEL || _cuLumina?.model || process.env.LLM_MODEL,
+    })
+  } catch {
+    initComputerUse({ safetyLevel: 'ask' })
+  }
 
   // 3.10 📦 v3.10: Skill 市场初始??+ 安装内置 skill
   const skillMarket = initSkillMarket()
