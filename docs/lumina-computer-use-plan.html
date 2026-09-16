@@ -11,7 +11,7 @@
 
     <!-- 一句话结论 -->
     <div style="background:#fff;border:1px solid #e3e8ec;border-left:5px solid #e0813f;border-radius:12px;padding:16px 20px;margin:18px 0;box-sizing:border-box;font-size:14.5px;">
-      <b style="color:#c2611f;">一眼结论：</b>cc-haha 的 Computer Use 本质是 <b>“截图 → 强视觉模型直接读坐标 → 人工确认 → pyautogui 执行 → 再截图验证”</b> 的循环，强在<b>模型视觉强 + 动作原语全 + 权限分级细</b>，弱在<b>依赖 Python、macOS 为主、源码有合规灰区</b>。Lumina 已具备同款循环（<code>desktop_see / desktop_act</code>，含点击/双击/右键/拖拽/滚动 + 审批门），但目前 <b>① 让小模型裸估坐标（点不准）② 设置里的模型没接进去（开箱即失败）③ 高分屏 DPI 与中文输入没处理 ④ 失败即停、缺验证与急停</b>。
+      <b style="color:#c2611f;">一眼结论：</b>cc-haha 的 Computer Use 本质是 <b>“截图 → 强视觉模型直接读坐标 → 人工确认 → pyautogui 执行 → 再截图验证”</b> 的循环，强在<b>动作原语全（24 个工具）+ 白名单/权限严 + Mac 另有原生无障碍树深度方案</b>；需注意 <b>Windows 其实也已全支持</b>（win32 栈），最深的 AX/JS 方案为 Mac 专属，且源码有合规灰区。Lumina 已具备同款循环（<code>desktop_see / desktop_act</code>，含点击/双击/右键/拖拽/滚动 + 审批门），但目前 <b>① 让小模型裸估坐标（点不准）② 设置里的模型没接进去（开箱即失败）③ 高分屏 DPI 与中文输入没处理 ④ 失败即停、缺验证与急停</b>。
     </div>
 
     <!-- A. cc-haha 怎么做 -->
@@ -66,12 +66,12 @@
           <div style="font-size:12.5px;color:#465861;">screenshot / zoom；click、drag、move、scroll、读光标；type、press、hold；打开应用、切显示器；剪贴板读写；wait、batch。</div>
         </div>
         <div style="border:1px solid #e3e8ec;border-radius:10px;padding:12px 14px;box-sizing:border-box;background:#fafbfc;">
-          <div style="font-weight:700;font-size:13.5px;color:#1f5d57;margin-bottom:6px;">🧱 底层实现</div>
-          <div style="font-size:12.5px;color:#465861;">官方私有模块（@ant/computer-use-*）不可得，改用 <b>Python bridge + pyautogui / mss / pyobjc</b>；桌面端 Electron+React，运行时 Bun。</div>
+          <div style="font-weight:700;font-size:13.5px;color:#1f5d57;margin-bottom:6px;">🧱 双轨底层（关键）</div>
+          <div style="font-size:12.5px;color:#465861;"><b>通用轨</b>：Python bridge（pyautogui/mss，Mac 用 pyobjc、Win 用 win32gui/psutil/pyperclip/screeninfo），Mac+Win 都全支持。<b>Mac 原生深度轨</b>：编译型 Swift cu-helper，读<b>无障碍元素树(AX)+截图双通道、持久 JS 执行器、元素句柄</b>，对标 OpenAI Codex（Windows 仍只是像素轨）。</div>
         </div>
         <div style="border:1px solid #e3e8ec;border-radius:10px;padding:12px 14px;box-sizing:border-box;background:#fafbfc;">
           <div style="font-weight:700;font-size:13.5px;color:#1f5d57;margin-bottom:6px;">🔐 平台与权限</div>
-          <div style="font-size:12.5px;color:#465861;">macOS 最完整（需辅助功能 + 屏幕录制权限）；Windows/Linux 因 pyobjc 部分未完全适配。五档权限，危险动作人工放行。</div>
+          <div style="font-size:12.5px;color:#465861;">macOS 全支持（需辅助功能+屏幕录制）；<b>Windows x64 也全支持</b>（win32gui/psutil，免额外系统授权）；Linux 未适配。安全：应用白名单、并发文件锁（同时只一个会话操控）、系统快捷键额外门、剪贴板守卫。</div>
         </div>
         <div style="border:1px solid #f0d9d4;border-radius:10px;padding:12px 14px;box-sizing:border-box;background:#fdf6f5;">
           <div style="font-weight:700;font-size:13.5px;color:#b23f33;margin-bottom:6px;">⚠️ 合规灰区（别照抄）</div>
@@ -122,8 +122,9 @@
           <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">动作原语丰富度</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">点击/拖拽/移动/滚动/长按/剪贴板/切应用</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">单击/双击/右键/拖拽/滚动/输入；缺悬停、修饰键组合、读光标、切应用</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 基本够</span></td></tr>
           <tr style="background:#fdf6f5;"><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">视觉定位准确度（命门）</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">靠 Claude 级强 VLM 裸读坐标 + zoom</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">让本地 9B 小模型裸估像素坐标，无标注/无 zoom，误差大</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#b23f33;font-weight:700;">✕ 最大短板</span></td></tr>
           <tr style="background:#fdf6f5;"><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">模型配置接线</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">设置里选模型/供应商</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">只读环境变量，未接设置；IPC 那套干脆没传 key</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#b23f33;font-weight:700;">✕ 开箱不通</span></td></tr>
-          <tr style="background:#fdf6f5;"><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">高分屏 DPI / 坐标换算</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">有处理</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">截图物理像素与 SetCursorPos 未做 scaleFactor 换算，缩放屏会点偏</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#b23f33;font-weight:700;">✕ 会点偏</span></td></tr>
-          <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">中文 / 长文本输入</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">剪贴板方案成熟</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">Windows 走 SendKeys，<b>基本输不了中文</b>；应改剪贴板粘贴</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 有硬伤</span></td></tr>
+          <tr style="background:#fdf6f5;"><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">高分屏 DPI / 坐标体系</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">支持归一化坐标 <code>normalized_0_100</code>（模型出 0–100，引擎映射实屏），天然免疫分辨率/DPI</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">让模型直接出物理像素，未归一化、未做 scaleFactor，缩放屏会点偏（归一化是低成本可直接抄的招）</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#b23f33;font-weight:700;">✕ 会点偏</span></td></tr>
+          <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">中文 / 长文本输入</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">默认走剪贴板粘贴，并先保存、事后恢复原剪贴板内容</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">Windows 走 SendKeys，<b>基本输不了中文</b>；应改剪贴板粘贴（含守卫）</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 有硬伤</span></td></tr>
+          <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">批量动作 / 往返效率</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">computer_batch 一次批量执行再统一观察；Mac JS worker 还能写循环/变量</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">每步一次模型往返 + 固定 sleep，无批量、无持久上下文</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 可补</span></td></tr>
           <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">动作后验证 / 自我纠错</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">再截图比对，不对就改</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">失败即 break，无重试、无画面变化检测、无前后 diff</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 较脆</span></td></tr>
           <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">权限 / 安全</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">五档 + 敏感动作人工确认 + 授权应用列表</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">agent 工具有审批门（好）；但 IPC 那套默认放行、无动作预览/急停/白名单/审计</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 一半</span></td></tr>
           <tr><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;font-weight:600;">执行层可靠性</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">pyautogui（需 Python 环境）</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;">PowerShell/osascript/xdotool，零依赖但每次起进程、首跑编译慢、易被杀软拦</td><td style="padding:9px 12px;border-bottom:1px solid #eef1f3;"><span style="color:#c2611f;font-weight:700;">◐ 可接受</span></td></tr>
@@ -161,7 +162,7 @@
         <ol style="margin:8px 0 0;padding-left:18px;font-size:12.8px;color:#3c4d56;">
           <li>CU 的 VLM 配置复用设置中的模型（去掉只认 env 的断裂）</li>
           <li><b>Set-of-Mark 标注</b>：截图叠加编号网格/候选框，模型回编号→映射坐标（纯 TS 可单测）</li>
-          <li>DPI scaleFactor 坐标换算（真机校准）</li>
+          <li>坐标改<b>归一化 0–100</b>（模型出相对坐标、引擎映射实屏，免疫分辨率/DPI，低成本高收益）</li>
           <li>Windows 输入改剪贴板粘贴，修中文</li>
           <li>修 IPC 套“默认放行”，统一走审批门</li>
         </ol>
@@ -186,6 +187,7 @@
           <li>多显示器、按应用切换、应用白名单</li>
           <li>可选执行层升级 nut.js（纯 Node 原生，免 Python/PS），评估包体与 ABI</li>
           <li>合并两套 CU 为单一权威实现，删冗余 IPC 路径</li>
+          <li><b>Windows 差异化（cc-haha 在 Win 都没做）</b>：接 UI Automation 元素树——能读树就点元素句柄（不靠像素、不吃 VLM 眼神），浏览器/自绘 UI/游戏再回退截图视觉坐标</li>
         </ol>
         <div style="font-size:11.8px;color:#8a98a0;margin-top:8px;">验收：像“会用电脑的小生物”，而非冷冰冰的脚本。</div>
       </div>
