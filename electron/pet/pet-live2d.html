@@ -816,6 +816,64 @@ function clampPosition() {
   if (!state.floating) { state.floatY = groundY(); model.y = state.floatY; }
   else { const hh = Math.abs(model.height) / 2 + 4; state.floatY = Math.min(innerHeight - hh, Math.max(hh, state.floatY)); }
 }
+/* ── v6.2 窗口物理裁剪 setShape：把全屏透明舞台收缩到模型 + 气泡/工具栏包围盒，
+   消除全屏透明 WebGL 置顶窗对 Windows 硬件叠加(MPO/DComp)合成的干扰，
+   修复“桌宠显示在屏幕前时，后方窗口里的视频/图片画面黑屏、花屏或不刷新”。
+   上报物理像素矩形给主进程 SetWindowRgn；区域外不渲染/不合成/不接收鼠标。
+   任何大面板/菜单/聊天/主动卡片打开，或模型未就绪时回退整窗，绝不裁空。 ── */
+let __shapeLastKey = "", __shapeLastT = 0
+function reportPetShape() {
+  try {
+    if (typeof ipcRenderer === "undefined") return
+    const dpr = window.devicePixelRatio || 1
+    const W = innerWidth, H = innerHeight
+    const fullRects = () => [{ x: 0, y: 0, width: Math.round(W * dpr), height: Math.round(H * dpr) }]
+    const pc = document.getElementById("proactive-card")
+    const uiOpen =
+      (typeof anyPanelOpen === "function" && anyPanelOpen()) ||
+      (typeof chatOpenNow === "function" && chatOpenNow()) ||
+      menuOpen === true ||
+      (!!pc && pc.classList.contains("show"))
+    if (uiOpen || !model) { sendPetShape(fullRects(), "full"); return }
+    let b = null
+    try { b = model.getBounds() } catch (e) { b = null }
+    if (!b || !(b.width > 0) || !(b.height > 0)) { sendPetShape(fullRects(), "full"); return }
+    // 模型包围盒(基础安全边距：上留余量、两侧与下方留粒子/影子/特效)
+    let x0 = b.x - 110, y0 = b.y - 70, x1 = b.x + b.width + 110, y1 = b.y + b.height + 120
+    // 并上当前可见的气泡 / 工具栏 / 折叠球，避免被裁；display:none 时包围盒为 0 自动跳过
+    const unionEl = (id) => {
+      const el = document.getElementById(id)
+      if (!el || el.style.display === "none") return
+      const r = el.getBoundingClientRect()
+      if (!(r.width > 0) || !(r.height > 0)) return
+      if (getComputedStyle(el).visibility === "hidden") return
+      x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top)
+      x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom)
+    }
+    unionEl("speech-bubble"); unionEl("neko-toolbar"); unionEl("tb-collapsed")
+    // 整体再外扩一圈，给边缘粒子/特效与点击留白
+    x0 -= 36; y0 -= 36; x1 += 36; y1 += 36
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0)
+    x1 = Math.min(W, x1); y1 = Math.min(H, y1)
+    const rects = [{
+      x: Math.round(x0 * dpr), y: Math.round(y0 * dpr),
+      width: Math.round((x1 - x0) * dpr), height: Math.round((y1 - y0) * dpr),
+    }]
+    // key 按 8 物理像素量化，呼吸/微表情的小幅变化不触发重复 SetWindowRgn
+    const q = v => Math.round(v / 8)
+    const key = q(rects[0].x) + "," + q(rects[0].y) + "," + q(rects[0].width) + "," + q(rects[0].height)
+    sendPetShape(rects, key)
+  } catch (e) { /* 裁剪失败不影响桌宠主流程 */ }
+}
+function sendPetShape(rects, key) {
+  try {
+    const now = performance.now()
+    if (key === __shapeLastKey) return
+    if (key !== "full" && now - __shapeLastT < 70) return // 紧凑态节流约 14fps，降低 SetWindowRgn 开销
+    __shapeLastKey = key; __shapeLastT = now
+    ipcRenderer.send("pet:set-shape", rects)
+  } catch (e) {}
+}
 function positionOverlays() {
   if (!model) return;
   const hw = modelHalfW();
@@ -849,6 +907,7 @@ function positionOverlays() {
 
   positionToolbar();
   positionProactiveCard();
+  reportPetShape();
 }
 
 /* 工具栏跟随模型定位（模型右侧，空间不够则左侧） */

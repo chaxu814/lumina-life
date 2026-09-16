@@ -1042,6 +1042,30 @@ export function registerPetIpc(): void {
       win.setIgnoreMouseEvents(!!ignore, { forward: true })
     }
   })
+  // ── v6.2 窗口物理裁剪(setShape)：渲染页上报模型/UI 包围盒(物理像素)，把全屏透明舞台收缩到实际内容，
+  //    避免全屏透明 WebGL 置顶窗占用 Windows 硬件叠加(MPO/DComp)，导致其后方视频/图片画面黑屏、花屏或不刷新。
+  //    区域外窗口不渲染、不参与合成、不接收鼠标。macOS 不支持 setShape，直接忽略。
+  ipcMain.on('pet:set-shape', (e, rects: Array<{ x: number; y: number; width: number; height: number }>) => {
+    try {
+      if (process.platform === 'darwin') return
+      const win = BrowserWindow.fromWebContents(e.sender)
+      if (!win || win.isDestroyed()) return
+      const valid = Array.isArray(rects)
+        ? rects.filter(r => r && Number.isFinite(r.x) && Number.isFinite(r.y) && r.width > 0 && r.height > 0)
+        : []
+      if (!valid.length) {
+        // 安全兜底：恢复整窗(物理像素)，绝不允许窗口被裁空
+        const b = win.getBounds()
+        const sf = screen.getDisplayMatching(b).scaleFactor || 1
+        win.setShape([{ x: 0, y: 0, width: Math.round(b.width * sf), height: Math.round(b.height * sf) }])
+        return
+      }
+      win.setShape(valid)
+    } catch (err) {
+      console.warn('[PetWindow] set-shape failed:', err)
+    }
+  })
+
 
   // ── 启动进度（渲染页加载 PIXI/模型时上报，转发给主窗口显示进度条）──
   ipcMain.on('pet:startup-progress', (_e, data: { progress: number; stage: string }) => {
