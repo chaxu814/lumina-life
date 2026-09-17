@@ -280,7 +280,8 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
       let denied = false
       for (const sub of act.actions) {
         if (isCuAborted()) { steps.push('🛑 急停，批量动作中止'); denied = true; break }
-        if (!preparePoint(sub, grid, { kind: 'full' })) { msgs.push('(某动作坐标无效，跳过)'); continue }
+        // 按“当前视图”映射坐标：全图 cell→全局；zoom 视图 cell/局部→自动换算回全屏
+        if (!preparePoint(sub, grid, view)) { msgs.push('(某动作坐标无效，跳过)'); continue }
         const r = await executeCuAction(sub, { imgW: shot.w, imgH: shot.h })
         msgs.push(r.msg)
         if (r.denied) { denied = true; break }
