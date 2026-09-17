@@ -232,6 +232,7 @@ var LuminaVoice = (() => {
     // ── Web Speech ──
     recognition = null;
     restarting = false;
+    webStartTimer = null;
     // ── 本地 mic VAD ──
     micStream = null;
     micCtx = null;
@@ -279,6 +280,10 @@ var LuminaVoice = (() => {
     stop() {
       if (!this.running) return;
       this.running = false;
+      if (this.webStartTimer) {
+        clearTimeout(this.webStartTimer);
+        this.webStartTimer = null;
+      }
       try {
         this.controller?.setEnabled(false);
       } catch {
@@ -306,9 +311,27 @@ var LuminaVoice = (() => {
       rec.continuous = false;
       rec.maxAlternatives = 1;
       let firedStart = false;
+      const clearWatchdog = () => {
+        if (this.webStartTimer) {
+          clearTimeout(this.webStartTimer);
+          this.webStartTimer = null;
+        }
+      };
       rec.onstart = () => {
+        clearWatchdog();
         this.hooks.onStatus?.("全双工已开启（在线流式识别）", "info");
       };
+      clearWatchdog();
+      this.webStartTimer = setTimeout(() => {
+        if (this.running && this.sttMode === "web") {
+          this.hooks.onStatus?.("在线识别未启动，切换本地识别…", "warn");
+          try {
+            rec.abort?.();
+          } catch {
+          }
+          this.startLocalMic();
+        }
+      }, 4e3);
       rec.onaudiostart = () => {
       };
       rec.onresult = (e) => {
@@ -343,6 +366,7 @@ var LuminaVoice = (() => {
         if (err === "no-speech" || err === "aborted") return;
         if (err === "network" || err === "service-not-allowed" || err === "not-allowed" || err === "audio-capture" || err === "language-not-supported") {
           if (this.sttMode === "web") {
+            clearWatchdog();
             this.hooks.onStatus?.("在线语音识别不可用（" + err + "），切换本地识别…", "warn");
             try {
               rec.abort?.();
@@ -424,7 +448,7 @@ var LuminaVoice = (() => {
               this.controller?.userUtterance(r.text).catch(() => {
               });
             } else if (r && r.missingDependency) {
-              this.hooks.onError?.("本地语音模型未安装（@xenova/transformers / whisper-base），请在设置中安装或改用在线识别。");
+              this.hooks.onError?.("离线语音需先安装依赖（npm install @xenova/transformers，首次会自动下载 whisper-base 约 290MB）；当前可先依赖在线识别。");
             } else {
               this.hooks.onStatus?.("没听清，可以再说一次～", "info");
             }

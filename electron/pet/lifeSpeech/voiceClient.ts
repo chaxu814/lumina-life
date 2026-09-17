@@ -101,6 +101,7 @@ class VoiceClient {
   // ── Web Speech ──
   private recognition: any = null
   private restarting = false
+  private webStartTimer: ReturnType<typeof setTimeout> | null = null
 
   // ── 本地 mic VAD ──
   private micStream: MediaStream | null = null
@@ -148,6 +149,7 @@ class VoiceClient {
   stop(): void {
     if (!this.running) return
     this.running = false
+    if (this.webStartTimer) { clearTimeout(this.webStartTimer); this.webStartTimer = null }
     try { this.controller?.setEnabled(false) } catch {}
     try { this.recognition?.stop() } catch {}
     try { this.recognition?.abort?.() } catch {}
@@ -168,7 +170,21 @@ class VoiceClient {
     rec.maxAlternatives = 1
 
     let firedStart = false
-    rec.onstart = () => { this.hooks.onStatus?.('全双工已开启（在线流式识别）', 'info') }
+    const clearWatchdog = () => { if (this.webStartTimer) { clearTimeout(this.webStartTimer); this.webStartTimer = null } }
+    rec.onstart = () => {
+      clearWatchdog()
+      this.hooks.onStatus?.('全双工已开启（在线流式识别）', 'info')
+    }
+    // 看门狗：Electron 常缺 Google 语音服务，rec.start() 不报错但 onstart 永不触发。
+    // 4 秒内没起来就判在线识别不可用，直接转本地。
+    clearWatchdog()
+    this.webStartTimer = setTimeout(() => {
+      if (this.running && this.sttMode === 'web') {
+        this.hooks.onStatus?.('在线识别未启动，切换本地识别…', 'warn')
+        try { rec.abort?.() } catch {}
+        this.startLocalMic()
+      }
+    }, 4000)
     rec.onaudiostart = () => { /* 已开始采集 */ }
     rec.onresult = (e: any) => {
       let interim = ''
@@ -199,6 +215,7 @@ class VoiceClient {
       if (err === 'network' || err === 'service-not-allowed' || err === 'not-allowed' || err === 'audio-capture' || err === 'language-not-supported') {
         // Electron 常缺 Google 语音服务 / 国内网络不通 → 降级本地
         if (this.sttMode === 'web') {
+          clearWatchdog()
           this.hooks.onStatus?.('在线语音识别不可用（' + err + '），切换本地识别…', 'warn')
           try { rec.abort?.() } catch {}
           this.startLocalMic()
@@ -267,7 +284,7 @@ class VoiceClient {
               this.hooks.onPartial?.(r.text)
               this.controller?.userUtterance(r.text).catch(() => {})
             } else if (r && r.missingDependency) {
-              this.hooks.onError?.('本地语音模型未安装（@xenova/transformers / whisper-base），请在设置中安装或改用在线识别。')
+              this.hooks.onError?.('离线语音需先安装依赖（npm install @xenova/transformers，首次会自动下载 whisper-base 约 290MB）；当前可先依赖在线识别。')
             } else {
               this.hooks.onStatus?.('没听清，可以再说一次～', 'info')
             }
