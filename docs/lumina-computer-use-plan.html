@@ -9,6 +9,22 @@
       <div style="font-size:14px;opacity:.92;">2026-09-16 ｜ 本轮已落地：桌宠窗口占位优化（本地 commit 68a1fb3）｜ 结论：<b>你不是从零开始，已有两套闭环骨架，真正卡脖子的是“看得准、接得上、点得对、管得住”四件事。</b></div>
     </div>
 
+    <!-- 实施状态回写 -->
+    <div style="background:#fff;border:1px solid #d8e8e2;border-left:6px solid #2c7a52;border-radius:12px;padding:16px 20px;margin:18px 0;box-sizing:border-box;font-size:14px;">
+      <div style="font-size:16px;font-weight:800;color:#1f5d57;margin-bottom:8px;">✅ 实施状态更新（2026-09-17）：P0 / P1 / P2 已落地，三件事已拍板</div>
+      <div style="margin-bottom:8px;"><b style="color:#2c7a52;">三项决策：</b>
+        ① 视觉路线选 <b>A · 本地 9B + Set-of-Mark</b>（纯本地/隐私/离线，网格把“估坐标”变“读编号”救小模型准度；云端强模无需另做——设置里改 OpenAI 兼容端点即得方案 B；自托管 UI-TARS 列后续可选）；
+        ② 执行层 <b>暂留 PowerShell</b>（已把键鼠原语抽象进 cuCore，将来可平滑换 nut.js，规避原生绑定 ABI/打包坑）；
+        ③ 权限姿态 <b>观察默认放行 ＋ 写操作走审批 ＋ 高危命令任何姿态硬拦截 ＋ Ctrl+Alt+X 全局急停</b>。
+      </div>
+      <div style="margin-bottom:8px;"><b style="color:#2c7a52;">已落地：</b>
+        <b>P0</b> 视觉配置接通设置/归一化坐标免疫 DPI/Windows 中文剪贴板输入/补 drag（cdd5e01）；
+        <b>P1</b> Set-of-Mark 编号网格 ＋ zoom 局部放大二次定位 ＋ computer_batch 批量动作 ＋ 全局急停（092ff90、9ca5782）；
+        <b>P2</b> 两套 CU 执行层合一为 cuCore、旧 IPC 引擎补齐归一化/drag/中文、桌宠窗口按可见像素 alpha-trim 贴身裁剪（092ff90、82d4151）。
+      </div>
+      <div style="color:#b0761f;"><b>待你真机验证：</b>网格/zoom 的小模型命中率、alpha-trim 边界（含 125%/150% 缩放）、后方视频/图片画面是否恢复正常、Ctrl+Alt+X 急停即时性（当前环境无 GUI，未做端到端验证）。</div>
+    </div>
+
     <!-- 一句话结论 -->
     <div style="background:#fff;border:1px solid #e3e8ec;border-left:5px solid #e0813f;border-radius:12px;padding:16px 20px;margin:18px 0;box-sizing:border-box;font-size:14.5px;">
       <b style="color:#c2611f;">一眼结论：</b>cc-haha 的 Computer Use 本质是 <b>“截图 → 强视觉模型直接读坐标 → 人工确认 → pyautogui 执行 → 再截图验证”</b> 的循环，强在<b>动作原语全（24 个工具）+ 白名单/权限严 + Mac 另有原生无障碍树深度方案</b>；需注意 <b>Windows 其实也已全支持</b>（win32 栈），最深的 AX/JS 方案为 Mac 专属，且源码有合规灰区。Lumina 已具备同款循环（<code>desktop_see / desktop_act</code>，含点击/双击/右键/拖拽/滚动 + 审批门），但目前 <b>① 让小模型裸估坐标（点不准）② 设置里的模型没接进去（开箱即失败）③ 高分屏 DPI 与中文输入没处理 ④ 失败即停、缺验证与急停</b>。
@@ -213,16 +229,16 @@
         </tr></thead>
         <tbody style="color:#33464f;">
           <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">桌宠窗口</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">默认模型占屏偏大、命中盒外扩 160px 透明区挡点击</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#2c7a52;font-weight:700;">✅ 本轮已修</td></tr>
-          <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">桌宠窗口</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Live2D 画布自带透明边，命中盒按画布矩形而非可见像素（更彻底的 trim 未做）</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P2</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b0761f;">◐ 待办</td></tr>
-          <tr style="background:#fdf6f5;"><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Computer Use</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">小模型裸估坐标、无 Set-of-Mark/zoom，点不准</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P0</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b23f33;">✕ 待决策1</td></tr>
-          <tr style="background:#fdf6f5;"><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Computer Use</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">VLM 配置只认环境变量、未接设置；IPC 套无 key 等于瞎</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P0</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b23f33;">✕ 待修</td></tr>
-          <tr style="background:#fdf6f5;"><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Computer Use</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">高分屏 DPI 点偏、Windows 输不了中文、失败即停无验证</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P0/P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b23f33;">✕ 待修</td></tr>
+          <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">桌宠窗口</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Live2D 画布自带透明边 → 已按当前帧不透明像素 alpha-trim 贴身裁剪（82d4151）</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P2</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#2c7a52;font-weight:700;">✅ 本轮已修</td></tr>
+          <tr style="background:#f3faf6;"><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Computer Use</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">小模型裸估坐标 → 已上 Set-of-Mark 编号网格 + zoom 放大 + batch（路线 A，9ca5782）</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P0/P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#2c7a52;font-weight:700;">✅ 已落地</td></tr>
+          <tr style="background:#f3faf6;"><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Computer Use</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">VLM 配置已接通设置 lumina 配置并 LLM_* 兜底，无 key 不再“瞎跑”（cdd5e01）</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P0</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#2c7a52;font-weight:700;">✅ 已修</td></tr>
+          <tr style="background:#f3faf6;"><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Computer Use</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">归一化坐标免疫 DPI、Windows 中文走剪贴板、补 drag、失败有急停/验证（cdd5e01/092ff90）</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P0/P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#2c7a52;font-weight:700;">✅ 已修</td></tr>
           <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">实时语音</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">中文流式 STT 未选型/未接麦克风流；全双工、唤醒词是期货</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b0761f;">◐ 待选型</td></tr>
           <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">视觉感知</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">摄像头人脸/在场检测未接；屏幕感知默认节流，存在感与省 token 需平衡</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b0761f;">◐ 待办</td></tr>
           <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">Live2D 控制</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">AI 尚未自由控制头/眼球/眨眼/呼吸（防打架而保留）；第三方模型 cdi3 参数未自动发现</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P2</td><td style="pending:8px 12px;border-bottom:1px solid #eef1f3;color:#5b7a99;">○ P3</td></tr>
           <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">记忆/内驱力</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">内存态、重启回基线，新用户记忆库为空，长期养成感短期不可见</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P2</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#5b7a99;">○ 观察</td></tr>
           <tr><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">表演 DSL</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">手势/特效触发率取决于小模型是否稳定输出 performance，未真机测命中率</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;">P1</td><td style="padding:8px 12px;border-bottom:1px solid #eef1f3;color:#b0761f;">◐ 待真机验</td></tr>
-          <tr><td style="padding:8px 12px;">工程/发布</td><td style="padding:8px 12px;">无 remote、未建公开仓（需你的 GitHub 凭据）；两套 CU 实现待合并；本地 key 仅存于 gitignore 文件</td><td style="padding:8px 12px;">P2</td><td style="padding:8px 12px;color:#5b7a99;">○ 待你定</td></tr>
+          <tr><td style="padding:8px 12px;">工程/发布</td><td style="padding:8px 12px;">无 remote、未建公开仓（需你的 GitHub 凭据）；两套 CU 执行层已合一为 cuCore（092ff90）；本地 key 仅存于 gitignore 文件</td><td style="padding:8px 12px;">P2</td><td style="padding:8px 12px;color:#5b7a99;">○ 待你定</td></tr>
         </tbody>
       </table>
     </div>
