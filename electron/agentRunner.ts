@@ -40,6 +40,13 @@ import { ScrollContext } from './memory/scrollContext'
 import { ReMeLight } from './memory/remeLight'
 // 模型能力缓存
 import { getModelCapabilityCache } from './modelCapabilityCache'
+// 本地 / 异构模型请求容错（400 自动降级：去 tools / 图片 / stream_options）
+import {
+  classifyModelError,
+  degradeForKind,
+  describeLimitation,
+  isLocalEndpoint,
+} from './core/modelCompat'
 // 工具审批 UI
 import { classifyApproval, formatDenyFeedback } from './tools/impl/approvalUI'
 // 情绪 ↔ 游戏化桥接（静态导入，打包后动态 require 解析不到）
@@ -2594,13 +2601,9 @@ private summarizer: ConversationSummarizer | null = null
       max_tokens: Math.min(this.config.maxTokens || 4096, 32768),
     }
 
-    if (tools.length > 0) {
-      // QwenPaw 风格 — 始终带工具，不再黑名单
-      //   工具路由只看 provider 档案 (modelLacksTools)，运行时不再封禁。
-      //   即使模型返回 400，也只是单次重试不带工具，不影响后续请求。
-      requestBody.tools = tools
-      requestBody.tool_choice = 'auto'
-    }
+    // 注意：tools 是否随请求发送，统一由下方「工具路由」根据 provider 档案
+    //   + 模型能力缓存（曾因 tools 被拒则不再发）决定，此处不再无条件预设，
+    //   否则会把「该模型不支持工具」的判断架空。
 
     // ── v3.8 超时配置（借鉴 QwenPaw）───────────────────
     // ❌ 删除：自定义首token超时（推理模型必然超30s）
@@ -2631,7 +2634,13 @@ private summarizer: ConversationSummarizer | null = null
     //   去掉全局黑名单 — QwenPaw 风格：每次请求都带 tools
     //     问题: 一次 400 就永久封禁模型 → 模型切换后也受影响
     //     修复: 只看 profile.model.supportsTools（精确标记），不做运行时封禁
-    const modelLacksTools = profile && !profile.model.supportsTools
+    // 能力缓存：该模型此前因 tools 被服务端拒绝（400）→ 本会话起不再发 tools，
+    //   改走纯对话 / XML 工具路径，避免每次请求都报错。
+    let cachedNoTools = false
+    try {
+      cachedNoTools = getModelCapabilityCache().get(this.config.model)?.supportsTools === false
+    } catch { /* 缓存不可用则忽略 */ }
+    const modelLacksTools = (profile && !profile.model.supportsTools) || cachedNoTools
     const shouldSendTools = tools.length > 0 && !modelLacksTools
 
     if (shouldSendTools) {
@@ -2639,7 +2648,7 @@ private summarizer: ConversationSummarizer | null = null
       requestBody.tool_choice = 'auto'
     } else if (tools.length > 0) {
       const reason = modelLacksTools
-        ? '档案标记不支持tool-calling'
+        ? (cachedNoTools ? '能力缓存标记不支持工具(自动降级)' : '档案标记不支持tool-calling')
         : '未知原因'
       console.log(`[AgentRunner] 跳过工具 (${reason}: ${this.config.model})`)
     }
@@ -2760,7 +2769,28 @@ private summarizer: ConversationSummarizer | null = null
           streamUsage = data.usage
           streamToolCalls = undefined
         } else {
-          return { error: `LLM 流式错误 (${streamRes.status}): ${errBody.slice(0, 200)}` }
+          // 400/422/500 能力不匹配：自动降级（去 tools / 图片 / stream_options，或降 max_tokens）后重试
+          const degraded = await this._degradedCompletionOnce(
+            requestBody, streamRes.status, errBody, fetchSignal,
+          )
+          if (degraded) {
+            const { data, kind } = degraded
+            const choice = data.choices?.[0]
+            if (!choice) return { error: 'LLM 返回为空' }
+            const msg = choice.message
+            if (msg?.content) streamText = msg.content
+            if (msg?.tool_calls?.length) {
+              if (streamText) this.messages.push({ role: 'assistant', content: streamText })
+              return { toolCalls: msg.tool_calls, text: streamText || undefined, usage: data.usage }
+            }
+            streamUsage = data.usage
+            streamToolCalls = undefined
+            if (kind === 'tools' || kind === 'vision' || kind === 'context') {
+              this.emit({ type: 'thinking_stream', text: '', isFirst: false, isLast: true })
+            }
+          } else {
+            return { error: `LLM 流式错误 (${streamRes.status}): ${errBody.slice(0, 200)}` }
+          }
         }
       } else {
         // ── 流式读取 ──
@@ -2949,6 +2979,74 @@ private summarizer: ConversationSummarizer | null = null
     }
     return { text: streamText, usage: streamUsage, earlyResults: earlyResultsObj }
 
+  }
+
+  /**
+   * 本地 / 异构模型能力不匹配时的非流式降级重试（最多 2 轮）。
+   * 依据错误文本依次移除问题字段（tools / stream_options / 图片 / 降 max_tokens），
+   * 并把能力短板写入模型能力缓存；context / unknown / auth 无法在通信层修复时返回 null。
+   */
+  private async _degradedCompletionOnce(
+    body: Record<string, any>,
+    initialStatus: number,
+    initialErr: string,
+    signal: AbortSignal,
+  ): Promise<{ data: any; kind: string } | null> {
+    let status = initialStatus
+    let lastErr = initialErr || ''
+    const tried = new Set<string>()
+    let cur: Record<string, any> = { ...body, stream: false }
+    const local = isLocalEndpoint(this.config.baseUrl)
+
+    const headersFor = (withAuth: boolean): Record<string, string> => {
+      const h: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+      return h
+    }
+
+    for (let round = 0; round < 2; round++) {
+      const kind = classifyModelError(status, lastErr)
+      if (!kind || kind === 'unknown' || kind === 'context' || kind === 'auth' || tried.has(kind)) {
+        return null
+      }
+      tried.add(kind)
+
+      try {
+        if (kind === 'tools') getModelCapabilityCache().markNoToolSupport(this.config.model)
+        else if (kind === 'vision') getModelCapabilityCache().update(this.config.model, { supportsVision: false })
+      } catch { /* 缓存不可用忽略 */ }
+
+      const note = describeLimitation(kind, this.config.model)
+      if (note) console.warn(`[AgentRunner] 🔧 ${status} ${kind} → 自动降级：${note}`)
+      cur = degradeForKind(cur, kind)
+
+      let res = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: headersFor(true),
+        body: JSON.stringify(cur),
+        signal,
+      })
+
+      // 本地端点误填 key 导致 401 → 去鉴权再试一次
+      if (res.status === 401 && local && this.config.apiKey) {
+        try { await res.body?.cancel() } catch { /* ignore */ }
+        res = await fetch(`${this.config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: headersFor(false),
+          body: JSON.stringify(cur),
+          signal,
+        })
+      }
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null)
+        if (data?.choices?.[0]) return { data, kind }
+        return null
+      }
+      lastErr = await res.text().catch(() => '')
+      status = res.status
+    }
+    return null
   }
 
   // ═════════════════════════════════════════════════════════

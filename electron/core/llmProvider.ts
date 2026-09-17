@@ -7,6 +7,14 @@
 
 import { matchProfile, getRecommendedTimeout } from '../providerProfiles'
 import { checkConnectionAlive } from '../llmRetry'
+import {
+  classifyModelError,
+  degradeForKind,
+  describeLimitation,
+  clampOutputTokens,
+  isLocalEndpoint,
+} from './modelCompat'
+import { getModelCapabilityCache } from '../modelCapabilityCache'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -149,7 +157,8 @@ export class LLMProvider {
     const requestBody: Record<string, any> = {
       model: this.config.model,
       messages,
-      max_tokens: opts.maxTokens || this.config.maxContextTokens,
+      // 输出上限与上下文窗口解耦：缺省 8192、硬封顶 32768，避免把 256k 上下文当输出上限发给严格服务
+      max_tokens: clampOutputTokens(opts.maxTokens),
       temperature: opts.temperature ?? 0.7,
       stream: true,
       stream_options: { include_usage: true },
@@ -227,6 +236,19 @@ export class LLMProvider {
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '')
+        const kind = classifyModelError(response.status, errText)
+        // 能力不匹配（tools / vision / stream_options / max_tokens）→ 去字段降级，非流式重试一次
+        if (kind !== 'unknown' && kind !== 'context' && kind !== 'auth') {
+          try {
+            if (kind === 'tools') getModelCapabilityCache().markNoToolSupport(this.config.model)
+            else if (kind === 'vision') getModelCapabilityCache().update(this.config.model, { supportsVision: false })
+          } catch { /* 缓存不可用忽略 */ }
+          const note = describeLimitation(kind, this.config.model)
+          if (note) console.warn(`[LLMProvider] 🔧 ${response.status} ${kind} → 降级：${note}`)
+          const degraded = degradeForKind(requestBody, kind)
+          const fallback = await this.callNonStreaming(opts, emit, degraded).catch(() => null)
+          if (fallback && !fallback.error) return fallback
+        }
         const errMsg = `LLM 返回 ${response.status}: ${errText.slice(0, 300)}`
         return { error: errMsg }
       }
@@ -397,25 +419,27 @@ export class LLMProvider {
   private async callNonStreaming(
     opts: LLMRequestOptions,
     emit?: LLMEmitCallbacks,
+    bodyOverride?: Record<string, any>,
   ): Promise<LLMResponse> {
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`
     const timeout = 600_000
 
-    const requestBody: Record<string, any> = {
+    // bodyOverride 来自流式 400 降级（已移除问题字段）；否则按标准 OpenAI 形态构造
+    const requestBody: Record<string, any> = bodyOverride ? { ...bodyOverride, stream: false } : {
       model: this.config.model,
       messages: opts.messages,
-      max_tokens: opts.maxTokens || this.config.maxContextTokens,
+      max_tokens: clampOutputTokens(opts.maxTokens),
       temperature: opts.temperature ?? 0.7,
       stream: false,
     }
 
-    if (opts.tools && opts.tools.length > 0) {
+    if (!bodyOverride && opts.tools && opts.tools.length > 0) {
       requestBody.tools = opts.tools
       requestBody.tool_choice = 'auto'
     }
 
     try {
-      const isLocal = /(localhost|127\.|0\.0\.0\.0|192\.168\.|^https?:\/\/10\.)/i.test(this.config.baseUrl || '')
+      const isLocal = isLocalEndpoint(this.config.baseUrl)
       const reqHeaders = (withAuth: boolean): Record<string, string> => {
         const h: Record<string, string> = { 'Content-Type': 'application/json' }
         if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
@@ -430,6 +454,19 @@ export class LLMProvider {
 
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
+        // 尚未降级过时，按错误类别自动降级一次（去 tools / stream_options / 图片 / 降 max_tokens）
+        if (!bodyOverride) {
+          const kind = classifyModelError(res.status, errText)
+          if (kind !== 'unknown' && kind !== 'context' && kind !== 'auth') {
+            try {
+              if (kind === 'tools') getModelCapabilityCache().markNoToolSupport(this.config.model)
+              else if (kind === 'vision') getModelCapabilityCache().update(this.config.model, { supportsVision: false })
+            } catch { /* 缓存不可用忽略 */ }
+            const note = describeLimitation(kind, this.config.model)
+            if (note) console.warn(`[LLMProvider] 🔧 非流式 ${res.status} ${kind} → 降级：${note}`)
+            return await this.callNonStreaming(opts, emit, degradeForKind(requestBody, kind))
+          }
+        }
         return { error: `非流式 LLM 返回 ${res.status}: ${errText.slice(0, 300)}` }
       }
 

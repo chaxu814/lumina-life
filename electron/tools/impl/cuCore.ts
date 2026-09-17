@@ -25,6 +25,7 @@ import screenshot from 'screenshot-desktop'
 import { getAgentConfig } from '../../agentConfig'
 import { normToPx, pngDimensions } from './cuGeometry'
 import { destructiveReason } from './cuSafety'
+import { classifyModelError, describeLimitation, looksLikeVisionModel, isLocalEndpoint } from '../../core/modelCompat'
 
 // 安全策略对外仍可从 cuCore 引用
 export { destructiveReason, isDestructive } from './cuSafety'
@@ -121,6 +122,10 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
     temperature: 0.3,
   }
   if (jsonMode) bodyObj.response_format = { type: 'json_object' }
+  // 软提示：本地端点 + 模型名不像 VLM（不硬拦，避免误伤自命名的视觉模型；失败时再给明确提示）
+  if (isLocalEndpoint(cfg.url) && !looksLikeVisionModel(cfg.model)) {
+    console.warn(`[CU] 视觉端点模型「${cfg.model}」从命名看不像视觉模型，若看屏/识图失败，请换 Qwen2.5-VL / GPT-4o / GLM-4V 等 VLM`)
+  }
   const body = JSON.stringify(bodyObj)
 
   return new Promise<string>((resolve, reject) => {
@@ -137,11 +142,30 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
       let d = ''
       res.on('data', c => d += c)
       res.on('end', () => {
+        const code = res.statusCode || 0
+        const visionHint = () => describeLimitation('vision', cfg.model)
         try {
           const j = JSON.parse(d)
-          if (j.error) return reject(new Error(j.error.message || 'vlm_err'))
+          if (j.error) {
+            const msg = String(j.error.message || j.error || 'vlm_err')
+            const kind = classifyModelError(code, msg + ' ' + d)
+            // 纯文本模型收到图片 → 给出明确的换模型提示，而不是一坨 400
+            if (kind === 'vision' || kind === 'tools') return reject(new Error(visionHint()))
+            return reject(new Error(msg))
+          }
+          if (code >= 400) {
+            const kind = classifyModelError(code, d)
+            if (kind === 'vision' || kind === 'tools') return reject(new Error(visionHint()))
+            return reject(new Error(`vlm_http_${code}:${d.slice(0, 200)}`))
+          }
           resolve(j.choices?.[0]?.message?.content || '')
-        } catch { reject(new Error(`vlm_parse:${d.slice(0, 200)}`)) }
+        } catch {
+          // 非 JSON 错误页（网关 HTML 等）：本地且模型不像 VLM 时给视觉提示
+          if (code >= 400 && isLocalEndpoint(cfg.url) && !looksLikeVisionModel(cfg.model)) {
+            return reject(new Error(visionHint()))
+          }
+          reject(new Error(`vlm_parse:${d.slice(0, 200)}`))
+        }
       })
     })
     r.on('error', reject)
