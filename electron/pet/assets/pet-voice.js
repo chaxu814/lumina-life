@@ -222,9 +222,11 @@ var LuminaVoice = (() => {
     controller = null;
     running = false;
     sttMode = "off";
+    duplexState = "idle";
     // ── TTS ──
     audioCtx = null;
     currentSrc = null;
+    playResolver = null;
     ttsToken = 0;
     synthAbort = null;
     // ── Web Speech ──
@@ -258,7 +260,10 @@ var LuminaVoice = (() => {
         },
         speakSentence: (text) => this.speak(text),
         cancelSpeech: () => this.cancelSpeech(),
-        onState: (s) => this.hooks.onState?.(s),
+        onState: (s) => {
+          this.duplexState = s;
+          this.hooks.onState?.(s);
+        },
         onPartial: (t) => this.hooks.onPartial?.(t),
         onError: (m) => this.hooks.onError?.(m)
       });
@@ -314,17 +319,23 @@ var LuminaVoice = (() => {
           if (r.isFinal) finalText += r[0].transcript;
           else interim += r[0].transcript;
         }
-        const heard = (finalText || interim).trim();
-        if (heard && !firedStart) {
-          firedStart = true;
-          this.controller?.userStarted().catch(() => {
-          });
-        }
-        if (interim) this.controller?.partial(interim);
-        if (finalText.trim()) {
-          this.controller?.userUtterance(finalText.trim()).catch(() => {
+        const final = finalText.trim();
+        if (final) {
+          if (!firedStart) {
+            firedStart = true;
+            this.controller?.userStarted().catch(() => {
+            });
+          }
+          this.controller?.userUtterance(final).catch(() => {
           });
           firedStart = false;
+        } else if (interim.trim()) {
+          if (this.duplexState !== "speaking" && !firedStart) {
+            firedStart = true;
+            this.controller?.userStarted().catch(() => {
+            });
+          }
+          this.controller?.partial(interim.trim());
         }
       };
       rec.onerror = (e) => {
@@ -366,16 +377,15 @@ var LuminaVoice = (() => {
     startLocalMic() {
       if (!this.running) return;
       this.sttMode = "local";
-      const constraints = {
-        audio: this.opts.micDevice ? { deviceId: { exact: this.opts.micDevice } } : true
-      };
+      const audio = this.opts.micDevice ? { deviceId: { exact: this.opts.micDevice }, echoCancellation: true, noiseSuppression: true, autoGainControl: true } : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      const constraints = { audio };
       navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
         if (!this.running || this.sttMode !== "local") {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         this.micStream = stream;
-        const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16e3 });
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.micCtx = ctx;
         const src = ctx.createMediaStreamSource(stream);
         const inRate = ctx.sampleRate || 16e3;
@@ -544,15 +554,27 @@ var LuminaVoice = (() => {
             engine?.speak?.(text, performance.now());
           } catch {
           }
-          src.onended = () => {
+          let finished = false;
+          const finish = () => {
+            if (finished) return;
+            finished = true;
             try {
               engine?.stopSpeak?.(performance.now());
             } catch {
             }
-            if (this.currentSrc === src) this.currentSrc = null;
+            if (this.currentSrc === src) {
+              this.currentSrc = null;
+              this.playResolver = null;
+            }
             resolve();
           };
-          src.start();
+          src.onended = finish;
+          this.playResolver = finish;
+          try {
+            src.start();
+          } catch {
+            finish();
+          }
         });
       } catch {
       }
@@ -568,13 +590,19 @@ var LuminaVoice = (() => {
         this.synthAbort?.abort?.();
       } catch {
       }
-      if (this.currentSrc) {
+      const src = this.currentSrc;
+      this.currentSrc = null;
+      if (src) {
         try {
-          this.currentSrc.onended = null;
-          this.currentSrc.stop();
+          src.stop();
         } catch {
         }
-        this.currentSrc = null;
+      }
+      const resolver = this.playResolver;
+      this.playResolver = null;
+      if (resolver) try {
+        resolver();
+      } catch {
       }
       try {
         window.__petLifeEngine?.stopSpeak?.(performance.now());

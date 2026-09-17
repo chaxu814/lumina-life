@@ -360,6 +360,11 @@ export interface PetVoiceResult {
   error?: string
 }
 
+// 全双工短期多轮上下文（仅内存，保留最近 8 轮，重启即清；长期记忆走 memoryStore）
+const voiceHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+const VOICE_MAX_TURNS = 8
+export function clearVoiceHistory(): void { voiceHistory.length = 0 }
+
 export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
   const text = (userText || '').trim()
   advanceDrives('chat')
@@ -376,9 +381,11 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
     ctx.push(`你此刻的情绪是「${currentMoodLabel()}」，保持情绪连贯，不要无理由突变。`)
     const tone = PERSONA_TONES[getPetPrefs().persona || ''] || ''
     const sys = VOICE_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + '\n' + ctx.join('\n')
+    const history = voiceHistory.slice(-VOICE_MAX_TURNS * 2)
     const res = await provider.call({
       messages: [
         { role: 'system', content: sys },
+        ...history,
         { role: 'user', content: text },
       ],
       temperature: 0.95,
@@ -386,6 +393,10 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
     } as any)
     const reply = (res?.text || '').trim()
     if (!reply) return { ok: false, text: '', source: 'fallback', error: 'LLM 空回复' }
+    // 写入滚动上下文
+    voiceHistory.push({ role: 'user', content: text })
+    voiceHistory.push({ role: 'assistant', content: reply })
+    while (voiceHistory.length > VOICE_MAX_TURNS * 2) voiceHistory.shift()
     return { ok: true, text: reply, source: 'llm' }
   } catch (e: any) {
     return { ok: false, text: '', source: 'fallback', error: e?.message || String(e) }

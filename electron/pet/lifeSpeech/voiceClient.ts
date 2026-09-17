@@ -89,10 +89,12 @@ class VoiceClient {
   private controller: FullDuplexController | null = null
   private running = false
   private sttMode: 'web' | 'local' | 'off' = 'off'
+  private duplexState: 'idle' | 'listening' | 'thinking' | 'speaking' = 'idle'
 
   // ── TTS ──
   private audioCtx: AudioContext | null = null
   private currentSrc: AudioBufferSourceNode | null = null
+  private playResolver: (() => void) | null = null
   private ttsToken = 0
   private synthAbort: AbortController | null = null
 
@@ -128,7 +130,7 @@ class VoiceClient {
       },
       speakSentence: (text) => this.speak(text),
       cancelSpeech: () => this.cancelSpeech(),
-      onState: (s) => this.hooks.onState?.(s),
+      onState: (s) => { this.duplexState = s; this.hooks.onState?.(s) },
       onPartial: (t) => this.hooks.onPartial?.(t),
       onError: (m) => this.hooks.onError?.(m),
     })
@@ -176,12 +178,19 @@ class VoiceClient {
         if (r.isFinal) finalText += r[0].transcript
         else interim += r[0].transcript
       }
-      const heard = (finalText || interim).trim()
-      if (heard && !firedStart) { firedStart = true; this.controller?.userStarted().catch(() => {}) }
-      if (interim) this.controller?.partial(interim)
-      if (finalText.trim()) {
-        this.controller?.userUtterance(finalText.trim()).catch(() => {})
+      // AI 正在说话时，扬声器容易把自己的 TTS 回灌进麦克风（回声）。
+      // 此时只在拿到「最终结果」才判定为用户打断，避免 interim 回声把自己打断；
+      // 聆听/思考态则照常先用 interim 起头，保证响应灵敏。
+      const final = finalText.trim()
+      if (final) {
+        if (!firedStart) { firedStart = true; this.controller?.userStarted().catch(() => {}) }
+        this.controller?.userUtterance(final).catch(() => {})
         firedStart = false
+      } else if (interim.trim()) {
+        if (this.duplexState !== 'speaking' && !firedStart) {
+          firedStart = true; this.controller?.userStarted().catch(() => {})
+        }
+        this.controller?.partial(interim.trim())
       }
     }
     rec.onerror = (e: any) => {
@@ -218,13 +227,16 @@ class VoiceClient {
   private startLocalMic(): void {
     if (!this.running) return
     this.sttMode = 'local'
-    const constraints: MediaStreamConstraints = {
-      audio: this.opts.micDevice ? { deviceId: { exact: this.opts.micDevice } } : true,
-    }
+    // 本地识别路径：开启回声消除/降噪，尽量避免把扬声器里的 TTS 当成用户说话（回声自激）
+    const audio: MediaTrackConstraints = this.opts.micDevice
+      ? { deviceId: { exact: this.opts.micDevice }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      : { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    const constraints: MediaStreamConstraints = { audio }
     navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
       if (!this.running || this.sttMode !== 'local') { stream.getTracks().forEach(t => t.stop()); return }
       this.micStream = stream
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 })
+      // 不强制 16k（部分设备不支持任意采样率会直接抛错），用设备原生率，后面统一降采样到 16k
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
       this.micCtx = ctx
       const src = ctx.createMediaStreamSource(stream)
       const inRate = ctx.sampleRate || 16000
@@ -364,12 +376,17 @@ class VoiceClient {
         this.currentSrc = src
         const engine = (window as any).__petLifeEngine
         try { engine?.speak?.(text, performance.now()) } catch {}
-        src.onended = () => {
+        let finished = false
+        const finish = () => {
+          if (finished) return
+          finished = true
           try { engine?.stopSpeak?.(performance.now()) } catch {}
-          if (this.currentSrc === src) this.currentSrc = null
+          if (this.currentSrc === src) { this.currentSrc = null; this.playResolver = null }
           resolve()
         }
-        src.start()
+        src.onended = finish
+        this.playResolver = finish
+        try { src.start() } catch { finish() }
       })
     } catch {
       /* 被打断或合成失败，交给控制器继续推进 */
@@ -384,10 +401,15 @@ class VoiceClient {
 
   private cancelPlaybackOnly(): void {
     try { this.synthAbort?.abort?.() } catch {}
-    if (this.currentSrc) {
-      try { this.currentSrc.onended = null; this.currentSrc.stop() } catch {}
-      this.currentSrc = null
+    const src = this.currentSrc
+    this.currentSrc = null
+    if (src) {
+      // 停止会触发 onended→finish；保险起见也显式 resolve，绝不让控制器 await 卡死
+      try { src.stop() } catch {}
     }
+    const resolver = this.playResolver
+    this.playResolver = null
+    if (resolver) try { resolver() } catch {}
     try { (window as any).__petLifeEngine?.stopSpeak?.(performance.now()) } catch {}
   }
 
