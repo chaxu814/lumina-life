@@ -149,3 +149,77 @@ describe('zoomCrop / localToGlobal', () => {
     expect(localToGlobal(-50, 200, c)).toEqual({ nx: 37.5, ny: 62.5 })
   })
 })
+
+// ── 高分屏缩放回归（100% / 125% / 150% / 200% / 4K）────────────
+// 核心不变量：坐标映射只认「本次截图真实像素」，归一化坐标在任何 DPI 下
+// 都应落在相同的相对位置；截图尺寸来源（PNG IHDR）与 Electron 兜底
+// (size*scaleFactor) 必须一致。真实 DPI 虚拟化下的点击落点由真机清单核验。
+describe('DPI / 缩放矩阵回归', () => {
+  const SCALES = [
+    { name: 'FHD 100%', logical: { w: 1920, h: 1080 }, scale: 1 },
+    { name: 'FHD 125%', logical: { w: 1920, h: 1080 }, scale: 1.25 },
+    { name: 'FHD 150%', logical: { w: 1920, h: 1080 }, scale: 1.5 },
+    { name: '2K 150%', logical: { w: 2560, h: 1440 }, scale: 1.5 },
+    { name: '4K 200%', logical: { w: 1920, h: 1080 }, scale: 2 },
+    { name: '4K 250%', logical: { w: 1536, h: 864 }, scale: 2.5 },
+  ]
+
+  function makePng(w: number, h: number): Buffer {
+    const buf = Buffer.alloc(32)
+    buf[0] = 0x89; buf[1] = 0x50; buf[2] = 0x4e; buf[3] = 0x47
+    buf[4] = 0x0d; buf[5] = 0x0a; buf[6] = 0x1a; buf[7] = 0x0a
+    buf[12] = 0x49; buf[13] = 0x48; buf[14] = 0x44; buf[15] = 0x52
+    buf.writeUInt32BE(w, 16); buf.writeUInt32BE(h, 20)
+    return buf
+  }
+
+  it.each(SCALES)('$name：PNG IHDR 尺寸 = Electron 兜底 size×scale', ({ logical, scale }) => {
+    const pw = Math.round(logical.w * scale)
+    const ph = Math.round(logical.h * scale)
+    expect(pngDimensions(makePng(pw, ph))).toEqual({ w: pw, h: ph })
+  })
+
+  it.each(SCALES)('$name：归一化坐标按比例映射，中心恒为物理中心', ({ logical, scale }) => {
+    const w = Math.round(logical.w * scale), h = Math.round(logical.h * scale)
+    const center = mapNormPoint(50, 50, w, h)
+    expect(center.x / w).toBeCloseTo(0.5, 3)
+    expect(center.y / h).toBeCloseTo(0.5, 3)
+    // 锚点：左上角 0，右下角不越界（dim-1）
+    expect(mapNormPoint(0, 0, w, h)).toEqual({ x: 0, y: 0 })
+    const br = mapNormPoint(100, 100, w, h)
+    expect(br.x).toBe(w - 1); expect(br.y).toBe(h - 1)
+  })
+
+  it.each(SCALES)('$name：同一归一化点在不同 DPI 下像素比例一致', ({ logical, scale }) => {
+    const w = Math.round(logical.w * scale), h = Math.round(logical.h * scale)
+    const p = mapNormPoint(33, 72, w, h)
+    expect(p.x / w).toBeCloseTo(0.33, 2)
+    expect(p.y / h).toBeCloseTo(0.72, 2)
+  })
+
+  it.each(SCALES)('$name：Set-of-Mark 网格只随宽高比变化，16:9 恒为 10×6', ({ logical, scale }) => {
+    const w = Math.round(logical.w * scale), h = Math.round(logical.h * scale)
+    expect(gridDims(w, h, 10)).toEqual({ cols: 10, rows: 6, count: 60 })
+  })
+
+  it.each(SCALES)('$name：SoM 格中心 → 像素落点恒在该格内', ({ logical, scale }) => {
+    const w = Math.round(logical.w * scale), h = Math.round(logical.h * scale)
+    const { cols, rows } = gridDims(w, h, 10)
+    for (let id = 0; id < cols * rows; id += 7) {
+      const c = cellToNorm(id, cols, rows)!
+      const p = mapNormPoint(c.nx, c.ny, w, h)
+      const r = Math.floor(id / cols), cc = id % cols
+      const cellW = w / cols, cellH = h / rows
+      expect(p.x).toBeGreaterThanOrEqual(Math.floor(cc * cellW))
+      expect(p.x).toBeLessThanOrEqual(Math.ceil((cc + 1) * cellW))
+      expect(p.y).toBeGreaterThanOrEqual(Math.floor(r * cellH))
+      expect(p.y).toBeLessThanOrEqual(Math.ceil((r + 1) * cellH))
+    }
+  })
+
+  it.each(SCALES)('$name：zoom 局部放大后坐标可还原（细定位链路）', () => {
+    const crop = zoomCrop(30, 60, 20)
+    const g = localToGlobal(50, 50, crop)
+    expect(g.nx).toBeCloseTo(30, 6); expect(g.ny).toBeCloseTo(60, 6)
+  })
+})

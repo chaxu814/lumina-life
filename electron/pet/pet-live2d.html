@@ -457,6 +457,7 @@
 <script src="assets/libs/live2d.min.js"></script>
 <script src="assets/libs/index.min.js"></script>
 <script src="assets/pet-life.js"></script>
+<script src="assets/pet-voice.js"></script>
 </head>
 <body>
 <div id="pet-container">
@@ -626,6 +627,59 @@ if (HAS_IPC) {
   });
 }
 
+/* ── 🎙 全双工实时对话（pet-voice.js）────────────────────── */
+let _fdStarted = false, _fdIndicator = null;
+function _fdEnsureIndicator() {
+  if (_fdIndicator) return _fdIndicator;
+  const el = document.createElement('div');
+  el.id = 'fd-indicator';
+  el.style.cssText = 'position:fixed;left:50%;bottom:16%;transform:translateX(-50%);z-index:99999;pointer-events:none;display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;font:600 13px/1.2 system-ui,"Microsoft YaHei",sans-serif;color:#fff;background:rgba(20,28,48,0.72);backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.3);opacity:0;transition:opacity .25s;';
+  el.innerHTML = '<span id="fd-dot" style="width:9px;height:9px;border-radius:50%;background:#4a9eff;box-shadow:0 0 8px #4a9eff;"></span><span id="fd-text">聆听中…</span>';
+  document.body.appendChild(el);
+  _fdIndicator = el;
+  return el;
+}
+function _fdShow(state, text) {
+  const el = _fdEnsureIndicator();
+  const colors = { listening: ['#4a9eff', '聆听中…'], thinking: ['#f5b14c', '思考中…'], speaking: ['#57d98a', '说话中…'], idle: ['#8a9aba', '待机'] };
+  const c = colors[state] || colors.listening;
+  el.style.opacity = state === 'idle' ? '0' : '1';
+  const dot = document.getElementById('fd-dot');
+  if (dot) { dot.style.background = c[0]; dot.style.boxShadow = '0 0 8px ' + c[0]; }
+  const t = document.getElementById('fd-text');
+  if (t) t.textContent = text || c[1];
+}
+function setFullDuplex(on) {
+  on = !!on;
+  // 持久化嵌套 life 开关
+  prefs.life = Object.assign({}, prefs.life, { fullDuplex: on });
+  if (HAS_IPC) ipc.invoke('pet:update-prefs', { life: prefs.life }).catch(() => {});
+  _lastLocalPrefAt = Date.now();
+  if (!window.LuminaVoice) { if (on) say('全双工语音模块没加载到喵…'); return; }
+  const opts = { ttsEngine: prefs.ttsEngine || 'edge-tts', volume: prefs.volume, spatial: prefs.spatial, micDevice: prefs.micDevice, lang: 'zh-CN' };
+  if (on) {
+    if (_fdStarted) { window.LuminaVoice.setOptions(opts); return; }
+    _fdStarted = true;
+    window.LuminaVoice.start(opts, {
+      onState: (s) => _fdShow(s),
+      onPartial: (t) => _fdShow('listening', t ? ('听到：' + (t.length > 16 ? t.slice(-16) : t)) : '聆听中…'),
+      onStatus: (msg) => { console.log('[Voice]', msg); },
+      onError: (msg) => { console.warn('[Voice]', msg); try { say('语音没准备好：' + msg); } catch (e) {} },
+    });
+  } else {
+    if (_fdStarted) { window.LuminaVoice.stop(); _fdStarted = false; }
+    _fdShow('idle');
+  }
+}
+// 启动时若已开启全双工，自动恢复
+if (HAS_IPC) {
+  ipc.invoke('pet:prefs').then(p => {
+    if (p && p.life && p.life.fullDuplex && window.LuminaVoice) {
+      setTimeout(() => setFullDuplex(true), 800);
+    }
+  }).catch(() => {});
+}
+
 /* ── 渲染器 ───────────────────────────────────────────────── */
 const Live2DModel = (window.PIXI && window.PIXI.live2d && window.PIXI.live2d.Live2DModel) || window.Live2DModel;
 let model = null, baseY = 0, bobT = 0;
@@ -697,6 +751,7 @@ function initLifeEngine() {
       lifeEngine = new window.LuminaLife.PetPerformanceEngine();
       lifeEngine.setBlinkEnabled(false); // 眨眼交给模型 idle motion / 现有 doBlink
       if (state && state.mood) lifeEngine.setMood(state.mood, performance.now());
+      window.__petLifeEngine = lifeEngine; // 供全双工语音(pet-voice.js)驱动五元音口型
       console.log('[PetLife] 表演引擎已初始化');
     } else {
       console.warn('[PetLife] pet-life.js 未加载，软组织表演不可用');
@@ -704,6 +759,7 @@ function initLifeEngine() {
   } catch (e) { console.warn('[PetLife] 引擎初始化失败:', e); }
 }
 function lifeFrame(now) {
+  try { window.__petModelX = model ? model.x : 0; } catch (e) {}
   if (!lifeEngine || !model) return;
   try {
     if (_speechAnalyser && _speechBuf) {
@@ -852,27 +908,15 @@ function computeModelAlphaTrim() {
     const step = (bw * bh > 1500000) ? 3 : 2  // 降采样，控制 CPU
     const buf = new Uint8Array(bw * bh * 4)
     gl.readPixels(bx, cv.height - (by + bh), bw, bh, gl.RGBA, gl.UNSIGNED_BYTE, buf)
-    const ALPHA = 28
-    let minX = bw, minY = bh, maxX = -1, maxY = -1
-    for (let sy = 0; sy < bh; sy += step) {
-      const row = bh - 1 - sy // readPixels 原点在左下，翻转为自上而下
-      const rowBase = row * bw * 4
-      for (let sx = 0; sx < bw; sx += step) {
-        if (buf[rowBase + sx * 4 + 3] > ALPHA) {
-          if (sx < minX) minX = sx
-          if (sx > maxX) maxX = sx
-          if (sy < minY) minY = sy
-          if (sy > maxY) maxY = sy
-        }
+    // 纯逻辑收敛到 pet-life.js（单测覆盖，DPI 无关的比例计算）；bundle 未就绪时回退整块
+    let trim = null
+    try {
+      if (window.LuminaLife && window.LuminaLife.scanAlphaBounds) {
+        trim = window.LuminaLife.scanAlphaBounds(buf, bw, bh, { step, alphaThreshold: 28, maxSide: 0.45 })
       }
-    }
-    if (maxX < 0) return __trimCache // 全透明：保留上次
-    const cap = 0.45
-    const l = Math.min(cap, Math.max(0, (minX - step) / bw))
-    const r = Math.min(cap, Math.max(0, (bw - 1 - maxX - step) / bw))
-    const t = Math.min(cap, Math.max(0, (minY - step) / bh))
-    const btm = Math.min(cap, Math.max(0, (bh - 1 - maxY - step) / bh))
-    __trimCache = { l, t, r, b: btm }
+    } catch (e2) { trim = null }
+    if (!trim) return __trimCache // 全透明/失败：保留上次
+    __trimCache = { l: trim.l, t: trim.t, r: trim.r, b: trim.b }
     return __trimCache
   } catch (e) { return __trimCache }
 }
@@ -2222,6 +2266,10 @@ function buildAudioPanel() {
       <div class="nk-label"><span>AI 语音</span><span class="nk-hint">开启后 AI 回复会朗读出来</span></div>
       <label class="nk-switch"><input type="checkbox" ${p.voiceOn ? 'checked' : ''} id="ap-voice"><span class="nk-sl"></span></label>
     </div>
+    <div class="nk-row">
+      <div class="nk-label"><span>🎙 全双工实时对话</span><span class="nk-hint" id="ap-fd-hint">${(p.life && p.life.fullDuplex) ? '聆听中…可随时打断' : '边听边说，像真人对话'}</span></div>
+      <label class="nk-switch"><input type="checkbox" ${(p.life && p.life.fullDuplex) ? 'checked' : ''} id="ap-fullduplex"><span class="nk-sl"></span></label>
+    </div>
     <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">TTS 引擎</span></div>
       <select id="ap-tts-engine" class="nk-select" style="width:100%;">
@@ -2238,6 +2286,11 @@ function bindAudioPanel() {
   $('ap-vr').onchange = e => { livePref({ voiceRecognition: e.target.checked }); $('ap-vr-hint').textContent = e.target.checked ? '当前使用语音识别中…' : '点击开启'; };
   $('ap-spatial').onchange = e => livePref({ spatial: e.target.checked });
   $('ap-voice').onchange = e => livePref({ voiceOn: e.target.checked });
+  const fd = $('ap-fullduplex');
+  if (fd) fd.onchange = e => {
+    setFullDuplex(e.target.checked);
+    const hint = $('ap-fd-hint'); if (hint) hint.textContent = e.target.checked ? '聆听中…可随时打断' : '边听边说，像真人对话';
+  };
   $('ap-tts-engine').onchange = e => livePref({ ttsEngine: e.target.value });
   $('ap-vol').oninput = e => { $('ap-vol-val').textContent = e.target.value + '%'; };
   $('ap-vol').onchange = e => livePref({ volume: Number(e.target.value) });

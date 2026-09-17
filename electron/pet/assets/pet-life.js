@@ -21,7 +21,8 @@ var LuminaLife = (() => {
   // electron/pet/life/runtime.ts
   var runtime_exports = {};
   __export(runtime_exports, {
-    PetPerformanceEngine: () => PetPerformanceEngine
+    PetPerformanceEngine: () => PetPerformanceEngine,
+    scanAlphaBounds: () => scanAlphaBounds
   });
 
   // electron/pet/live2d/parameterProfile.ts
@@ -651,6 +652,34 @@ var LuminaLife = (() => {
   function safePerformance(input) {
     const r = parsePerformance(input);
     return r.ok ? r.command : null;
+  }
+
+  // electron/pet/life/alphaTrim.ts
+  function scanAlphaBounds(rgba, bw, bh, opts = {}) {
+    if (!rgba || bw <= 0 || bh <= 0) return null;
+    const step = Math.max(1, Math.round(opts.step ?? 2));
+    const ALPHA = opts.alphaThreshold ?? 28;
+    const cap = opts.maxSide ?? 0.45;
+    let minX = bw, minY = bh, maxX = -1, maxY = -1;
+    for (let sy = 0; sy < bh; sy += step) {
+      const row = bh - 1 - sy;
+      const rowBase = row * bw * 4;
+      for (let sx = 0; sx < bw; sx += step) {
+        const a = rgba[rowBase + sx * 4 + 3];
+        if (a > ALPHA) {
+          if (sx < minX) minX = sx;
+          if (sx > maxX) maxX = sx;
+          if (sy < minY) minY = sy;
+          if (sy > maxY) maxY = sy;
+        }
+      }
+    }
+    if (maxX < 0) return null;
+    const l = Math.min(cap, Math.max(0, (minX - step) / bw));
+    const r = Math.min(cap, Math.max(0, (bw - 1 - maxX - step) / bw));
+    const t = Math.min(cap, Math.max(0, (minY - step) / bh));
+    const b = Math.min(cap, Math.max(0, (bh - 1 - maxY - step) / bh));
+    return { l, t, r, b };
   }
 
   // electron/pet/life/runtime.ts

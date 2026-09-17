@@ -291,5 +291,31 @@ export function registerLifeServicesIpc(): void {
     return { ok: true, actions, generation: d.currentGeneration, queueSize: d.queueSize }
   })
 
+  // ── 🎙 本地 Whisper 切句兜底（Web Speech 不可用/网络不通时的离线 STT）─
+  // 渲染层把 VAD 切出的一句话编码成 16k 单声道 WAV(base64) 喂进来；
+  // @xenova/transformers 是可选依赖（首次自动下载 whisper-base 多语模型），
+  // 未安装时返回 missingDependency=true，由 UI 给出引导，绝不阻塞主链路。
+  ipcMain.handle('pet:transcribe-utterance', async (_e, params: { audioBase64?: string; model?: string }) => {
+    let wavPath = ''
+    try {
+      const b64 = String(params?.audioBase64 || '').replace(/^data:audio\/[\w+.-]+;base64,/, '')
+      if (!b64) return { ok: false, text: '', error: '空音频' }
+      const { WhisperTranscriber } = await import('../whisper/transcriber')
+      wavPath = path.join(app.getPath('temp'), `lumina-utter-${Date.now()}-${Math.floor(Math.random() * 1e6)}.wav`)
+      await fsp.writeFile(wavPath, Buffer.from(b64, 'base64'))
+      const modelName = params?.model || 'Xenova/whisper-base'
+      const tr = WhisperTranscriber.getInstance()
+      await tr.initialize({ modelName })
+      const res = await tr.transcribe(wavPath, { modelName, language: 'zh' })
+      return { ok: true, text: (res.text || '').trim(), model: modelName }
+    } catch (e: any) {
+      const msg = String(e?.message || e)
+      const missingDependency = /cannot find package|@xenova|transformers|fetch failed|enotfound|network|下载|model/i.test(msg)
+      return { ok: false, text: '', error: msg, missingDependency }
+    } finally {
+      if (wavPath) fsp.unlink(wavPath).catch(() => {})
+    }
+  })
+
   console.log('[LifeServices] 🫀 v0.2 生命感服务 IPC 已注册（模型库/屏幕节流/在场/唤醒/全双工）')
 }

@@ -210,3 +210,6 @@ function gazeTargetY(t?: string): number {
   if (t === 'down') return 0.6
   return 0
 }
+
+// alpha-trim 纯逻辑（随 pet-life.js 一起暴露到 window.LuminaLife，供渲染页贴身裁剪用）
+export { scanAlphaBounds, type TrimRatios, type ScanAlphaOptions } from './alphaTrim'

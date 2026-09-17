@@ -340,6 +340,58 @@ export async function petChat(userText: string): Promise<PetChatResult> {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// 🎙 全双工实时语音对话（自然口语，不输出 JSON、不触发动作/气泡，避免重复 TTS）
+// 由渲染层 FullDuplexController 经 pet:voice-chat 调用，回复直接交给 TTS 逐句播放。
+// ═══════════════════════════════════════════════════════════
+
+const VOICE_SYSTEM_PROMPT = `你是 Lumina，住在用户电脑桌面上的可爱猫娘，正在和用户进行【实时语音对话】（像 N.E.K.O 那样的全双工陪聊）。
+硬性要求：
+- 只说口语，像真人聊天，简短自然（通常一到三句、每句不超过 20 字），适合语音朗读。
+- 绝不输出 JSON、动作标签、markdown、列表符号或（动作）这类舞台提示，不要解释你在做什么。
+- 有温度、会接话、会主动关心用户，回答要顺着用户的话走，不要自说自话。
+- 带一点猫娘口癖即可，不要每句话都"喵"。
+- 用户没说清楚时可以自然反问，不要编造用户没提供的信息。`
+
+export interface PetVoiceResult {
+  ok: boolean
+  text: string
+  source: 'llm' | 'fallback'
+  error?: string
+}
+
+export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
+  const text = (userText || '').trim()
+  advanceDrives('chat')
+  if (!text) return { ok: false, text: '', source: 'fallback', error: '空输入' }
+  try {
+    const cfg = resolvePetBrainConfig()
+    if (!cfg) {
+      return { ok: false, text: '', source: 'fallback', error: 'Lumina 未配置 LLM（设置→LLM模型）' }
+    }
+    const provider = createPetLLM(cfg)
+    const ctx: string[] = []
+    const mem = petMemorySnippet()
+    if (mem) ctx.push(mem)
+    ctx.push(`你此刻的情绪是「${currentMoodLabel()}」，保持情绪连贯，不要无理由突变。`)
+    const tone = PERSONA_TONES[getPetPrefs().persona || ''] || ''
+    const sys = VOICE_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + '\n' + ctx.join('\n')
+    const res = await provider.call({
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: text },
+      ],
+      temperature: 0.95,
+      maxTokens: 220,
+    } as any)
+    const reply = (res?.text || '').trim()
+    if (!reply) return { ok: false, text: '', source: 'fallback', error: 'LLM 空回复' }
+    return { ok: true, text: reply, source: 'llm' }
+  } catch (e: any) {
+    return { ok: false, text: '', source: 'fallback', error: e?.message || String(e) }
+  }
+}
+
 // 🫀 LLM 自主思考心跳（借鉴 N.E.K.O 主动陪伴 / AIRI 自主循环）
 // 渲染页按自主级别定时调用：LLM 结合 时间 + 屏幕 + 互动历史
 // 自主决定下一个行为，而不是随机抽签。
@@ -441,6 +493,15 @@ export function registerPetIntentIpc(): void {
       return await petChat(params?.text || '')
     } catch (e: any) {
       return { ok: false, intent: null, source: 'fallback', error: e?.message }
+    }
+  })
+
+  // 🎙 全双工实时语音：自然口语回复（纯文本，不 dispatchIntent，避免重复 TTS）
+  ipcMain.handle('pet:voice-chat', async (_e, params: { text: string }) => {
+    try {
+      return await petVoiceChat(params?.text || '')
+    } catch (e: any) {
+      return { ok: false, text: '', source: 'fallback', error: e?.message }
     }
   })
 

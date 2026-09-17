@@ -882,6 +882,27 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   // 调试用：自动打开开发者工具（正式发布前注释掉）
   // petWindow.webContents.openDevTools({ mode: 'detach' })
 
+  // 🎙 全双工语音需要麦克风权限：桌宠页是本地可信内容，自动授予媒体采集。
+  try {
+    const petSession = petWindow.webContents.session
+    petSession.setPermissionRequestHandler((wc, permission, callback) => {
+      if (permission === 'media') {
+        let url = ''
+        try { url = wc?.getURL() || '' } catch { /* noop */ }
+        return callback(url.includes('pet') || url.startsWith('file://'))
+      }
+      return callback(true)
+    })
+    petSession.setPermissionCheckHandler((wc, permission) => {
+      if (permission === 'media') {
+        let url = ''
+        try { url = wc?.getURL() || '' } catch { /* noop */ }
+        return url.includes('pet') || url.startsWith('file://')
+      }
+      return true
+    })
+  } catch (e) { console.warn('[PetWindow] 媒体权限处理器设置失败:', e) }
+
   // 加载生成的 HTML（页面就绪后再应用穿透模式，确保渲染页收到状态同步）
   petWindow.loadFile(getPetHtmlPath()).then(() => {
     setWindowClickThrough(config.clickThrough)
