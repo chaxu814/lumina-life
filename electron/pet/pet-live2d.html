@@ -646,6 +646,8 @@ function initPixi() {
       transparent: true, backgroundAlpha: 0,
       resolution: prefs.quality === 'low' ? 1 : (window.devicePixelRatio || 1),
       autoDensity: true,
+      // v6.3 alpha-trim：允许在帧呈现之后仍可 readPixels 读取模型像素（窗口物理裁剪贴身用）
+      preserveDrawingBuffer: true,
     });
     applyPrefs();
     window.__petApp = app;
@@ -822,6 +824,59 @@ function clampPosition() {
    上报物理像素矩形给主进程 SetWindowRgn；区域外不渲染/不合成/不接收鼠标。
    任何大面板/菜单/聊天/主动卡片打开，或模型未就绪时回退整窗，绝不裁空。 ── */
 let __shapeLastKey = "", __shapeLastT = 0
+
+/* ── v6.3 alpha-trim：实测模型当前帧“不透明像素”相对整块 getBounds 的内缩比例，
+   让 setShape 区域比 Live2D 画布包围盒更贴身，进一步减少透明区对后方视频/图片合成的占用。
+   只在 getBounds 矩形内 readPixels 读 alpha（需 preserveDrawingBuffer），节流约 8fps；
+   返回 {l,t,r,b} 四边内缩比例，位置仍由每帧实时 getBounds 决定（走路不滞后），
+   单边最多内缩 45% 防误裁；任何失败/全透明返回上一次结果，首次为 null（回退整块）。 ── */
+let __trimCache = null, __trimT = 0
+function computeModelAlphaTrim() {
+  try {
+    const now = performance.now()
+    if (now - __trimT < 120) return __trimCache
+    __trimT = now
+    if (!app || !model) return __trimCache
+    const gb = model.getBounds()
+    if (!gb || !(gb.width > 0) || !(gb.height > 0)) return __trimCache
+    const cv = app.view
+    const gl = cv.getContext('webgl2') || cv.getContext('webgl')
+    if (!gl) return __trimCache
+    const dpr = window.devicePixelRatio || 1
+    const bx = Math.max(0, Math.round(gb.x * dpr))
+    const by = Math.max(0, Math.round(gb.y * dpr))
+    const bw = Math.min(cv.width - bx, Math.round(gb.width * dpr))
+    const bh = Math.min(cv.height - by, Math.round(gb.height * dpr))
+    if (bw <= 4 || bh <= 4) return __trimCache
+    if (bw * bh > 6000000) return __trimCache // 面积护栏，异常大时不 trim
+    const step = (bw * bh > 1500000) ? 3 : 2  // 降采样，控制 CPU
+    const buf = new Uint8Array(bw * bh * 4)
+    gl.readPixels(bx, cv.height - (by + bh), bw, bh, gl.RGBA, gl.UNSIGNED_BYTE, buf)
+    const ALPHA = 28
+    let minX = bw, minY = bh, maxX = -1, maxY = -1
+    for (let sy = 0; sy < bh; sy += step) {
+      const row = bh - 1 - sy // readPixels 原点在左下，翻转为自上而下
+      const rowBase = row * bw * 4
+      for (let sx = 0; sx < bw; sx += step) {
+        if (buf[rowBase + sx * 4 + 3] > ALPHA) {
+          if (sx < minX) minX = sx
+          if (sx > maxX) maxX = sx
+          if (sy < minY) minY = sy
+          if (sy > maxY) maxY = sy
+        }
+      }
+    }
+    if (maxX < 0) return __trimCache // 全透明：保留上次
+    const cap = 0.45
+    const l = Math.min(cap, Math.max(0, (minX - step) / bw))
+    const r = Math.min(cap, Math.max(0, (bw - 1 - maxX - step) / bw))
+    const t = Math.min(cap, Math.max(0, (minY - step) / bh))
+    const btm = Math.min(cap, Math.max(0, (bh - 1 - maxY - step) / bh))
+    __trimCache = { l, t, r, b: btm }
+    return __trimCache
+  } catch (e) { return __trimCache }
+}
+
 function reportPetShape() {
   try {
     if (typeof ipcRenderer === "undefined") return
@@ -835,9 +890,19 @@ function reportPetShape() {
       menuOpen === true ||
       (!!pc && pc.classList.contains("show"))
     if (uiOpen || !model) { sendPetShape(fullRects(), "full"); return }
-    let b = null
-    try { b = model.getBounds() } catch (e) { b = null }
-    if (!b || !(b.width > 0) || !(b.height > 0)) { sendPetShape(fullRects(), "full"); return }
+    let gb = null
+    try { gb = model.getBounds() } catch (e) { gb = null }
+    if (!gb || !(gb.width > 0) || !(gb.height > 0)) { sendPetShape(fullRects(), "full"); return }
+    // 默认整块包围盒；若已测得当前帧不透明像素的内缩比例，则贴身收紧（位置仍跟实时 getBounds，走路不滞后）
+    let b = gb
+    const trim = computeModelAlphaTrim()
+    if (trim) {
+      const tw = gb.width * (1 - trim.l - trim.r)
+      const th = gb.height * (1 - trim.t - trim.b)
+      if (tw > 8 && th > 8) {
+        b = { x: gb.x + gb.width * trim.l, y: gb.y + gb.height * trim.t, width: tw, height: th }
+      }
+    }
     // 模型包围盒(基础安全边距：上留余量、两侧与下方留粒子/影子/特效)
     let x0 = b.x - 110, y0 = b.y - 70, x1 = b.x + b.width + 110, y1 = b.y + b.height + 120
     // 并上当前可见的气泡 / 工具栏 / 折叠球，避免被裁；display:none 时包围盒为 0 自动跳过
