@@ -1,5 +1,8 @@
 // ============================================================
-// providerAdapter.ts — 多 Provider 差异化适配层 (v1.0)
+// ⚠️ @deprecated（2026-09）未接入主链路，Anthropic 适配不完整（缺工具回合/多模态/流式/响应解析）。
+//    原生协议（Claude/Gemini/Azure）已由 core/nativeBridge.ts 统一实现并在 llmProvider 接线。
+//    本文件仅留作参考与旧测试，新代码勿引用；可连同 tests/providerAdapter.test.ts 一并删除。
+// providerAdapter.ts — 多 Provider 差异化适配层 (v1.0) 【已弃用，见上方说明】
 //
 // 目标：让 Lumina 像 QwenPaw 一样，每个 Provider 有独立的行为适配，
 // 而不是所有 Provider 共用一套 OpenAI 兼容 API 调用。

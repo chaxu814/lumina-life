@@ -14,6 +14,14 @@ import {
   clampOutputTokens,
   isLocalEndpoint,
 } from './modelCompat'
+import {
+  resolveNativeKind,
+  buildTransportPlan,
+  parseNativeCompletion,
+  createNativeStreamParser,
+  extractNativeErrorText,
+  type NativeKind,
+} from './nativeBridge'
 import { getModelCapabilityCache } from '../modelCapabilityCache'
 
 // ═══════════════════════════════════════════════════════════
@@ -27,6 +35,8 @@ export interface LLMProviderConfig {
   maxContextTokens: number
   socialMode?: boolean
   personaId?: string
+  /** 显式指定原生协议（openai|anthropic|gemini|azure）；缺省按 baseUrl 自动识别 */
+  protocol?: string
 }
 
 export interface LLMResponse {
@@ -73,13 +83,18 @@ export class LLMProvider {
   private reasoningStarted = false
   private reasoningAccum = ''
 
+  /** 该端点对应的原生协议（openai / anthropic / gemini / azure） */
+  private kind: NativeKind
+
   constructor(config: LLMProviderConfig) {
     this.config = config
+    this.kind = resolveNativeKind(config.baseUrl, config.protocol)
   }
 
   /** 更新配置（例如运行时切换模型） */
   updateConfig(partial: Partial<LLMProviderConfig>): void {
     Object.assign(this.config, partial)
+    this.kind = resolveNativeKind(this.config.baseUrl, this.config.protocol)
   }
 
   /** 重置健康检查标记（如切换对话后） */
@@ -176,7 +191,18 @@ export class LLMProvider {
     )
 
     // ── 执行请求 ──
-    const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`
+    // 原生协议桥接：主链路只讲 OpenAI，由 nativeBridge 翻译成 anthropic/gemini/azure
+    const plan = buildTransportPlan(
+      this.kind,
+      this.config.baseUrl,
+      this.config.apiKey || '',
+      this.config.model,
+      requestBody as any,
+    )
+    const url = plan.url
+    if (this.kind !== 'openai') {
+      console.log(`[LLMProvider] 🌉 原生协议 ${this.kind} → ${url.split('?')[0]}`)
+    }
     const effectiveTimeout = httpTimeoutSeconds > 0 ? httpTimeoutSeconds * 1000 : 1_800_000 // 默认 30min
 
     const controller = new AbortController()
@@ -210,32 +236,32 @@ export class LLMProvider {
 
     try {
       const isLocalishEndpoint = /(localhost|127\.|0\.0\.0\.0|192\.168\.|^https?:\/\/10\.)/i.test(this.config.baseUrl || '')
-      const buildReqHeaders = (withAuth: boolean): Record<string, string> => {
-        const h: Record<string, string> = { 'Content-Type': 'application/json' }
-        // 本地推理服务（LM Studio/Ollama 等）通常免密；没 key 时不发空头，误填 key 401 时还会自动去鉴权重试
-        if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
-        return h
-      }
+      const planHeaders: Record<string, string> = { ...plan.headers }
+      const noAuthHeaders: Record<string, string> = { ...plan.headers }
+      delete noAuthHeaders.Authorization
+      const bodyStr = JSON.stringify(plan.body)
       let response = await fetch(url, {
         method: 'POST',
-        headers: buildReqHeaders(true),
-        body: JSON.stringify(requestBody),
+        headers: planHeaders,
+        body: bodyStr,
         signal: masterSignal,
       })
-      // 本地端点误填 API Key（如 LM Studio 报 Invalid token 401）→ 去掉 Authorization 自动重试一次
-      if (response.status === 401 && isLocalishEndpoint && this.config.apiKey) {
+      // 本地 OpenAI 兼容端点误填 API Key（如 LM Studio 报 Invalid token 401）→ 去掉 Authorization 自动重试一次
+      //   原生协议（anthropic/gemini/azure）的鉴权头各不相同，不做此重试。
+      if (response.status === 401 && isLocalishEndpoint && this.kind === 'openai' && this.config.apiKey) {
         console.warn('[LLMProvider] 本地端点返回 401（疑似误填 API Key），去掉鉴权头重试一次')
         try { await response.body?.cancel() } catch { /* ignore */ }
         response = await fetch(url, {
           method: 'POST',
-          headers: buildReqHeaders(false),
-          body: JSON.stringify(requestBody),
+          headers: noAuthHeaders,
+          body: bodyStr,
           signal: masterSignal,
         })
       }
 
       if (!response.ok) {
-        const errText = await response.text().catch(() => '')
+        const rawErr = await response.text().catch(() => '')
+        const errText = extractNativeErrorText(this.kind, rawErr)
         const kind = classifyModelError(response.status, errText)
         // 能力不匹配（tools / vision / stream_options / max_tokens）→ 去字段降级，非流式重试一次
         if (kind !== 'unknown' && kind !== 'context' && kind !== 'auth') {
@@ -258,6 +284,63 @@ export class LLMProvider {
       }
 
       // ── 流式读取 ──
+      // openai/azure 响应本身就是 OpenAI chunk；anthropic/gemini 经原生 parser 归一成 OpenAI chunk
+      const nativeParser = (this.kind === 'openai' || this.kind === 'azure')
+        ? null
+        : createNativeStreamParser(this.kind)
+      let sseEvent = ''
+
+      // 单个 OpenAI 风格 chunk 的处理（流式文本 / 推理 / 工具调用累加 / usage）
+      const processChunk = (chunk: any) => {
+        // 推理 token
+        if (opts.trackReasoning && chunk.choices?.[0]?.delta?.reasoning_content) {
+          const reasoningText = chunk.choices[0].delta.reasoning_content
+          if (reasoningText) {
+            if (!this.reasoningStarted) {
+              this.reasoningStarted = true
+              this.reasoningAccum = ''
+              emit?.onThinkingStream?.('', true, false)
+              if (!firstTokenReceived) firstTokenReceived = true
+            }
+            this.reasoningAccum += reasoningText
+            // 推理内容只通过 onThinkingStream 发思考面板，不混入最终回复文本
+            emit?.onThinkingStream?.(reasoningText, false, false)
+            return
+          }
+        }
+
+        const delta = chunk.choices?.[0]?.delta
+        if (delta?.content) {
+          if (!firstTokenReceived) {
+            firstTokenReceived = true
+          }
+          streamText += delta.content
+        } else if (delta?.reasoning_content && opts.trackReasoning !== false) {
+          // 推理模型将回复放在 reasoning_content，content 为空
+          if (!firstTokenReceived) {
+            firstTokenReceived = true
+          }
+          streamText += delta.reasoning_content
+        }
+
+        // 工具调用
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0
+            if (!toolCallAccum.has(idx)) toolCallAccum.set(idx, { id: '', name: '', args: '' })
+            const acc = toolCallAccum.get(idx)!
+            if (tc.id) acc.id = tc.id
+            if (tc.function?.name) acc.name = tc.function.name
+            if (tc.function?.arguments) acc.args += tc.function.arguments
+          }
+        }
+
+        if (chunk.usage) {
+          // 原生流末 chunk 的 usage 可能只给 completion_tokens，做一次合并而非覆盖
+          streamUsage = { ...(streamUsage as any), ...chunk.usage } as any
+        }
+      }
+
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -274,61 +357,29 @@ export class LLMProvider {
 
         for (const line of lines) {
           const trimmed = line.trim()
-          if (!trimmed || trimmed === 'data: [DONE]') continue
+          if (!trimmed) continue
 
-          if (trimmed.startsWith('data: ')) {
-            resetWatchdog()
-
-            try {
-              const chunk = JSON.parse(trimmed.slice(6))
-
-              // 推理 token
-              if (opts.trackReasoning && chunk.choices?.[0]?.delta?.reasoning_content) {
-                const reasoningText = chunk.choices[0].delta.reasoning_content
-                if (reasoningText) {
-                  if (!this.reasoningStarted) {
-                    this.reasoningStarted = true
-                    this.reasoningAccum = ''
-                    emit?.onThinkingStream?.('', true, false)
-                    if (!firstTokenReceived) firstTokenReceived = true
-                  }
-                  this.reasoningAccum += reasoningText
-                  // ❌ 已删除: streamText += reasoningText — 推理内容只通过 onThinkingStream 发思考面板，不混入最终回复文本
-                  emit?.onThinkingStream?.(reasoningText, false, false)
-                  continue
-                }
-              }
-
-              const delta = chunk.choices?.[0]?.delta
-              if (delta?.content) {
-                if (!firstTokenReceived) {
-                  firstTokenReceived = true
-                }
-                streamText += delta.content
-              } else if (delta?.reasoning_content && opts.trackReasoning !== false) {
-                // 🆕 fix: 推理模型将回复放在 reasoning_content，content 为空
-                // trackReasoning=false 时不追加，避免推理泄露到消息气泡
-                if (!firstTokenReceived) {
-                  firstTokenReceived = true
-                }
-                streamText += delta.reasoning_content
-              }
-
-              // 工具调用
-              if (delta?.tool_calls) {
-                for (const tc of delta.tool_calls) {
-                  const idx = tc.index ?? 0
-                  if (!toolCallAccum.has(idx)) toolCallAccum.set(idx, { id: '', name: '', args: '' })
-                  const acc = toolCallAccum.get(idx)!
-                  if (tc.id) acc.id = tc.id
-                  if (tc.function?.name) acc.name = tc.function.name
-                  if (tc.function?.arguments) acc.args += tc.function.arguments
-                }
-              }
-
-              if (chunk.usage) streamUsage = chunk.usage
-            } catch { /* skip malformed chunk */ }
+          // Anthropic SSE：每个 data 前有一行 `event: xxx`，记录下来供 parser 使用
+          if (trimmed.startsWith('event:')) {
+            sseEvent = trimmed.slice(6).trim()
+            continue
           }
+
+          const dm = /^data:\s?(.*)$/.exec(trimmed)
+          if (!dm) continue
+          const dataStr = dm[1].trim()
+          if (!dataStr || dataStr === '[DONE]') continue
+
+          resetWatchdog()
+
+          try {
+            if (nativeParser) {
+              const chunks = nativeParser.feed(sseEvent, dataStr)
+              for (const ck of chunks) processChunk(ck)
+            } else {
+              processChunk(JSON.parse(dataStr))
+            }
+          } catch { /* skip malformed chunk */ }
         }
       }
 
@@ -421,13 +472,21 @@ export class LLMProvider {
     emit?: LLMEmitCallbacks,
     bodyOverride?: Record<string, any>,
   ): Promise<LLMResponse> {
-    const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`
     const timeout = 600_000
 
-    // bodyOverride 来自流式 400 降级（已移除问题字段）；否则按标准 OpenAI 形态构造
+    // 图片转 image_url（与流式路径保持一致）
+    const messages = (opts.messages || []).map((m) => {
+      if (!m.images || !m.images.length) return m
+      const content: any[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : [...(m.content || [])]
+      for (const img of m.images) content.push({ type: 'image_url', image_url: { url: img } })
+      const { images, ...rest } = m
+      return { ...rest, content }
+    })
+
+    // bodyOverride 来自流式 400 降级（已移除问题字段，OpenAI 形态）；否则按标准 OpenAI 形态构造
     const requestBody: Record<string, any> = bodyOverride ? { ...bodyOverride, stream: false } : {
       model: this.config.model,
-      messages: opts.messages,
+      messages,
       max_tokens: clampOutputTokens(opts.maxTokens),
       temperature: opts.temperature ?? 0.7,
       stream: false,
@@ -438,22 +497,30 @@ export class LLMProvider {
       requestBody.tool_choice = 'auto'
     }
 
+    // 原生协议桥接
+    const plan = buildTransportPlan(
+      this.kind, this.config.baseUrl, this.config.apiKey || '', this.config.model, requestBody as any,
+    )
+    const url = plan.url
+    const bodyStr = JSON.stringify(plan.body)
+
     try {
       const isLocal = isLocalEndpoint(this.config.baseUrl)
       const reqHeaders = (withAuth: boolean): Record<string, string> => {
-        const h: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+        const h: Record<string, string> = { ...plan.headers }
+        if (!withAuth) delete h.Authorization
         return h
       }
-      let res = await fetch(url, { method: 'POST', headers: reqHeaders(true), body: JSON.stringify(requestBody), signal: AbortSignal.timeout(timeout) })
-      if (res.status === 401 && isLocal && this.config.apiKey) {
+      let res = await fetch(url, { method: 'POST', headers: reqHeaders(true), body: bodyStr, signal: AbortSignal.timeout(timeout) })
+      if (res.status === 401 && isLocal && this.kind === 'openai' && this.config.apiKey) {
         console.warn('[LLMProvider] 非流式：本地端点 401，去鉴权重试一次')
         try { await res.body?.cancel() } catch {}
-        res = await fetch(url, { method: 'POST', headers: reqHeaders(false), body: JSON.stringify(requestBody), signal: AbortSignal.timeout(timeout) })
+        res = await fetch(url, { method: 'POST', headers: reqHeaders(false), body: bodyStr, signal: AbortSignal.timeout(timeout) })
       }
 
       if (!res.ok) {
-        const errText = await res.text().catch(() => '')
+        const rawErr = await res.text().catch(() => '')
+        const errText = extractNativeErrorText(this.kind, rawErr)
         // 尚未降级过时，按错误类别自动降级一次（去 tools / stream_options / 图片 / 降 max_tokens）
         if (!bodyOverride) {
           const kind = classifyModelError(res.status, errText)
@@ -470,7 +537,9 @@ export class LLMProvider {
         return { error: `非流式 LLM 返回 ${res.status}: ${errText.slice(0, 300)}` }
       }
 
-      const json = await res.json()
+      const rawJson = await res.json()
+      // 原生协议（anthropic/gemini）响应归一为 OpenAI completion；azure/openai 原样
+      const json = parseNativeCompletion(this.kind, rawJson)
       const choice = json.choices?.[0]
       if (!choice) return { error: '非流式响应无 choices' }
 

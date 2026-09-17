@@ -1,5 +1,9 @@
 // ============================================================
-// core/unifiedChat.ts — 🔀 统一模型调用层 (v0.1)
+// ⚠️ @deprecated（2026-09）未接入主链路，仅支持非流式纯文本，无工具调用 / 流式 / 视觉。
+//    主链路的统一出站/入站协议翻译已由 core/nativeBridge.ts + llmProvider.ts 承担（支持
+//    流式、工具回合、多模态，覆盖 Claude/Gemini/Azure/OpenAI）。本文件仅留作参考与旧测试，
+//    新代码勿引用；可连同 tests/unifiedChat.test.ts 一并删除。
+// core/unifiedChat.ts — 🔀 统一模型调用层 (v0.1) 【已弃用，见上方说明】
 //
 // providerAdapter.ts 已负责「请求体 / 鉴权头 / 端点」的供应商归一；
 // 本层在其上补齐真正发请求时缺的那一圈：

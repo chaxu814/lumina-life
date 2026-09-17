@@ -14,6 +14,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
 import { getAgentConfig } from '../agentConfig'
+import { resolveNativeKind, buildTransportPlan } from './nativeBridge'
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
@@ -32,6 +33,8 @@ export interface ProviderDefinition {
   defaultModel: string
   /** 是否需要 API Key */
   requiresApiKey: boolean
+  /** 原生协议：openai(默认，OpenAI 兼容) / anthropic / gemini / azure */
+  protocol?: 'openai' | 'anthropic' | 'gemini' | 'azure'
 }
 
 export interface ProviderConfig {
@@ -76,6 +79,9 @@ const BUILT_IN_PROVIDERS: ProviderDefinition[] = [
   { id: 'deepseek',    name: 'DeepSeek',         isLocal: false, defaultBaseUrl: 'https://api.deepseek.com/v1',  defaultModel: 'deepseek-chat',  requiresApiKey: true },
   { id: 'qwen',        name: '通义千问',         isLocal: false, defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus', requiresApiKey: true },
   { id: 'openai',      name: 'OpenAI',           isLocal: false, defaultBaseUrl: 'https://api.openai.com/v1',    defaultModel: 'gpt-4o',        requiresApiKey: true },
+  { id: 'claude',      name: 'Anthropic Claude', isLocal: false, defaultBaseUrl: 'https://api.anthropic.com',    defaultModel: 'claude-sonnet-4-5-20250929', requiresApiKey: true, protocol: 'anthropic' },
+  { id: 'gemini',      name: 'Google Gemini',    isLocal: false, defaultBaseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.5-flash', requiresApiKey: true, protocol: 'gemini' },
+  { id: 'azure',       name: 'Azure OpenAI',     isLocal: false, defaultBaseUrl: 'https://YOUR_RESOURCE.openai.azure.com', defaultModel: 'gpt-4o', requiresApiKey: true, protocol: 'azure' },
   { id: 'zhipu',       name: '智谱 GLM',         isLocal: false, defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-plus', requiresApiKey: true },
   { id: 'siliconflow', name: '硅基流动',         isLocal: false, defaultBaseUrl: 'https://api.siliconflow.cn/v1', defaultModel: 'Qwen/Qwen3-235B-A22B', requiresApiKey: true },
   // ── 🔧 自定义 ──
@@ -409,8 +415,13 @@ export class ProviderManager {
           return await this._fetchLMStudioModels(baseUrl, apiKey)
         case 'ollama':
           return await this._fetchOllamaModels(baseUrl)
-        default:
+        default: {
+          const kind = resolveNativeKind(baseUrl, this.getDefinition(id)?.protocol)
+          if (kind === 'anthropic') return await this._fetchAnthropicModels(baseUrl, apiKey)
+          if (kind === 'gemini') return await this._fetchGeminiModels(baseUrl, apiKey)
+          if (kind === 'azure') return this._fetchAzureModels()
           return await this._fetchOpenAIModels(baseUrl, apiKey)
+        }
       }
     } catch (err: any) {
       return { models: [], error: err.message }
@@ -446,7 +457,30 @@ export class ProviderManager {
         // 回退到 chat completion 测试
       }
 
-      // 标准 POST 测试
+      // 原生协议（anthropic / gemini / azure）：经 nativeBridge 出正确的端点、头与 body
+      const kind = resolveNativeKind(config.baseUrl, this.getDefinition(id)?.protocol)
+      if (kind !== 'openai') {
+        const plan = buildTransportPlan(
+          kind, config.baseUrl, config.apiKey || '', config.model || 'test',
+          {
+            model: config.model || 'test',
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 5,
+            stream: false,
+          },
+        )
+        const nativeResp = await fetch(plan.url, {
+          method: 'POST',
+          headers: plan.headers,
+          body: JSON.stringify(plan.body),
+          signal: AbortSignal.timeout(15000),
+        })
+        if (nativeResp.ok) return { success: true, latency: Date.now() - startTime }
+        const nativeErr = await nativeResp.text().catch(() => '')
+        return { success: false, error: `HTTP ${nativeResp.status}: ${nativeErr.slice(0, 200)}` }
+      }
+
+      // 标准 POST 测试（OpenAI 兼容）
       const resp = await fetch(config.baseUrl + '/chat/completions', {
         method: 'POST',
         headers: {
@@ -644,6 +678,65 @@ export class ProviderManager {
       return { models: [], error: `HTTP ${resp.status}` }
     } catch (err: any) {
       return { models: [], error: err.message }
+    }
+  }
+
+  // ── Anthropic Claude：GET /v1/models（x-api-key） ─────────────
+  private async _fetchAnthropicModels(baseUrl: string, apiKey: string): Promise<{ models: ModelInfo[]; error?: string }> {
+    const base = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+    try {
+      const resp = await fetch(base + '/v1/models', {
+        headers: { 'x-api-key': apiKey || '', 'anthropic-version': '2023-06-01' },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const raw = data.data || data
+        if (Array.isArray(raw)) {
+          const models = raw
+            .map((m: any) => ({ id: m.id || '', multimodal: true, vision: true }))
+            .filter((m: ModelInfo) => m.id)
+          return { models }
+        }
+      }
+      return { models: [], error: `HTTP ${resp.status}` }
+    } catch (err: any) {
+      return { models: [], error: err.message }
+    }
+  }
+
+  // ── Google Gemini：GET /v1beta/models（x-goog-api-key） ────────
+  private async _fetchGeminiModels(baseUrl: string, apiKey: string): Promise<{ models: ModelInfo[]; error?: string }> {
+    const base = baseUrl.replace(/\/+$/, '').replace(/\/v1beta$/, '')
+    try {
+      const resp = await fetch(base + '/v1beta/models', {
+        headers: { 'x-goog-api-key': apiKey || '' },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const raw = Array.isArray(data.models) ? data.models : []
+        const models = raw
+          .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map((m: any) => {
+            const id = (m.name || '').replace(/^models\//, '')
+            return { id, multimodal: true, vision: true }
+          })
+          .filter((m: ModelInfo) => m.id)
+        return { models }
+      }
+      return { models: [], error: `HTTP ${resp.status}` }
+    } catch (err: any) {
+      return { models: [], error: err.message }
+    }
+  }
+
+  // ── Azure OpenAI：部署名由用户自定义，无法用 key 枚举；给常用占位 ──
+  private _fetchAzureModels(): { models: ModelInfo[]; error?: string } {
+    return {
+      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-35-turbo', 'o3-mini']
+        .map((id) => ({ id, multimodal: true, vision: id.startsWith('gpt-4o') })),
+      error: 'Azure 请填写你在门户创建的「部署名(Deployment name)」，上方为常用占位',
     }
   }
 }
