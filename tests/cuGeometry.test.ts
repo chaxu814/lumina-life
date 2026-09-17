@@ -3,7 +3,10 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest'
-import { clamp, normToPx, mapNormPoint, pngDimensions } from '../electron/tools/impl/cuGeometry'
+import {
+  clamp, normToPx, mapNormPoint, pngDimensions,
+  gridDims, cellToNorm, zoomCrop, localToGlobal,
+} from '../electron/tools/impl/cuGeometry'
 
 describe('clamp', () => {
   it('keeps in-range values', () => {
@@ -86,5 +89,63 @@ describe('pngDimensions', () => {
 
   it('rejects absurd dimensions', () => {
     expect(pngDimensions(makePng(999999, 999999))).toBeNull()
+  })
+})
+
+// ── Set-of-Mark 网格 ─────────────────────────────────────
+describe('gridDims / cellToNorm', () => {
+  it('16:9 → 10 cols × 6 rows = 60 cells', () => {
+    expect(gridDims(1920, 1080, 10)).toEqual({ cols: 10, rows: 6, count: 60 })
+  })
+  it('defaults to 10 cols', () => {
+    expect(gridDims(1920, 1080).cols).toBe(10)
+  })
+  it('cell 0 → top-left cell center', () => {
+    expect(cellToNorm(0, 10, 6)).toEqual({ nx: 5, ny: 100 / 12 })
+  })
+  it('last cell → bottom-right center', () => {
+    expect(cellToNorm(59, 10, 6)).toEqual({ nx: 95, ny: (5.5 * 100) / 6 })
+  })
+  it('row-major: cell 10 starts second row first col', () => {
+    expect(cellToNorm(10, 10, 6)).toEqual({ nx: 5, ny: (1.5 * 100) / 6 })
+  })
+  it('out-of-range / invalid → null', () => {
+    expect(cellToNorm(60, 10, 6)).toBeNull()
+    expect(cellToNorm(-1, 10, 6)).toBeNull()
+    expect(cellToNorm(NaN, 10, 6)).toBeNull()
+  })
+})
+
+// ── zoom 裁剪与坐标变换 ──────────────────────────────────
+describe('zoomCrop / localToGlobal', () => {
+  it('centered crop keeps the requested span', () => {
+    expect(zoomCrop(50, 50, 25)).toEqual({ nx0: 37.5, ny0: 37.5, nx1: 62.5, ny1: 62.5 })
+  })
+  it('near top-left corner shifts crop to stay on screen', () => {
+    const c = zoomCrop(5, 5, 25)
+    expect(c.nx0).toBe(0); expect(c.ny0).toBe(0)
+    expect(c.nx1).toBe(25); expect(c.ny1).toBe(25)
+  })
+  it('near bottom-right corner shifts back', () => {
+    const c = zoomCrop(100, 100, 20)
+    expect(c.nx1).toBe(100); expect(c.ny1).toBe(100)
+    expect(c.nx0).toBe(80); expect(c.ny0).toBe(80)
+  })
+  it('span is clamped to 4–100', () => {
+    expect(zoomCrop(50, 50, 500)).toEqual({ nx0: 0, ny0: 0, nx1: 100, ny1: 100 })
+    const t = zoomCrop(50, 50, 1)
+    expect(t.nx1 - t.nx0).toBe(4)
+  })
+  it('local center maps back to global center', () => {
+    expect(localToGlobal(50, 50, zoomCrop(50, 50, 25))).toEqual({ nx: 50, ny: 50 })
+  })
+  it('local corners map to crop corners', () => {
+    const c = zoomCrop(50, 50, 25)
+    expect(localToGlobal(0, 0, c)).toEqual({ nx: 37.5, ny: 37.5 })
+    expect(localToGlobal(100, 100, c)).toEqual({ nx: 62.5, ny: 62.5 })
+  })
+  it('clamps local coords into 0–100', () => {
+    const c = zoomCrop(50, 50, 25)
+    expect(localToGlobal(-50, 200, c)).toEqual({ nx: 37.5, ny: 62.5 })
   })
 })

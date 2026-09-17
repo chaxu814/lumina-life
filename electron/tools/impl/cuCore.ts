@@ -44,6 +44,8 @@ export interface CuAction {
   scroll_amount?: number
   wait_seconds?: number
   key?: string
+  /** open_app 目标应用名（也兼容 text） */
+  app?: string
 }
 
 export interface CuView {
@@ -101,7 +103,7 @@ export function getCuVlmConfig(): { url: string; key: string; model: string } {
 // 2. VLM 调用
 // ──────────────────────────────────────────────────────────
 
-export function callVisionModel(sys: string, usr: string, b64: string, jsonMode = false): Promise<string> {
+export function callVisionModel(sys: string, usr: string, b64: string, jsonMode = false, mime = 'image/png'): Promise<string> {
   const cfg = getCuVlmConfig()
   const u = new URL(cfg.url + '/chat/completions')
   const t = u.protocol === 'https:' ? https : http
@@ -112,7 +114,7 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
       { role: 'system', content: sys },
       { role: 'user', content: [
         { type: 'text', text: usr },
-        { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}`, detail: 'high' } },
+        { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}`, detail: 'high' } },
       ] },
     ],
     max_tokens: 1024,
@@ -482,8 +484,26 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
       )
       return { ok: !msg.startsWith('❌') && !msg.startsWith('拖拽失败'), msg }
     }
-    case 'wait':
-      return { ok: true, msg: `等待 ${act.wait_seconds || 1} 秒` }
+    case 'wait': {
+      const sec = Math.max(0, Math.min(60, Number(act.wait_seconds) || 1))
+      await new Promise(r => setTimeout(r, sec * 1000))
+      return { ok: true, msg: `等待 ${sec} 秒` }
+    }
+    case 'open_app': {
+      const name = (act.app || act.text || '').trim()
+      if (!name) return { ok: false, msg: '❌ 缺少应用名' }
+      const msg = await cuOpenApp(name)
+      return { ok: !/失败|ERR:/i.test(msg), msg }
+    }
+    case 'close_window': {
+      const msg = await cuPressKey('alt_f4')
+      return { ok: !msg.startsWith('❌') && !msg.startsWith('按键失败'), msg }
+    }
+    case 'clipboard': {
+      if (!act.text) return { ok: false, msg: '❌ 缺少剪贴板文本' }
+      const msg = cuSetClipboard(act.text)
+      return { ok: !msg.startsWith('写剪贴板失败'), msg }
+    }
     default:
       return { ok: false, msg: `❓ 未知操作类型: ${act.action_type}` }
   }

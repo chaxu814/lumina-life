@@ -60,3 +60,69 @@ export function pngDimensions(buf: Buffer): { w: number; h: number } | null {
     return null
   }
 }
+
+// ============================================================
+// Set-of-Mark 网格（把“估坐标”变成“读编号”，显著提升小模型准度）
+// ============================================================
+
+export interface GridInfo { cols: number; rows: number; count: number }
+
+/** 按画面宽高比决定网格行列（默认横向 10 格，行数随比例，夹在 4–16） */
+export function gridDims(imgW: number, imgH: number, cols = 10): GridInfo {
+  const safeCols = Math.max(2, Math.round(cols))
+  const ratio = imgW > 0 && imgH > 0 ? imgH / imgW : 9 / 16
+  let rows = Math.round(safeCols * ratio)
+  rows = Math.max(4, Math.min(16, rows))
+  return { cols: safeCols, rows, count: safeCols * rows }
+}
+
+/**
+ * 网格编号（row-major，从 0 开始，从左到右、从上到下）→ 格子中心归一化坐标。
+ * 越界返回 null。
+ */
+export function cellToNorm(cell: number, cols: number, rows: number): { nx: number; ny: number } | null {
+  if (!Number.isFinite(cell) || cols <= 0 || rows <= 0) return null
+  const count = cols * rows
+  const id = Math.floor(cell)
+  if (id < 0 || id >= count) return null
+  const r = Math.floor(id / cols)
+  const c = id % cols
+  return {
+    nx: (c + 0.5) * (100 / cols),
+    ny: (r + 0.5) * (100 / rows),
+  }
+}
+
+// ============================================================
+// zoom 局部放大（粗选格 → 放大 → 细定位）
+// ============================================================
+
+export interface NormRect { nx0: number; ny0: number; nx1: number; ny1: number }
+
+/** 以 (cx,cy) 为中心、span 为边长(归一化)求裁剪框；clamp 到 0–100，越界时平移保持尺寸 */
+export function zoomCrop(cx: number, cy: number, span: number): NormRect {
+  const s = clamp(span, 4, 100)
+  const half = s / 2
+  let x0 = cx - half, x1 = cx + half
+  let y0 = cy - half, y1 = cy + half
+  if (x0 < 0) { x1 -= x0; x0 = 0 }
+  if (x1 > 100) { x0 -= (x1 - 100); x1 = 100 }
+  if (y0 < 0) { y1 -= y0; y0 = 0 }
+  if (y1 > 100) { y0 -= (y1 - 100); y1 = 100 }
+  return {
+    nx0: clamp(x0, 0, 100 - s),
+    ny0: clamp(y0, 0, 100 - s),
+    nx1: clamp(x1, s, 100),
+    ny1: clamp(y1, s, 100),
+  }
+}
+
+/** 放大裁剪图内的局部归一化坐标 (0–100) → 全屏全局归一化坐标 */
+export function localToGlobal(lx: number, ly: number, crop: NormRect): { nx: number; ny: number } {
+  const cx = clamp(lx, 0, 100)
+  const cy = clamp(ly, 0, 100)
+  return {
+    nx: crop.nx0 + (cx / 100) * (crop.nx1 - crop.nx0),
+    ny: crop.ny0 + (cy / 100) * (crop.ny1 - crop.ny0),
+  }
+}
