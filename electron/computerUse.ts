@@ -1,32 +1,29 @@
 // ============================================================
-// computerUse.ts — Lumina 桌面操控引擎 (v3.10)
+// computerUse.ts — Lumina 桌面操控引擎 (IPC 外壳, v3.20)
 //
-// 对标能力：
-//   - Manus/Operator：截图分析 → VLM 理解界面 → 执行操作
-//   - Claude Cowork：本地桌面自动化
-//   - Perplexity Computer：研究型桌面交互
+// v3.20 起，键鼠执行 / 视觉配置 / 中文输入 / 高危拦截 / 急停全部统一到
+//       electron/tools/impl/cuCore.ts（与 agent 工具 desktop_act 同一内核）。
+//       本类只保留 IPC 需要的外壳：截图落盘、VLM 分析协议、单步 executeAction、
+//       多步 execute 编排、安全确认与单例管理。
 //
 // 架构：
-//   1. ScreenCapture   → 截取全屏/窗口
-//   2. ScreenAnalysis  → VLM 分析界面元素 (按钮、输入框、文本)
-//   3. ActionExecute   → 鼠标/键盘/剪贴板执行
-//   4. SafetyGuard     → 操作确认 + 沙箱回滚
-//
-// 使用方式：
-//   const cu = new ComputerUse({ llmApiKey, safetyLevel: 'ask' })
-//   await cu.execute("打开 Chrome 并搜索 Lumina AI")
+//   1. ScreenCapture   → 截取全屏/窗口（captureScreen）
+//   2. ScreenAnalysis  → VLM 分析界面元素（analyzeScreen）
+//   3. ActionExecute   → 统一内核 executeCuAction / cuOpenApp / cuSetClipboard
+//   4. SafetyGuard     → 操作确认 + 内核高危硬拦截 + 全局急停 Ctrl+Alt+X
 // ============================================================
 
 import screenshot from 'screenshot-desktop'
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import https from 'https'
 import http from 'http'
-
-const execAsync = promisify(exec)
+import { screen } from 'electron'
+import {
+  executeCuAction, cuOpenApp, cuSetClipboard, cuPressKey,
+  resetCuAbort, isCuAborted,
+} from './tools/impl/cuCore'
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
@@ -103,6 +100,19 @@ export class ComputerUse {
     }
   }
 
+  /** 主显示器物理像素尺寸（归一化坐标据此换算） */
+  private physicalView(): { imgW: number; imgH: number } {
+    try {
+      const d = screen.getPrimaryDisplay()
+      return {
+        imgW: Math.round(d.size.width * d.scaleFactor),
+        imgH: Math.round(d.size.height * d.scaleFactor),
+      }
+    } catch {
+      return { imgW: 0, imgH: 0 }
+    }
+  }
+
   // ═══════════════════════════════════════════════════════
   // 公共 API
   // ═══════════════════════════════════════════════════════
@@ -112,12 +122,18 @@ export class ComputerUse {
     const startTime = Date.now()
     const steps: CUStepResult[] = []
     let summary = ''
+    resetCuAbort()
 
     this.log(`🖥️ 开始执行: ${task}`)
     this.config.onProgress?.(`开始: ${task}`)
 
     try {
       for (let i = 0; i < (this.config.maxSteps || 10); i++) {
+        if (isCuAborted()) {
+          summary = '用户触发了急停 (Ctrl+Alt+X)'
+          this.log(`🛑 ${summary}`)
+          break
+        }
         this.config.onProgress?.(`Step ${i + 1}: 分析屏幕...`)
 
         // 1. 截图
@@ -148,7 +164,13 @@ export class ComputerUse {
           break
         }
 
-        // 5. 执行操作
+        if (isCuAborted()) {
+          summary = '用户触发了急停 (Ctrl+Alt+X)'
+          this.log(`🛑 ${summary}`)
+          break
+        }
+
+        // 5. 执行操作（统一内核）
         const success = await this.executeAction(action)
         steps[steps.length - 1].action = action
         steps[steps.length - 1].analysisBefore = analysis
@@ -179,7 +201,7 @@ export class ComputerUse {
     }
   }
 
-  /** 快速截图 (不分析) */
+  /** 快速截图（落盘，供 IPC / 预览使用） */
   async captureScreen(filename?: string): Promise<string> {
     const name = filename || `screen_${Date.now()}_${++this.screenshotIndex}.png`
     const filepath = path.join(this.tmpDir, name)
@@ -195,144 +217,69 @@ export class ComputerUse {
     return this.vlmAnalysis(screenshotPath, task, history)
   }
 
-  /** 执行单个操作 */
+  /**
+   * 执行单个操作 —— 全部走共享内核 cuCore。
+   * click/drag 同时支持归一化坐标 (nx/ny 0–100) 与像素坐标 (x/y)；
+   * type 在 Windows 自动走剪贴板（支持中文），并继承内核高危硬拦截。
+   */
   async executeAction(action: CUAction): Promise<boolean> {
     try {
+      const p = action.params || {}
+      const view = this.physicalView()
+      const num = (k: string): number | undefined => {
+        const v = Number(p[k])
+        return Number.isFinite(v) ? v : undefined
+      }
+
       switch (action.type) {
         case 'click': {
-          const x = Number(action.params.x)
-          const y = Number(action.params.y)
-          if (isNaN(x) || isNaN(y)) return false
-          return await this.safeExec(this.clickCmd(x, y))
+          if (num('nx') === undefined && num('x') === undefined) return false
+          const r = await executeCuAction(
+            { action_type: 'click', nx: num('nx'), ny: num('ny'), x: num('x'), y: num('y') },
+            view,
+          )
+          return r.ok
         }
-        case 'type': {
-          const text = String(action.params.text || '')
-          return await this.safeExec(this.typeCmd(text))
+        case 'drag': {
+          const startNorm = num('nx') !== undefined, startPx = num('x') !== undefined
+          const endNorm = num('nx2') !== undefined, endPx = (num('x2') ?? num('drag_end_x')) !== undefined
+          if ((!startNorm && !startPx) || (!endNorm && !endPx)) return false
+          const r = await executeCuAction({
+            action_type: 'drag',
+            nx: num('nx'), ny: num('ny'), nx2: num('nx2'), ny2: num('ny2'),
+            x: num('x'), y: num('y'),
+            drag_end_x: num('x2') ?? num('drag_end_x'),
+            drag_end_y: num('y2') ?? num('drag_end_y'),
+          }, view)
+          return r.ok
         }
-        case 'keypress': {
-          const key = String(action.params.key || '')
-          return await this.safeExec(this.keypressCmd(key))
-        }
+        case 'type':
+          return (await executeCuAction({ action_type: 'type', text: String(p.text ?? '') }, view)).ok
+        case 'keypress':
+          return (await executeCuAction({ action_type: 'keypress', key: String(p.key ?? '') }, view)).ok
         case 'scroll': {
-          const direction = String(action.params.direction || 'down')
-          const amount = Number(action.params.amount || 3)
-          return await this.safeExec(this.scrollCmd(direction, amount))
+          const dir = String(p.direction || 'down')
+          const amount = Number(p.amount || 3)
+          const signed = dir === 'up' ? -Math.abs(amount) : Math.abs(amount)
+          return (await executeCuAction({ action_type: 'scroll', scroll_amount: signed }, view)).ok
         }
-        case 'wait': {
-          const ms = Number(action.params.ms || 1000)
-          await this.sleep(ms)
+        case 'wait':
+          await this.sleep(Number(p.ms || 1000))
           return true
-        }
-        case 'clipboard': {
-          const text = String(action.params.text || '')
-          return await this.safeExec(this.clipboardCmd(text))
-        }
-        case 'open_app': {
-          const app = String(action.params.app || '')
-          return await this.safeExec(this.openAppCmd(app))
-        }
-        case 'close_window': {
-          return await this.safeExec(this.closeWindowCmd())
-        }
-        case 'screenshot': {
+        case 'clipboard':
+          return cuSetClipboard(String(p.text || '')).includes('已写入')
+        case 'open_app':
+          return (await cuOpenApp(String(p.app || ''))).includes('已尝试')
+        case 'close_window':
+          return (await cuPressKey('alt_f4')).includes('完成')
+        case 'screenshot':
           try { await this.captureScreen(); return true } catch { return false }
-        }
         default:
           return false
       }
     } catch {
       return false
     }
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // 平台命令生成
-  // ═══════════════════════════════════════════════════════
-
-  private clickCmd(x: number, y: number): string {
-    if (process.platform === 'win32') {
-      // PowerShell: 移动鼠标并点击
-      return `powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${Math.round(x)},${Math.round(y)}); Start-Sleep -Milliseconds 100; $c = Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, int dwExtraInfo);' -Name 'Win32' -Namespace 'System' -PassThru; $c::mouse_event(0x0002,0,0,0,0); Start-Sleep -Milliseconds 50; $c::mouse_event(0x0004,0,0,0,0)"`
-    } else if (process.platform === 'darwin') {
-      return `osascript -e 'tell application "System Events" to click at {${Math.round(x)},${Math.round(y)}}'`
-    }
-    // Linux: xdotool
-    return `xdotool mousemove ${Math.round(x)} ${Math.round(y)} click 1`
-  }
-
-  private typeCmd(text: string): string {
-    const escaped = text.replace(/"/g, '\\"')
-    if (process.platform === 'win32') {
-      return `powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('${escaped.replace(/'/g, "''")}')"`
-    } else if (process.platform === 'darwin') {
-      return `osascript -e 'tell application "System Events" to keystroke "${escaped}"'`
-    }
-    return `xdotool type "${escaped}"`
-  }
-
-  private keypressCmd(key: string): string {
-    const keyMap: Record<string, string> = {
-      enter: 'Return', tab: 'Tab', esc: 'Escape',
-      backspace: 'BackSpace', space: 'space',
-      up: 'Up', down: 'Down', left: 'Left', right: 'Right',
-      ctrl_c: '^c', ctrl_v: '^v', ctrl_a: '^a', ctrl_z: '^z',
-      alt_f4: '%{F4}', win: '#',
-    }
-    const mapped = keyMap[key.toLowerCase()] || key
-    if (process.platform === 'win32') {
-      if (mapped.startsWith('^') || mapped.startsWith('%') || mapped.startsWith('#')) {
-        return `powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('${mapped}')"`
-      }
-      return `powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('{${mapped}}')"`
-    } else if (process.platform === 'darwin') {
-      return `osascript -e 'tell application "System Events" to key code (get key code "${mapped}")'`
-    }
-    return `xdotool key "${mapped}"`
-  }
-
-  private scrollCmd(direction: string, amount: number): string {
-    if (process.platform === 'win32') {
-      // PowerShell: 复用 Win32 mouse_event 模拟滚轮（0x0800 = MOUSEEVENTF_WHEEL）
-      const delta = direction === 'up' ? 120 : -120
-      const clicks = Math.max(1, Math.min(10, amount))
-      const ps = `Add-Type -AssemblyName System.Windows.Forms; $s = Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern void mouse_event(uint f,uint x,uint y,uint d,int e);' -Name 'W32S' -Namespace 'Sys' -PassThru; 1..${clicks} | ForEach-Object { $s::mouse_event(0x0800,0,0,${delta},0); Start-Sleep -Milliseconds 50 }`
-      return `powershell -Command "${ps}"`
-    }
-    if (process.platform === 'darwin') {
-      const y = direction === 'up' ? -amount * 30 : amount * 30
-      return `osascript -e 'tell application "System Events" to scroll page ${y}'`
-    }
-    const btn = direction === 'up' ? '4' : '5'
-    const clicksArr = Array(amount).fill(btn).join(' ')
-    return `xdotool click ${clicksArr}`
-  }
-
-  private clipboardCmd(text: string): string {
-    const escaped = text.replace(/"/g, '\\"')
-    if (process.platform === 'win32') {
-      return `powershell -Command "Set-Clipboard -Value '${escaped}'"`
-    } else if (process.platform === 'darwin') {
-      return `echo "${escaped}" | pbcopy`
-    }
-    return `echo "${escaped}" | xclip -selection clipboard`
-  }
-
-  private openAppCmd(app: string): string {
-    if (process.platform === 'win32') {
-      return `start "" "${app}"`
-    } else if (process.platform === 'darwin') {
-      return `open -a "${app}"`
-    }
-    return `xdg-open "${app}"`
-  }
-
-  private closeWindowCmd(): string {
-    if (process.platform === 'win32') {
-      return `powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('%{F4}')"`
-    } else if (process.platform === 'darwin') {
-      return `osascript -e 'tell application "System Events" to keystroke "w" using command down'`
-    }
-    return `xdotool key alt+F4`
   }
 
   // ═══════════════════════════════════════════════════════
@@ -354,7 +301,7 @@ ${task}
 ${historyDesc || '（无）'}
 
 ## 可用操作
-- click(x, y) — 点击坐标
+- click(x, y) — 点击像素坐标
 - type("text") — 输入文字
 - keypress("enter"|"tab"|"esc"|"ctrl_c"|"ctrl_v"|...) — 按键
 - scroll("up"|"down", n) — 滚动
@@ -392,7 +339,6 @@ ${historyDesc || '（无）'}
 
   private parseAnalysisResponse(response: string): ScreenAnalysis {
     try {
-      // 提取 JSON
       const jsonMatch = response.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('No JSON found')
       const parsed = JSON.parse(jsonMatch[0])
@@ -458,7 +404,6 @@ ${historyDesc || '（无）'}
 
     const messages: any[] = [{ role: 'user', content: prompt }]
 
-    // 如果有截图，以 base64 格式附加
     if (imagePath && fs.existsSync(imagePath)) {
       const imgBase64 = fs.readFileSync(imagePath).toString('base64')
       messages[0].content = [
@@ -502,7 +447,7 @@ ${historyDesc || '（无）'}
   }
 
   // ═══════════════════════════════════════════════════════
-  // 安全确认
+  // 安全确认（破坏性硬拦截已在 cuCore 执行层统一处理）
   // ═══════════════════════════════════════════════════════
 
   private async confirmAction(action: CUAction): Promise<boolean> {
@@ -511,16 +456,11 @@ ${historyDesc || '（无）'}
     const desc = `${action.type}(${JSON.stringify(action.params)})`
     this.log(`🔒 确认操作: ${desc}`)
 
-    // strict 模式：拒绝破坏性操作
     if (this.config.safetyLevel === 'strict') {
-      const dangerous = ['rm ', 'del ', 'format', 'sudo', 'shutdown', 'restart']
-      if (action.type === 'type' && dangerous.some(d => String(action.params.text).toLowerCase().includes(d))) {
-        this.log('🚫 严格模式拒绝破坏性操作')
+      // strict 模式额外拒绝关闭窗口类操作；命令破坏由 cuCore 硬拦截兜底
+      if (action.type === 'close_window') {
+        this.log('🚫 严格模式拒绝关闭窗口')
         return false
-      }
-      if (action.type === 'keypress' && String(action.params.key).includes('ctrl_c')) {
-        // ctrl+c 在终端中是安全的，但在其他地方可能不是
-        return true
       }
       return true
     }
@@ -530,23 +470,12 @@ ${historyDesc || '（无）'}
       return this.config.onConfirm(action.type, JSON.stringify(action.params))
     }
 
-    return true // 默认允许
+    return true // 未提供确认回调时默认允许（agent 工具路径另有审批门）
   }
 
   // ═══════════════════════════════════════════════════════
   // 工具方法
   // ═══════════════════════════════════════════════════════
-
-  private async safeExec(cmd: string): Promise<boolean> {
-    try {
-      this.log(`  📟 > ${cmd.slice(0, 80)}...`)
-      await execAsync(cmd, { timeout: 10000 })
-      return true
-    } catch (err: any) {
-      this.log(`  ❌ ${err.message?.slice(0, 100)}`)
-      return false
-    }
-  }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(r => setTimeout(r, ms))

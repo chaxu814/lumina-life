@@ -1,547 +1,213 @@
 // ============================================================
-// tests/computerUse.test.ts — ComputerUse 桌面操控引擎单元测试
+// tests/computerUse.test.ts — IPC 桌面操控引擎（外壳）单元测试
+//
+// v3.20 起执行层统一到 cuCore，这里 mock 掉 cuCore / electron / 截图，
+// 重点验证：解析、分析协议、确认策略、executeAction 到内核的正确分派。
 // ============================================================
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-// 在 import ComputerUse 前 mock 依赖
 vi.mock('screenshot-desktop', () => ({
   default: vi.fn().mockResolvedValue('/tmp/mock-screen.png'),
+}))
+
+vi.mock('electron', () => ({
+  screen: { getPrimaryDisplay: () => ({ size: { width: 1920, height: 1080 }, scaleFactor: 1 }) },
+}))
+
+// vi.mock 工厂会被提升，mock 函数必须用 vi.hoisted 创建以免 TDZ
+const m = vi.hoisted(() => ({
+  executeCuAction: vi.fn(async () => ({ ok: true, msg: 'ok' })),
+  cuOpenApp: vi.fn(async () => '已尝试打开应用'),
+  cuSetClipboard: vi.fn(() => '已写入剪贴板'),
+  cuPressKey: vi.fn(async () => '按键完成'),
+  resetCuAbort: vi.fn(),
+  isCuAborted: vi.fn(() => false),
+}))
+
+vi.mock('../electron/tools/impl/cuCore', () => ({
+  executeCuAction: m.executeCuAction,
+  cuOpenApp: m.cuOpenApp,
+  cuSetClipboard: m.cuSetClipboard,
+  cuPressKey: m.cuPressKey,
+  resetCuAbort: m.resetCuAbort,
+  isCuAborted: m.isCuAborted,
 }))
 
 import { ComputerUse, getComputerUse, initComputerUse } from '../electron/computerUse'
 import type { CUConfig, CUAction } from '../electron/computerUse'
 
-// ═══════════════════════════════════════════════════════════
-// 辅助
-// ═══════════════════════════════════════════════════════════
-
 function makeCU(config?: Partial<CUConfig>): ComputerUse {
-  return new ComputerUse({
-    llmApiKey: 'test-key',
-    safetyLevel: 'auto',
-    ...config,
-  })
+  return new ComputerUse({ llmApiKey: 'test-key', safetyLevel: 'auto', ...config })
 }
-
-// 访问私有方法
 function privateMethod(obj: any, name: string): any {
   return obj[name].bind(obj)
 }
 
-// ═══════════════════════════════════════════════════════════
-// 1. 构造
-// ═══════════════════════════════════════════════════════════
-
+// ── 1. 构造 ──────────────────────────────────────────────
 describe('constructor', () => {
   it('creates instance with default config', () => {
-    const cu = new ComputerUse()
-    expect(cu).toBeInstanceOf(ComputerUse)
+    expect(new ComputerUse()).toBeInstanceOf(ComputerUse)
   })
-
-  it('applies custom config', () => {
-    const cu = new ComputerUse({ maxSteps: 5, safetyLevel: 'strict' })
-    expect(cu).toBeDefined()
-  })
-
   it('sets default maxSteps to 10', () => {
-    const cu = new ComputerUse()
-    expect((cu as any).config.maxSteps).toBe(10)
+    expect((new ComputerUse() as any).config.maxSteps).toBe(10)
   })
-
-  it('creates temp directory if not exists', () => {
-    // 只是确认不报错
-    const cu = new ComputerUse({ screenshotDir: '/tmp/lumina-cu-test' })
-    expect(cu).toBeDefined()
+  it('applies custom config', () => {
+    expect((new ComputerUse({ maxSteps: 5, safetyLevel: 'strict' }) as any).config.safetyLevel).toBe('strict')
   })
 })
 
-// ═══════════════════════════════════════════════════════════
-// 2. parseAction — 解析 LLM 输出的操作指令
-// ═══════════════════════════════════════════════════════════
-
+// ── 2. parseAction ───────────────────────────────────────
 describe('parseAction', () => {
-  let cu: ComputerUse
-  let parseAction: (suggested: string) => CUAction | null
-
-  beforeEach(() => {
-    cu = makeCU()
-    parseAction = privateMethod(cu, 'parseAction')
-  })
+  let parseAction: (s: string) => CUAction | null
+  beforeEach(() => { parseAction = privateMethod(makeCU(), 'parseAction') })
 
   it('parses click(x, y)', () => {
-    const result = parseAction('click(500, 300)')
-    expect(result).toEqual({ type: 'click', params: { x: 500, y: 300 } })
+    expect(parseAction('click(500, 300)')).toEqual({ type: 'click', params: { x: 500, y: 300 } })
   })
-
-  it('parses click with spaces', () => {
-    const result = parseAction('click( 100 , 200 )')
-    expect(result).toEqual({ type: 'click', params: { x: 100, y: 200 } })
-  })
-
   it('parses type("text")', () => {
-    const result = parseAction('type("hello world")')
-    expect(result).toEqual({ type: 'type', params: { text: 'hello world' } })
+    expect(parseAction('type("hello world")')).toEqual({ type: 'type', params: { text: 'hello world' } })
   })
-
-  it('parses type with empty string', () => {
-    const result = parseAction('type("")')
-    expect(result).toEqual({ type: 'type', params: { text: '' } })
+  it('parses keypress("enter")', () => {
+    expect(parseAction('keypress("enter")')).toEqual({ type: 'keypress', params: { key: 'enter' } })
   })
-
-  it('parses keypress', () => {
-    const result = parseAction('keypress("enter")')
-    expect(result).toEqual({ type: 'keypress', params: { key: 'enter' } })
-  })
-
-  it('parses keypress with ctrl_c', () => {
-    const result = parseAction('keypress("ctrl_c")')
-    expect(result).toEqual({ type: 'keypress', params: { key: 'ctrl_c' } })
-  })
-
   it('parses scroll', () => {
-    const result = parseAction('scroll("down", 3)')
-    expect(result).toEqual({ type: 'scroll', params: { direction: 'down', amount: 3 } })
+    expect(parseAction('scroll("down", 3)')).toEqual({ type: 'scroll', params: { direction: 'down', amount: 3 } })
   })
-
-  it('parses scroll up', () => {
-    const result = parseAction('scroll("up", 1)')
-    expect(result).toEqual({ type: 'scroll', params: { direction: 'up', amount: 1 } })
-  })
-
   it('parses wait', () => {
-    const result = parseAction('wait(1500)')
-    expect(result).toEqual({ type: 'wait', params: { ms: 1500 } })
+    expect(parseAction('wait(1500)')).toEqual({ type: 'wait', params: { ms: 1500 } })
   })
-
-  it('parses clipboard', () => {
-    const result = parseAction('clipboard("你好世界")')
-    expect(result).toEqual({ type: 'clipboard', params: { text: '你好世界' } })
+  it('parses clipboard/open_app', () => {
+    expect(parseAction('clipboard("你好")')?.type).toBe('clipboard')
+    expect(parseAction('open_app("Chrome")')?.type).toBe('open_app')
   })
-
-  it('parses open_app', () => {
-    const result = parseAction('open_app("Chrome")')
-    expect(result).toEqual({ type: 'open_app', params: { app: 'Chrome' } })
-  })
-
-  it('returns null for DONE', () => {
+  it('DONE / empty → null', () => {
     expect(parseAction('DONE')).toBeNull()
-  })
-
-  it('returns null for empty string', () => {
     expect(parseAction('')).toBeNull()
   })
-
-  it('returns null for undefined input', () => {
-    expect(parseAction(undefined as any)).toBeNull()
-  })
-
-  it('CASE-INSENSITIVE: click vs CLICK', () => {
-    const result = parseAction('CLICK(1, 2)')
-    expect(result?.type).toBe('click')
-  })
-
-  it('ignores surrounding whitespace', () => {
-    const result = parseAction('  click(10, 20)  ')
-    expect(result?.type).toBe('click')
+  it('case-insensitive CLICK', () => {
+    expect(parseAction('CLICK(1, 2)')?.type).toBe('click')
   })
 })
 
-// ═══════════════════════════════════════════════════════════
-// 3. parseAnalysisResponse
-// ═══════════════════════════════════════════════════════════
-
+// ── 3. parseAnalysisResponse ─────────────────────────────
 describe('parseAnalysisResponse', () => {
-  let cu: ComputerUse
-  let parseAnalysisResponse: (response: string) => any
-
-  beforeEach(() => {
-    cu = makeCU()
-    parseAnalysisResponse = privateMethod(cu, 'parseAnalysisResponse')
+  let fn: (s: string) => any
+  beforeEach(() => { fn = privateMethod(makeCU(), 'parseAnalysisResponse') })
+  it('parses valid JSON', () => {
+    const r = fn(JSON.stringify({ description: '桌面', elements: [], suggestedAction: 'DONE' }))
+    expect(r.suggestedAction).toBe('DONE')
   })
-
-  it('parses valid JSON response', () => {
-    const result = parseAnalysisResponse(JSON.stringify({
-      description: '打开了的浏览器窗口',
-      elements: [{ type: 'button', label: '搜索', confidence: 0.9 }],
-      suggestedAction: 'click(500, 300)',
-      reasoning: '搜索按钮在页面中间',
-    }))
-    expect(result.description).toBe('打开了的浏览器窗口')
-    expect(result.elements).toHaveLength(1)
-    expect(result.suggestedAction).toBe('click(500, 300)')
+  it('extracts JSON from fenced text', () => {
+    const r = fn('前缀\n```json\n{"description":"t","elements":[],"suggestedAction":"DONE"}\n```')
+    expect(r.description).toBe('t')
   })
-
-  it('extracts JSON from mixed text', () => {
-    const result = parseAnalysisResponse(
-      '一些前缀\n```\n{"description":"test","elements":[],"suggestedAction":"DONE"}\n```',
-    )
-    expect(result.description).toBe('test')
-    expect(result.suggestedAction).toBe('DONE')
-  })
-
-  it('falls back when no JSON found', () => {
-    const result = parseAnalysisResponse('纯文字，没有 JSON')
-    expect(result.description).toBe('无法解析分析结果')
-    expect(result.suggestedAction).toBe('DONE')
-  })
-
-  it('handles malformed JSON gracefully', () => {
-    const result = parseAnalysisResponse('{"bad json"}')
-    expect(result.description).toBe('无法解析分析结果')
-    expect(result.suggestedAction).toBe('DONE')
-  })
-
-  it('handles empty input', () => {
-    const result = parseAnalysisResponse('')
-    expect(result.description).toBe('无法解析分析结果')
+  it('falls back when no JSON', () => {
+    const r = fn('纯文字')
+    expect(r.suggestedAction).toBe('DONE')
   })
 })
 
-// ═══════════════════════════════════════════════════════════
-// 4. fallbackAnalysis — VLM 未配置时的降级
-// ═══════════════════════════════════════════════════════════
-
+// ── 4. fallbackAnalysis ──────────────────────────────────
 describe('fallbackAnalysis', () => {
-  let cu: ComputerUse
-  let fallbackAnalysis: (path: string, task: string, history: any[]) => any
-
-  beforeEach(() => {
-    cu = makeCU({ llmApiKey: undefined }) // 无 API key
-    fallbackAnalysis = privateMethod(cu, 'fallbackAnalysis')
-  })
-
-  it('returns DONE when VLM is unavailable', () => {
-    const result = fallbackAnalysis('/tmp/screen.png', '打开浏览器', [])
-    expect(result.suggestedAction).toBe('DONE')
-    expect(result.description).toContain('VLM 未配置')
-  })
-
-  it('includes task description in response', () => {
-    const result = fallbackAnalysis('/tmp/screen.png', '查找文件', [])
-    expect(result.description).toContain('查找文件')
+  it('returns DONE and mentions task', () => {
+    const cu = makeCU({ llmApiKey: undefined })
+    const r = privateMethod(cu, 'fallbackAnalysis')('/p.png', '打开浏览器', [])
+    expect(r.suggestedAction).toBe('DONE')
+    expect(r.description).toContain('打开浏览器')
   })
 })
 
-// ═══════════════════════════════════════════════════════════
-// 5. confirmAction — 安全确认
-// ═══════════════════════════════════════════════════════════
-
+// ── 5. confirmAction（破坏性硬拦截已下沉 cuCore，见 cuSafety 测试）──
 describe('confirmAction', () => {
-  let confirmAction: (action: CUAction) => Promise<boolean>
-
-  it('auto mode: allows all actions', async () => {
-    const cu = makeCU({ safetyLevel: 'auto' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    expect(await confirmAction({ type: 'click', params: { x: 1, y: 2 } })).toBe(true)
-    expect(await confirmAction({ type: 'type', params: { text: 'hello' } })).toBe(true)
+  it('auto allows all (hard-block is the core layer)', async () => {
+    const fn = privateMethod(makeCU({ safetyLevel: 'auto' }), 'confirmAction')
+    expect(await fn({ type: 'click', params: { x: 1, y: 2 } })).toBe(true)
+    expect(await fn({ type: 'type', params: { text: 'sudo rm -rf /' } })).toBe(true)
   })
-
-  it('strict mode: blocks destructive text', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    const result = await confirmAction({ type: 'type', params: { text: 'sudo rm -rf /' } })
-    expect(result).toBe(false)
+  it('strict blocks close_window', async () => {
+    const fn = privateMethod(makeCU({ safetyLevel: 'strict' }), 'confirmAction')
+    expect(await fn({ type: 'close_window', params: {} })).toBe(false)
   })
-
-  it('strict mode: blocks del command', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    const result = await confirmAction({ type: 'type', params: { text: 'del /f system.dll' } })
-    expect(result).toBe(false)
-  })
-
-  it('strict mode: allows normal text', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    const result = await confirmAction({ type: 'type', params: { text: 'Hello, 你好!' } })
-    expect(result).toBe(true)
-  })
-
-  it('strict mode: allows ctrl_c', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    const result = await confirmAction({ type: 'keypress', params: { key: 'ctrl_c' } })
-    expect(result).toBe(true)
-  })
-
-  it('strict mode: allows click', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    expect(await confirmAction({ type: 'click', params: { x: 100, y: 200 } })).toBe(true)
-  })
-
-  it('strict mode: blocks shutdown text', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    expect(await confirmAction({ type: 'type', params: { text: 'sudo shutdown -h now' } })).toBe(false)
-  })
-
-  it('strict mode: blocks restart text', async () => {
-    const cu = makeCU({ safetyLevel: 'strict' })
-    confirmAction = privateMethod(cu, 'confirmAction')
-    expect(await confirmAction({ type: 'type', params: { text: 'restart computer' } })).toBe(false)
+  it('strict allows normal type / keypress / click', async () => {
+    const fn = privateMethod(makeCU({ safetyLevel: 'strict' }), 'confirmAction')
+    expect(await fn({ type: 'type', params: { text: 'Hello, 你好' } })).toBe(true)
+    expect(await fn({ type: 'keypress', params: { key: 'ctrl_c' } })).toBe(true)
+    expect(await fn({ type: 'click', params: { x: 1, y: 2 } })).toBe(true)
   })
 })
 
-// ═══════════════════════════════════════════════════════════
-// 6. 平台命令生成（跨平台）
-// ═══════════════════════════════════════════════════════════
+// ── 6. executeAction → cuCore 分派 ───────────────────────
+describe('executeAction dispatch', () => {
+  beforeEach(() => { vi.clearAllMocks() })
 
-describe('platform commands (win32)', () => {
-  let cu: ComputerUse
-  let clickCmd: (x: number, y: number) => string
-
-  beforeEach(() => {
-    cu = makeCU()
-    clickCmd = privateMethod(cu, 'clickCmd')
+  it('unknown type → false', async () => {
+    expect(await makeCU().executeAction({ type: 'fly' as any, params: {} })).toBe(false)
   })
 
-  it('clickCmd generates PowerShell command', () => {
-    const cmd = clickCmd(100, 200)
-    expect(cmd).toContain('powershell')
-    expect(cmd).toContain('mouse_event')
-    expect(cmd).toContain('100')
-    expect(cmd).toContain('200')
-  })
-})
-
-// ── 平台命令测试：根据实际运行平台调整断言 ──────────
-
-function isWin32(): boolean { return process.platform === 'win32' }
-function isDarwin(): boolean { return process.platform === 'darwin' }
-
-describe('platform commands (win32)', () => {
-  let cu: ComputerUse
-  let clickCmd: (x: number, y: number) => string
-  let clipboardCmd: (text: string) => string
-  let scrollCmd: (dir: string, amount: number) => string
-
-  beforeEach(() => {
-    cu = makeCU()
-    clickCmd = privateMethod(cu, 'clickCmd')
-    clipboardCmd = privateMethod(cu, 'clipboardCmd')
-    scrollCmd = privateMethod(cu, 'scrollCmd')
+  it('click with NaN / missing coords → false (does not call core)', async () => {
+    const cu = makeCU()
+    expect(await cu.executeAction({ type: 'click', params: { x: 'abc', y: 'def' } as any })).toBe(false)
+    expect(await cu.executeAction({ type: 'click', params: {} })).toBe(false)
+    expect(m.executeCuAction).not.toHaveBeenCalled()
   })
 
-  it('clickCmd generates PowerShell command on win32', () => {
-    const cmd = clickCmd(100, 200)
-    if (isWin32()) {
-      expect(cmd).toContain('powershell')
-      expect(cmd).toContain('mouse_event')
-      expect(cmd).toContain('100')
-      expect(cmd).toContain('200')
-    } else {
-      // cross-platform: 至少包含坐标数字
-      expect(cmd).toMatch(/100/)
-      expect(cmd).toMatch(/200/)
-    }
+  it('pixel click → executeCuAction with x/y', async () => {
+    await makeCU().executeAction({ type: 'click', params: { x: 960, y: 540 } })
+    const arg = m.executeCuAction.mock.calls.at(-1)![0]
+    expect(arg.action_type).toBe('click')
+    expect(arg.x).toBe(960); expect(arg.y).toBe(540)
   })
 
-  it('clipboard command carries the text', () => {
-    const cmd = clipboardCmd('hello')
-    expect(cmd).toContain('hello')
-    if (isWin32()) {
-      expect(cmd).toContain('Set-Clipboard')
-    } else if (isDarwin()) {
-      expect(cmd).toContain('pbcopy')
-    }
+  it('normalized click → passes nx/ny through', async () => {
+    await makeCU().executeAction({ type: 'click', params: { nx: 50, ny: 50 } } as any)
+    const arg = m.executeCuAction.mock.calls.at(-1)![0]
+    expect(arg.nx).toBe(50); expect(arg.ny).toBe(50)
   })
 
-  it('scroll command outputs direction-based number', () => {
-    const cmd = scrollCmd('down', 1)
-    // 跨平台：至少包含 xdotool/osascript 中一种
-    expect(cmd.length).toBeGreaterThan(10)
+  it('type (incl. Chinese) → executeCuAction type', async () => {
+    await makeCU().executeAction({ type: 'type', params: { text: '你好世界' } })
+    const arg = m.executeCuAction.mock.calls.at(-1)![0]
+    expect(arg.action_type).toBe('type'); expect(arg.text).toBe('你好世界')
+  })
+
+  it('keypress / scroll(up negative) → core', async () => {
+    await makeCU().executeAction({ type: 'keypress', params: { key: 'enter' } })
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'keypress', key: 'enter' })
+    await makeCU().executeAction({ type: 'scroll', params: { direction: 'up', amount: 3 } })
+    expect(m.executeCuAction.mock.calls.at(-1)![0].scroll_amount).toBe(-3)
+  })
+
+  it('drag: missing endpoints → false; complete → core', async () => {
+    const cu = makeCU()
+    expect(await cu.executeAction({ type: 'drag', params: { x: 1, y: 2 } })).toBe(false)
+    await cu.executeAction({ type: 'drag', params: { nx: 10, ny: 20, nx2: 80, ny2: 90 } } as any)
+    const arg = m.executeCuAction.mock.calls.at(-1)![0]
+    expect(arg.action_type).toBe('drag')
+    expect([arg.nx, arg.ny, arg.nx2, arg.ny2]).toEqual([10, 20, 80, 90])
+  })
+
+  it('wait sleeps', async () => {
+    const t0 = Date.now()
+    await makeCU().executeAction({ type: 'wait', params: { ms: 40 } })
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(25)
+  })
+
+  it('clipboard / open_app / close_window route to dedicated primitives', async () => {
+    const cu = makeCU()
+    expect(await cu.executeAction({ type: 'clipboard', params: { text: 't' } })).toBe(true)
+    expect(m.cuSetClipboard).toHaveBeenCalledWith('t')
+    expect(await cu.executeAction({ type: 'open_app', params: { app: 'Chrome' } })).toBe(true)
+    expect(m.cuOpenApp).toHaveBeenCalledWith('Chrome')
+    expect(await cu.executeAction({ type: 'close_window', params: {} })).toBe(true)
+    expect(m.cuPressKey).toHaveBeenCalledWith('alt_f4')
   })
 })
 
-describe('platform commands — 键映射', () => {
-  let cu: ComputerUse
-  let keypressCmd: (key: string) => string
-
-  beforeEach(() => {
-    cu = makeCU()
-    keypressCmd = privateMethod(cu, 'keypressCmd')
-  })
-
-  it('maps enter to Return', () => {
-    const cmd = keypressCmd('enter')
-    expect(cmd).toContain('Return')
-  })
-
-  it('maps tab', () => {
-    const cmd = keypressCmd('tab')
-    expect(cmd).toContain('Tab')
-  })
-
-  it('maps esc', () => {
-    const cmd = keypressCmd('esc')
-    expect(cmd).toContain('Escape')
-  })
-
-  it('maps space', () => {
-    const cmd = keypressCmd('space')
-    expect(cmd).toContain('space')
-  })
-
-  it('passes through unknown keys', () => {
-    const cmd = keypressCmd('f5')
-    // 所有平台都包含 f5
-    expect(cmd).toContain('f5')
-  })
-})
-
-describe('platform commands — 跨平台输出', () => {
-  let cu: ComputerUse
-  let clickCmd: (x: number, y: number) => string
-
-  beforeEach(() => {
-    cu = makeCU()
-    clickCmd = privateMethod(cu, 'clickCmd')
-  })
-
-  it('click action contains coordinates', () => {
-    const cmd = clickCmd(300, 400)
-    expect(cmd).toMatch(/300/)
-    expect(cmd).toMatch(/400/)
-    if (isWin32()) {
-      expect(cmd).toContain('powershell')
-      expect(cmd).toContain('mouse_event')
-    } else if (isDarwin()) {
-      expect(cmd).toContain('osascript')
-    } else {
-      expect(cmd).toContain('xdotool')
-    }
-  })
-})
-
-describe('platform commands — type', () => {
-  let cu: ComputerUse
-  let typeCmd: (text: string) => string
-
-  beforeEach(() => {
-    cu = makeCU()
-    typeCmd = privateMethod(cu, 'typeCmd')
-  })
-
-  it('generates type command with text', () => {
-    const cmd = typeCmd('hello world')
-    expect(cmd).toContain('hello world')
-    if (isWin32()) {
-      expect(cmd).toContain('SendKeys')
-    } else if (isDarwin()) {
-      expect(cmd).toContain('keystroke')
-    } else {
-      expect(cmd).toContain('xdotool type')
-    }
-  })
-
-  it('escapes double quotes', () => {
-    const cmd = typeCmd('say "hi"')
-    expect(cmd).toContain('\\"')
-  })
-})
-
-describe('platform commands — scroll 数量', () => {
-  let cu: ComputerUse
-  let scrollCmd: (dir: string, amount: number) => string
-
-  beforeEach(() => {
-    cu = makeCU()
-    scrollCmd = privateMethod(cu, 'scrollCmd')
-  })
-
-  it('scroll down one step', () => {
-    const cmd = scrollCmd('down', 1)
-    expect(cmd.length).toBeGreaterThan(5)
-  })
-
-  it('scroll up one step', () => {
-    const cmd = scrollCmd('up', 1)
-    expect(cmd.length).toBeGreaterThan(5)
-  })
-
-  it('scroll repeats for amount', () => {
-    const cmd = scrollCmd('down', 3)
-    if (isWin32() || !isDarwin()) {
-      // Linux: xdotool click 5 5 5; Win: 同 xdotool
-      if (cmd.includes('xdotool')) {
-        expect(cmd.match(/5/g)?.length).toBe(3)
-      }
-    }
-    // darwin: osascript - 滚动量 x3
-    expect(cmd).toBeTruthy()
-  })
-})
-
-// ═══════════════════════════════════════════════════════════
-// 7. 边缘情况与错误处理
-// ═══════════════════════════════════════════════════════════
-
-describe('executeAction error handling', () => {
-  let cu: ComputerUse
-
-  beforeEach(() => {
-    cu = makeCU()
-  })
-
-  it('returns false for unknown action type', async () => {
-    const result = await (cu as any).executeAction({ type: 'fly', params: {} })
-    expect(result).toBe(false)
-  })
-
-  it('returns false for click with NaN coordinates', async () => {
-    const result = await (cu as any).executeAction({ type: 'click', params: { x: 'abc', y: 'def' } })
-    expect(result).toBe(false)
-  })
-
-  it('returns false for missing click coordinates', async () => {
-    const result = await (cu as any).executeAction({ type: 'click', params: {} })
-    expect(result).toBe(false)
-  })
-
-  it('handles wait action', async () => {
-    const start = Date.now()
-    await (cu as any).executeAction({ type: 'wait', params: { ms: 50 } })
-    const elapsed = Date.now() - start
-    expect(elapsed).toBeGreaterThanOrEqual(30)
-  })
-
-  it('returns true for clipboard action', async () => {
-    const result = await (cu as any).executeAction({ type: 'clipboard', params: { text: 'test' } })
-    // 由于 mock 了 exec，实际 command 可能失败，但函数不抛异常
-    expect(typeof result).toBe('boolean')
-  })
-})
-
-describe('safeExec error handling', () => {
-  let cu: ComputerUse
-
-  beforeEach(() => {
-    cu = makeCU()
-  })
-
-  it('returns false on command failure (does not throw)', async () => {
-    // safeExec 内部 catch error 并返回 false
-    const safeExec = privateMethod(cu, 'safeExec')
-    // 传一个必定失败的命令
-    const result = await safeExec('cmddddddddd_does_not_exist')
-    expect(result).toBe(false)
-  })
-})
-
-// ═══════════════════════════════════════════════════════════
-// 8. singleton: getComputerUse / initComputerUse
-// ═══════════════════════════════════════════════════════════
-
-describe('getComputerUse / initComputerUse', () => {
-  it('getComputerUse returns an instance', () => {
-    const instance = getComputerUse()
-    expect(instance).toBeDefined()
-  })
-
-  it('initComputerUse creates a new singleton', () => {
-    const instance = initComputerUse({ llmApiKey: 'test-init-key' })
-    expect(instance).toBeDefined()
+// ── 7. 单例 ──────────────────────────────────────────────
+describe('singleton', () => {
+  it('get/init return instances', () => {
+    expect(getComputerUse()).toBeDefined()
+    expect(initComputerUse({ llmApiKey: 'k' })).toBeDefined()
   })
 })

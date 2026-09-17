@@ -56,6 +56,7 @@ import { globalEventBus, BusEvents } from './eventBus'
 
 // ─── v6.0: Agent 独立 LLM 配置 + 委托管理器 ────────────
 import { initAgentConfig, getAgentConfig } from './agentConfig'
+import { requestCuAbort } from './tools/impl/cuCore'
 import { LLMProvider } from './core/llmProvider'
 import { initOrchestrator, getOrchestrator } from './core/agentOrchestrator'
 // ─── P3-5: Agent 工作区管理器 ──────────────────────────
@@ -203,6 +204,15 @@ globalShortcut.register('Alt+Space', () => {
       mainWindow.focus()
       mainWindow.webContents.send('menu:capture-and-analyze')
     }
+  })
+
+  // Ctrl+Alt+X：Computer Use 全局急停（任何时候立即中止正在执行的桌面操控）
+  globalShortcut.register('Ctrl+Alt+X', () => {
+    try {
+      requestCuAbort()
+      console.log('[Hotkey] Computer Use abort requested (Ctrl+Alt+X)')
+      new Notification({ title: 'Lumina', body: '🛑 已停止 Computer Use 正在执行的操作' }).show()
+    } catch { /* 通知不可用时仍已置急停标志 */ }
   })
 }
 
