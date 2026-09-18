@@ -458,6 +458,24 @@ function getTaskTypeInstruction(taskType?: TaskType | null): string {
   }
 }
 
+// 自主刷新倒计时：独立小组件，自己持有 1s 定时器；避免每秒让整个 GroupChatView（数千行）重渲染
+function NextRefreshCountdown({ next }: { next: number | null }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!next) return
+    const t = setInterval(() => setTick(n => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [next])
+  if (!next) return null
+  const sec = Math.max(0, Math.round((next - Date.now()) / 1000))
+  const text = sec > 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`
+  return (
+    <span style={{ color: '#92400e', fontSize: 10, background: 'var(--yellow-100)', padding: '1px 8px', borderRadius: 10, border: '1px solid #fcd34d' }}>
+      ⏱ 下次 {text}
+    </span>
+  )
+}
+
 export default function GroupChatView() {
   const llmConfig = useStore(s => s.llmConfig)
   const getAgentLlmConfig = useStore(s => s.getAgentLlmConfig)
@@ -3621,18 +3639,8 @@ export default function GroupChatView() {
     }
   }, [llmEnabled])
 
-  // 实时倒计时 — 从模块级 _llmState._nextRefresh 读取
-  const [, setCountTick] = useState(0)
-  useEffect(() => {
-    if (!llmEnabled) return
-    const t = setInterval(() => setCountTick(n => n + 1), 1000)
-    return () => clearInterval(t)
-  }, [llmEnabled])
+  // 实时倒计时收敛到独立小组件 NextRefreshCountdown（不再每秒重渲染整个 GroupChatView）
   const nextRefreshAt = _llmState._nextRefresh
-  const countdownStr = nextRefreshAt ? (() => {
-    const s = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000))
-    return s > 60 ? `${Math.floor(s / 60)}分${s % 60}秒` : `${s}秒`
-  })() : ''
 
   // 主动关心 → 群聊消息 + TTS 播报
   // 之前 proactiveChat 的回调在 ChatPanel 1v1 里，有 activeConversationId guard
@@ -4139,11 +4147,7 @@ export default function GroupChatView() {
                 <span style={{ color: '#92400e', fontWeight: 500 }}>
                   · 每 {Math.round(AUTONOMY_INTERVAL / 60000)} 分钟自动更新
                 </span>
-                {nextRefreshAt && (
-                  <span style={{ color: '#92400e', fontSize: 10, background: 'var(--yellow-100)', padding: '1px 8px', borderRadius: 10, border: '1px solid #fcd34d' }}>
-                    ⏱ 下次 {countdownStr}
-                  </span>
-                )}
+                <NextRefreshCountdown next={nextRefreshAt} />
                 <span style={{ color: '#b45309', fontSize: 9, background: 'var(--yellow-100)', padding: '1px 6px', borderRadius: 8 }}>
                   ⚡ ~3K tk/次
                 </span>

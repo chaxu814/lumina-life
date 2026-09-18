@@ -122,7 +122,7 @@ function isSelfWindow(title: string, process: string): boolean {
 
 /** 🆕 v3.0: 窗口缓存 — 相同窗口不重复调 PowerShell */
 let _lastWindowCache: { title: string; process: string; cachedAt: number } | null = null
-const CACHE_TTL_MS = 10_000  // 10 秒内同一窗口直接返回缓存
+const CACHE_TTL_MS = 30_000  // 30 秒内复用上次窗口结果（场景检测/屏幕感知共用，避免反复启动 PowerShell）
 
 const PS_GET_ACTIVE_WINDOW = `
 [Console]::OutputEncoding = [Text.Encoding]::UTF8

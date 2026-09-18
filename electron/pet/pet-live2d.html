@@ -587,7 +587,7 @@ function sendEvent(type, data) { if (HAS_IPC) try { ipc.send('pet:event', { type
 /* ── N.E.K.O 风格偏好 ────────────────────────────────────── */
 let prefs = {
   bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
-  mouseTrack: true, fullscreenTrack: false, fps: 0, quality: 'high',
+  mouseTrack: true, fullscreenTrack: false, fps: 30, quality: 'high',
   voiceOn: false, volume: 100, spatial: true,
   breathing: false, hoverFade: false, dropEffects: true, naturalExpression: true,
   autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
@@ -595,7 +595,9 @@ let prefs = {
   catpaw: { master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false },
 };
 function applyPrefs() {
-  if (app && app.ticker) app.ticker.maxFPS = prefs.fps || 0;
+  // 0(不限速)默认 30fps：桌宠多为呼吸/眨眼/小动作，30fps 足够顺滑，把渲染器+GPU 的常驻开销减半；
+  // 高刷屏（120/144Hz）尤其受益；封顶 60fps，再高对桌宠毫无必要。
+  if (app && app.ticker) { const f = (!prefs.fps || prefs.fps <= 0) ? 30 : Math.min(prefs.fps, 60); app.ticker.maxFPS = f; }
   const tag = document.getElementById('name-tag');
   if (tag) tag.style.display = (prefs.catpaw && prefs.catpaw.hud === false) ? 'none' : '';
   // 工具栏按钮状态
@@ -886,9 +888,13 @@ let __shapeLastKey = "", __shapeLastT = 0
    只在 getBounds 矩形内 readPixels 读 alpha（需 preserveDrawingBuffer），节流约 8fps；
    返回 {l,t,r,b} 四边内缩比例，位置仍由每帧实时 getBounds 决定（走路不滞后），
    单边最多内缩 45% 防误裁；任何失败/全透明返回上一次结果，首次为 null（回退整块）。 ── */
-let __trimCache = null, __trimT = 0
+let __trimCache = null, __trimT = 0, __trimSamples = 0
+const __trimMaxSamples = 8
 function computeModelAlphaTrim() {
   try {
+    // 裁剪比例是“按模型”的静态属性，只在模型加载后的前几帧采样，采样足够后永久复用，
+    // 不再每帧 readPixels（GPU 管线同步停顿 + 大块 Uint8Array 分配 → GC 小卡顿）。
+    if (__trimSamples >= __trimMaxSamples && __trimCache) return __trimCache
     const now = performance.now()
     if (now - __trimT < 120) return __trimCache
     __trimT = now
@@ -917,6 +923,7 @@ function computeModelAlphaTrim() {
     } catch (e2) { trim = null }
     if (!trim) return __trimCache // 全透明/失败：保留上次
     __trimCache = { l: trim.l, t: trim.t, r: trim.r, b: trim.b }
+    __trimSamples++
     return __trimCache
   } catch (e) { return __trimCache }
 }
@@ -3009,8 +3016,11 @@ function startAutoBehavior() {
     if (state.sleeping || !HAS_IPC) return;
     if (state.autoLevel === 'off' || prefs.proactive === false) return;
     if (prefs.privacyMode) return;
+    // 与 startAutonomyLoop(8s 心跳)共用同一最小间隔闸门，避免两套定时器重复发起空闲 LLM
+    if (Date.now() - lastLLMActAt < 20_000) return;
     autonomyTickNo++;
     if (state.autoLevel === 'light' && autonomyTickNo % 2 !== 0) return;
+    lastLLMActAt = Date.now();
     ipc.invoke('pet:autonomy:tick').catch(() => {});
   }, 30 * 1000);
 

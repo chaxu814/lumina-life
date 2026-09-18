@@ -166,10 +166,10 @@ class ModeManager {
   private mainWindowRef: BrowserWindow | null = null
   private listeners: Array<() => void> = []
 
-  /** 场景检测间隔 (秒) — 🆕 v3.0: 30s→60s，使用缓存后降低频率 */
-  private readonly DETECT_INTERVAL = 60
-  /** 🆕 v3.0: 空闲模式检测间隔加倍（省电） */
-  private readonly IDLE_DETECT_INTERVAL = 120
+  /** 场景检测间隔 (秒) — v3.9 性能：60s→90s，配合 30s 窗口缓存，减少 PowerShell 启动频率 */
+  private readonly DETECT_INTERVAL = 90
+  /** v3.0 空闲模式检测间隔加倍；v3.9 再放宽到 180s 省电 */
+  private readonly IDLE_DETECT_INTERVAL = 180
 
   /** 注册主窗口引用（用于 IPC 推送） */
   setMainWindow(win: BrowserWindow): void {

@@ -1250,15 +1250,17 @@ export function registerPetIpc(): void {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 800, height: 450 } })
       const src = sources[0]
       if (!src) return { ok: true, skipped: true }
-      const dataUrl = src.thumbnail.toDataURL()
-      // 🫀 v0.2 屏幕节流：dHash 帧差 + 场景切换 + 低频兜底，稳定画面不花钱问 VLM
-      let sceneInfo: any = null
-      try { sceneInfo = await detectScene() } catch { sceneInfo = null }
+      // 🫀 v0.2 屏幕节流：先做纯图像 dHash 帧差判定（零进程开销）。画面稳定直接放行，
+      // 不启动 PowerShell、不做 base64 编码（这是周期性小卡顿来源之一）。
       let decision: any = null
       if (getPetPrefs().life?.screenGate !== false) {
-        decision = decideScreenCapture(src.thumbnail, sceneInfo?.windowTitle || null, sceneInfo?.processName || null, Date.now())
+        decision = decideScreenCapture(src.thumbnail, null, null, Date.now())
         if (!decision.capture) return { ok: true, skipped: true, reason: 'stable', scene: decision.scene, change: decision.change }
       }
+      // 画面确实变化、需要问 VLM 时，才做 base64 编码并读一次活动窗口（与场景检测共享 30s 缓存）
+      const dataUrl = src.thumbnail.toDataURL()
+      let sceneInfo: any = null
+      try { sceneInfo = await detectScene() } catch { sceneInfo = null }
       console.log('[Pet] perception tick: 已截屏，size=', src.thumbnail.getSize())
       // 用已配置 LLM 做多模态分析；纯文本模型/调用失败时降级为"活动窗口标题文本观察"
       try {
