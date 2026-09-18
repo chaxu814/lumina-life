@@ -5,6 +5,9 @@
 // 包括：正在做什么、互相之间的互动、随机内心独白
 // ============================================================
 
+// [EXPERIMENTAL / easter egg] Reality-show events are randomly picked from
+// fixed thought/interaction/conflict arrays; they are NOT LLM-generated.
+// Label as "experimental easter egg" in UI/README.
 import { globalEventBus, BusEvents } from '../eventBus'
 
 // ═══════════════════════════════════════════════════════════

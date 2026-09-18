@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina × N.E.K.O / AIRI / OpenClaw 深度对比 · 2026-09-18</title>
+<style>
+  :root{
+    --bg:#0f1020; --panel:#171830; --panel2:#1e2040; --line:#2c2f55;
+    --ink:#e9ebff; --sub:#a7abd4; --mut:#7c81ad;
+    --lum:#ec4899; --neko:#22d3ee; --airi:#a78bfa; --claw:#fb7185;
+    --good:#34d399; --warn:#fbbf24; --bad:#f87171; --acc:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0d0e1c,#0f1020 240px);color:var(--ink);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.6;font-size:15px}
+  .wrap{max-width:1180px;margin:0 auto;padding:36px 22px 80px}
+  h1{font-size:28px;margin:0 0 6px;letter-spacing:.5px}
+  h1 .em{color:var(--lum)}
+  h2{font-size:20px;margin:42px 0 14px;padding-left:11px;border-left:4px solid var(--lum)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--ink)}
+  p{margin:8px 0}
+  .sub{color:var(--sub)}
+  .mut{color:var(--mut);font-size:13px}
+  .src{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:var(--sub);font-size:13px;margin-top:16px}
+  .verdict{background:linear-gradient(135deg,rgba(236,72,153,.14),rgba(96,165,250,.10));
+    border:1px solid #3a2a55;border-radius:14px;padding:18px 20px;margin-top:18px;font-size:16px}
+  .verdict b{color:#fff}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+  .card h4{margin:0 0 6px;font-size:15px}
+  .tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--sub);margin:2px 4px 2px 0}
+  .dot{font-weight:700}
+  .dot.s{color:var(--good)} .dot.m{color:var(--warn)} .dot.n{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px;background:var(--panel);border-radius:12px;overflow:hidden}
+  th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink);font-weight:600;white-space:nowrap}
+  td:first-child,th:first-child{color:var(--sub)}
+  tr:last-child td{border-bottom:none}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+  .chart .ec{width:100%;height:420px}
+  .fallback{display:none;overflow-x:auto}
+  /* layered ecosystem */
+  .layer{border-radius:12px;padding:14px 16px;margin:10px 0;border:1px solid var(--line)}
+  .layer .lt{font-size:13px;color:var(--mut);margin-bottom:9px;text-transform:uppercase;letter-spacing:1px}
+  .l-top{background:linear-gradient(135deg,rgba(167,139,250,.12),rgba(236,72,153,.10))}
+  .l-mid{background:rgba(96,165,250,.07)}
+  .l-bot{background:rgba(251,113,133,.09)}
+  .nodes{display:flex;gap:12px;flex-wrap:wrap}
+  .node{flex:1;min-width:210px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .node .nm{font-weight:700;margin-bottom:2px}
+  .node.airi{border-top:3px solid var(--airi)} .node.neko{border-top:3px solid var(--neko)}
+  .node.lumina{border-top:3px solid var(--lum)} .node.claw{border-top:3px solid var(--claw)}
+  .arrows{display:flex;gap:26px;justify-content:center;color:var(--mut);font-size:12px;margin:4px 0;flex-wrap:wrap}
+  .pill{display:inline-block;padding:1px 8px;border-radius:6px;font-size:12px;margin:1px 2px;background:#26294d;color:var(--sub)}
+  .ok{color:var(--good)} .mid{color:var(--warn)} .no{color:var(--bad)}
+  .win{border-left:3px solid var(--good)} .lose{border-left:3px solid var(--bad)}
+  ul{margin:8px 0;padding-left:22px} li{margin:6px 0}
+  .num{font-variant-numeric:tabular-nums}
+  .kpi{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .kpi .k{flex:1;min-width:140px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .kpi .v{font-size:24px;font-weight:700} .kpi .l{font-size:12px;color:var(--sub)}
+  .legend span{margin-right:16px;font-size:13px;color:var(--sub)}
+  .foot{margin-top:40px;color:var(--mut);font-size:12px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🔬 Lumina × <span class="em">N.E.K.O / AIRI / OpenClaw</span> 深度对比</h1>
+  <div class="sub">数据口径：2026-09-18 · Lumina 为本地仓库实读（含跑测试 / 读源码），三个外部项目为 GitHub 官方 API + 公开 README 实测</div>
+
+  <div class="src">
+    <b>评级图例：</b>
+    <span class="dot s">● 强 / 成熟</span>　
+    <span class="dot m">◐ 有但早期 / 局部 / 待真机</span>　
+    <span class="dot n">○ 无或几乎无</span>　—
+    评级为基于证据的工程判断，<b>非官方排名</b>；评分为 1–5 分的主观工程判断，用于理解能力形状，不代表精确测量。
+  </div>
+
+  <div class="verdict">
+    🧭 <b>一句话总评：</b>Lumina 是一台「<b>引擎和灵魂已经就位、但还没点火上路</b>」的车——
+    它在「同帧驱动身体 + 多 Agent 团队群像 + 安全纵深 + 办公工具面」上已经追平甚至局部反超最直接的对手 N.E.K.O；
+    但它 <b>0 发布、0 外部用户</b>，实时语音与一堆能力还停在「逻辑就绪、真机未验证」，且部分「生命感」彩蛋（梦境 / 真人秀）目前是写死模板。
+    它最大的敌人不是任何一个竞品，而是<b>闭门不发布</b>。
+  </div>
+
+  <div class="kpi">
+    <div class="k"><div class="v num">~11.3 万</div><div class="l">Lumina TS/TSX 自有代码行（electron 7.6 万 + src 3.7 万）</div></div>
+    <div class="k"><div class="v num">538 ✅</div><div class="l">单测通过 / 1 跳过（45 个测试文件，我刚实跑）</div></div>
+    <div class="k"><div class="v num">36</div><div class="l">git 提交 · <b>无 remote · 0 Release · 0 用户</b></div></div>
+    <div class="k"><div class="v num">390,029</div><div class="l">OpenClaw Stars（10 个月）· AIRI 49,235 · N.E.K.O 2,928</div></div>
+  </div>
+
+  <!-- ================= 生态位 ================= -->
+  <h2>① 它们不是同一物种：一个「基础设施」+ 三个「数字生命」</h2>
+  <p class="sub">理解这场对比的前提：四个项目天然分成三层，Lumina 同时跨了「上层生命体」和「中层办公能力」，但缺了「底层执行总线」和「外层触达」。</p>
+
+  <div class="layer l-top">
+    <div class="lt">上层 · 有人格的「数字生命 / 陪伴体验」</div>
+    <div class="nodes">
+      <div class="node airi"><div class="nm">AIRI 🎮</div><div class="mut">会真玩 Minecraft / Factorio 的 AI VTuber / 灵魂容器，Web / 桌面 / 移动全端</div></div>
+      <div class="node neko"><div class="nm">N.E.K.O 🐱</div><div class="mut">全双工实时语音视觉 + 五维记忆 + 五种形态，<b>已上 Steam</b> 的消费级陪伴产品</div></div>
+      <div class="node lumina"><div class="nm">Lumina（你的）🐱</div><div class="mut">LLM 同帧驱动身体 + 三人后台团队，桌面生命体 × 办公 Agent，<b>尚未公开</b></div></div>
+    </div>
+  </div>
+
+  <div class="layer l-mid">
+    <div class="lt">中层 · 共用能力（记忆 / 语音 / 多模型 / 渲染 / 协议）</div>
+    <div class="nodes">
+      <div class="node" style="flex:1;min-width:100%"><span class="pill">SQLite · DuckDB-WASM · pglite · 向量检索</span><span class="pill">STT / TTS</span><span class="pill">OpenAI / Claude / Gemini / 本地模型</span><span class="pill">Live2D / VRM</span><span class="pill">MCP · A2A</span><span class="pill">本地推理 WebGPU / CUDA / Metal</span></div>
+    </div>
+  </div>
+
+  <div class="layer l-bot">
+    <div class="lt">底层 · 执行 / 渠道「手脚与神经总线」</div>
+    <div class="nodes">
+      <div class="node claw" style="flex:1;min-width:100%"><div class="nm">OpenClaw 🦞</div><div class="mut">本地 Gateway + <b>20 多个成熟聊天渠道</b> + 主机工具 / 沙箱 + 全平台原生 App / headless。它<b>明确不做人格与形象</b>。</div></div>
+    </div>
+  </div>
+
+  <div class="arrows">
+    <span>N.E.K.O ── A2A 把 OpenClaw 当「手脚」调用 ──▶ OpenClaw</span>
+    <span>Lumina 已内置 OpenClaw 桥接适配器（连不上自动回退，不崩）</span>
+  </div>
+  <p class="mut">结论：OpenClaw 不是 Lumina 的对手，而是 Lumina / N.E.K.O 都应该接的「外骨骼」。正面打它没有胜算（差约 5 个数量级的工程规模），把它外包成执行层才是聪明打法。</p>
+
+  <!-- ================= 能力矩阵 ================= -->
+  <h2>② 能力矩阵（14 维逐项核对）</h2>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>维度</th><th>🌸 Lumina</th><th>🐱 N.E.K.O</th><th>🎮 AIRI</th><th>🦞 OpenClaw</th></tr></thead>
+    <tbody>
+      <tr><td>同帧驱动身体 action/mood/speech</td><td><span class="dot s">●</span> 第一卖点 + 表演 DSL</td><td><span class="dot m">◐</span> 检测触发，身体偏状态机</td><td><span class="dot m">◐</span> 人格驱动</td><td><span class="dot n">○</span></td></tr>
+      <tr><td>多 Agent 分工协作</td><td><span class="dot s">●</span> 三人 + DAG + 实习生池</td><td><span class="dot m">◐</span> 单角色，A2A 调外部</td><td><span class="dot n">○</span> 单灵魂</td><td><span class="dot m">◐</span> 可编排，无人格团队</td></tr>
+      <tr><td>生命感 / 情感 / 内驱力</td><td><span class="dot s">●</span> V/A 情绪环 + 4 内驱力</td><td><span class="dot s">●</span> 情绪 + 主动陪伴，体感打磨好</td><td><span class="dot m">◐</span> 以人格设定为主</td><td><span class="dot n">○</span></td></tr>
+      <tr><td>实时语音 / 视觉</td><td><span class="dot m">◐</span> 全双工已打通，非原生 Realtime</td><td><span class="dot s">●</span> 全双工 Realtime API 为第一公民</td><td><span class="dot s">●</span> 客户端 VAD/STT + 多 TTS</td><td><span class="dot m">◐</span> 语音节点</td></tr>
+      <tr><td>屏幕理解 / 主动搭话</td><td><span class="dot s">●</span> dHash 节流 + 场景分类</td><td><span class="dot s">●</span> 窥屏 / 热搜 / 动态，强</td><td><span class="dot m">◐</span> 主要看游戏画面</td><td><span class="dot m">◐</span> 屏幕节点</td></tr>
+      <tr><td>Computer Use 桌面操控</td><td><span class="dot s">●</span> 自研全套：SoM/zoom/batch/急停</td><td><span class="dot s">●</span> CUA + 浏览器 + OpenClaw</td><td><span class="dot n">○</span> 主攻游戏内操作</td><td><span class="dot s">●</span> 主机工具 + 沙箱，最系统</td></tr>
+      <tr><td>Avatar 形态</td><td><span class="dot m">◐</span> 仅 Live2D，内置仅 Mao</td><td><span class="dot s">●</span> Live2D/VRM/MMD/PNG/猫宠 + 动捕</td><td><span class="dot s">●</span> Live2D + VRM</td><td><span class="dot n">○</span> 无拟人形象</td></tr>
+      <tr><td>长期记忆</td><td><span class="dot s">●</span> SQLite + 反思 + 证据链 *</td><td><span class="dot s">●</span> 五维记忆 + 跨端同一人格</td><td><span class="dot s">●</span> DuckDB-WASM / pglite</td><td><span class="dot m">◐</span> 会话 / transcripts</td></tr>
+      <tr><td>模型供应商 / 本地模型</td><td><span class="dot m">◐</span> 原生四协议 + 8 预置 + 自动容错</td><td><span class="dot s">●</span> 14+，免费模型开箱</td><td><span class="dot s">●</span> 30+（xsai 统一层）</td><td><span class="dot s">●</span> 多家托管 + 本地，harness 可换</td></tr>
+      <tr><td>办公 / 生产力工具面</td><td><span class="dot s">●</span> 50–60 工具 + CLI + REST，最宽</td><td><span class="dot m">◐</span> 偏陪伴 / 浏览器</td><td><span class="dot m">◐</span> 偏游戏</td><td><span class="dot s">●</span> 通用工具 / 技能 / 插件</td></tr>
+      <tr><td>渠道 / 多端触达</td><td><span class="dot m">◐</span> 7 个早期 adapter，Win 优先</td><td><span class="dot s">●</span> Steam + Docker + 手机内测</td><td><span class="dot s">●</span> Web/PWA/iOS/桌面 + TG/DC</td><td><span class="dot s">●</span> 20+ 成熟渠道 + 全端原生</td></tr>
+      <tr><td>安全治理</td><td><span class="dot s">●</span> 6 层 / 7 级×8 类 / 审批 / 急停</td><td><span class="dot m">◐</span> 基础（遥测默认开，可关）</td><td><span class="dot m">◐</span> 基础</td><td><span class="dot s">●</span> 配对 / 沙箱 / 处置手册 / 基金会</td></tr>
+      <tr><td>工程化 / 测试</td><td><span class="dot m">◐</span> strict + 538 单测，仍有单体</td><td><span class="dot m">◐</span> 多 server，历史包袱重</td><td><span class="dot s">●</span> monorepo + 可复用包</td><td><span class="dot s">●</span> 9.6 万提交，流水线完备</td></tr>
+      <tr><td>成熟度 / 社区 / 发布</td><td><span class="dot n">○</span> 未发布、0 外部用户</td><td><span class="dot m">◐</span> 已上 Steam + 工坊 + 手机内测</td><td><span class="dot s">●</span> 4.9 万★，持续 DevLog</td><td><span class="dot s">●</span> 39 万★，基金会治理</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="mut">* 记忆的「向量检索」需诚实说明：Lumina 默认是 <b>TF-IDF 统计向量</b>（非真语义），只有用户自起 Ollama（nomic-embed-text）或 Python sentence-transformers 服务后才升级为真 embedding。</p>
+
+  <!-- ================= 雷达 ================= -->
+  <h2>③ 同赛道能力形状：Lumina vs N.E.K.O（8 维，1–5 分）</h2>
+  <div class="chart">
+    <div id="radar" class="ec"></div>
+    <div class="fallback" id="radarFb"></div>
+    <p class="mut">Lumina 明显占优：多 Agent（5 vs 1.5）、安全治理（4.5 vs 2.5）、办公 / 自研 CU。<br>
+      N.E.K.O 明显占优：实时语音视觉（5 vs 3）、形态 / Avatar（5 vs 2）、工程生态与发布（3.5 vs 2）。<br>
+      基本打平：生命感 / 人格、电脑操控、记忆。</p>
+  </div>
+
+  <!-- ================= 社区 ================= -->
+  <h2>④ 社区成熟度差几个数量级（GitHub API，2026-09-18）</h2>
+  <div class="chart">
+    <div id="bar" class="ec" style="height:360px"></div>
+    <div class="fallback" id="barFb"></div>
+  </div>
+  <p class="mut">读法：OpenClaw 与 Lumina 之间隔着约 5 个数量级的关注度；但 OpenClaw 只用约 10 个月、AIRI 约 21 个月走到现在——赛道仍在快速洗牌，<b>晚不等于没机会，闭门不发布才是最大风险</b>。</p>
+
+  <!-- ================= 真正站得住的优点 ================= -->
+  <h2>⑤ Lumina 真正站得住的优点（我逐个读过源码验证）</h2>
+  <div class="grid g2">
+    <div class="card"><h4>🧠 ①「意识同帧驱动身体」是最锋利的机制</h4>
+      <p class="mut">LLM 每次推理强制产出一份结构化 <code>{action, mood, speech}</code>（<code>intentDispatcher.ts</code>），身体与台词同源、不播预设动画。上层是表演 DSL（不裸调参数），下层是 5 层加权软混合器 + 五元音口型（文本定形、真实音频能量定张度）+ 模型无关的全参数 profile。三家都没把它当第一卖点。</p></div>
+    <div class="card"><h4>👥 ② 多 Agent「团队群像」独一份</h4>
+      <p class="mut">固定三人（Lumina 出面 / Yak 研究 / 热茶审码）+ 委托流水线（写→审→修闭环）+ 任务 DAG 看板 + 五阶段门控（调研→规划→执行→验证→评审）+「实习生池」并行临时 Agent + verifyLoop。这是把<b>真实软件团队的协作</b>做进了陪伴产品，别家要么单角色、要么无人格编排。</p></div>
+    <div class="card"><h4>🫀 ③ 生命感从「状态机」升级到「内驱力」</h4>
+      <p class="mut">统一情绪核心用 V/A（效价-唤醒）情绪环，权威换算三套旧口径，带迟滞防抖；内驱力（精力 / 社交 / 好奇 / 安心）随时间、昼夜节律、互动消长，推出当前行为倾向。LLM 挂了也不僵——本地规则降级，困了睡、无聊撒娇、好奇张望。</p></div>
+    <div class="card"><h4>🛡️ ④ 陪伴类里罕见的安全纵深</h4>
+      <p class="mut">6 层防线、7 级严重度 × 8 类威胁、审批流、密钥拦截、全局急停、CU 高危动作硬拦截；摄像头「在场 / 注视 / 表情」是<b>默认关闭、必须授权、强制 local-only、采样必须亮灯</b>的隐私状态机。安全意识接近 OpenClaw。</p></div>
+    <div class="card"><h4>🖥️ ⑤ 自研 Computer Use 完整度领先</h4>
+      <p class="mut">截图→VLM→键鼠之上，还做了 dHash 事件化屏幕感知（画面不变就不花钱问 VLM）、场景分类、Set-of-Mark 网格、zoom 局部放大、batch 批量动作、alpha-trim 贴身裁剪、DPI 免疫归一化坐标、中文剪贴板输入。N.E.K.O 更多是 CUA + OpenClaw 组合。</p></div>
+    <div class="card"><h4>🔧 ⑥ 办公生产力面最宽，且供应商在补齐</h4>
+      <p class="mut">50–60 个工具实现（文件 / 终端 / git / LSP / OCR / 深度研究 / 情报订阅）+ CLI + REST API；最新提交的 <code>nativeBridge</code> 用纯函数无损翻译，已在主链路原生支持 Claude / Gemini / Azure（不再只讲 OpenAI 兼容）。</p></div>
+  </div>
+  <p class="mut">其他加分：本地优先 + AGPL/Apache 双许可（个人 / 商业都友好）；中文本土场景与 QQ / 钉钉 / 微信渠道；异构模型能力自动容错（纯聊天模型自动降级、不接就崩）；约 7 周交付 11 万行且 538 单测通过。</p>
+
+  <!-- ================= 问题 ================= -->
+  <h2>⑥ 但我必须直说的问题（按严重度，含「真实 vs 注水」审计）</h2>
+  <div class="grid g2">
+    <div class="card lose"><h4>🔴 P0 · 仍未发布，窗口在收窄</h4>
+      <p class="mut">无 remote、0 Release、0 外部用户，36 次提交全在本地。N.E.K.O 已上 Steam + 创意工坊 + 手机内测，AIRI 4.9 万★，OpenClaw 39 万★。你缺的不是代码，是真实用户与真机反馈。</p></div>
+    <div class="card lose"><h4>🔴 P0 · 大量「逻辑就绪、真机未验证」</h4>
+      <p class="mut">538 个测试几乎全是<b>纯逻辑单测</b>。全双工语音、SoM 渲染、alpha-trim 缩放在 125/150% 下是否裁到模型、presence 人脸、UGC 加载、透明窗修复——都在等真机。默认离线 Whisper 是 tiny.en <b>不识中文</b>，中文主链路依赖 Web Speech（联网）。</p></div>
+    <div class="card lose"><h4>🔴 P1 · 「真实感」有注水，深扒会被抓</h4>
+      <p class="mut">我读了源码：<b>梦境引擎</b>是 25 个写死的中文模板随机拼接（记忆只塞 50 字）；<b>真人秀</b>是写死的内心独白 / 互动 / 冲突数组随机抽。它们不是 LLM 生成的「真实生活」，和「她真的活着」的对外叙事有落差。建议要么真接 LLM，要么明确标为「彩蛋 / 实验」。</p></div>
+    <div class="card lose"><h4>🟡 P1 · 宣传口径略超前于代码</h4>
+      <p class="mut">README 写「向量语义检索」，默认实为 TF-IDF；写「70+ 工具」，实际工具实现约 50–60 个（含 MCP / 技能再凑数）。公开后这些最容易被竞品支持者抓硬伤。</p></div>
+    <div class="card lose"><h4>🟡 P1 · 形态单薄、平台单一</h4>
+      <p class="mut">仅 Live2D、内置仅 Mao（N.E.K.O 五形态 + 动捕，AIRI 有 VRM）；只有 Windows 优先的 Electron，无 Web/PWA/移动/Docker/headless。跨端「同一个她」是 N.E.K.O 的主打，你目前没有。</p></div>
+    <div class="card lose"><h4>🟡 P2 · 功能蔓延、广度 &gt; 深度</h4>
+      <p class="mut">30+ 顶层模块：dream / realityShow / gamification / mission / timeCapsule / luckyMode / loop / 7 角色 / 新闻 / 游戏化……「副人格抢麦」概念新颖但实现偏模板。单点对拼都不够深，容易稀释「3 分钟生命时刻」。</p></div>
+    <div class="card lose"><h4>🟡 P2 · 工程债与持久化缺口</h4>
+      <p class="mut">仍有 5 个千行单体；<b>内驱力 / 情绪是内存单例，重启回基线</b>——不持久化，「越处越懂你」就立不住；我跑测试时 better-sqlite3 在纯 Node 下 ABI 不匹配（发布前必须 electron-rebuild）；7 个渠道 / OpenClaw 桥都是早期 adapter，未真实联调。</p></div>
+    <div class="card lose"><h4>🟢 亮点中的小提醒</h4>
+      <p class="mut">TODO/FIXME 已从 82 降到 40，工作树也比 9/15 报告时干净，方向是对的；但「视觉路线 / 执行层 / 默认权限姿态」三项技术决策仍需拍板。</p></div>
+  </div>
+
+  <!-- ================= 创新点 ================= -->
+  <h2>⑦ 竞争性与创新创意（这些是你真正的护城河）</h2>
+  <ul>
+    <li><b>把「身体」当一等输出</b>：同帧 <code>{action, mood, speech}</code> + 表演 DSL，是把「LLM 驱动数字生命」从 demo 推进到工程可控的关键一步；这是最该被写成论文 / 演示视频的点。</li>
+    <li><b>「团队群像」而非「单角色」</b>：固定三人 + 实习生并行池 + 五阶段门控，是「数字生命」和「Agent 编排」两条赛道的<b>交集创新</b>，目前没有第二家。</li>
+    <li><b>内驱力 / 生理模拟</b>：needs + 情绪环 + 昼夜节律 + 惯性迟滞，让「主动」有内在动机，而非定时器——这比 N.E.K.O 的「检测触发」更接近「活物」。</li>
+    <li><b>成本感知的主动感知</b>：dHash 事件化屏幕感知（稳定画面不烧 VLM token），是把「一直看着你」做到可商用的关键工程细节。</li>
+    <li><b>隐私即默认</b>：摄像头 local-only 硬约束 + 指示灯 + 授权状态机，在消费级陪伴里是差异化卖点（N.E.K.O 遥测默认开，虽可关）。</li>
+    <li><b>正确的生态位判断</b>：已经内置 OpenClaw A2A 桥接，把硬执行外包、精力留给「灵魂」，而不是重造 20 个渠道。</li>
+  </ul>
+
+  <!-- ================= 逐个对手 ================= -->
+  <h2>⑧ 逐个对手：赢面与短板</h2>
+  <div class="grid g3">
+    <div class="card win"><h4>vs N.E.K.O（最直接对手）</h4>
+      <p class="ok">你占优：同帧身体机制厚度、多 Agent 群像、安全纵深、办公工具面、自研 CU 完整度、本地模型容错。</p>
+      <p class="no">你落后：全双工实时语音真机打磨、五形态 + 动捕、零配置开箱、跨端同一人格、14+ 供应商、Steam 工坊 UGC 闭环、<b>已发布</b>。</p>
+      <p class="mut">主动搭话 / 窥屏 / 五维记忆 / 猫娘桌宠高度重合——差异必须靠「驱动身体 + 团队群像」讲得更锋利。</p></div>
+    <div class="card win"><h4>vs AIRI（不同赛道：游戏 VTuber）</h4>
+      <p class="ok">你占优：桌面办公生产力、中文本土渠道、多 Agent 团队、情感与安全纵深、桌面 CU。</p>
+      <p class="no">你落后：「AI 真会玩游戏」王牌、VRM、Web/PWA/iOS 触达、可复用 npm 包（xsai/unspeech/DuckDB 驱动）、WebGPU/CUDA/Metal 本地推理、国际化社区。</p>
+      <p class="mut">可学其薄供应商层与本地推理栈；游戏陪玩线已明确不跟进是对的。</p></div>
+    <div class="card lose"><h4>vs OpenClaw（不同物种，别正面打）</h4>
+      <p class="ok">你占优：人格 / 情绪 / Avatar / 消费级陪伴——它明确不做；中文与桌宠形态。</p>
+      <p class="no">差距悬殊：9.6 万提交、39 万★、20+ 成熟渠道、配对安全、沙箱、全端原生、headless / 基金会治理。</p>
+      <p class="mut">策略：用 A2A / MCP 把它当手脚（你已有桥接），把自己那 7 个早期渠道与硬执行逐步外包，精力留给灵魂。</p></div>
+  </div>
+
+  <!-- ================= 建议 ================= -->
+  <h2>⑨ 我的想法：下一步按杠杆排序</h2>
+  <div class="grid g2">
+    <div class="card"><h4>1️⃣ 发布 v0.1-preview（最大杠杆）</h4><p class="mut">建仓 push、打 Release、拍真机演示视频（pitch 文档都写好了）。用真实迭代换反馈，停止闭门堆功能。哪怕粗糙，先让「她」被人摸到。</p></div>
+    <div class="card"><h4>2️⃣ 统一口径 + 去注水</h4><p class="mut">对外只讲「同帧驱动身体 + 连续情绪 + 团队群像」一条主线；核准「情绪维度 / 工具数 / 版本号 / 记忆措辞」；梦境 / 真人秀要么真接 LLM，要么标实验，别让模板砸了「活着」的招牌。</p></div>
+    <div class="card"><h4>3️⃣ 聚焦「3 分钟生命时刻」</h4><p class="mut">冻结边缘模块（luckyMode / mission / realityShow / timeCapsule / 7 角色先藏起），把同帧身体 + 内驱力 + 屏幕主动搭话 + 真机全双工语音磨到「3 分钟让人 wow」。</p></div>
+    <div class="card"><h4>4️⃣ 补两块最短体验板</h4><p class="mut">① 1–2 个授权清晰的默认形象 + 一键导入（VRM 可排后）；② 真机打通中文全双工语音（先定中文流式 STT 选型，别让 tiny.en 拖后腿）。</p></div>
+    <div class="card"><h4>5️⃣ 让「感情」能跨会话累积</h4><p class="mut">把内驱力 / 情绪 / 亲密度持久化到 SQLite（哪怕只是定时快照），否则「越处越懂你」每次重启都清零，这是陪伴产品的命脉。</p></div>
+    <div class="card"><h4>6️⃣ 集成而非重造</h4><p class="mut">OpenClaw A2A 干硬执行（已起步）；nativeBridge 已起步，继续把供应商层做薄，删掉没接线的死代码；拍板视觉路线 / 执行层 / 默认权限三件事。</p></div>
+  </div>
+
+  <div class="foot">
+    <b>事实口径</b>：Lumina 来自本地仓库实读（目录 / 行数 / 源码 / 实跑 538 单测 / git log / package.json，2026-09-18）；
+    三个外部项目来自 GitHub 官方 API（Stars / Forks / 创建时间 / 提交数 / 语言 / License）与公开 README（2026-09-18 抓取）。
+    OpenClaw 仓库 License 字段为 NOASSERTION，其 README 自述为 MIT（见 THIRD_PARTY_NOTICES）。
+    本报告与 9/15、9/17 两版对比看板同源、在其上做了 9/18 独立复核：补入 36 次提交、nativeBridge 原生四协议、全双工语音闭环、538 单测，并新增「真实 vs 模板」注水审计。
+  </div>
+
+</div>
+
+<script>
+(function(){
+  function render(){
+    if(typeof echarts === 'undefined'){ showFallback(); return; }
+    try{ radarChart(); barChart(); }catch(e){ if(window&&window.console)console.error(e); showFallback(); }
+  }
+  function radarChart(){
+    var el=document.getElementById('radar'); if(!el) return;
+    var ind=[
+      {name:'生命感/人格',max:5},{name:'多Agent协作',max:5},{name:'实时语音视觉',max:5},{name:'电脑操控',max:5},
+      {name:'记忆',max:5},{name:'形态/Avatar',max:5},{name:'安全治理',max:5},{name:'工程生态/发布',max:5}
+    ];
+    var c=echarts.init(el,null,{renderer:'canvas'});
+    c.setOption({
+      backgroundColor:'transparent',
+      tooltip:{},
+      legend:{data:['🌸 Lumina','🐱 N.E.K.O'],top:6,textStyle:{color:'#a7abd4'}},
+      radar:{indicator:ind,center:['50%','56%'],radius:'66%',
+        axisName:{color:'#e9ebff',fontSize:12},
+        splitLine:{lineStyle:{color:'#2c2f55'}},splitArea:{areaStyle:{color:['rgba(255,255,255,.015)','rgba(255,255,255,.03)']}},
+        axisLine:{lineStyle:{color:'#2c2f55'}}},
+      series:[{type:'radar',data:[
+        {value:[4.5,5,3,4.5,4,2,4.5,2],name:'🌸 Lumina',
+          itemStyle:{color:'#ec4899'},areaStyle:{color:'rgba(236,72,153,.28)'},lineStyle:{width:2}},
+        {value:[4.5,1.5,5,4,4.5,5,2.5,3.5],name:'🐱 N.E.K.O',
+          itemStyle:{color:'#22d3ee'},areaStyle:{color:'rgba(34,211,238,.20)'},lineStyle:{width:2}}
+      ]}]
+    });
+    window.addEventListener('resize',function(){c.resize();});
+  }
+  function barChart(){
+    var el=document.getElementById('bar'); if(!el) return;
+    var names=['Lumina（未公开）','N.E.K.O','AIRI','OpenClaw'];
+    var stars=[0,2928,49235,390029];
+    var logs=stars.map(function(v){return Math.log10(Math.max(v,1));});
+    var c=echarts.init(el,null,{renderer:'canvas'});
+    c.setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis',formatter:function(p){var i=p[0].dataIndex;return names[i]+'：<b>'+stars[i].toLocaleString()+'</b> ★';}},
+      grid:{left:60,right:40,top:30,bottom:40},
+      xAxis:{type:'category',data:names,axisLabel:{color:'#e9ebff',fontSize:12},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      yAxis:{type:'value',name:'log₁₀ Stars',nameTextStyle:{color:'#7c81ad'},
+        axisLabel:{color:'#7c81ad'},splitLine:{lineStyle:{color:'#22244a'}},max:6},
+      series:[{type:'bar',data:logs.map(function(v,i){
+          var colors=['#7c81ad','#22d3ee','#a78bfa','#fb7185'];
+          return {value:v,itemStyle:{color:colors[i],borderRadius:[6,6,0,0]}};
+        }),
+        barWidth:'46%',
+        label:{show:true,position:'top',color:'#e9ebff',formatter:function(p){return stars[p.dataIndex].toLocaleString()+' ★';}}
+      }]
+    });
+    window.addEventListener('resize',function(){c.resize();});
+  }
+  function showFallback(){
+    var r=document.getElementById('radarFb'), b=document.getElementById('barFb');
+    if(r){r.style.display='block';r.innerHTML='<table><tr><th>维度</th><th>Lumina</th><th>N.E.K.O</th></tr>'+
+      [['生命感/人格','4.5','4.5'],['多Agent协作','5','1.5'],['实时语音视觉','3','5'],['电脑操控','4.5','4'],['记忆','4','4.5'],['形态/Avatar','2','5'],['安全治理','4.5','2.5'],['工程生态/发布','2','3.5']]
+      .map(function(x){return '<tr><td>'+x[0]+'</td><td>'+x[1]+'</td><td>'+x[2]+'</td></tr>';}).join('')+'</table>';}
+    if(b){b.style.display='block';b.innerHTML='<table><tr><th>项目</th><th>Stars</th></tr>'+
+      [['Lumina','0（未公开）'],['N.E.K.O','2,928'],['AIRI','49,235'],['OpenClaw','390,029']]
+      .map(function(x){return '<tr><td>'+x[0]+'</td><td>'+x[1]+'</td></tr>';}).join('')+'</table>';}
+    document.querySelectorAll('.ec').forEach(function(e){e.style.display='none';});
+  }
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
+  s.onload=render; s.onerror=showFallback;
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>

@@ -13,6 +13,8 @@ import { globalEventBus, BusEvents } from './eventBus'
 import { getTeamRegistry } from './core/teamRegistry'
 import type { DynamicMemberRegistration } from './core/teamRegistry'
 import { personalityConflictManager } from './gamification/personalityConflict'
+// 🆕 v0.1.1: Agent 间动态关系（亲密度/信任/协作随真实互动演化，持久化）
+import { getRelationshipStore } from './agentRelationships'
 // 🆕 Lucky 模式情绪桥接
 import { setCurrentMood } from './luckyModeIntegration'
 
@@ -191,13 +193,11 @@ export class ModeManager {
     return [...builtIn, ...dynamic]
   }
 
-  /** v5.0 compat: 返回所有关系（旧格式），供 teamProactiveSystem 使用 */
+  /** v5.0 compat: 返回所有关系（旧格式），供 teamProactiveSystem 使用。
+   * v0.1.1 起改为读取动态关系存储：委托/群聊等真实互动会改变亲密度、信任、协作数，
+   * 并持久化到 userData/lumina-relationships.json；首次启动以出厂基线播种。 */
   getAllRelationships(): Array<{ pairKey: string; agentA: string; agentB: string; type: string; affinity: number; trust: number; argumentCount: number; collaborationCount: number; lastInteraction: string; evolutionLog: string[] }> {
-    return [
-      { pairKey: 'lumina-recha', agentA: 'lumina', agentB: 'recha', type: 'colleague', affinity: 85, trust: 90, argumentCount: 12, collaborationCount: 156, lastInteraction: new Date().toISOString(), evolutionLog: [] },
-      { pairKey: 'lumina-yak', agentA: 'lumina', agentB: 'yak', type: 'mentor', affinity: 75, trust: 80, argumentCount: 5, collaborationCount: 89, lastInteraction: new Date().toISOString(), evolutionLog: [] },
-      { pairKey: 'recha-yak', agentA: 'recha', agentB: 'yak', type: 'colleague', affinity: 60, trust: 70, argumentCount: 20, collaborationCount: 67, lastInteraction: new Date().toISOString(), evolutionLog: [] },
-    ]
+    return getRelationshipStore().getAll()
   }
 }
 

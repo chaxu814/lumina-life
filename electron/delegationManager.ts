@@ -29,6 +29,8 @@ import { AgentRunner } from './agentRunner'
 import { autoFixLoop, runVerification, detectProjectRoot, detectProjectProfile, taskMayNeedVerification } from './orchestration/verifyLoop'
 import { assessComplexity } from './orchestration/complexityAnalyzer'
 import { PhaseGate, getPhasesFromComplexity } from './orchestration/phaseGate'
+// v0.1.1: 委托结果驱动 Agent 间动态关系
+import { getRelationshipStore } from './agentRelationships'
 import { getTaskBoard } from './orchestration/taskBoard'
 import type { PhaseName } from './orchestration/phaseGate'
 import type { ComplexityAnalysis } from './orchestration/complexityAnalyzer'
@@ -142,10 +144,18 @@ export class DelegationManager {
     } catch { /* ignore */ }
   }
 
-  /** P2: 记录委托日志到团队上下文 */
-  private _logDelegation(from: string, to: string, task: string, summary: string, success: boolean, elapsed: number): void {
+  /** P2: 记录委托日志到团队上下文；v0.1.1 同时驱动 Agent 间动态关系 */
+  private _logDelegation(from: string, to: string, task: string, summary: string, success: boolean, elapsed: number, taskType?: string): void {
     try {
       getTeamContextManager().logDelegation(from, to, task, summary, success, elapsed)
+    } catch { /* ignore */ }
+    // v0.1.1: 真实委托结果改变两人关系（成功→协作/信任上升，失败→信任下降）
+    try {
+      getRelationshipStore().recordInteraction(
+        from, to,
+        success ? 'delegation_ok' : 'delegation_fail',
+        taskType,
+      )
     } catch { /* ignore */ }
   }
 
@@ -496,7 +506,7 @@ ${lastError.slice(0, 1000)}
 
           if (attempt >= maxAttempts) {
             // 最后一次仍失败
-            this._logDelegation(from, to, task, result.error, false, Date.now() - startTime)
+            this._logDelegation(from, to, task, result.error, false, Date.now() - startTime, request.taskType)
             this._notifyEngine('end')
 
             const finalResult: DelegationResult = {
@@ -553,7 +563,7 @@ ${lastError.slice(0, 1000)}
           }
         }
 
-        this._logDelegation(from, to, task, cleanText.slice(0, 200), true, Date.now() - startTime)
+        this._logDelegation(from, to, task, cleanText.slice(0, 200), true, Date.now() - startTime, request.taskType)
         this._notifyEngine('end')
 
         const retryInfo = attempt > 1 ? {

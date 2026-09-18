@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion%20System-5D-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-70%2B-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="70+ Tools">
+  <img src="https://img.shields.io/badge/Tools-90%2B-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="90+ Tools & Skills">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -107,7 +107,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 |------|------|
 | **五维 + 三维情绪** | 团队侧五维：🥰开心 · 😴疲劳 · 🎯专注 · 😰焦虑 · 🤔好奇；底层用心情 / 精力 / 亲密度三个连续数值，带惯性、漂移与昼夜节律<br>Five team-level dimensions over a mood/energy/affinity numeric core with inertia, drift and circadian rhythm |
 | **实时可视化** | Lumina 的表情和语气随情绪实时变化<br>Her expression and tone shift in real time |
-| **关系记忆** | Agent 之间也有亲密度，随着互动自然演化<br>Agents build relationships with each other over time |
+| **关系记忆** | Agent 之间的亲密度/信任/协作数随**真实委托与群聊事件**演化，并持久化到本地（重启后保留）<br>Inter-agent affinity/trust evolve from real delegation & group-chat events and persist locally |
 | **主动搭话** | 不是冷通知——"主人你对着屏幕发呆好久了，要休息一下吗？"<br>Not a cold notification — "You've been staring at the screen for a while. Take a break?" |
 
 ---
@@ -120,7 +120,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 |------|------|
 | **短期记忆** | 当前对话上下文，支持自动压缩 |
 | **长期记忆** | SQLite 持久化 + 结构化事实/反思/人格 |
-| **向量检索** | 语义搜索，找到最相关的历史记忆 |
+| **混合召回** | 默认内置 TF-IDF + BM25 关键词混合检索（CJK 友好）；配置本地 Ollama / Python 语义模型后可升级为真·语义向量召回与精排<br>Hybrid recall: built-in TF-IDF + BM25 by default; optional semantic embeddings via local Ollama/Python |
 | **自动精炼** | 定时清理低质量记忆，保留真正重要的 |
 | **证据链** | 每条记忆有置信度评分，不是瞎猜 |
 | **记忆剧场** | 可视化浏览你和 Lumina 的回忆 |
@@ -173,7 +173,7 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **群聊** 💬 | Lumina、热茶、Yak 在后台自发聊天（你可以旁观） |
 | **早安仪式** 🌅 | 每天早上团队互道早安，同步日程 |
 | **Moments 朋友圈** 📱 | Agent 记录自己的状态和想法，像真人朋友圈 |
-| **亲密度演化** ❤️ | 关系随互动自然变化，吵架和好都真实发生 |
+| **关系演化** ❤️ | 委托成功 / 失败、群聊参与、建设性分歧会改变彼此的亲密度、信任与协作数并持久化（数值驱动，非剧情化"吵架和好"） |
 
 ---
 
@@ -190,9 +190,11 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ---
 
-### 🔧 70+ Built-in Tools · 70+ 内置工具（另可经内置技能 / MCP 扩展）
+### 🔧 90+ Built-in Tools & Skills · 90+ 内置工具与技能（另可经 MCP / 技能市场扩展）
 
-`搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · …… 
+<sub>口径：运行时注册约 90+ 个工具/技能名（约 80 个功能工具 + 8 个内置技能，来自约 50 个实现模块，部分模块含多个工具）；另有少量反幻觉别名与重定向。</sub>
+
+`搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · ……
 
 通过内置技能商店安装、卸载、升级——就像装 App 一样简单。<br>
 <sub>Install, uninstall, upgrade skills like apps from a store.</sub>
@@ -209,9 +211,9 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **😊 情感系统** | ❌ 几乎没有 | ✅ **5 维情绪 + 可视化 + 亲密度** |
 | **🖥️ Computer Use** | ❌ 只有闭源产品有 | ✅ **截图→理解→操作** |
 | **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
-| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + 向量检索 + 证据链** |
+| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + TF-IDF/BM25 混合召回（可选语义向量）+ 证据链** |
 | **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **沙箱模式 + 7级×8类 + 审批流** |
-| **🔧 工具生态** | ⭐ 看项目 | ✅ **70+ 工具 + MCP + 技能商店** |
+| **🔧 工具生态** | ⭐ 看项目 | ✅ **90+ 工具/技能 + MCP + 技能商店** |
 | **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
@@ -235,7 +237,7 @@ cp .env.example .env            # 编辑 .env 填入 LLM API（默认 LM Studio 
 npm run dev                     # 启动！
 ```
 
-> 💡 **可选：安装 Python 依赖**（语音输入/输出/向量检索需要）
+> 💡 **可选：安装 Python 依赖**（语音输入/输出、以及可选的语义向量召回需要；默认 TF-IDF/BM25 无需 Python）
 > ```bash
 > pip install -r python/requirements.txt
 > ```
@@ -373,7 +375,7 @@ Lumina 记得你。每次对话都是你们关系的延续，不是从头开始�
 
 ```
 短期记忆（当前会话）→ 是否重要？→ 长期记忆（SQLite）
-                                    → 向量化 → 语义检索
+                                    → TF-IDF/BM25 混合召回（默认）· 可选语义向量（Ollama/Python）
                                     → 摘要 → 每日记忆
 ```
 
@@ -411,7 +413,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  70+ tools · MCP     │   Plugin SDK · Skill Store       │ │
+│  │  90+ tools/skills · MCP │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -466,12 +468,18 @@ lumina-life/
 
 ## 🗺️ Roadmap · 路线图
 
-- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统 + 70+ 工具 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
+- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统 + 90+ 工具/技能 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
 - 🔜 **v1.1.0** — 自定义 Agent 创建（定义新角色加入团队）
 - 🔜 **v1.2.0** — 插件生态开放（社区技能商店）
 - 🔜 **v1.3.0** — macOS / Linux 支持
 - 🔜 **v1.4.0** — 多模态增强（图片理解、视频理解）
 - 🔜 **v1.5.0** — 移动端伴侣（iOS / Android 通知同步）
+
+### 🧪 实验性 / 彩蛋功能（非主线，请勿当真）
+
+- **梦境日记、Agent 真人秀**：当前由**写死的叙事模板 + 记忆片段关键词**随机拼接，用于氛围点缀，**不是大模型自由生成**。UI 已标注「🧪 实验彩蛋」，后续会改为模型生成或移除。
+- **记忆检索**：默认 TF-IDF / BM25 混合召回；真·语义向量召回需自行配置本地 Ollama / Python 模型。
+- **副人格觉醒等游戏化模块**：偏概念验证，不代表核心能力。
 
 ---
 

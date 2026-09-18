@@ -1,13 +1,17 @@
 // ============================================================
 // verify-p3-delegation.ts — P3-5 委托链路端到端验证脚本
 //
-// 运行：cd K:\Lumina 2\Lumina AI && npx ts-node electron/verify-p3-delegation.ts
+// 运行：npx ts-node electron/verify-p3-delegation.ts（可用 LUMINA_USER_DATA 指向 userData）
 // ============================================================
 
 import * as fs from 'fs'
 import * as path from 'path'
 
 // ── 配置 ──────────────────────────────────────────────────
+
+// userData 根目录：可用环境变量 LUMINA_USER_DATA 覆盖，默认取当前目录下的 userData
+const USER_DATA_ROOT = process.env.LUMINA_USER_DATA || path.join(process.cwd(), 'userData')
+const AGENTS_ROOT = path.join(USER_DATA_ROOT, 'agents')
 
 const TEST_FROM = 'lumina'
 const TEST_TO = 'yak'
@@ -25,19 +29,19 @@ function readJsonSafe(filePath: string, fallback: any = null): any {
 }
 
 function countMessages(agentId: string): number {
-  const chatsPath = path.join('K:\\Lumina 2\\Lumina AI\\userData\\agents', agentId, 'chats.json')
+  const chatsPath = path.join(AGENTS_ROOT, agentId, 'chats.json')
   const store = readJsonSafe(chatsPath, { sessions: {} })
   return Object.values(store.sessions || {}).reduce((sum: number, s: any) => sum + (s.messages?.length || 0), 0)
 }
 
 function countDelegationJobs(agentId: string): number {
-  const jobsPath = path.join('K:\\Lumina 2\\Lumina AI\\userData\\agents', agentId, 'jobs.json')
+  const jobsPath = path.join(AGENTS_ROOT, agentId, 'jobs.json')
   const store = readJsonSafe(jobsPath, { jobs: {} })
   return Object.values(store.jobs || {}).filter((j: any) => j.type === 'delegation').length
 }
 
 function getLatestJob(agentId: string): any {
-  const jobsPath = path.join('K:\\Lumina 2\\Lumina AI\\userData\\agents', agentId, 'jobs.json')
+  const jobsPath = path.join(AGENTS_ROOT, agentId, 'jobs.json')
   const store = readJsonSafe(jobsPath, { jobs: {} })
   const jobs = Object.values(store.jobs || {})
   if (jobs.length === 0) return null

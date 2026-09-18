@@ -107,9 +107,9 @@ export default function DreamPanel() {
       {/* ── 头部 ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>🌙 梦境日记</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>🌙 梦境日记 <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 999, background: 'rgba(139,92,246,0.15)', color: '#a78bfa', verticalAlign: 'middle' }}>🧪 实验彩蛋</span></h2>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-            每天 03:00 Lumina 为你编织梦境
+            每天 03:00 由记忆片段 + 叙事模板生成的趣味彩蛋（非模型自由生成，仅作氛围点缀）
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

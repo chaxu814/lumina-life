@@ -1,7 +1,7 @@
 import urllib.request, os, sys
 
 url = "https://download.pytorch.org/whl/cu128/torch-2.7.0%2Bcu128-cp310-cp310-win_amd64.whl"
-out = r"C:\Users\13510\torch_cu128.whl"
+out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.getcwd(), "torch_cu128.whl")
 
 print(f"Downloading {url} -> {out}")
 

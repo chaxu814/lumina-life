@@ -14,9 +14,9 @@ import DreamPanel from '../panels/DreamPanel'
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
   { id: 'social', icon: '🌐', label: '社区' },
-  { id: 'reality', icon: '🎬', label: '真人秀' },
+  { id: 'reality', icon: '🎬', label: '真人秀🧪' },
   { id: 'familytree', icon: '🌳', label: '家谱' },
-  { id: 'dream', icon: '🌙', label: '梦境' },
+  { id: 'dream', icon: '🌙', label: '梦境🧪' },
 ] as const
 
 type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']

@@ -124,7 +124,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "lumina-life",
+      "owner": "chaxu814",
       "repo": "lumina-life"
     }
   },

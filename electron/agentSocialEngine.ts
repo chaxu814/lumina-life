@@ -24,6 +24,7 @@ import { TEAM_PERSONAS, TEAM_MEMBERS } from './agentTeamPersonas'
 import { llmCoordinator, PRIORITY } from './llmCoordinator'  // 🆕 v2.18: 智能 LLM 调度
 // 朋友圈 — 社交对话输出到朋友圈
 import { postObservation, postThought, postChatSummary } from './moments/autoPoster'
+import { getRelationshipStore } from './agentRelationships'
 
 // ═══════════════════════════════════════════════════════════
 // v4.0: 话题库按轨道分离
@@ -422,6 +423,15 @@ export class AgentSocialEngine {
       this.activeConversation = null
       this.isProcessing = false
       llmCoordinator.releasePermission('SocialEngine')
+      try {
+        const parts = (ctx.participants || []) as string[]
+        const relStore = getRelationshipStore()
+        for (let __i = 0; __i < parts.length; __i++) {
+          for (let __j = __i + 1; __j < parts.length; __j++) {
+            relStore.recordInteraction(parts[__i], parts[__j], 'chat')
+          }
+        }
+      } catch { /* ignore */ }
 
       // 处理队列
       if (this.conversationQueue.length > 0 && !this._userIsWaiting) {

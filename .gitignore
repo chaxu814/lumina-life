@@ -6,7 +6,8 @@ node_modules/
 # ── Build output ─────────────────────────────────────────────
 out/
 dist/
-_runtime/  # Electron 运行时文件（构建产物）
+# Electron 运行时文件（构建产物，含 dll/exe，勿提交）
+_runtime/
 build/
 *.tsbuildinfo
 
@@ -115,6 +116,15 @@ screenshots/
 *.jpg
 *.jpeg
 *.gif
+# 例外：随仓库发布的 Live2D 桌宠模型贴图必须提交（否则克隆后模型无贴图、纯白）
+!electron/pet/assets/**/*.png
+!electron/pet/assets/**/*.jpg
+!electron/pet/assets/**/*.jpeg
+# 例外：README / 文档用的品牌图与截图
+!docs/**/*.png
+!docs/**/*.jpg
+!public/**/*.png
+!public/**/*.ico
 
 # ── Runtime config ──────────────────────────────────────────
 vk_swiftshader_icd.json

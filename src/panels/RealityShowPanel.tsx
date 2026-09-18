@@ -120,9 +120,9 @@ export default function RealityShowPanel() {
         color: '#e0e7ff',
       }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>🎬 Agent 真人秀</div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>🎬 Agent 真人秀 <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.18)', color: '#fff' }}>🧪 实验彩蛋</span></div>
           <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>
-            24/7 直播 Agent 们的幕后日常 · {events.length} 条记录
+            实验彩蛋 · 由预设事件库随机生成的幕后日常（非模型自由发挥）· {events.length} 条记录
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>

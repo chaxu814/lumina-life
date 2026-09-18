@@ -12,6 +12,9 @@
 //   5. 发送 DREAM_NEW 事件 → 前端展示
 // ============================================================
 
+// [EXPERIMENTAL / easter egg] Dreams are assembled from 25 fixed narrative
+// templates (DREAM_TEMPLATES) plus memory-fragment keywords; they are NOT
+// LLM-generated. Label as "experimental easter egg" in UI/README.
 import { globalEventBus, BusEvents } from '../eventBus'
 import * as fs from 'fs'
 import * as path from 'path'
