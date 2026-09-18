@@ -15,6 +15,7 @@
 
 import { EventEmitter } from 'events'
 import { ChildProcess, spawn } from 'child_process'
+import { resolvePython } from './pythonBin'
 import { globalEventBus, BusEvents } from './eventBus'
 import fs from 'fs'
 import path from 'path'
@@ -220,7 +221,7 @@ export class HearingManager extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       try {
-        this.sttProcess = spawn('python', [mainPy, '--port', String(this.sttPort)], {
+        this.sttProcess = spawn(resolvePython(), [mainPy, '--port', String(this.sttPort)], {
           cwd: sttDir,
           stdio: ['pipe', 'pipe', 'pipe'],
         })

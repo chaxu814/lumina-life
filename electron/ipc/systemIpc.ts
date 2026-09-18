@@ -5,6 +5,7 @@
 
 import { ipcMain, BrowserWindow } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
+import { resolvePython } from '../pythonBin'
 import { join } from 'path'
 import fs from 'fs'
 import { app } from 'electron'
@@ -794,7 +795,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
         sttProcess = null
       }
       const serverPath = join(__dirname, '..', '..', 'stt-server', 'stt_server.py')
-      sttProcess = spawn('python', [serverPath, '--port', String(STT_PORT)], {
+      sttProcess = spawn(resolvePython(), [serverPath, '--port', String(STT_PORT)], {
         cwd: join(__dirname, '..', '..', 'stt-server'),
         stdio: 'pipe',
       })
