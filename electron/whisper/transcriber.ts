@@ -15,13 +15,14 @@ import { extname, join } from 'path'
 import { tmpdir } from 'os'
 import { promisify } from 'util'
 import { exec } from 'child_process'
+import { DEFAULT_WHISPER_MODEL, ENGLISH_TINY_MODEL, resolveSttModel, configureTransformersEnv } from './sttModelConfig'
 
 const execAsync = promisify(exec)
 
 export interface TranscribeOptions {
-  /** 模型名称，默认 'Xenova/whisper-tiny.en' */
+  /** 模型名称，默认多语种 Xenova/whisper-base（支持中文） */
   modelName?: string
-  /** 语言（可选，如 'zh' 'en'） */
+  /** 语言（可选，如 'zh' 'en'）；中文默认 zh */
   language?: string
   /** 是否强制重新下模型 */
   forceReDownload?: boolean
@@ -47,7 +48,7 @@ export interface TranscribeResult {
 export class WhisperTranscriber {
   private static instance: WhisperTranscriber | null = null
   private pipeline: any = null
-  private modelName: string = 'Xenova/whisper-tiny.en'
+  private modelName: string = DEFAULT_WHISPER_MODEL
   private initialized: boolean = false
 
   static getInstance(): WhisperTranscriber {
@@ -63,11 +64,14 @@ export class WhisperTranscriber {
   async initialize(options: TranscribeOptions = {}): Promise<void> {
     if (this.initialized && !options.forceReDownload) return
 
-    this.modelName = options.modelName || 'Xenova/whisper-tiny.en'
+    // 中文链路必须选多语种模型（绝不能用 tiny.en）；默认即多语种 base
+    const language = options.language || 'zh'
+    this.modelName = resolveSttModel({ model: options.modelName, language })
 
     try {
-      // 动态导入 @xenova/transformers（可选依赖）
+      // 动态导入 @xenova/transformers（内置依赖），配置缓存目录与国内镜像
       const { pipeline } = await import('@xenova/transformers' as any)
+      configureTransformersEnv()
 
       this.pipeline = await pipeline('automatic-speech-recognition', this.modelName, {
         quantized: true, // 使用 int8 量化，更快更省内存
@@ -78,8 +82,8 @@ export class WhisperTranscriber {
     } catch (err: any) {
       throw new Error(
         `Whisper 模型加载失败: ${err.message}\n` +
-        `请确认已安装: npm install @xenova/transformers\n` +
-        `或使用已有音频文件 + 外部工具方案。`,
+        `请确认已安装依赖（npm install @xenova/transformers），并允许首次下载约 290MB 的多语种模型；\n` +
+        `或临时使用浏览器内置语音识别（联网）。`,
       )
     }
   }
@@ -98,17 +102,18 @@ export class WhisperTranscriber {
       throw new Error(`音频文件不存在: ${audioPath}`)
     }
 
-    await this.initialize(options)
+    const language = options.language || 'zh'
+    await this.initialize({ ...options, language })
 
     const pipelineOpts: any = {
       return_timestamps: 'chunk',
     }
 
-    if (options.language) {
-      // whisper-tiny.en 只支持英文，其他模型可指定语言
+    // 多语种模型可指定语言；tiny.en 只识英文，默认多语种 base 下强制中文识别
+    if (this.modelName !== ENGLISH_TINY_MODEL) {
       pipelineOpts.forced_decoder_ids = null
       // @ts-ignore
-      pipelineOpts.language = options.language
+      pipelineOpts.language = language
     }
 
     try {

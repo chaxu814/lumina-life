@@ -14,6 +14,7 @@ export { WhisperTranscriber, transcribeAudio } from './transcriber'
 export type { TranscribeOptions, TranscribeResult } from './transcriber'
 export { recordAudio } from './recorder'
 export type { RecordingOptions, RecordingResult } from './recorder'
+import { DEFAULT_WHISPER_MODEL } from './sttModelConfig'
 
 /**
  * 录制并转录（一键语音输入）
@@ -22,13 +23,15 @@ export type { RecordingOptions, RecordingResult } from './recorder'
 export async function voiceRecordAndTranscribe(
   duration: number = 5,
   modelName?: string,
+  language: string = 'zh',
 ): Promise<{ text: string; audioPath: string }> {
   const { recordAudio } = await import('./recorder')
   const { transcribeAudio } = await import('./transcriber')
 
   const recording = await recordAudio({ duration })
   const result = await transcribeAudio(recording.filePath, {
-    modelName,
+    modelName: modelName || DEFAULT_WHISPER_MODEL,
+    language,
   })
 
   return { text: result.text, audioPath: recording.filePath }

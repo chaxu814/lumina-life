@@ -22,6 +22,7 @@ var LuminaLife = (() => {
   var runtime_exports = {};
   __export(runtime_exports, {
     PetPerformanceEngine: () => PetPerformanceEngine,
+    backingPixelScale: () => backingPixelScale,
     scanAlphaBounds: () => scanAlphaBounds
   });
 
@@ -680,6 +681,12 @@ var LuminaLife = (() => {
     const t = Math.min(cap, Math.max(0, (minY - step) / bh));
     const b = Math.min(cap, Math.max(0, (bh - 1 - maxY - step) / bh));
     return { l, t, r, b };
+  }
+  function backingPixelScale(canvasWidth, cssWidth, devicePixelRatio) {
+    if (canvasWidth > 0 && cssWidth > 0 && Number.isFinite(canvasWidth) && Number.isFinite(cssWidth)) {
+      return canvasWidth / cssWidth;
+    }
+    return devicePixelRatio > 0 ? devicePixelRatio : 1;
   }
 
   // electron/pet/life/runtime.ts

@@ -27,6 +27,12 @@ export default defineConfig({
         'electron/realityShow/realityShowEngine.ts',
         'electron/securityGuard.ts',
         'electron/tokenEstimator.ts',
+        // v0.1 打磨：新增的纯逻辑/跨平台/开箱/形态模块（均有对应单测）
+        'electron/pet/platformCaps.ts',
+        'electron/pet/life/alphaTrim.ts',
+        'electron/pet/vrm/vrmLayout.ts',
+        'electron/core/localProviderDiscovery.ts',
+        'electron/whisper/sttModelConfig.ts',
       ],
       // 覆盖率门禁：CI 中 `vitest run --coverage` 低于阈值即失败
       thresholds: {

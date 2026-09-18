@@ -201,15 +201,44 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libappindicator1 libayatana-appindicator3-1 libfuse2 libnss3 2>/dev/null || true
 
-      - name: macOS - install certs (placeholder, set APPLE_* secrets for signing)
-        if: matrix.os == 'macos-latest'
-        run: |
-          # 如有 Apple Developer 证书，设置环境变量：
-          #   APPLE_ID, APPLE_ID_PASSWORD, APPLE_TEAM_ID
-          # electron-builder 会自动读取
-          echo "macOS build - code signing will be skipped if no credentials"
+      - name: Windows - import code-signing certificate (if provided)
+        if: matrix.os == 'windows-latest' && env.CSC_LINK != ''
+        shell: pwsh
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          # WINDOWS_CSC_LINK：base64 编码的 PFX（openssl base64 -in cert.pfx -out cert.b64）。
+          # 设置后 electron-builder 会用它做 Authenticode 签名；未设置则产出未签名安装包。
+          echo "Certificate secret present, electron-builder will sign via CSC_LINK."
+          if ($env:CSC_LINK) {
+            $bytes = [Convert]::FromBase64String($env:CSC_LINK)
+            [IO.File]::WriteAllBytes("cert.pfx", $bytes)
+            echo "CSC_LINK=$((Resolve-Path cert.pfx).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: macOS - install signing certs (if provided)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          BUILD_CERT_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MAC_KEYCHAIN_PASSWORD }}
+        run: |
+          # 配置 MAC_CERTIFICATE_BASE64 + MAC_CERTIFICATE_PASSWORD 后导入 Developer ID 证书；
+          # 再配置 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID 即可自动公证。
+          # 全部缺省时跳过签名（产出未签名 dmg，用户需右键打开）。
+          if [ -z "$BUILD_CERT_BASE64" ]; then
+            echo "No macOS certificate secret, building unsigned."
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> $GITHUB_ENV
+          else
+            echo "$BUILD_CERT_BASE64" | base64 --decode > certificate.p12
+            security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+            security default-keychain -s build.keychain
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+            security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -220,12 +249,24 @@ jobs:
 
       - name: Build and package
         run: npm run ${{ matrix.build_script }}
+        env:
+          # Windows Authenticode（PFX 已在上方落盘时，electron-builder 自动读取）
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          # macOS 公证（Developer ID 证书已导入时生效）
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WINDOWS_CSC_LINK == '' && secrets.MAC_CERTIFICATE_BASE64 == '' && 'false' || 'true' }}
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_glob }}
+          path: |
+            ${{ matrix.artifact_glob }}
+            dist/*.yml
+            dist/*.blockmap
           retention-days: 30
 
       - name: Create Release
@@ -237,6 +278,8 @@ jobs:
             dist/*.zip
             dist/*.AppImage
             dist/*.deb
+            dist/*.yml
+            dist/*.blockmap
           draft: true
           generate_release_notes: true
           body: |

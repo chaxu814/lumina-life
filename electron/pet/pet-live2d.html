@@ -904,11 +904,17 @@ function computeModelAlphaTrim() {
     const cv = app.view
     const gl = cv.getContext('webgl2') || cv.getContext('webgl')
     if (!gl) return __trimCache
-    const dpr = window.devicePixelRatio || 1
-    const bx = Math.max(0, Math.round(gb.x * dpr))
-    const by = Math.max(0, Math.round(gb.y * dpr))
-    const bw = Math.min(cv.width - bx, Math.round(gb.width * dpr))
-    const bh = Math.min(cv.height - by, Math.round(gb.height * dpr))
+    // 关键：readPixels 用「画布 backing store 像素」，其缩放是 renderer resolution（低画质=1，
+    // 高画质=devicePixelRatio），不能一律用 devicePixelRatio——否则在 125/150% 缩放且低画质时
+    // 会读错区域、误判包围盒而把模型裁掉。走随 pet-life.js 暴露的纯函数（单测覆盖），任意 DPI/画质都对。
+    const LL = window.LuminaLife
+    const pxScale = (LL && typeof LL.backingPixelScale === 'function')
+      ? LL.backingPixelScale(cv.width, innerWidth, window.devicePixelRatio || 1)
+      : ((cv.width > 0 && innerWidth > 0) ? (cv.width / innerWidth) : (window.devicePixelRatio || 1))
+    const bx = Math.max(0, Math.round(gb.x * pxScale))
+    const by = Math.max(0, Math.round(gb.y * pxScale))
+    const bw = Math.min(cv.width - bx, Math.round(gb.width * pxScale))
+    const bh = Math.min(cv.height - by, Math.round(gb.height * pxScale))
     if (bw <= 4 || bh <= 4) return __trimCache
     if (bw * bh > 6000000) return __trimCache // 面积护栏，异常大时不 trim
     const step = (bw * bh > 1500000) ? 3 : 2  // 降采样，控制 CPU
@@ -2471,6 +2477,9 @@ function buildSettingsMain() {
     <div class="nk-row">
       <button id="sp-model-import" style="width:100%;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,.28);background:rgba(120,180,255,.28);color:#fff;cursor:pointer;font-size:13px;">📥 导入 Live2D 模型（.model3.json）</button>
     </div>
+    <div class="nk-row">
+      <button id="sp-model-import-vrm" style="width:100%;padding:8px;border-radius:10px;border:1px solid rgba(187,154,247,.45);background:rgba(187,154,247,.28);color:#fff;cursor:pointer;font-size:13px;">🧊 导入 VRM 3D 模型（.vrm，切换为 3D 形态）</button>
+    </div>
     <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">模型大小</span><span class="nk-val" id="sp-scale-val">${Math.round(userScale * 100)}%</span></div>
       <input type="range" class="nk-slider" id="sp-scale" min="40" max="160" step="5" value="${Math.round(userScale * 100)}">
@@ -2631,14 +2640,18 @@ function bindSettingsPanel() {
     say(e.target.value === 'indextts' ? '已切换到 IndexTTS 语音喵~' : '已切换到 Edge TTS 语音喵~');
   };
   const mdlSel = $('sp-model-select');
+  let modelCache = [];
   function refreshModelList(current) {
     if (!HAS_IPC || !mdlSel) return;
     ipc.invoke('pet:models:list').then(r => {
       if (!r || !r.ok || !Array.isArray(r.models)) return;
+      modelCache = r.models;
       mdlSel.innerHTML = '';
       r.models.forEach(m => {
         const o = document.createElement('option');
-        o.value = m.id; o.textContent = (m.builtin ? '🌈 ' : '✨ ') + m.name;
+        o.value = m.id;
+        const prefix = m.kind === 'vrm' ? '🧊 ' : (m.builtin ? '🌈 ' : '✨ ');
+        o.textContent = prefix + m.name + (m.kind === 'vrm' ? '（3D）' : '');
         const curId = current ? current.id : (r.current && r.current.id);
         if (curId === m.id) o.selected = true;
         mdlSel.appendChild(o);
@@ -2648,8 +2661,13 @@ function bindSettingsPanel() {
   refreshModelList(null);
   if (mdlSel) mdlSel.onchange = e => {
     if (!HAS_IPC) return;
+    const target = modelCache.find(m => m.id === e.target.value);
+    const targetKind = target && target.kind === 'vrm' ? 'vrm' : 'live2d';
     ipc.invoke('pet:models:select', { id: e.target.value }).then(() => {
-      say('换装中…喵'); setTimeout(() => location.reload(), 600);
+      say('换装中…喵');
+      // 跨形态（Live2D ↔ VRM）需要切换渲染页，交由主进程重载；同形态直接刷新本页
+      if (targetKind === 'vrm') { setTimeout(() => ipc.invoke('pet:reopen').catch(() => {}), 500); }
+      else { setTimeout(() => location.reload(), 600); }
     }).catch(() => {});
   };
   const importBtn = $('sp-model-import');
@@ -2659,6 +2677,14 @@ function bindSettingsPanel() {
       if (r && r.ok) { say('模型导入成功喵~在列表里选它就换装！'); refreshModelList(r.model); }
       else if (r && !r.canceled) say('导入失败喵：' + (r.error || '未知错误'));
     }).catch(() => say('导入失败喵…'));
+  };
+  const importVrmBtn = $('sp-model-import-vrm');
+  if (importVrmBtn) importVrmBtn.onclick = () => {
+    if (!HAS_IPC) return;
+    ipc.invoke('pet:models:import-vrm').then(r => {
+      if (r && r.ok) { say('VRM 导入成功，正在切换为 3D 形态…'); refreshModelList(r.model); setTimeout(() => ipc.invoke('pet:reopen').catch(() => {}), 600); }
+      else if (r && !r.canceled) say('VRM 导入失败：' + (r.error || '未知错误'));
+    }).catch(() => say('VRM 导入失败…'));
   };
   const sc = $('sp-scale');
   if (sc) {

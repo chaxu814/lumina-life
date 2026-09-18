@@ -29,19 +29,19 @@ export const toolVoiceTranscribe: ToolDef = {
       },
       language: {
         type: 'string',
-        description: '语言（可选，如 zh / en）。whisper-tiny.en 仅支持英文',
+        description: '语言（可选，如 zh / en）。默认 zh，使用多语种模型；whisper-tiny.en 仅支持英文',
         enum: ['zh', 'en', 'ja', 'fr', 'de', 'auto'],
       },
       modelName: {
         type: 'string',
         description:
-          'Whisper 模型（可选）。默认 Xenova/whisper-tiny.en，中文推荐 Xenova/whisper-base',
+          'Whisper 模型（可选）。默认多语种 Xenova/whisper-base（支持中文，约 290MB，首次下载）；tiny.en 仅英文',
         enum: [
-          'Xenova/whisper-tiny.en',
           'Xenova/whisper-base',
           'Xenova/whisper-small',
+          'Xenova/whisper-tiny.en',
         ],
-        default: 'Xenova/whisper-tiny.en',
+        default: 'Xenova/whisper-base',
       },
     },
     required: ['audioPath'],
@@ -63,8 +63,8 @@ export const toolVoiceTranscribe: ToolDef = {
 
     try {
       const result = await transcribeAudio(args.audioPath, {
-        language: args.language === 'auto' ? undefined : args.language,
-        modelName: args.modelName,
+        language: args.language === 'auto' ? 'zh' : (args.language || 'zh'),
+        modelName: args.modelName || 'Xenova/whisper-base',
       })
 
       return {
@@ -75,7 +75,7 @@ export const toolVoiceTranscribe: ToolDef = {
           ? result.chunks.map((c, i) => `[${c.start.toFixed(1)}s-${c.end.toFixed(1)}s] ${c.text}`).join('\n')
           : undefined,
         duration: result.duration.toFixed(1) + 's',
-        model: args.modelName || 'Xenova/whisper-tiny.en',
+        model: args.modelName || 'Xenova/whisper-base',
       }
     } catch (err: any) {
       return {
@@ -111,8 +111,8 @@ export const toolVoiceRecord: ToolDef = {
       },
       modelName: {
         type: 'string',
-        description: 'Whisper 模型名',
-        default: 'Xenova/whisper-tiny.en',
+        description: 'Whisper 模型名（默认多语种 base，支持中文）',
+        default: 'Xenova/whisper-base',
       },
     },
   },

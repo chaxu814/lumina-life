@@ -212,4 +212,4 @@ function gazeTargetY(t?: string): number {
 }
 
 // alpha-trim 纯逻辑（随 pet-life.js 一起暴露到 window.LuminaLife，供渲染页贴身裁剪用）
-export { scanAlphaBounds, type TrimRatios, type ScanAlphaOptions } from './alphaTrim'
+export { scanAlphaBounds, backingPixelScale, type TrimRatios, type ScanAlphaOptions } from './alphaTrim'

@@ -1,11 +1,12 @@
 // ============================================================
 // pet/avatarRenderer.ts — Avatar 渲染器抽象与能力声明
 //
-// 目的：在不假装"已经能渲染 VRM/MMD"的前提下，把多形态渲染的接口固定下来。
-// 当前唯一落地的是 Live2D（在 pet-live2d.html 里运行）。VRM / MMD / PNGTuber
-// 标记为 roadmap：选中这些模型时，前端应拿到明确的"暂未支持"提示，而不是黑屏。
+// 目的：在不假装"已经能渲染 MMD/PNGTuber"的前提下，把多形态渲染的接口固定下来。
+// Live2D 在 pet-live2d.html 里运行；VRM 3D 形态（three.js / three-vrm）已在
+// pet-vrm.html 落地（眨眼/呼吸/待机/口型），选中 .vrm 模型时主进程切换到该渲染页。
+// MMD / PNGTuber 仍为 roadmap：选中这些模型时，前端应拿到明确的"暂未支持"提示，而不是黑屏。
 //
-// 真正的 3D 渲染器接入后，只需在 AVATAR_RENDERERS 注册对应实现即可，
+// 新增 3D 渲染器时，只需在 petWindow 的渲染页选择处与 AVATAR_RENDERERS 注册即可，
 // 上层（模型库 / 设置 / 桌宠窗口）无需改动。
 // ============================================================
 
@@ -35,8 +36,8 @@ export const AVATAR_RENDERERS: Record<AvatarKind, AvatarRendererInfo> = {
   vrm: {
     kind: 'vrm',
     label: 'VRM（3D 模型）',
-    status: 'roadmap',
-    roadmapNote: 'VRM 3D 渲染（three.js / three-vrm）正在开发中，当前版本暂不支持载入 .vrm。',
+    status: 'ready',
+    roadmapNote: undefined,
     entryExts: ['vrm'],
   },
   mmd: {

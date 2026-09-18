@@ -15,6 +15,9 @@ function copyPetAssets() {
       try {
         if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true })
         copyFileSync(resolve(srcDir, 'pet-live2d.html'), resolve(destDir, 'pet-live2d.html'))
+        if (existsSync(resolve(srcDir, 'pet-vrm.html'))) {
+          copyFileSync(resolve(srcDir, 'pet-vrm.html'), resolve(destDir, 'pet-vrm.html'))
+        }
         if (existsSync(resolve(srcDir, 'settings.html'))) {
           copyFileSync(resolve(srcDir, 'settings.html'), resolve(destDir, 'settings.html'))
         }

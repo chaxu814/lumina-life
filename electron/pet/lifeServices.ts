@@ -106,7 +106,7 @@ function modelUrl(e: ModelEntry): string {
   return pathToFileURL(path.join(modelsRoot(), e.entryRel)).href
 }
 function modelDto(e: ModelEntry) {
-  return { id: e.id, name: e.name, builtin: e.builtin, hasFiveVowel: !!e.hasFiveVowel, url: modelUrl(e) }
+  return { id: e.id, name: e.name, builtin: e.builtin, hasFiveVowel: !!e.hasFiveVowel, kind: e.kind || 'live2d', url: modelUrl(e) }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -223,6 +223,39 @@ export function registerLifeServicesIpc(): void {
       if (!reg.ok) return { ok: false, error: reg.error || '模型注册失败' }
       saveLibrary()
       return { ok: true, model: modelDto(lib.get(reg.id!)!), fileCount: plan.fileCount }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  // 从本地安全导入一个 VRM 3D 模型（单个 .vrm 文件 → 复制进 userData → 注册 kind=vrm）
+  ipcMain.handle('pet:models:import-vrm', async () => {
+    try {
+      const parent = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || undefined
+      const dlg = await dialog.showOpenDialog(parent as BrowserWindow, {
+        title: '选择 VRM 3D 模型（.vrm）',
+        filters: [{ name: 'VRM', extensions: ['vrm'] }],
+        properties: ['openFile'],
+      })
+      if (dlg.canceled || !dlg.filePaths[0]) return { ok: false, canceled: true }
+      const file = dlg.filePaths[0]
+      if (!/\.vrm$/i.test(file)) return { ok: false, error: '请选择 *.vrm 模型文件' }
+
+      const baseName = path.basename(file).replace(/\.vrm$/i, '')
+      // 安全目录名：仅保留字母数字下划线连字符中文
+      const safeName = (baseName.replace(/[^w\u4e00-\u9fa5\-]+/g, '_') || 'vrm_model').slice(0, 48)
+      const destRoot = modelsRoot()
+      const destDir = path.join(destRoot, safeName)
+      await fsp.mkdir(destDir, { recursive: true })
+      const destFile = path.join(destDir, baseName + '.vrm')
+      await fsp.copyFile(file, destFile)
+
+      const entryRel = (safeName + '/' + baseName + '.vrm').replace(/\\/g, '/')
+      const lib = loadLibrary()
+      const reg = lib.register({ name: baseName, entryRel, kind: 'vrm' }, Date.now())
+      if (!reg.ok) return { ok: false, error: reg.error || '模型注册失败' }
+      saveLibrary()
+      return { ok: true, model: modelDto(lib.get(reg.id!)!) }
     } catch (e: any) {
       return { ok: false, error: String(e?.message || e) }
     }

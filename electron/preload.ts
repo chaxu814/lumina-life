@@ -164,6 +164,12 @@ const api = {
   providerTestConnection: (id: string) =>
     ipcRenderer.invoke('provider:test-connection', id) as Promise<{ success: boolean; latency?: number; error?: string }>,
 
+  // 一键检测/接入本地模型（Ollama / LM Studio，免 Key）
+  providerDiscoverLocal: () =>
+    ipcRenderer.invoke('provider:discover-local') as Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>,
+  providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) =>
+    ipcRenderer.invoke('provider:apply-local', input) as Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; error?: string }>,
+
   // ─── TTS ────────────────────────────────────────────────
   ttsSpeak: (params: TTSSpeakParams) =>
     ipcRenderer.invoke('tts:speak', params) as Promise<TTSSpeakResult>,
@@ -427,6 +433,17 @@ const api = {
     return () => {
       ipcRenderer.removeListener('stt:ready', handler)
     }
+  },
+
+  // ─── 离线中文 STT 模型（whisper-base 多语种）──────────
+  sttOfflineStatus: () =>
+    ipcRenderer.invoke('stt:offline-status') as Promise<any>,
+  sttDownloadModel: () =>
+    ipcRenderer.invoke('stt:download-model') as Promise<any>,
+  onSttDownloadProgress: (callback: (p: any) => void) => {
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('stt:download-progress', handler)
+    return () => { ipcRenderer.removeListener('stt:download-progress', handler) }
   },
 
   // ─── SoVITS TTS ────────────────────────────────────────

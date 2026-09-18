@@ -837,5 +837,40 @@ export function registerProviderIpc(): void {
     }
   })
 
+  // ── 一键检测本地模型（Ollama / LM Studio，免 Key）──
+  ipcMain.handle('provider:discover-local', async () => {
+    try {
+      const { discoverLocalProviders, FREE_SETUP_GUIDE } = await import('./localProviderDiscovery')
+      const found = await discoverLocalProviders()
+      return { found, guide: FREE_SETUP_GUIDE }
+    } catch (err: any) {
+      return { found: [], error: err?.message || String(err) }
+    }
+  })
+
+  // ── 一键接入发现的本地模型（写配置 + 激活，无需 Key）──
+  ipcMain.handle('provider:apply-local', (_event, input: { id?: string; baseUrl?: string; model?: string }) => {
+    try {
+      // 探测结果 id 映射到 providerManager 已知供应商
+      const idMap: Record<string, string> = { ollama: 'ollama', 'lm-studio': 'lmstudio', 'local-openai': 'lmstudio' }
+      const id = idMap[input?.id || ''] || (input?.baseUrl?.includes('11434') ? 'ollama' : 'lmstudio')
+      const base = input?.baseUrl
+        ? (input.baseUrl.endsWith('/v1') ? input.baseUrl : input.baseUrl.replace(/\/$/, '') + '/v1')
+        : (id === 'ollama' ? 'http://127.0.0.1:11434/v1' : 'http://127.0.0.1:1234/v1')
+      pm.setProviderConfig(id, {
+        baseUrl: base,
+        apiKey: 'local',
+        model: input?.model || pm.getDefinition(id)?.defaultModel || '',
+        enabled: true,
+        timeout: 120,
+        maxContextTokens: 128000,
+      })
+      pm.setActiveProvider(id)
+      return { success: true, id, model: input?.model, baseUrl: base }
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) }
+    }
+  })
+
   console.log('[ProviderManager] 📡 IPC 处理器已注册 (provider:*)')
 }

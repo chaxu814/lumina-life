@@ -7,6 +7,7 @@ import ModelPickerModal from './ModelPickerModal'
 const LLM_PROVIDERS = [
   { id: 'opencode-zen', name: '🎯 OpenCode Zen (免费)', url: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free', free: true },
   { id: 'lmstudio', name: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '' },
+  { id: 'ollama', name: 'Ollama (本地)', url: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' },
   { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o' },
   { id: 'claude', name: 'Anthropic Claude', url: 'https://api.anthropic.com', model: 'claude-sonnet-4-5-20250929' },
   { id: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash' },
@@ -89,6 +90,40 @@ export default function SettingsLLM() {
   const [savingProvider, setSavingProvider] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+
+  // ── 一键检测本地模型（Ollama / LM Studio，免 Key）──
+  const [localDetecting, setLocalDetecting] = useState(false)
+  const [localFound, setLocalFound] = useState<any[]>([])
+  const [localGuide, setLocalGuide] = useState<any[]>([])
+  const [localHint, setLocalHint] = useState('')
+  const [applyingLocal, setApplyingLocal] = useState('')
+  const detectLocal = async () => {
+    setLocalDetecting(true); setLocalHint(''); setLocalFound([])
+    try {
+      const r = await window.luminaAPI?.providerDiscoverLocal?.()
+      if (r?.found?.length) {
+        setLocalFound(r.found)
+        setLocalHint('检测到本地模型，点击「使用」即可一键接入（无需 Key）。')
+      } else {
+        setLocalGuide(r?.guide || [])
+        setLocalHint('未检测到正在运行的本地模型。可安装 Ollama 后点「重新检测」，或使用上方免费在线模型。')
+      }
+    } catch (e: any) {
+      setLocalHint('检测失败：' + (e?.message || e))
+    } finally { setLocalDetecting(false) }
+  }
+  const applyLocal = async (f: any) => {
+    setApplyingLocal(f.id); setNotice(null)
+    try {
+      const r = await window.luminaAPI?.providerApplyLocal?.({ id: f.id, baseUrl: f.baseUrl, model: f.recommendedModel })
+      if (r?.success) {
+        switchLLMProvider(r.id === 'ollama' ? 'ollama' : 'lmstudio', r.baseUrl || '', r.model || '')
+        setNotice('✅ 已接入本地模型 ' + (r.model || '') + '（无需 Key）')
+        setLlmOnline(true); setLlmChecked(true)
+      } else { setNotice('❌ 接入失败：' + (r?.error || '未知错误')) }
+    } catch (e: any) { setNotice('❌ 接入失败：' + (e?.message || e)) }
+    finally { setApplyingLocal('') }
+  }
 
   const [maxTokensDraft, setMaxTokensDraft] = useState<string | null>(null)
   const maxTokensDisplay = maxTokensDraft ?? String(llmConfig.maxTokens ?? 4096)
@@ -324,14 +359,48 @@ export default function SettingsLLM() {
           {/* 本地模型 */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>🖥️</span> 本地模型
+              <span style={{ fontSize: 12 }}>🖥️</span> 本地模型（免费·隐私不出本机）
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {LLM_PROVIDERS.filter(p => p.id === 'lmstudio').map(p => (
+              {LLM_PROVIDERS.filter(p => p.id === 'lmstudio' || p.id === 'ollama').map(p => (
                 <ProviderBtn key={p.id} p={p} active={llmConfig.provider === p.id}
                   onClick={() => { switchLLMProvider(p.id, p.url, p.model); setLlmStatus('idle') }} />
               ))}
+              <button onClick={detectLocal} disabled={localDetecting}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 8,
+                  fontSize: 11, fontWeight: 600, border: '1.5px dashed #3b82f6', background: 'var(--accent-50)',
+                  color: '#2563eb', cursor: localDetecting ? 'wait' : 'pointer',
+                }}>
+                {localDetecting ? '⏳ 检测中…' : '🔎 一键检测本地模型'}
+              </button>
             </div>
+            {localHint && (
+              <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: 'var(--surface-100)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                {localHint}
+                {localFound.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                    {localFound.map((f) => (
+                      <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <StatusBadge status="running" label={f.label} />
+                        <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>推荐：{f.recommendedModel}（共 {f.models.length} 个）</span>
+                        <button onClick={() => applyLocal(f)} disabled={!!applyingLocal}
+                          style={{ padding: '2px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer' }}>
+                          {applyingLocal === f.id ? '接入中…' : '使用'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!localFound.length && localGuide.length > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {localGuide.map((g, i) => (
+                      <div key={i}><b style={{ color: 'var(--text-primary)' }}>{g.title}：</b>{g.body}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 云端模型 */}

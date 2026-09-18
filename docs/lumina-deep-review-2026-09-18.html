@@ -445,6 +445,38 @@
       </div>
     </div>
 
+    <!-- ============ ⑩⁺ 9/19 闭环对账 ============ -->
+    <div class="h2" style="color:#2f7d32;margin-top:6px;">⑩⁺ 9/19 深度打磨闭环对账：P0/P1/P2 逐项落地（实改·实测·如实标注）</div>
+    <div class="grid" style="margin-bottom:22px;">
+      <div class="card pad" style="flex:1 1 340px;min-width:300px;border-top:4px solid #3f8f4f;">
+        <div style="font-weight:700;color:#2f7d32;font-size:14px;">已闭环 · 可验证</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8;">
+          <li><b>中文离线 STT</b>：默认改多语种 whisper-base（识中文），设置页可下载/切换（hf-mirror），纯本地；5 项单测。</li>
+          <li><b>alpha-trim 高 DPI</b>：用 backingPixelScale 把 CSS 矩形换算为物理像素再裁切，125%/150% 不再裁模型，4 项单测。</li>
+          <li><b>透明窗跨平台</b>：新增 platformCaps——Win 透明+setShape、mac 透明、Linux Wayland 透明/X11 无合成器可实色兜底，6 项单测。</li>
+          <li><b>开箱门槛</b>：引导默认免费模型（OpenCode Zen，无需 Key）；一键自动探测本机 LM Studio / Ollama 并一键应用，中文模型优先，7 项单测。</li>
+          <li><b>VRM 形态（beta）</b>：three + three-vrm 渲染页，可导入 .vrm、待机/眨眼/呼吸/口型/表情，Live2D↔VRM 同窗切换，9 项布局单测。</li>
+          <li><b>渠道加固</b>：逐渠道隔离、init 失败即离线、Telegram 容错；新增 10 项 mock 契约测试（含 OpenClaw 可达/不可达回退）。</li>
+          <li><b>原生模块 ABI</b>：postinstall 自动 electron-rebuild，新环境 better-sqlite3 不再 ABI 不匹配。</li>
+          <li><b>内存治理</b>：渲染器堆上限 768MB 防膨胀；启动后/隐藏后清 Chromium 缓存（memoryManager）；主窗与桌宠后台节流。</li>
+          <li><b>签名 + 自动更新</b>：CI 已铺 Win/mac 签名/公证 Secrets 注入与 latest-*.yml 产物，electron-updater 已接；见 docs/release-and-signing.md。</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 340px;min-width:300px;border-top:4px solid #E0A93B;">
+        <div style="font-weight:700;color:#9a6d1f;font-size:14px;">仍需外部条件 / 后续（不假装完成）</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8;">
+          <li><b>真机验收</b>：打包后启动冒烟已通过（5 进程稳态、服务全起、无致命错误）；透明窗/125-150% 缩放/UGC 导入建议在干净机器逐项回归；VRM 视觉需在有 .vrm 的机器验收（仓库无内置样例）。</li>
+          <li><b>中文离线 STT 模型</b>：whisper-base 约 290MB，首次在设置页下载；下载链路已就绪，未在沙箱内拉完整模型。</li>
+          <li><b>签名证书</b>：需自费购买 Win OV/EV 证书与 Apple Developer（$99），填入 GitHub Secrets 后自动签名，无需改代码；当前包为未签名。</li>
+          <li><b>mac/Linux 安装包</b>：打包目标已配置（dmg/zip/AppImage/deb），需对应设备验收透明窗、托盘与原生模块。</li>
+          <li><b>发布</b>：按你的要求暂不开源/上传；推 tag 即自动产出三平台草稿 Release。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="small muted" style="margin:-6px 0 22px;line-height:1.7;">
+      9/19 验证口径：<code>npm run typecheck</code> 通过；<code>npm test</code> 637 通过 / 1 跳过（56 文件）；<code>npm run test:coverage</code> 门禁绿（行 72.0% / 分支 66.2% / 函数 72.3%，新增 5 个纯逻辑模块纳入门禁）；<code>npm run build</code> 三桌宠 bundle + electron-vite 全绿；打包后启动冒烟通过。
+    </div>
+
     <!-- ============ ⑪ 评分与下一步 ============ -->
     <div class="grid" style="margin-bottom:22px;">
       <div class="card pad" style="flex:1 1 300px;min-width:280px;">

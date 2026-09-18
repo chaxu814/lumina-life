@@ -12,7 +12,7 @@
     "dev": "electron-vite dev",
     "build:pet-life": "esbuild electron/pet/life/runtime.ts --bundle --format=iife --global-name=LuminaLife --charset=utf8 --outfile=electron/pet/assets/pet-life.js",
     "build:pet-voice": "esbuild electron/pet/lifeSpeech/voiceClient.ts --bundle --format=iife --global-name=LuminaVoice --charset=utf8 --external:electron --outfile=electron/pet/assets/pet-voice.js",
-    "build": "npm run build:pet-life && npm run build:pet-voice && electron-vite build",
+    "build": "npm run build:pet-life && npm run build:pet-voice && npm run build:pet-vrm && electron-vite build",
     "preview": "electron-vite preview",
     "pack:win": "electron-vite build && electron-builder --win --x64",
     "pack:mac": "electron-vite build && electron-builder --mac --x64 --arm64",
@@ -30,7 +30,9 @@
     "api": "electron --no-sandbox out/main/index.js --api",
     "api:dev": "cross-env LUMINA_API_ENABLED=1 LUMINA_API_PORT=3456 electron --no-sandbox out/main/index.js",
     "doctor": "electron --no-sandbox out/main/index.js --cli doctor",
-    "chat": "electron --no-sandbox out/main/index.js --cli chat"
+    "chat": "electron --no-sandbox out/main/index.js --cli chat",
+    "postinstall": "node scripts/electron-postinstall.cjs",
+    "build:pet-vrm": "esbuild electron/pet/vrm/vrmRenderer.ts --bundle --format=iife --global-name=LuminaVRM --charset=utf8 --outfile=electron/pet/assets/pet-vrm.js"
   },
   "build": {
     "appId": "com.lumina.desktop-pet",
@@ -43,6 +45,10 @@
       {
         "from": "resources",
         "to": "resources"
+      },
+      {
+        "from": "electron/pet/pet-vrm.html",
+        "to": "pet/pet-vrm.html"
       },
       {
         "from": "electron/pet/pet-live2d.html",
@@ -84,7 +90,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Lumina Life",
       "installerIcon": "resources/icon.ico",
-      "uninstallerIcon": "resources/icon.ico"
+      "uninstallerIcon": "resources/icon.ico",
+      "artifactName": "Lumina-Life-Setup-${version}-win-${arch}.${ext}"
     },
     "mac": {
       "target": [
@@ -130,7 +137,15 @@
       "provider": "github",
       "owner": "chaxu814",
       "repo": "lumina-life"
-    }
+    },
+    "asarUnpack": [
+      "**/node_modules/onnxruntime-node/**/*",
+      "**/node_modules/@xenova/**/*",
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/better-sqlite3/**/*",
+      "**/node_modules/@img/**/*"
+    ],
+    "npmRebuild": true
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
@@ -138,6 +153,7 @@
     "@types/node": "^22.19.19",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.169.0",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
@@ -153,8 +169,10 @@
     "vitest": "^4.1.6"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "^3.4.1",
     "@unocss/preset-uno": "^66.7.5",
     "@unocss/transformer-directives": "^66.7.5",
+    "@xenova/transformers": "^2.17.2",
     "adm-zip": "^0.5.17",
     "better-sqlite3": "^12.10.0",
     "clsx": "^2.1.0",
@@ -170,6 +188,7 @@
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.8",
     "screenshot-desktop": "^1.15.4",
+    "three": "^0.169.0",
     "unocss": "^66.7.5",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.8"

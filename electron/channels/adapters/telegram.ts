@@ -31,10 +31,16 @@ export class TelegramAdapter implements ChannelAdapter {
     this.botToken = config.credentials.botToken || ''
 
     if (this.botToken) {
-      // 验证 token
-      const me = await this.telegramGet('getMe')
-      if (me.ok) {
-        console.log(`[Telegram] ✅ 已连接 Bot: @${me.result?.username}`)
+      // 验证 token；网络异常/Token 无效都不向上抛穿（保持适配器可被健康检查/重试）
+      try {
+        const me = await this.telegramGet('getMe')
+        if (me.ok) {
+          console.log(`[Telegram] ✅ 已连接 Bot: @${me.result?.username}`)
+        } else {
+          console.warn('[Telegram] Token 校验未通过，渠道保持离线（可稍后重试）')
+        }
+      } catch (err) {
+        console.warn('[Telegram] 初始化网络异常（不影响其它渠道）:', (err as Error)?.message || err)
       }
     }
 

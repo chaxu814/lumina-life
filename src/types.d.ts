@@ -155,6 +155,8 @@ declare global {
       providerSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
       providerFetchModels: (id: string, override?: { baseUrl?: string; apiKey?: string }) => Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>
       providerTestConnection: (id: string) => Promise<{ success: boolean; latency?: number; error?: string }>
+      providerDiscoverLocal: () => Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>
+      providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) => Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; error?: string }>
 
       onAgentEvent: (callback: (event: {
         type: string; text?: string; tool?: string
@@ -176,6 +178,9 @@ declare global {
       sttStart: () => Promise<{ ok: boolean; error?: string }>
       sttStop: () => Promise<{ ok: boolean }>
       onSTTResult: (callback: (text: string) => void) => () => void
+      sttOfflineStatus: () => Promise<{ ok: boolean; depReady?: boolean; modelReady?: boolean; model?: string; sizeMB?: number }>
+      sttDownloadModel: () => Promise<{ ok: boolean; alreadyReady?: boolean; error?: string }>
+      onSttDownloadProgress: (callback: (p: any) => void) => () => void
 
       // Skill
       skillInstall: (zipPath: string) => Promise<any>

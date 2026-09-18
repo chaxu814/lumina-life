@@ -831,22 +831,18 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
   // ─── STT (v2.11) ───────────────────────────────
   // stt:check — 检查语音识别可用性
   ipcMain.handle('stt:check', async () => {
-    // 检查 Web Speech API 可用性（Chromium 内置）
-    // Chrome/Edge 的 Electron 默认支持
+    // 主窗口连续听写默认走 Chromium 内置 Web Speech（开箱即用，需联网）；
+    // 同时上报「内置离线中文模型」就绪状态（桌宠全双工在模型就绪后可完全离线）。
+    let offline: any = null
     try {
-      // 尝试检查 stt-server 是否存在
-      const sttServerPath = join(__dirname, '..', '..', 'stt-server', 'stt_server.py')
-      if (fs.existsSync(sttServerPath)) {
-        const python = await findPython()
-        if (python) {
-          return { available: true, engine: 'whisper' }
-        }
-      }
-      // 降级: Web Speech API (Chromium 始终可用)
-      return { available: true, engine: 'web-speech' }
-    } catch {
-      return { available: true, engine: 'web-speech' }
+      const { getOfflineStatus } = require('../whisper/sttModelIpc')
+      offline = getOfflineStatus()
+    } catch { offline = null }
+    // 主窗口连续识别链路：若离线模型已就绪则优先离线（whisper），否则用内置 Web Speech
+    if (offline?.modelReady) {
+      return { available: true, engine: 'whisper', offline }
     }
+    return { available: true, engine: 'web-speech', offline }
   })
 
   // ═══ STT 相关 handler 移至 bridgeIpc.ts ═══

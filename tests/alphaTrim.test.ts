@@ -3,7 +3,7 @@
 // ============================================================
 
 import { describe, it, expect } from 'vitest'
-import { scanAlphaBounds } from '../electron/pet/life/alphaTrim'
+import { scanAlphaBounds, backingPixelScale } from '../electron/pet/life/alphaTrim'
 
 /** 造一块 RGBA 缓冲，[x0,x1)×[y0,y1) 区域填不透明 */
 function makeFrame(w: number, h: number, rect?: { x0: number; y0: number; x1: number; y1: number; a?: number }): Uint8Array {
@@ -82,3 +82,29 @@ describe('scanAlphaBounds 的 DPI 无关性（125% / 150% / 200%）', () => {
     }
   })
 })
+
+describe('backingPixelScale：readPixels 区域的 backing/CSS 缩放（修 125/150% 低画质误裁）', () => {
+  it('高画质：backing = CSS×DPR，返回 1.25 / 1.5', () => {
+    // 1000 CSS 宽，125% 时 backing 1250
+    expect(backingPixelScale(1250, 1000, 1.25)).toBeCloseTo(1.25, 6)
+    expect(backingPixelScale(1500, 1000, 1.5)).toBeCloseTo(1.5, 6)
+  })
+
+  it('低画质（renderer resolution 固定 1）：backing 等于 CSS，即使 DPR=1.5 也返回 1', () => {
+    // 这是关键回归：不能因为 devicePixelRatio=1.5 就按 1.5 读 backing（画布其实只有 1000）
+    expect(backingPixelScale(1000, 1000, 1.5)).toBe(1)
+    expect(backingPixelScale(1000, 1000, 1.25)).toBe(1)
+  })
+
+  it('画布/CSS 宽无效时回退到 devicePixelRatio', () => {
+    expect(backingPixelScale(0, 1000, 1.5)).toBe(1.5)
+    expect(backingPixelScale(1000, 0, 2)).toBe(2)
+    expect(backingPixelScale(NaN, 1000, 1.25)).toBe(1.25)
+  })
+
+  it('DPR 非法时回退 1，不返回 0/NaN', () => {
+    expect(backingPixelScale(0, 0, 0)).toBe(1)
+    expect(backingPixelScale(0, 0, NaN)).toBe(1)
+  })
+})
+

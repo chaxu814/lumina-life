@@ -13,9 +13,14 @@ import { getAppIconPath, getTrayIcon } from './appIcon'
 
 // ── 必须在 app.whenReady 前设置 ──────────────────────
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+// 约束每个渲染器的 V8 堆上限（防止长跑膨胀；桌面应用 768MB 足够）
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=768')
+// 关闭用不到的 Chromium 功能，省一点常驻开销
+app.commandLine.appendSwitch('disable-features', 'TranslateUI,LensOverlay')
 
 import { createAppMenu } from './menu'
 import { initAutoUpdater, destroyAutoUpdater } from './autoUpdater'
+import { scheduleMemoryTrims } from './memoryManager'
 import { getPluginManager } from './pluginSDK'
 import { startCronLoop } from './tools/impl/cron'
 import { initProactiveEngine, getProactiveEngine } from './proactiveEngine'
@@ -74,6 +79,7 @@ import { registerAgentIpc } from './ipc/agentIpc'
 import { registerMemoryIpc } from './ipc/memoryIpc'
 import { registerBridgeIpc } from './ipc/bridgeIpc'
 import { registerSystemIpc, cleanupSystemProcesses, autoStartEdgeTts } from './ipc/systemIpc'
+import { registerSttModelIpc } from './whisper/sttModelIpc'  // 🎙 离线中文 STT 模型就绪检测/一键下载
 import { registerTeamIpc, initTeamSocialEngine } from './ipc/teamIpc'
 import { registerLoopIpc } from './ipc/loopIpc'
 
@@ -524,6 +530,8 @@ for (const { id } of orch.listRunners()) {
 
   // 2. 托盘 + 快捷??+ 右键菜单
   try { createTray() } catch { /* tray not available */ }
+  // 低风险常驻内存治理（启动后/隐藏后清缓存，不影响本地资源与桌宠）
+  try { scheduleMemoryTrims(() => mainWindow) } catch (e) { console.warn('[MemoryManager] 启动失败（忽略）:', e) }
   try { registerHotkeys() } catch { /* hotkeys not available */ }
   registerContextMenu(mainWindow)
 
@@ -556,6 +564,7 @@ for (const { id } of orch.listRunners()) {
   startConfigWatcher(__dirname)                        // 🆕 v3.5: 配置热重??  registerMemoryIpc()
   registerBridgeIpc(mainWindow)
   registerSystemIpc(mainWindow)
+  registerSttModelIpc(() => mainWindow)          // 🎙 离线语音模型（whisper-base 多语种/中文）
   registerProviderIpc()                               // 📡 v10.0: 统一 Provider IPC
   registerTeamIpc()                                   // 🆕 v2.6: AI 小团队系统 IPC
   registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC

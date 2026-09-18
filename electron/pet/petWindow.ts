@@ -18,6 +18,7 @@ import { getAgentConfig } from '../agentConfig'
 import { LLMProvider } from '../core/llmProvider'
 import { detectScene } from '../sceneDetector'
 import { getProviderManager } from '../core/providerManager'
+import { currentPlatformCaps } from './platformCaps'
 
 /**
  * 桌宠"大脑"LLM 配置解析：
@@ -763,6 +764,31 @@ function getPetHtmlPath(): string {
   return petHtmlPath
 }
 
+/** 读取当前选中模型的形态（内置 Mao / 旧清单均视为 live2d） */
+function currentModelKind(): 'live2d' | 'vrm' {
+  try {
+    const libPath = path.join(app.getPath('userData'), 'pet-model-library.json')
+    if (!fs.existsSync(libPath)) return 'live2d'
+    const data = JSON.parse(fs.readFileSync(libPath, 'utf8'))
+    const id = data?.currentId
+    if (!id || id === 'Mao') return 'live2d'
+    const entry = Array.isArray(data?.custom) ? data.custom.find((c: any) => c.id === id) : null
+    return entry?.kind === 'vrm' ? 'vrm' : 'live2d'
+  } catch {
+    return 'live2d'
+  }
+}
+
+/** 按当前模型形态选择渲染页：VRM 用 pet-vrm.html，其余用 Live2D 的 pet.html */
+function getRendererHtmlPath(): string {
+  const live2d = getPetHtmlPath() // 同时确保资源已复制
+  if (currentModelKind() === 'vrm') {
+    const vrm = path.join(path.dirname(live2d), 'pet-vrm.html')
+    if (fs.existsSync(vrm)) return vrm
+  }
+  return live2d
+}
+
 /**
  * 把 Live2D 桌宠渲染器（pet-live2d.html）与 assets/ 拷贝到用户数据目录。
  * 源文件位于 petWindow.js 同级的 pet-live2d.html 与 assets/，
@@ -806,6 +832,11 @@ function copyPetAssets(dir: string): void {
     const onboardSrc = path.join(src, 'onboarding.html')
     if (fs.existsSync(onboardSrc)) {
       fs.copyFileSync(onboardSrc, path.join(dir, 'onboarding.html'))
+    }
+    // 复制 VRM 3D 渲染页（assets/pet-vrm.js 随 assets 目录一并复制）
+    const vrmSrc = path.join(src, 'pet-vrm.html')
+    if (fs.existsSync(vrmSrc)) {
+      fs.copyFileSync(vrmSrc, path.join(dir, 'pet-vrm.html'))
     }
   } catch (e: any) {
     console.error('[PetWindow] copyPetAssets error:', e)
@@ -861,19 +892,21 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   // 全屏舞台：覆盖整个屏幕（含任务栏区域），桌宠可在整块屏幕上活动
   const { x: workX, y: workY, width: screenWidth, height: screenHeight } = display.bounds
 
+  const petCaps = currentPlatformCaps()
+  if (petCaps.note) console.log('[PetWindow] 平台能力：', petCaps.label, '-', petCaps.note)
   petWindow = new BrowserWindow({
     width: screenWidth,
     height: screenHeight,
     x: workX,
     y: workY,
-    transparent: true,
+    transparent: petCaps.transparent,
     frame: false,
-    alwaysOnTop: true,
+    alwaysOnTop: petCaps.alwaysOnTop,
     skipTaskbar: true,
     resizable: false,
     hasShadow: false,
     focusable: true,
-    backgroundColor: '#00000000',
+    backgroundColor: petCaps.backgroundColor,
     webPreferences: {
       preload: resolvePreloadPath(),
       sandbox: false,
@@ -907,8 +940,8 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
     })
   } catch (e) { console.warn('[PetWindow] 媒体权限处理器设置失败:', e) }
 
-  // 加载生成的 HTML（页面就绪后再应用穿透模式，确保渲染页收到状态同步）
-  petWindow.loadFile(getPetHtmlPath()).then(() => {
+  // 加载生成的 HTML（按当前模型形态选择 Live2D / VRM 渲染页）
+  petWindow.loadFile(getRendererHtmlPath()).then(() => {
     setWindowClickThrough(config.clickThrough)
   }).catch(err => {
     console.error('[PetWindow] loadFile failed:', err)
@@ -1072,7 +1105,7 @@ export function registerPetIpc(): void {
   //    区域外窗口不渲染、不参与合成、不接收鼠标。macOS 不支持 setShape，直接忽略。
   ipcMain.on('pet:set-shape', (e, rects: Array<{ x: number; y: number; width: number; height: number }>) => {
     try {
-      if (process.platform === 'darwin') return
+      if (!currentPlatformCaps().setShape) return // 仅 Windows 支持 setShape；macOS/Linux 不裁剪
       const win = BrowserWindow.fromWebContents(e.sender)
       if (!win || win.isDestroyed()) return
       const valid = Array.isArray(rects)
@@ -1236,6 +1269,22 @@ export function registerPetIpc(): void {
         persistPetModel(model)
       }
       return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e) }
+    }
+  })
+
+  // 切换到不同形态模型后，在同一桌宠窗口重载对应渲染页（Live2D ↔ VRM）
+  ipcMain.handle('pet:reopen', async () => {
+    try {
+      const html = getRendererHtmlPath()
+      if (petWindow && !petWindow.isDestroyed()) {
+        await petWindow.loadFile(html)
+        setWindowClickThrough(config.clickThrough)
+      } else {
+        createPetWindow(petMainWindow)
+      }
+      return { ok: true, kind: currentModelKind() }
     } catch (e: any) {
       return { ok: false, error: String(e) }
     }

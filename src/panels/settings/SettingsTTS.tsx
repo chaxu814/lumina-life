@@ -52,6 +52,38 @@ export default function SettingsTTS() {
   const [indexttsStatus, setIndexttsStatus] = useState<'idle' | 'checking' | 'ok' | 'fail'>('idle')
   const [indexttsMsg, setIndexttsMsg] = useState('')
 
+  // 离线语音识别（whisper-base 多语种，支持中文）
+  const [sttOffline, setSttOffline] = useState<any>(null)
+  const [sttBusy, setSttBusy] = useState(false)
+  const [sttPct, setSttPct] = useState(0)
+  const [sttFile, setSttFile] = useState('')
+  const [sttErr, setSttErr] = useState('')
+  const refreshStt = async () => {
+    try { const r = await window.luminaAPI?.sttOfflineStatus?.(); if (r?.ok) setSttOffline(r) } catch {}
+  }
+  useEffect(() => {
+    refreshStt()
+    let un: any = null
+    try {
+      un = window.luminaAPI?.onSttDownloadProgress?.((d: any) => {
+        if (typeof d.progress === 'number') setSttPct(Math.round(d.progress * 100))
+        if (d.file) setSttFile(d.file)
+        if (d.status === 'done') { setSttBusy(false); setSttPct(100); refreshStt() }
+        if (d.status === 'error') { setSttBusy(false); setSttErr(d.message || '下载失败') }
+      })
+    } catch {}
+    return () => { try { un?.() } catch {} }
+  }, [])
+  const downloadStt = async () => {
+    setSttBusy(true); setSttErr(''); setSttPct(0)
+    try {
+      const r = await window.luminaAPI?.sttDownloadModel?.()
+      if (r?.ok) { setSttPct(100); setSttOffline({ ...sttOffline, ...r }) }
+      else { setSttErr(r?.error || '下载失败') }
+    } catch (e: any) { setSttErr(e?.message || '下载失败') }
+    finally { setSttBusy(false) }
+  }
+
   const engine = ttsConfig.engine || 'edge-tts'
   const ttsEnabled = ttsConfig.enabled !== false
 
@@ -278,6 +310,38 @@ export default function SettingsTTS() {
           </div>
         </>
       )}
+
+      {/* ══════ 离线语音识别（STT）══════ */}
+      <div style={{ marginTop: 18, marginBottom: 14, padding: '12px 14px', background: 'var(--surface-100, #f3f4f6)', borderRadius: 10, border: '1px solid var(--border-light)' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>🎙️ 离线语音识别（中文）</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+          内置多语种 Whisper 模型，识别中文。首次点“下载”约 290MB（国内镜像），完成后<b>桌宠全双工对话可完全离线识别中文</b>，不再依赖联网；
+          未下载时，主窗口语音输入使用浏览器内置识别（需联网）。
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <StatusBadge
+            status={sttOffline?.modelReady ? 'running' : sttOffline?.depReady ? 'warning' : 'stopped'}
+            label={sttOffline?.modelReady ? '已就绪·离线可用' : sttOffline?.depReady ? '未下载模型' : '内置依赖缺失'}
+          />
+          {sttOffline?.modelReady && sttOffline?.sizeMB > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>已占用 {sttOffline.sizeMB} MB</span>
+          )}
+          {!sttOffline?.modelReady && (
+            <SettingBtn variant="success" onClick={downloadStt} disabled={sttBusy || !sttOffline?.depReady} loading={sttBusy}>
+              {sttBusy ? (sttPct > 0 ? `下载中 ${sttPct}%` : '准备中…') : '⬇ 下载离线中文模型'}
+            </SettingBtn>
+          )}
+        </div>
+        {sttBusy && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ height: 6, background: 'var(--surface-0, #e5e7eb)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: sttPct + '%', height: '100%', background: '#8b5cf6', transition: 'width .2s' }} />
+            </div>
+            {sttFile && <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4, wordBreak: 'break-all' }}>{sttFile}</div>}
+          </div>
+        )}
+        {sttErr && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 6 }}>{sttErr}</div>}
+      </div>
 
       {/* 通用音量 + 试听 */}
       <SettingRowLast label="试听" desc="播放一段测试语音验证效果">

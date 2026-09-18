@@ -25,12 +25,28 @@ const STEPS: StepConfig[] = [
 // ─── 预设 LLM 配置 ─────────────────────────────────────
 const PRESET_LLMS = [
   {
+    id: 'opencode-zen',
+    name: 'OpenCode Zen（免费在线）',
+    icon: '🎯',
+    desc: '无需注册、无需 Key，点击即可开始（推荐新用户）',
+    badge: '免费·开箱即用',
+    config: { provider: 'opencode-zen', baseUrl: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free', apiKey: 'public' },
+  },
+  {
     id: 'lmstudio',
     name: 'LM Studio',
     icon: '🖥️',
     desc: '本地运行，完全免费，保护隐私',
     badge: '离线·免费',
     config: { provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: 'local-model' },
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    icon: '🦙',
+    desc: '本地运行，完全免费，可「自动检测」已装模型',
+    badge: '离线·免费',
+    config: { provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' },
   },
   {
     id: 'deepseek',
@@ -117,21 +133,59 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
 }
 
 function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
-  const [selected, setSelected] = useState<string>('deepseek')
+  const [selected, setSelected] = useState<string>('opencode-zen')
   const [apiKey, setApiKey] = useState('')
+  const [detecting, setDetecting] = useState(false)
+  const [found, setFound] = useState<any[]>([])
+  const [detectMsg, setDetectMsg] = useState('')
   const setLLMConfig = useStore((s) => s.setLLMConfig)
 
-  const handleConfirm = () => {
+  // 把选择写入前端 store，并尽力持久化到后端 ProviderManager（best-effort，不阻塞引导）
+  const persist = async (providerId: string, baseUrl: string, model: string, key: string) => {
+    setLLMConfig({ provider: providerId, baseUrl, model, apiKey: key })
+    try {
+      await window.luminaAPI?.providerSaveConfig?.(providerId, {
+        baseUrl, apiKey: key, model, enabled: true, timeout: 600, maxContextTokens: 256000,
+      })
+      await window.luminaAPI?.providerSetActive?.(providerId)
+    } catch { /* 后端暂不可用时忽略，用户可在设置页再配置 */ }
+  }
+
+  const handleConfirm = async () => {
     const preset = PRESET_LLMS.find(p => p.id === selected)
     if (preset) {
-      setLLMConfig({ ...preset.config, apiKey })
+      const key = (preset as any).config.apiKey || (preset.needApiKey ? apiKey : '')
+      await persist(preset.config.provider, preset.config.baseUrl, preset.config.model, key)
     }
     onNext()
   }
 
+  const detectLocal = async () => {
+    setDetecting(true); setDetectMsg(''); setFound([])
+    try {
+      const r = await window.luminaAPI?.providerDiscoverLocal?.()
+      if (r?.found?.length) {
+        setFound(r.found)
+        setDetectMsg('检测到本地模型，点右侧「使用」即可（无需 Key）。')
+      } else {
+        setDetectMsg('暂未检测到本地模型。可用上面的「免费在线」，或先安装 Ollama 后重新检测。')
+      }
+    } catch {
+      setDetectMsg('检测失败，可直接选择「免费在线」继续。')
+    } finally { setDetecting(false) }
+  }
+
+  const useFound = async (f: any) => {
+    const r = await window.luminaAPI?.providerApplyLocal?.({ id: f.id, baseUrl: f.baseUrl, model: f.recommendedModel })
+    if (r?.success) {
+      setLLMConfig({ provider: r.id === 'ollama' ? 'ollama' : 'lmstudio', baseUrl: r.baseUrl || '', model: r.model || '', apiKey: 'local' })
+      onNext()
+    } else { setDetectMsg('接入失败：' + (r?.error || '未知错误')) }
+  }
+
   return (
     <div style={{ padding: '16px 12px' }}>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
         {PRESET_LLMS.map(p => (
           <div key={p.id} onClick={() => setSelected(p.id)}
             style={{
@@ -155,6 +209,35 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
         ))}
       </div>
 
+      {/* 自动检测本地模型 */}
+      <button onClick={detectLocal} disabled={detecting}
+        style={{
+          width: '100%', padding: '8px 12px', borderRadius: 8, marginBottom: 8,
+          border: '1.5px dashed var(--accent-500)', background: 'var(--accent-50)',
+          color: 'var(--accent-600)', fontSize: 12, fontWeight: 600, cursor: detecting ? 'wait' : 'pointer',
+        }}>
+        {detecting ? '⏳ 正在检测 Ollama / LM Studio…' : '🔎 自动检测本地模型（已安装就一键接入）'}
+      </button>
+      {detectMsg && (
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.6 }}>
+          {detectMsg}
+          {found.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+              {found.map((f) => (
+                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ flex: 1, fontSize: 11, color: 'var(--text-primary)' }}>
+                    {f.label} · 推荐 {f.recommendedModel}（{f.models.length} 个）
+                  </span>
+                  <button onClick={() => useFound(f)} style={{ padding: '2px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer' }}>
+                    使用
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {PRESET_LLMS.find(p => p.id === selected)?.needApiKey && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -172,7 +255,7 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button onClick={onSkip} className="onboarding-btn-secondary">跳过</button>
         <button onClick={handleConfirm} className="onboarding-btn-primary" style={{ flex: 1 }}>
-          {selected === 'lmstudio' ? '使用本地模型' : '确认并继续'}
+          {selected === 'opencode-zen' ? '免费开始（无需 Key）' : '确认并继续'}
         </button>
       </div>
     </div>

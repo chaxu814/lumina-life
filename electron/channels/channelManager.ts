@@ -42,10 +42,14 @@ export class ChannelManager {
     // 读取渠道配置
     await this.loadConfigs()
 
-    // 启动已启用的渠道
+    // 启动已启用的渠道（单个渠道失败不影响其它渠道）
     for (const [key, cfg] of this.configs) {
       if (cfg.enabled) {
-        await this.startAdapter(key, cfg)
+        try {
+          await this.startAdapter(key, cfg)
+        } catch (err) {
+          console.warn(`[ChannelManager] 渠道 ${key} 启动失败（已隔离，不影响其它渠道）:`, err)
+        }
       }
     }
 
@@ -142,34 +146,38 @@ export class ChannelManager {
   // ── 内部方法 ──────────────────────────────────────
 
   private async startAdapter(key: string, cfg: ChannelConfig): Promise<boolean> {
-    // 找对应的适配器实现
+    // 找对应的适配器实现（构造阶段失败不影响其它渠道）
     let adapter: ChannelAdapter | undefined
-
-    switch (cfg.type) {
-      case 'dingtalk':
-        adapter = await this.createDingTalkAdapter(cfg)
-        break
-      case 'wechat':
-        adapter = await this.createWeChatAdapter(cfg)
-        break
-      case 'qq':
-        adapter = await this.createQQAdapter(cfg)
-        break
-      case 'slack':
-        adapter = await this.createSlackAdapter(cfg)
-        break
-      case 'telegram':
-        adapter = await this.createTelegramAdapter(cfg)
-        break
-      case 'discord':
-        adapter = await this.createDiscordAdapter(cfg)
-        break
-      case 'openclaw':
-        adapter = await this.createOpenClawAdapter(cfg)
-        break
-      default:
-        console.warn(`[ChannelManager] 不支持的渠道类型: ${cfg.type}`)
-        return false
+    try {
+      switch (cfg.type) {
+        case 'dingtalk':
+          adapter = await this.createDingTalkAdapter(cfg)
+          break
+        case 'wechat':
+          adapter = await this.createWeChatAdapter(cfg)
+          break
+        case 'qq':
+          adapter = await this.createQQAdapter(cfg)
+          break
+        case 'slack':
+          adapter = await this.createSlackAdapter(cfg)
+          break
+        case 'telegram':
+          adapter = await this.createTelegramAdapter(cfg)
+          break
+        case 'discord':
+          adapter = await this.createDiscordAdapter(cfg)
+          break
+        case 'openclaw':
+          adapter = await this.createOpenClawAdapter(cfg)
+          break
+        default:
+          console.warn(`[ChannelManager] 不支持的渠道类型: ${cfg.type}`)
+          return false
+      }
+    } catch (err) {
+      console.warn(`[ChannelManager] 渠道 ${key} 适配器构造失败（已隔离）:`, err)
+      return false
     }
 
     if (!adapter) return false
@@ -185,7 +193,20 @@ export class ChannelManager {
       }
     })
 
-    await adapter.init(cfg)
+    // init 失败 / 抛异常都要安全降级：该渠道保持离线，不注册、不影响其它渠道
+    try {
+      const ok = await adapter.init(cfg)
+      if (!ok) {
+        console.warn(`[ChannelManager] 渠道 ${key} (${cfg.type}) 初始化返回 false，保持离线`)
+        await adapter.destroy().catch(() => {})
+        return false
+      }
+    } catch (err) {
+      console.warn(`[ChannelManager] 渠道 ${key} (${cfg.type}) 初始化异常（已隔离）:`, err)
+      await adapter.destroy().catch(() => {})
+      return false
+    }
+
     this.adapters.set(key, adapter)
     console.log(`[ChannelManager] ✅ 渠道已启动: ${key} (${cfg.type})`)
     return true
@@ -251,14 +272,13 @@ export class ChannelManager {
     }
   }
 
-  private async createOpenClawAdapter(cfg: ChannelConfig): Promise<ChannelAdapter | undefined> {
+  private async createOpenClawAdapter(_cfg: ChannelConfig): Promise<ChannelAdapter | undefined> {
     try {
       const { OpenClawAdapter } = await import('./adapters/openclaw')
-      const adapter = new OpenClawAdapter()
-      const ok = await adapter.init(cfg)
-      return ok ? adapter : undefined
+      // 仅构造；连通性探活由 startAdapter 统一在 init() 中完成（失败则安全保持离线）
+      return new OpenClawAdapter()
     } catch (err) {
-      console.warn('[ChannelManager] OpenClaw 适配器启动失败（不影响其它渠道）:', err)
+      console.warn('[ChannelManager] OpenClaw 适配器构造失败（不影响其它渠道）:', err)
       return undefined
     }
   }

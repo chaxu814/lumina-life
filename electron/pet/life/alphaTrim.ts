@@ -65,3 +65,18 @@ export function scanAlphaBounds(
   const b = Math.min(cap, Math.max(0, (bh - 1 - maxY - step) / bh))
   return { l, t, r, b }
 }
+
+/**
+ * 画布 backing store 与 CSS 像素的比值（readPixels 用）。
+ *
+ * 高画质下 PIXI renderer resolution = devicePixelRatio，低画质固定为 1，
+ * 因此 readPixels 区域不能一律乘 devicePixelRatio，否则在 125/150% 缩放 +
+ * 低画质时读错区域、误判包围盒而把模型裁掉。直接用「画布实际像素宽 /
+ * CSS 宽」最稳，对任意 DPI 与画质都正确。
+ */
+export function backingPixelScale(canvasWidth: number, cssWidth: number, devicePixelRatio: number): number {
+  if (canvasWidth > 0 && cssWidth > 0 && Number.isFinite(canvasWidth) && Number.isFinite(cssWidth)) {
+    return canvasWidth / cssWidth
+  }
+  return devicePixelRatio > 0 ? devicePixelRatio : 1
+}
