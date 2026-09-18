@@ -2423,6 +2423,7 @@ const PERSONA_NAMES = { '': '默认猫娘', bingruo: '病弱妹妹', zhixin: '�
 
 function buildSettingsMain() {
   const p = prefs;
+  const _effFps = (!p.fps || p.fps <= 0) ? 30 : Math.min(p.fps, 60);
   return `
     <div class="nk-section-title">快捷设置</div>
     <div class="nk-row">
@@ -2473,6 +2474,11 @@ function buildSettingsMain() {
     <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">模型大小</span><span class="nk-val" id="sp-scale-val">${Math.round(userScale * 100)}%</span></div>
       <input type="range" class="nk-slider" id="sp-scale" min="40" max="160" step="5" value="${Math.round(userScale * 100)}">
+    </div>
+    <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">帧率</span><span class="nk-val" id="sp-fps-val">${_effFps} FPS</span></div>
+      <input type="range" class="nk-slider" id="sp-fps" min="30" max="60" step="30" value="${_effFps}">
+      <span class="nk-hint">30 省电（默认，推荐）· 60 更丝滑，拖动后即时生效</span>
     </div>
     <div class="nk-section-title">功能设置</div>
     <div class="nk-card-grid">
@@ -2538,7 +2544,8 @@ function buildDialogueSubPanel() {
 
 function buildAnimSubPanel() {
   const p = prefs;
-  const fpsLabel = p.fps === 0 ? '无限制 (VSync)' : String(p.fps);
+  const _effFps = (!p.fps || p.fps <= 0) ? 30 : Math.min(p.fps, 60);
+  const fpsLabel = _effFps + ' FPS';
   const qualityPct = p.quality === 'low' ? 50 : 100;
   return `
     <div class="nk-back" id="sp-back">‹ 返回</div>
@@ -2548,7 +2555,8 @@ function buildAnimSubPanel() {
     </div>
     <div class="nk-row" style="flex-direction:column;align-items:stretch;gap:4px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-weight:600;">帧率</span><span class="nk-val" id="an-fps-val">${fpsLabel}</span></div>
-      <input type="range" class="nk-slider" id="an-fps" min="0" max="120" step="30" value="${p.fps || 0}">
+      <input type="range" class="nk-slider" id="an-fps" min="30" max="60" step="30" value="${_effFps}">
+      <div style="font-size:11px;opacity:.55;margin-top:2px;">30 省电（默认）· 60 更丝滑</div>
     </div>
     <div class="nk-checklist" style="margin-top:6px;">
       <label class="nk-check"><input type="checkbox" ${p.mouseTrack !== false ? 'checked' : ''} id="an-mtrack"><span class="nk-cbox"></span>跟踪鼠标</label>
@@ -2663,6 +2671,11 @@ function bindSettingsPanel() {
       setUserScale(Number(e.target.value) / 100, true); // 释放时保存
     };
   }
+  const spf = $('sp-fps');
+  if (spf) {
+    spf.oninput = e => { const v = Number(e.target.value); const lab = $('sp-fps-val'); if (lab) lab.textContent = v + ' FPS'; };
+    spf.onchange = e => livePref({ fps: Number(e.target.value) });
+  }
   const persona = $('sp-persona'); if (persona) persona.onclick = () => { settingsSubPage = 'persona'; refreshPanel('panel-settings'); };
   const audioNav = $('sp-audio'); if (audioNav) audioNav.onclick = () => togglePanel('panel-audio', 'tb-voice');
   const catpawNav = $('sp-catpaw'); if (catpawNav) catpawNav.onclick = () => togglePanel('panel-tools', 'tb-tools');
@@ -2701,7 +2714,7 @@ function bindSettingsPanel() {
   }
   const f = $('an-fps');
   if (f) {
-    f.oninput = e => { const v = Number(e.target.value); $('an-fps-val').textContent = v === 0 ? '无限制 (VSync)' : String(v); };
+    f.oninput = e => { const v = Number(e.target.value); $('an-fps-val').textContent = v + ' FPS'; };
     f.onchange = e => livePref({ fps: Number(e.target.value) });
   }
   const mt = $('an-mtrack'); if (mt) mt.onchange = e => livePref({ mouseTrack: e.target.checked });
