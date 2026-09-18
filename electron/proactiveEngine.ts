@@ -33,6 +33,7 @@ import https from 'https'
 import http from 'http'
 import screenshot from 'screenshot-desktop'
 import { Notification } from 'electron'
+import { getAppIconPath } from './appIcon'
 import { stripMarkdown } from './utils/stripMarkdown'
 import { globalEventBus, BusEvents } from './eventBus'
 import { postObservation, postThought } from './moments/autoPoster'  // 🌸 v2.10
@@ -1508,7 +1509,7 @@ export class ProactiveEngine extends EventEmitter {
     // ── 🔧 v3.9.1/v6.x: Windows 系统通知（兼容层，失败不阻塞引擎） ──
     try {
       if (!this.config.notificationsEnabled) return // 静默跳过
-      const iconPath = path.join(__dirname, '..', 'assets', 'icon.png')
+      const iconPath = getAppIconPath()
       safeNotify('💡 Lumina 有话要说', message.slice(0, 120), iconPath)
     } catch {
       // 静默降级 — 通知失败不影响引擎核心功能

@@ -125,6 +125,11 @@ screenshots/
 !docs/**/*.jpg
 !public/**/*.png
 !public/**/*.ico
+# 例外：应用图标（exe/安装包/窗口/托盘/favicon）必须随仓库发布
+!resources/icon.png
+!resources/icon-16.png
+!resources/icon-32.png
+!resources/icon.ico
 
 # ── Runtime config ──────────────────────────────────────────
 vk_swiftshader_icd.json

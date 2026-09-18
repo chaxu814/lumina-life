@@ -172,7 +172,7 @@ export interface PetPrefs {
 const DEFAULT_PREFS: PetPrefs = {
   persona: '', onboardingDone: true,
   bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
-  mouseTrack: true, fullscreenTrack: false, fps: 0, quality: 'high',
+  mouseTrack: true, fullscreenTrack: false, fps: 30, quality: 'high',
   voiceOn: false, volume: 100, spatial: true,
   breathing: false, hoverFade: false, dropEffects: true, naturalExpression: true,
   autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
@@ -198,6 +198,8 @@ export function getPetPrefs(): PetPrefs {
   }
   // 用户明确不需要鼠标离开变淡效果，强制关闭（覆盖旧版本保存的 true）
   merged.hoverFade = false
+  // 帧率：旧版存 0(不限速)，统一归一为 30（省电默认），封顶 60；让设置页与运行时一致
+  merged.fps = (!merged.fps || merged.fps <= 0) ? 30 : Math.min(merged.fps, 60)
   return merged
 }
 export function updatePetPrefs(patch: Partial<PetPrefs>): PetPrefs {

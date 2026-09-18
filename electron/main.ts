@@ -9,6 +9,7 @@ import 'dotenv/config'
 
 import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification } from 'electron'
 import { join } from 'path'
+import { getAppIconPath, getTrayIcon } from './appIcon'
 
 // ── 必须在 app.whenReady 前设置 ──────────────────────
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -132,7 +133,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       autoplayPolicy: 'no-user-gesture-required',
     },
-    icon: join(__dirname, '../../resources/icon.png'),
+    icon: getAppIconPath(),
     show: false,
   })
 
@@ -169,8 +170,8 @@ function createWindow(): BrowserWindow {
 // ==================??// 托盘
 // ==================??
 function createTray(): void {
-  const trayIcon = nativeImage.createEmpty()
-  tray = new Tray(trayIcon.resize({ width: 16, height: 16 }))
+  const trayIcon = getTrayIcon()
+  tray = new Tray(trayIcon.isEmpty() ? nativeImage.createEmpty() : trayIcon)
 
   const contextMenu = Menu.buildFromTemplate([
     { label: '显示 Lumina', click: () => mainWindow?.show() },
@@ -768,7 +769,7 @@ try {
             title: '📡 Lumina 新闻早报',
             body: `${data?.count || 0} 条新闻已推送到邮箱\n${data?.date || ''}`,
             silent: false,
-            icon: join(__dirname, '../build/icon.ico'),
+            icon: getAppIconPath(),
           })
           notif.show()
           // 点击通知打开新闻面板
