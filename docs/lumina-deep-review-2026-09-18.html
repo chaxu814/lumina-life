@@ -1,0 +1,407 @@
+<html style="margin:0;padding:0;">
+<title>Lumina 深度体检报告 · 2026-09-18</title>
+<div style="background:#F4F3EE;box-sizing:border-box;font-family:'PingFang SC','Segoe UI','Microsoft YaHei',Arial,sans-serif;color:#1A1B1C;padding:24px 16px;line-height:1.6;width:100%;">
+  <div style="max-width:1120px;margin:0 auto;box-sizing:border-box;width:100%;">
+
+    <style>
+      .h1{font-size:25px;font-weight:700;letter-spacing:.5px;}
+      .h2{font-size:17px;font-weight:700;margin:26px 0 10px;}
+      .muted{color:#6B7280;}
+      .card{background:#fff;border:1px solid #E4E3DD;border-radius:14px;}
+      .pad{padding:14px 16px;}
+      .chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;}
+      .chip.ok{background:#e8f5ea;color:#2f7d32;border:1px solid #bfe3c6;}
+      .chip.warn{background:#fbf3e2;color:#9a6d1f;border:1px solid #ecd9a8;}
+      .chip.bad{background:#fdeaea;color:#c05a5a;border:1px solid #f3c4c5;}
+      .chip.gray{background:#f1f0ea;color:#5b594f;border:1px solid #e0ded6;}
+      table{border-collapse:collapse;width:100%;}
+      th,td{text-align:left;padding:9px 12px;}
+      .small{font-size:12.5px;}
+      .kbd{font-size:12.5px;}
+      .grid{display:flex;flex-wrap:wrap;gap:10px;}
+      @media (max-width:640px){
+        body{font-size:15px;}
+        .h1{font-size:20px;} .h2{font-size:16px;}
+        th,td{padding:8px 10px;font-size:13.5px;}
+        .small{font-size:13px;}
+      }
+      .stat{flex:1 1 132px;min-width:124px;background:#fff;border:1px solid #E4E3DD;border-radius:12px;padding:12px 14px;}
+      .stat .n{font-size:24px;font-weight:700;line-height:1.15;}
+      .stat .l{font-size:12.5px;color:#555;margin-top:4px;}
+    </style>
+
+    <!-- ============ 标题 ============ -->
+    <div style="margin-bottom:16px;">
+      <div class="h1">Lumina 深度体检报告 · 普通用户 / 专业用户体验 · 与 2026 agent 市场的短中长期判断</div>
+      <div class="small muted" style="margin-top:6px;">
+        数据口径：Lumina 为本地仓库 <b>2026-09-18 实读实跑</b>（electron + src + tests 共 403 个源文件、约 <b>11.11 万行</b>；vitest 实跑 <b>547 通过 / 1 跳过</b>；打包后真机启动测内存/CPU）；外部项目与市场数据来自官方 README / 公开报道，标注抓取日期（9/17 GitHub 接口、9/18 公开报道）。
+        评级 <b>● 强/成熟　◐ 有但早期/局部　○ 无或几乎无</b>，为基于证据的工程判断，非官方排名。
+      </div>
+    </div>
+
+    <!-- ============ 总评 ============ -->
+    <div class="card" style="border-left:4px solid #EAA7B2;padding:16px 18px;margin-bottom:8px;">
+      <div style="font-size:17px;font-weight:700;color:#8a3d52;">一句话总评：引擎、灵魂、外壳都已到位，就差「点火上路」</div>
+      <div style="font-size:14px;margin-top:8px;">
+        相比 9/17 体检，这一天把「产品化最后一公里」补齐了一大截：<b>原生 Claude/Gemini/Azure 已接进主链路</b>、<b>全双工语音闭环打通并加固</b>、<b>日常卡顿完成一轮优化</b>、<b>帧率设置提到主面板</b>、<b>品牌图标（纸袋少女）装进 exe/安装包/托盘/favicon</b>、<b>亲密度从写死常量改成事件驱动并持久化</b>。
+        现在的 Lumina 是一台<b>发动机和内饰都已就位、能装袋交付</b>的车：安装包（151 MB）和绿色版（204 MB）已就绪、启动稳定无崩溃、547 测试通过。
+        但它仍停在车库里——<b>没有公开、没有外部用户、没有签名（首装 SmartScreen 警告）、一批「逻辑就绪」的能力还没过真机关</b>。最大的风险依旧不是技术，而是<b>发布与真实反馈</b>。
+      </div>
+    </div>
+
+    <!-- ============ ① 仪表盘 ============ -->
+    <div class="h2">① 体检仪表盘：一个体量很大、测试很扎实、已经能打包的工程</div>
+    <div class="grid" style="margin-bottom:22px;">
+      <div class="stat"><div class="n" style="color:#b56677;">11.11万</div><div class="l">TS/TSX 行（403 文件；后端 electron 占大头）</div></div>
+      <div class="stat"><div class="n" style="color:#3f8f4f;">547</div><div class="l">单测通过 / 1 跳过（46 文件实跑；磁盘 53 个测试文件）</div></div>
+      <div class="stat"><div class="n" style="color:#3f8f4f;">~60</div><div class="l">工具实现（59 个 impl 文件）+ MCP/技能扩展</div></div>
+      <div class="stat"><div class="n" style="color:#3f8f4f;">3</div><div class="l">核心 Agent 团队（Lumina / Recha / Yak）+ 31 个后端模块</div></div>
+      <div class="stat"><div class="n" style="color:#3f8f4f;">8</div><div class="l">内置模型供应商 + 原生桥（Claude/Gemini/Azure）</div></div>
+      <div class="stat"><div class="n" style="color:#3f8f4f;">7</div><div class="l">渠道适配（QQ 最成熟，OpenClaw 桥仍骨架）</div></div>
+      <div class="stat"><div class="n" style="color:#a8793f;">775MB</div><div class="l">打包后稳态内存（5 进程，约 0.28 核空闲 CPU）</div></div>
+      <div class="stat"><div class="n" style="color:#c05a5a;">10</div><div class="l">千行/超大文件（最大 GroupChatView 267KB、agentRunner 154KB）</div></div>
+      <div class="stat"><div class="n" style="color:#c05a5a;">0 ★</div><div class="l">仍未公开（仓库/Release/外部用户都还没有）</div></div>
+    </div>
+
+    <!-- ============ ② 9/17→9/18 进步对账 ============ -->
+    <div class="h2">② 24 小时进步对账：9/17 报告点名的问题，今天改到哪了</div>
+    <div class="card" style="overflow-x:auto;margin-bottom:22px;">
+      <table style="min-width:760px;font-size:13.5px;">
+        <thead><tr style="background:rgba(0,0,0,0.03);">
+          <th style="width:26%;border-bottom:1px solid #E4E3DD;">9/17 点名问题</th>
+          <th style="width:56%;border-bottom:1px solid #E4E3DD;">9/18 实测状态</th>
+          <th style="width:18%;border-bottom:1px solid #E4E3DD;">结论</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">原生 Claude / Gemini / Azure 没接主链路</td>
+            <td style="border-bottom:1px solid #f0efe9;">新增 <b>nativeBridge 原生协议桥接层</b>，主链路原生支持 Claude/Gemini/Azure（commit 74f132d）</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已解决</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">全双工实时语音差最后一公里</td>
+            <td style="border-bottom:1px solid #f0efe9;">打通全双工实时语音闭环（802f1c8），并加固防 TTS 打断挂起、回声自激、多轮上下文、Web Speech 看门狗与离线引导（fbb55e6/8ba8ec9）；<b>但中文主链路默认仍依赖联网 Web Speech（离线 tiny.en 不识中文）</b></td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">闭环已通·待真机</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">日常使用周期性小卡</td>
+            <td style="border-bottom:1px solid #f0efe9;">桌宠渲染、周期任务、群聊重渲染一轮优化（38973c9）；帧率默认 30 并封顶 60；实测稳态约 0.28 核、无崩溃</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已优化</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">帧率设置藏在二级页找不到</td>
+            <td style="border-bottom:1px solid #f0efe9;">帧率滑块提到「桌宠设置」主面板（5d2aa04）；旧存档 fps=0 自动归一为 30，设置页与运行时一致</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已解决</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">exe / 安装包 / 托盘全是 Electron 默认图标</td>
+            <td style="border-bottom:1px solid #f0efe9;">纸袋少女 LOGO 已生成 7 尺寸混合 ICO（16–256）并接入 <b>exe、安装/卸载器、桌面/开始菜单、任务栏、托盘、系统通知、favicon</b>；PE 图标组已验证 7 尺寸嵌入，mac/linux 也已配（7b98d63）</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已解决</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">亲密度 getAllRelationships() 返回写死常量</td>
+            <td style="border-bottom:1px solid #f0efe9;">新增 agentRelationships（v0.1.1）：委托成功/失败、团队群聊事件驱动 affinity/trust，0–100 钳制，持久化到 lumina-relationships.json，已接进 TeamManager/委托/社交引擎</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已解决</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">README 口径超前（「向量语义」「70+ 工具」）</td>
+            <td style="border-bottom:1px solid #f0efe9;">现 README 已改为如实表述 TF-IDF / BM25（各出现 6 次），不再宣称「70+」；代码注释也明确默认是 TF-IDF 本地向量、Ollama/embedding-server 为可选</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已对齐</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">5 个千行单体、82 处 TODO</td>
+            <td style="border-bottom:1px solid #f0efe9;">超大文件按目录统计仍有 10 个（前端面板占多数），electron+src 实测 TODO/FIXME 63 处；核心 ReAct 循环 agentRunner 154KB 对应测试仅 4.1KB，测试重心仍偏纯逻辑</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">有进展·仍是债</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;">未发布 / 真机未验证</td>
+            <td style="border-bottom:1px solid #f0efe9;">安装包与绿色版已构建并验证（启动 5 进程、无崩溃）；但尚未建仓发布，且透明窗/alpha-trim/全双工/UGC 等仍未真机逐项回归</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip bad">待发布/待真机</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ============ ③ 2026 市场格局 ============ -->
+    <div class="h2">③ 2026 赛道：AI 桌宠 / 个人代理「全面开花」，窗口正在收窄</div>
+    <div class="card pad" style="margin-bottom:12px;">
+      <div class="small" style="margin-bottom:10px;">
+        2026 年「观察式本地代理（observational AI）」被公开报道称为<b>个人 AI 的定义性品类</b>：软件正在从「你打开 App 点按钮」反转为「代理在你机器上、替你看、替你做、主动找你」。<b>大厂和开源在同一时间涌入「桌宠/陪伴」这个最直观的外壳</b>：
+      </div>
+      <div style="position:relative;display:grid;grid-template-columns:92px 1fr;gap:0 14px;font-size:13px;">
+        <!-- 时间轴 -->
+        <div style="grid-column:1/-1;display:contents;">
+          <div class="muted" style="padding:6px 0;text-align:right;">2026-01</div>
+          <div style="padding:6px 0;border-left:2px solid #e4e3dd;padding-left:14px;margin-left:-9px;">N.E.K.O 上线 <b>Steam 抢先体验</b>（1 月 30 日）</div>
+          <div class="muted" style="padding:6px 0;text-align:right;">2026-05</div>
+          <div style="padding:6px 0;border-left:2px solid #e4e3dd;padding-left:14px;margin-left:-9px;"><b>OpenAI Codex</b> 推出全局桌面宠物（仿电子鸡，跨应用常驻，可拖拽）；腾讯 WorkBuddy 内置 Buddy 猫；Google 被曝为 Gemini 做 7×24 个人代理</div>
+          <div class="muted" style="padding:6px 0;text-align:right;">2026-06</div>
+          <div style="padding:6px 0;border-left:2px solid #e4e3dd;padding-left:14px;margin-left:-9px;"><b>微软 Scout</b> 发布：直接嵌进 Windows、学行为、主动执行；Perplexity Personal Computer 登陆 Windows；Open-LLM-VTuber 一周 +2388 星、冲上 Trending（约 1.04 万星）</div>
+          <div class="muted" style="padding:6px 0;text-align:right;">2026-07</div>
+          <div style="padding:6px 0;border-left:2px solid #b56677;padding-left:14px;margin-left:-9px;"><b>B 站「猫娘计划」N.E.K.O 登上 WAIC</b>：GitHub 2000+ 星、Steam 用户破万、手机内测；本地数据、五维记忆、双渲染</div>
+          <div class="muted" style="padding:6px 0;text-align:right;">2026-09</div>
+          <div style="padding:6px 0;border-left:2px solid #e4e3dd;padding-left:14px;margin-left:-9px;">腾讯 WorkBuddy ×《和平精英》联动桌宠装扮；Steam 上 Aimi 桌面伴侣等一批 Live2D/VRM 本地 AI 产品排队上架</div>
+        </div>
+      </div>
+      <div class="small muted" style="margin-top:10px;">背景：个人 AI 助手市场 2025 年约 34 亿美元 → 2026 年约 48.4 亿美元（约 42% 年增），第三方预测 2030 年约 196 亿美元。<b>品类被验证 = 红利，但也意味着同质化竞争与大厂挤压同时到来。</b></div>
+    </div>
+
+    <div class="grid" style="margin-bottom:22px;">
+      <div class="card pad" style="flex:1 1 320px;min-width:280px;border-top:4px solid #3f9a80;">
+        <div style="font-weight:700;color:#266451;">大厂在做什么（通用平台层）</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.85;">
+          <li>微软 Scout / Google Gemini 代理 / Perplexity PC：做<b>跨应用的通用生产力代理</b>，绑系统、绑云、绑自家模型</li>
+          <li>OpenAI Codex / 腾讯 Buddy：把桌宠当<b>状态化身与情感钩子</b>，但内核仍是工具/办公助手</li>
+          <li>共性：强分发、强算力，但<b>人格深度、数据主权、可定制</b>是短板</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 320px;min-width:280px;border-top:4px solid #4a78c4;">
+        <div style="font-weight:700;color:#2f5696;">开源在做什么（陪伴/人格层）</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.85;">
+          <li><b>AIRI</b> ≈4.8 万星：Rust 后端 + WebGPU VRM，真陪玩 Minecraft/Factorio，全端 + 30+ 供应商，自我定位为开源 Neuro-sama / Grok Companion 替代品</li>
+          <li><b>N.E.K.O</b>（B 站）≈2.9 千星但已上 Steam：全双工语音 + 五维记忆 + 五形态，最直接对手</li>
+          <li>Open-LLM-VTuber / Soul-of-Waifu / Utsuwa / Aimi 等长尾：本地 LLM + Live2D/VRM 悬浮桌宠</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 320px;min-width:280px;border-top:4px solid #a8793f;">
+        <div style="font-weight:700;color:#8a5f2f;">执行底座在做什么（手脚层）</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.85;">
+          <li><b>OpenClaw</b>（9/17 实测 38.9 万星、9.5 万次提交）：本地 Gateway + 20+ 成熟渠道 + 100+ 技能 + ACP 多代理协议 + 沙箱/基金会治理</li>
+          <li>明确不做人格与形象，是「数字生命」可复用的执行/渠道神经总线</li>
+          <li>N.E.K.O 已用 A2A 把 OpenClaw 当手脚；Lumina 也有桥接</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ ④ 生态位 ============ -->
+    <div class="h2">④ Lumina 的卡位：不是另一个「聊天桌宠」，而是「有团队、有身体、有安全纵深」的中文本地数字生命</div>
+    <div class="card pad" style="margin-bottom:22px;">
+      <svg viewBox="0 0 1060 250" width="100%" style="display:block;height:auto;" role="img" aria-label="三层生态位示意图">
+        <rect x="20" y="14" width="1020" height="104" rx="12" fill="rgba(234,167,178,0.10)" stroke="#EAA7B2"/>
+        <text x="36" y="36" font-size="13" font-weight="700" fill="#8a3d52">上层 · 有人格的「数字生命 / 陪伴体验」</text>
+        <rect x="40" y="48" width="318" height="58" rx="10" fill="#fff" stroke="#94D8C3" stroke-width="1.5"/>
+        <text x="56" y="70" font-size="14" font-weight="700" fill="#266451">AIRI（约4.8万★）</text>
+        <text x="56" y="90" font-size="12" fill="#333">AI 真玩 Minecraft/Factorio 的 VTuber，全端+本地推理</text>
+        <rect x="371" y="48" width="318" height="58" rx="10" fill="#fff" stroke="#9BBBF4" stroke-width="1.5"/>
+        <text x="387" y="70" font-size="14" font-weight="700" fill="#2f5696">N.E.K.O（约2.9千★，已上 Steam 破万）</text>
+        <text x="387" y="90" font-size="12" fill="#333">全双工实时语音+五维记忆+五形态，最直接对手</text>
+        <rect x="702" y="48" width="318" height="58" rx="10" fill="#fff" stroke="#EAA7B2" stroke-width="2"/>
+        <text x="718" y="70" font-size="14" font-weight="700" fill="#8a3d52">Lumina（你的项目，未公开）</text>
+        <text x="718" y="90" font-size="12" fill="#333">同帧驱动身体 + 三 Agent 团队群像 + 安全纵深 + 办公</text>
+        <rect x="20" y="132" width="1020" height="48" rx="12" fill="rgba(154,152,143,0.10)" stroke="#c9c7bd"/>
+        <text x="36" y="154" font-size="13" font-weight="700" fill="#5b594f">中层 · 共用能力</text>
+        <text x="36" y="172" font-size="12" fill="#444">记忆/检索 · 语音 STT/TTS · 多模型供应商层 · Live2D/VRM 渲染 · MCP/A2A/ACP 协议 · 本地推理</text>
+        <rect x="20" y="194" width="1020" height="46" rx="12" fill="rgba(225,185,143,0.14)" stroke="#E1B98F" stroke-width="1.5"/>
+        <text x="36" y="216" font-size="13" font-weight="700" fill="#8a5f2f">底层 · 执行 / 渠道「手脚与神经总线」</text>
+        <text x="36" y="233" font-size="12" fill="#444">OpenClaw（约38.9万★，9.5 万次提交）：本地 Gateway + 20+ 成熟渠道 + 主机工具/沙箱 + 全端原生，明确不做人格与形象。</text>
+        <line x1="530" y1="106" x2="530" y2="192" stroke="#2f5696" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <polygon points="530,194 526,186 534,186" fill="#2f5696"/>
+        <text x="408" y="126" text-anchor="middle" font-size="11" fill="#2f5696">N.E.K.O 已用 A2A 把 OpenClaw 当手脚</text>
+        <line x1="860" y1="106" x2="860" y2="192" stroke="#b56677" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <polygon points="860,194 856,186 864,186" fill="#b56677"/>
+        <text x="860" y="126" text-anchor="middle" font-size="11" fill="#b56677">Lumina 也有 OpenClaw 桥接</text>
+      </svg>
+      <div class="small muted" style="margin-top:8px;">示意图：依据各项目公开定位与代码结构归纳，仅用于理解生态位，不代表精确测量。</div>
+    </div>
+
+    <!-- ============ ⑤ 两类用户体验 ============ -->
+    <div class="h2">⑤ 两种视角：普通用户拿到手，会经历什么；专业用户打开它，会看到什么</div>
+    <div class="grid" style="margin-bottom:12px;">
+      <div class="card pad" style="flex:1 1 460px;min-width:320px;border-top:4px solid #EAA7B2;">
+        <div style="font-weight:700;color:#8a3d52;font-size:15px;">普通用户视角（想要一个「会陪我、能帮我点小忙」的桌面伙伴）</div>
+        <table style="font-size:13px;margin-top:6px;">
+          <tr><td style="width:86px;font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">下载安装</td><td style="border-bottom:1px solid #f0efe9;">安装包 151MB / 绿色版 204MB，装完约 571MB。<b>未签名，首装会弹 SmartScreen「未知发布者」</b>，需要点「更多信息 → 仍要运行」，这一步会劝退很多非技术用户。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">第一印象</td><td style="border-bottom:1px solid #f0efe9;">安装后桌面、开始菜单、任务栏、托盘都是纸袋少女图标（本轮新做）；Live2D Mao 置顶悬浮、会主动搭话，三角色群聊有「人」的感觉。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">上手门槛</td><td style="border-bottom:1px solid #f0efe9;"><span class="chip bad">最大摩擦</span> 要<b>自带模型 Key 或本地模型</b>，不像 N.E.K.O 有免费开箱模型；配置项多、专业词多，普通用户容易在「模型/供应商」这一页卡住。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">日常使用</td><td style="border-bottom:1px solid #f0efe9;">之前「隔一段时间小卡一下」已修：帧率默认 30、可在设置主面板直接调；稳态约 775MB 内存（Electron 正常水位，但对低配机偏重）。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">语音体验</td><td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">中文有坑</span> 全双工已能跑，但<b>离线 Whisper 是 tiny.en 不识中文，中文语音主链路默认走联网 Web Speech</b>；断网或浏览器内核语音服务不稳时，中文语音就不可用。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;">预期管理</td><td>「梦境」「真人秀」是 <b>25 个模板随机拼接（代码注释已如实标注 NOT LLM）</b>，记忆只塞约 50 字；作为「彩蛋/实验」有趣，但不能对外宣称「她真的活着」。内置形象只有 Mao 一款。</td></tr>
+        </table>
+      </div>
+      <div class="card pad" style="flex:1 1 460px;min-width:320px;border-top:4px solid #4a78c4;">
+        <div style="font-weight:700;color:#2f5696;font-size:15px;">专业用户 / 开发者视角（评估要不要用、改、二开、贡献）</div>
+        <table style="font-size:13px;margin-top:6px;">
+          <tr><td style="width:86px;font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">代码质量</td><td style="border-bottom:1px solid #f0efe9;">TypeScript strict、<b>547 测试通过</b>、纯逻辑模块依赖可注入、三端构建、双许可（AGPL/Apache）；工程意识和测试密度在同类里偏上。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">可扩展面</td><td style="border-bottom:1px solid #f0efe9;">插件 SDK、MCP、技能市场、渠道 adapter、UGC Live2D 导入、CLI/REST、30+ 后端模块；<b>「能干活」的面很宽</b>（约 60 工具：文件/git/LSP/OCR/浏览器/深度研究）。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">安全纵深</td><td style="border-bottom:1px solid #f0efe9;">六层防线、7 级×8 类、审批/访问控制/沙箱/密钥加密/全局急停；Computer Use 有 SoM/zoom/batch/alpha-trim/DPI 免疫/高危拦截——在陪伴类里罕见。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">技术债</td><td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">实打实</span> 10 个千行/超大文件（GroupChatView 267KB、agentRunner 154KB）；<b>核心 ReAct 循环 154KB 却只有 4.1KB 测试</b>；63 处 TODO；无 CI 覆盖率门禁。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;border-bottom:1px solid #f0efe9;">记忆架构</td><td style="border-bottom:1px solid #f0efe9;">SQLite + 混合检索；默认 <b>TF-IDF（零依赖）</b>，可选 Ollama 向量 / embedding-server；分层不如 N.E.K.O 五维记忆工程化；<b>内驱力/情绪仍是内存态、重启回基线</b>。</td></tr>
+          <tr><td style="font-weight:700;vertical-align:top;">平台/发布</td><td>仅 Windows x64；无 Web/PWA/移动/Docker；better-sqlite3 需按 Electron ABI rebuild（打包已自动处理，纯 Node 跑测试会报 ABI 警告但不致命）；无 CI、无 Release、无贡献者。</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card pad" style="margin-bottom:22px;border-left:4px solid #b56677;">
+      <div class="small"><b>一句话概括两类用户：</b>普通用户会被「外形 + 群像 + 主动陪伴」打动，但卡在<b>模型配置、签名警告、中文语音</b>三个门槛；专业用户会认可<b>架构理念、安全纵深和工具面</b>，但会指出<b>核心循环测试薄、超大文件、记忆分层与情绪持久化、渠道未联调</b>。两类用户的交集结论一致：<b>现在最缺的不是功能，是「一键开箱 + 真机打磨 + 公开」</b>。</div>
+    </div>
+
+    <!-- ============ ⑥ 能力雷达 ============ -->
+    <div class="h2">⑥ 同赛道能力形状：Lumina vs N.E.K.O（8 维，1–5 分，工程判断，语音已按 9/18 上调）</div>
+    <div class="grid" style="margin-bottom:22px;align-items:flex-start;">
+      <div class="card pad" style="flex:1 1 380px;min-width:300px;">
+        <svg viewBox="-50 -30 480 440" width="100%" style="height:auto;display:block;" role="img" aria-label="Lumina 与 N.E.K.O 能力雷达图">
+          <polygon points="190.0,163.0 209.1,170.9 217.0,190.0 209.1,209.1 190.0,217.0 170.9,209.1 163.0,190.0 170.9,170.9" fill="none" stroke="#e7e5dd" stroke-width="1"/>
+          <polygon points="190.0,136.0 228.2,151.8 244.0,190.0 228.2,228.2 190.0,244.0 151.8,228.2 136.0,190.0 151.8,151.8" fill="none" stroke="#e7e5dd" stroke-width="1"/>
+          <polygon points="190.0,109.0 247.3,132.7 271.0,190.0 247.3,247.3 190.0,271.0 132.7,247.3 109.0,190.0 132.7,132.7" fill="none" stroke="#e7e5dd" stroke-width="1"/>
+          <polygon points="190.0,82.0 266.4,113.6 298.0,190.0 266.4,266.4 190.0,298.0 113.6,266.4 82.0,190.0 113.6,113.6" fill="none" stroke="#e7e5dd" stroke-width="1"/>
+          <polygon points="190.0,55.0 285.5,94.5 325.0,190.0 285.5,285.5 190.0,325.0 94.5,285.5 55.0,190.0 94.5,94.5" fill="none" stroke="#d9d7cf" stroke-width="1.2"/>
+          <line x1="190" y1="190" x2="190" y2="55" stroke="#e0ded6"/><line x1="190" y1="190" x2="285.5" y2="94.5" stroke="#e0ded6"/>
+          <line x1="190" y1="190" x2="325" y2="190" stroke="#e0ded6"/><line x1="190" y1="190" x2="285.5" y2="285.5" stroke="#e0ded6"/>
+          <line x1="190" y1="190" x2="190" y2="325" stroke="#e0ded6"/><line x1="190" y1="190" x2="94.5" y2="285.5" stroke="#e0ded6"/>
+          <line x1="190" y1="190" x2="55" y2="190" stroke="#e0ded6"/><line x1="190" y1="190" x2="94.5" y2="94.5" stroke="#e0ded6"/>
+          <!-- N.E.K.O -->
+          <polygon points="190,68.5 218.6,161.4 325,190 266.4,266.4 190,325 94.5,285.5 122.5,190 123.2,123.2" fill="rgba(155,187,244,0.18)" stroke="#4a78c4" stroke-width="2" stroke-dasharray="6 3"/>
+          <!-- Lumina: 语音维度由 2.5 升到 3.5（257.5→284.5） -->
+          <polygon points="190,68.5 285.5,94.5 284.5,190 266.4,266.4 190,311.5 151.8,228.2 68.5,190 142.3,142.3" fill="rgba(234,167,178,0.30)" stroke="#b56677" stroke-width="2.2"/>
+          <circle cx="190" cy="68.5" r="3" fill="#b56677"/><circle cx="285.5" cy="94.5" r="3" fill="#b56677"/><circle cx="284.5" cy="190" r="3" fill="#b56677"/><circle cx="266.4" cy="266.4" r="3" fill="#b56677"/><circle cx="190" cy="311.5" r="3" fill="#b56677"/><circle cx="151.8" cy="228.2" r="3" fill="#b56677"/><circle cx="68.5" cy="190" r="3" fill="#b56677"/><circle cx="142.3" cy="142.3" r="3" fill="#b56677"/>
+          <text x="190" y="28" text-anchor="middle" font-size="12.5" font-weight="700" fill="#333">生命感/人格</text>
+          <text x="315" y="78" text-anchor="start" font-size="12.5" font-weight="700" fill="#333">多Agent</text>
+          <text x="333" y="194" text-anchor="start" font-size="12.5" font-weight="700" fill="#333">实时语音视觉</text>
+          <text x="315" y="312" text-anchor="start" font-size="12.5" font-weight="700" fill="#333">电脑操控</text>
+          <text x="190" y="364" text-anchor="middle" font-size="12.5" font-weight="700" fill="#333">记忆</text>
+          <text x="65" y="312" text-anchor="end" font-size="12.5" font-weight="700" fill="#333">形态/Avatar</text>
+          <text x="48" y="194" text-anchor="end" font-size="12.5" font-weight="700" fill="#333">安全治理</text>
+          <text x="65" y="78" text-anchor="end" font-size="12.5" font-weight="700" fill="#333">工程生态</text>
+        </svg>
+      </div>
+      <div style="flex:1 1 320px;min-width:280px;font-size:13.5px;">
+        <div style="display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:18px;height:10px;background:rgba(234,167,178,0.5);border:1.5px solid #b56677;display:inline-block;border-radius:2px;"></span>Lumina（9/18）</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:18px;height:10px;background:rgba(155,187,244,0.3);border:1.5px dashed #4a78c4;display:inline-block;border-radius:2px;"></span>N.E.K.O</span>
+        </div>
+        <div class="card pad" style="border:1px solid #E4E3DD;"><b style="color:#b56677;">Lumina 明显占优：</b>多 Agent 协作（5 vs 1.5）、安全治理（4.5 vs 2.5）、办公工具面。</div>
+        <div class="card pad" style="border:1px solid #E4E3DD;margin-top:8px;"><b style="color:#4a78c4;">N.E.K.O 明显占优：</b>实时语音视觉（5 vs 3.5，全双工真机打磨与开箱）、形态/Avatar（5 vs 2，五形态+动捕）、工程生态（3.5 vs 2.5，已上 Steam+手机内测）。</div>
+        <div class="card pad" style="border:1px solid #E4E3DD;margin-top:8px;"><b>基本打平：</b>生命感/人格（机制 Lumina 更统一，体感 N.E.K.O 更打磨）、电脑操控（都约 4）、记忆（五维分层更工程化 vs Lumina SQLite+混合检索，关系已动态化）。</div>
+        <div class="small muted" style="margin-top:8px;">9/18 变化：全双工闭环打通后，Lumina 语音维度由 2.5→3.5；但「中文默认离线不可用 + 真机未验证」使其仍未到 4。</div>
+      </div>
+    </div>
+
+    <!-- ============ ⑦ 社区规模 ============ -->
+    <div class="h2">⑦ 社区成熟度仍差几个数量级（GitHub 9/17 抓取；条长按 log₁₀ 星数缩放）</div>
+    <div class="card pad" style="margin-bottom:22px;">
+      <div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;flex-wrap:wrap;gap:4px;"><span style="font-weight:700;color:#a8793f;">OpenClaw　TS+Rust · 2025-11 创建</span><span>约 389,708 ★ · 81,925 fork · 95,642 提交</span></div><div style="background:#f3f1ea;border-radius:6px;height:22px;overflow:hidden;"><div style="width:100%;height:22px;background:#E1B98F;border-radius:6px;"></div></div></div>
+      <div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;flex-wrap:wrap;gap:4px;"><span style="font-weight:700;color:#3f9a80;">AIRI　TS+Rust · 2024-12 创建</span><span>约 4.8 万 ★ · 持续 DevLog · 多端分发</span></div><div style="background:#f3f1ea;border-radius:6px;height:22px;overflow:hidden;"><div style="width:84%;height:22px;background:#94D8C3;border-radius:6px;"></div></div></div>
+      <div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;flex-wrap:wrap;gap:4px;"><span style="font-weight:700;color:#4a78c4;">N.E.K.O　Python · 2025-06 创建</span><span>约 2,903 ★ · 已上 Steam 且用户破万 · 手机内测</span></div><div style="background:#f3f1ea;border-radius:6px;height:22px;overflow:hidden;"><div style="width:62%;height:22px;background:#9BBBF4;border-radius:6px;"></div></div></div>
+      <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;flex-wrap:wrap;gap:4px;"><span style="font-weight:700;color:#b56677;">Lumina　TS · 2026-07 首次提交</span><span>公开仓库尚未建立（0 ★）· 本地 40 次提交 · 但代码已达 11 万行、安装包就绪</span></div><div style="background:#f3f1ea;border-radius:6px;height:22px;overflow:hidden;"><div style="width:1.5%;min-width:4px;height:22px;background:#EAA7B2;border-radius:6px;"></div></div></div>
+      <div class="small muted" style="margin-top:10px;">读法：OpenClaw 用约 10 个月、AIRI 约 21 个月走到现在，而 N.E.K.O 半年就上了 Steam。<b>晚不等于没机会，闭门不发布才是最大风险。</b></div>
+    </div>
+
+    <!-- ============ ⑧ 短中长期 ============ -->
+    <div class="h2">⑧ 短 / 中 / 长期趋势：Lumina 会走向哪里</div>
+    <div class="grid" style="margin-bottom:22px;">
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;border-top:4px solid #EA6668;">
+        <div style="font-weight:700;color:#c05a5a;">短期（0–3 个月）：发布即最大杠杆</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.85;">
+          <li><b>赛道窗口在收窄</b>：N.E.K.O 已上 Steam 破万、大厂桌宠密集落地。每多闭一个月，先发位就少一寸。</li>
+          <li><b>建仓 + Release + 真机演示视频</b>，用真实用户反馈替代闭门堆功能。</li>
+          <li><b>代码签名 / 自动更新</b>：消掉 SmartScreen 警告（普通用户第一道坎）。</li>
+          <li>一轮真机回归：透明窗、alpha-trim 在 125/150% 缩放、全双工中文、UGC 导入。</li>
+          <li><b>定中文 STT 方案</b>（本地中文模型或浏览器/云），让主链路不依赖联网 Web Speech。</li>
+          <li>降低开箱门槛：内置/赠送一套免费可用的默认模型或引导配置。</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;border-top:4px solid #E0A93B;">
+        <div style="font-weight:700;color:#9a6d1f;">中期（3–12 个月）：把差异点磨到「不可替代」</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.85;">
+          <li>把「<b>同帧驱动身体 + 三 Agent 团队群像</b>」做成一句话记得住、视频里看得到的招牌；梦境/真人秀要么真接 LLM、要么明确标注「彩蛋/实验」。</li>
+          <li><b>内驱力/情绪持久化</b>：让「越处越懂你」跨重启成立（现在 drives 是内存态、重启回基线）。</li>
+          <li>记忆分层向 N.E.K.O 看齐：本地向量/语义召回做成默认且不依赖 Python sidecar。</li>
+          <li>补 1–2 个授权清晰的默认形象，VRM 排期；核心 agentRunner 补集成测试（154KB 仅 4.1KB 测试）。</li>
+          <li>真机打通 1–2 个渠道（QQ 最成熟），渠道从「骨架」变「能用」。</li>
+          <li>拆超大文件、加 CI 覆盖率门禁，为社区贡献做准备。</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;border-top:4px solid #4a78c4;">
+        <div style="font-weight:700;color:#2f5696;">长期（1–3 年）：在大厂平台化之前，守住「人格 + 数据主权」</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.85;">
+          <li>品类从「聊天机器人」彻底转向「<b>观察式本地代理</b>」；通用执行会被大厂/OpenClaw 做成水电煤，<b>人格与陪伴体验才是开源护城河</b>。</li>
+          <li><b>不与 OpenClaw 正面打执行/渠道</b>，用 A2A/MCP 把它当手脚；不追 AIRI 的游戏陪玩；守住「中文、本地、有团队、有身体、有安全纵深」的卡位。</li>
+          <li>本地优先 + 数据不出本机，是对抗云大厂的核心理由（隐私焦虑是 2026 持续趋势）。</li>
+          <li>可选商业化：Steam/独立分发、形象工坊与创作者生态、可复用的「生命感引擎」npm 包（学 AIRI 的 monorepo 子包策略）。</li>
+          <li>风险：大厂把桌宠做成系统标配；应对是把「灵魂深度 + 可移植/可拥有」做到平台不愿做的程度。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ ⑨ 优点 ============ -->
+    <div class="h2">⑨ 深度体检：真正站得住的优点</div>
+    <div class="card pad" style="border-left:4px solid #52C41A;margin-bottom:22px;">
+      <ol style="margin:4px 0 0 18px;padding:0;font-size:13.5px;line-height:1.85;">
+        <li><b>「意识同帧驱动身体」是最锋利的差异点</b>：表演 DSL（LLM 下高层指令而非裸参数）+ 五层加权软混合 + 五元音口型 + 模型无关的全参数语义 profile，三家都没把它当第一卖点。</li>
+        <li><b>多 Agent「团队群像」独一份</b>：固定三人 + 委托流水线（写→审→修）+ 群聊/早安/朋友圈/梦境/真人秀；<b>亲密度已改为事件驱动并持久化</b>。</li>
+        <li><b>生命感从状态机升级到内驱力</b>：energy/social/curiosity/comfort 指导自主行为，LLM 不可用时也不僵；情绪有 EMA 惯性而非硬切。</li>
+        <li><b>Computer Use 在陪伴类里领先</b>：SoM、zoom、batch、alpha-trim、全局急停、DPI 免疫、中文输入、高危拦截。</li>
+        <li><b>安全纵深罕见</b>：六层防线、7 级×8 类、审批/沙箱/密钥加密/急停，意识接近 OpenClaw。</li>
+        <li><b>模型兼容面补齐</b>：8 供应商 + 原生桥接 Claude/Gemini/Azure + 本地异构模型自动降级容错，纯聊天模型也能接。</li>
+        <li><b>工程交付密度高、且已能打包</b>：TS strict、547 单测、约 11 万行自有代码；NSIS 安装包 + 绿色版 + 全套品牌图标已就绪，启动稳定。</li>
+        <li><b>办公生产力面最宽</b>：约 60 工具 + CLI + REST，比另两家「更能干活」。</li>
+      </ol>
+    </div>
+
+    <!-- ============ ⑩ 问题分级 ============ -->
+    <div class="h2">⑩ 仍然存在的问题（直说，按严重度）</div>
+    <div class="grid" style="margin-bottom:22px;">
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;border-top:4px solid #EA6668;">
+        <div style="font-weight:700;color:#c05a5a;font-size:14px;">P0 · 阻塞「成为产品」</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8;">
+          <li><b>仍未发布</b>：无仓库/Release/外部用户，0 反馈回路。</li>
+          <li><b>未签名 + 中文语音默认联网</b>：首装 SmartScreen 警告；离线 tiny.en 不识中文，中文主链路靠 Web Speech。</li>
+          <li><b>一批「逻辑就绪、真机未验证」</b>：全双工、SoM、alpha-trim 高 DPI、presence、UGC、透明窗，需真机逐项回归。</li>
+          <li><b>开箱门槛高</b>：要自带 Key/本地模型，普通用户易在配置页放弃。</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;border-top:4px solid #E0A93B;">
+        <div style="font-weight:700;color:#9a6d1f;font-size:14px;">P1 · 真实感与深度</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8;">
+          <li><b>内驱力/情绪不持久</b>：drives/emotion 为内存态，重启回基线，「越处越懂你」立不住。</li>
+          <li><b>梦境/真人秀是模板彩蛋</b>：25 个写死模板 + 约 50 字记忆拼接，代码已诚实标注，需对用户管理预期或接 LLM。</li>
+          <li><b>形态单薄</b>：仅 Live2D、内置 Mao 一款；无 VRM/MMD（N.E.K.O 五形态、AIRI 有 VRM）。</li>
+          <li><b>记忆默认仅 TF-IDF</b>：语义检索依赖可选 Ollama/Python；分层不如 N.E.K.O 五维。</li>
+          <li>功能蔓延：30+ 模块，单点深度不足，易稀释「3 分钟生命时刻」。</li>
+        </ul>
+      </div>
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;border-top:4px solid #7BA7D9;">
+        <div style="font-weight:700;color:#3f6ea6;font-size:14px;">P2 · 工程与打磨</div>
+        <ul class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8;">
+          <li><b>核心循环测试薄</b>：agentRunner 154KB 仅 4.1KB 测试；10 个超大文件、63 处 TODO；无 CI 覆盖率门禁。</li>
+          <li>7 个渠道多为早期 adapter，OpenClaw 桥仅 2.3KB 骨架，未真机联调。</li>
+          <li>仅 Windows x64；无 Web/PWA/移动/Docker/headless。</li>
+          <li>内存约 775MB 偏高（Electron 税）；纯 Node 跑测试 better-sqlite3 有 ABI 警告（打包已 rebuild，不致命）。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ ⑪ 评分与下一步 ============ -->
+    <div class="grid" style="margin-bottom:22px;">
+      <div class="card pad" style="flex:1 1 300px;min-width:280px;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px;">综合评分卡（10 分制，工程判断）</div>
+        <div style="font-size:13px;line-height:2;">
+          架构/理念　<span style="color:#3f8f4f;font-weight:700;">9.0</span>　同帧驱动+团队群像，最锋利<br>
+          创新/差异化　<span style="color:#3f8f4f;font-weight:700;">8.5</span>　安全+CUA 在陪伴类稀缺<br>
+          功能广度　<span style="color:#a8793f;font-weight:700;">8.0</span>　很宽但深度不均<br>
+          工程质量　<span style="color:#a8793f;font-weight:700;">7.5</span>　547 测试扎实，核心循环/单体待补<br>
+          实时体验　<span style="color:#a8793f;font-weight:700;">6.8</span>　全双工已通（较 9/17 的 6.0 上调），中文/真机待补<br>
+          产品成熟度　<span style="color:#a8793f;font-weight:700;">4.2</span>　已能打包+有图标，较 9/17 的 3.5 上调，但仍未签名未发布<br>
+          社区/生态　<span style="color:#c05a5a;font-weight:700;">1.5</span>　0 公开、无外部用户
+        </div>
+      </div>
+      <div class="card pad" style="flex:1 1 340px;min-width:300px;border-left:4px solid #b56677;">
+        <div style="font-weight:700;font-size:14px;">下一步建议（按杠杆排序）</div>
+        <ol style="margin:8px 0 0 18px;padding:0;font-size:13px;line-height:1.9;">
+          <li><b>发布 v0.1-preview（最大杠杆）</b>：建仓 push、打 Release、真机演示视频；先把签名/自动更新提上日程。</li>
+          <li><b>开箱体验</b>：默认模型/Key 引导 + 免费可用兜底，消灭 SmartScreen 之后的第二道坎。</li>
+          <li><b>中文全双工真机闭环</b>：定中文 STT，逐项真机回归透明窗/alpha-trim/SoM/UGC。</li>
+          <li><b>情绪/内驱力持久化</b>：让关系与心情跨重启连续（关系已持久化，情绪是下一块）。</li>
+          <li><b>模板彩蛋管理预期</b>：梦境/真人秀标注「实验/彩蛋」或接 LLM，避免对外口径翻车。</li>
+          <li><b>冻结边缘模块、聚焦「3 分钟生命时刻」</b>；补 1–2 个授权形象；把核心循环测试和 CI 门禁补上。</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="small muted" style="line-height:1.7;">
+      事实口径：Lumina 来自本地仓库 2026-09-18 实读实跑（目录/行数/vitest 实跑/打包后启动测内存/CPU/package.json/git log）；三个外部项目为 GitHub 官方接口 9/17 抓取与公开 README；市场数据为 2026 年公开报道（TechNode/DoNews/36氪/AgentUpdate/business20channel/钛媒体/Research and Markets 转引等，抓取于 9/18）。OpenClaw 许可 GitHub 标记为 NOASSERTION，其 README 自述为 MIT。
+      本报告在 9/15、9/17 版本上更新：补入原生协议桥、全双工闭环、性能优化、帧率设置、品牌图标、动态关系与 2026 市场格局、两类用户体验与短中长期判断。评级与评分为基于证据的工程判断，非官方排名。
+    </div>
+
+  </div>
+</div>
+</html>
