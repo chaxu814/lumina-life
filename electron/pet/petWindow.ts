@@ -879,6 +879,8 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
       sandbox: false,
       contextIsolation: false,
       nodeIntegration: true,
+      backgroundThrottling: true, // 窗口隐藏/被遮挡时暂停 RAF 与定时器，省 CPU/内存
+      spellcheck: false,
     },
   })
   // 调试用：自动打开开发者工具（正式发布前注释掉）
@@ -1678,6 +1680,8 @@ export function openOnboarding(): { ok: boolean } {
       sandbox: false,
       contextIsolation: false,
       nodeIntegration: true,
+      backgroundThrottling: true, // 窗口隐藏/被遮挡时暂停 RAF 与定时器，省 CPU/内存
+      spellcheck: false,
     },
   })
   onboardingWin.loadFile(p)

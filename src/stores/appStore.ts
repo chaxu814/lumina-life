@@ -259,6 +259,10 @@ interface AppStore {
   compactMode: boolean
   setCompactMode: (v: boolean) => void
 
+  // 是否显示实验功能（梦境 / 真人秀等实验彩蛋）
+  showExperimental: boolean
+  setShowExperimental: (v: boolean) => void
+
   // Profile 面板默认 Tab（⭐ 徽章点击时设为 'achievements'）
   profileTab: 'profile' | 'achievements'
   setProfileTab: (t: 'profile' | 'achievements') => void
@@ -764,6 +768,15 @@ export const useStore = create<AppStore>()(
       // 🆕 简约模式
       compactMode: (() => { try { return localStorage.getItem('lumina_compact') === 'true' } catch { return false } })(),
       setCompactMode: (v) => { try { localStorage.setItem('lumina_compact', String(v)) } catch {} ; set({ compactMode: v }) },
+
+      // 实验功能开关（默认开启；关闭后隐藏梦境/真人秀等彩蛋）
+      showExperimental: (() => {
+        try { return localStorage.getItem('lumina_show_experimental') !== 'false' } catch { return true }
+      })(),
+      setShowExperimental: (v) => {
+        try { localStorage.setItem('lumina_show_experimental', String(v)) } catch {}
+        set({ showExperimental: v })
+      },
 
       // Profile 面板默认 Tab（⭐ 徽章点击时设为 'achievements'）
       profileTab: 'profile' as const,

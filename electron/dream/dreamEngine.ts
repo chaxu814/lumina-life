@@ -1,20 +1,19 @@
 // ============================================================
-// dream/dreamEngine.ts — 梦境系统 v1.0
+// dream/dreamEngine.ts — 梦境系统 v1.1
 //
 // 每天早上自动生成"梦境日记"，基于最近的记忆片段，
 // 用诗意、隐喻的方式编织成梦境叙事。
 //
 // 工作方式:
-//   1. 每天 03:00 cron 触发 → generateDream()
-//   2. 从 memoryStore 获取最近记忆作为素材
-//   3. 用模板 + 素材混合生成梦境文本
-//   4. 存入 dreamStore（JSON 文件持久化）
-//   5. 发送 DREAM_NEW 事件 → 前端展示
+//   1. 每天 03:00 cron 触发 → generateTodayDreamAsync()
+//   2. 从 memoryStore 获取最近记忆作为素材（注入比旧版更长的真实记忆）
+//   3. 【已配置 LLM】调用模型生成；【未配置/失败】回退到 25 个内置模板
+//   4. 存入 dreamStore（userData/dreams.json，持久化）
+//   5. 发送 DREAM_NEW 事件 → 前端展示（entry.source 标注 llm/template）
+//
+// 说明：模板回退是「离线彩蛋」，会在 UI 明确标注；配置 LLM 后即为真实生成。
 // ============================================================
 
-// [EXPERIMENTAL / easter egg] Dreams are assembled from 25 fixed narrative
-// templates (DREAM_TEMPLATES) plus memory-fragment keywords; they are NOT
-// LLM-generated. Label as "experimental easter egg" in UI/README.
 import { globalEventBus, BusEvents } from '../eventBus'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -31,6 +30,8 @@ export interface DreamEntry {
   mood: string          // 梦境情绪
   tags: string[]        // 梦境标签
   createdAt: string     // ISO timestamp
+  /** 生成方式：LLM 真实生成 / 模板彩蛋（UI 据此如实标注） */
+  source?: 'llm' | 'template'
 }
 
 interface DreamCache {
@@ -120,15 +121,40 @@ const DREAM_TEMPLATES = [
 // ═══════════════════════════════════════════════════════════
 
 function getDreamDbPath(): string {
-  const baseDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR || ''
-  const dbDir = baseDir ? path.join(baseDir, 'data') : path.join(__dirname, '..', '..', 'data')
-  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true })
-  return path.join(dbDir, 'dreams.json')
+  // 打包后 app.asar 只读，必须落到 Electron userData；纯 Node/测试环境退化到 data 目录
+  let dir: string
+  try {
+    const { app } = require('electron')
+    if (app && typeof app.getPath === 'function' && app.getPath('userData')) {
+      dir = app.getPath('userData')
+    } else {
+      throw new Error('no-userdata')
+    }
+  } catch {
+    const baseDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR || ''
+    dir = baseDir ? path.join(baseDir, 'data') : path.join(__dirname, '..', '..', 'data')
+  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  return path.join(dir, 'dreams.json')
+}
+
+/** 旧版（data/dreams.json，打包时只读会失败）迁移到 userData */
+function migrateLegacyDreams(targetPath: string): void {
+  try {
+    if (fs.existsSync(targetPath)) return
+    const baseDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR || ''
+    const oldDir = baseDir ? path.join(baseDir, 'data') : path.join(__dirname, '..', '..', 'data')
+    const oldPath = path.join(oldDir, 'dreams.json')
+    if (oldPath !== targetPath && fs.existsSync(oldPath)) {
+      fs.copyFileSync(oldPath, targetPath)
+    }
+  } catch { /* 迁移失败忽略 */ }
 }
 
 function loadDreams(): DreamEntry[] {
   try {
     const p = getDreamDbPath()
+    migrateLegacyDreams(p)
     if (!fs.existsSync(p)) return []
     const raw = fs.readFileSync(p, 'utf-8')
     const cache: DreamCache = JSON.parse(raw)
@@ -182,7 +208,7 @@ function generateTags(): string[] {
 }
 
 /**
- * 核心：生成一篇梦境
+ * 核心：生成一篇梦境（模板回退路径，离线彩蛋）
  * @param memoryContext 可选，从记忆系统提取的上下文片段
  */
 export function generateDream(memoryContext?: string): DreamEntry {
@@ -201,17 +227,94 @@ export function generateDream(memoryContext?: string): DreamEntry {
     mood,
     tags,
     createdAt: new Date().toISOString(),
+    source: 'template',
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LLM 真实生成（注入式，便于测试；主进程注册 provider）
+// ═══════════════════════════════════════════════════════════
+
+export type DreamLLMCaller = (system: string, user: string) => Promise<string>
+let dreamLLMCaller: DreamLLMCaller | null = null
+let todayInFlight = false
+
+/** 主进程注册 LLM 调用器（未注册则永远走模板） */
+export function registerDreamLLM(caller: DreamLLMCaller | null): void {
+  dreamLLMCaller = caller
+}
+
+function buildDreamPrompt(memoryContext?: string): { system: string; user: string } {
+  const system = `你是 Lumina 的梦境引擎。请根据用户近期的真实记忆片段，以第一人称（用户的视角）写一段诗意、充满隐喻的梦境日记，像把白天的经历在潜意识里重新编织。
+要求：
+- 只输出一个 JSON 对象，不要 markdown、不要解释，格式：{"title":"不超过20字的标题","content":"150到300字的梦境正文，分3到5句，第一人称","mood":"一个带emoji的情绪词","tags":["2到3个意象标签"]}
+- 梦境要暗合记忆片段里的人、事、情绪，但要用奇幻/隐喻的方式重写，不要照抄。
+- mood 从这些里选或自拟：🌙 安宁、🌊 深邃、✨ 奇幻、🌿 自然、🔥 热烈、🌸 温柔、🌌 神秘、🎭 荒诞。
+- 温柔、有画面感，不恐怖、不说教。`
+  const mem = (memoryContext || '').trim()
+  const user = mem
+    ? `这是用户近期的真实记忆片段，请据此编织梦境：\n${mem.slice(0, 1200)}`
+    : '没有可用的记忆片段，请基于"平凡日常里的一点光"创作一个温柔的梦境。'
+  return { system, user }
+}
+
+/** 从 LLM 文本里容错解析出梦境字段 */
+function parseDreamLLM(raw: string): Partial<DreamEntry> | null {
+  if (!raw) return null
+  let txt = raw.trim()
+  const fence = txt.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fence) txt = fence[1].trim()
+  const m = txt.match(/\{[\s\S]*\}/)
+  if (!m) return null
+  try {
+    const obj = JSON.parse(m[0])
+    if (!obj || typeof obj.content !== 'string' || !obj.content.trim()) return null
+    return {
+      title: typeof obj.title === 'string' && obj.title.trim() ? obj.title.trim() : generateTitle(obj.content),
+      content: obj.content.trim(),
+      mood: typeof obj.mood === 'string' && obj.mood.trim() ? obj.mood.trim() : pickRandom(MOODS),
+      tags: Array.isArray(obj.tags) ? obj.tags.map((t: any) => String(t)).filter(Boolean).slice(0, 4) : generateTags(),
+    }
+  } catch { return null }
+}
+
+/**
+ * 异步生成梦境：LLM 优先，失败/未配置回退模板。
+ * 永远返回有效梦境，绝不抛错（夜间 cron 安全）。
+ */
+export async function generateDreamAsync(memoryContext?: string): Promise<DreamEntry> {
+  const today = new Date().toISOString().slice(0, 10)
+  const fallback = generateDream(memoryContext)
+  if (!dreamLLMCaller) return fallback
+  try {
+    const { system, user } = buildDreamPrompt(memoryContext)
+    const raw = await dreamLLMCaller(system, user)
+    const parsed = parseDreamLLM(raw)
+    if (!parsed) return fallback
+    return {
+      id: generateId(),
+      date: today,
+      title: parsed.title || fallback.title,
+      content: parsed.content || fallback.content,
+      mood: parsed.mood || fallback.mood,
+      tags: parsed.tags && parsed.tags.length ? parsed.tags : fallback.tags,
+      createdAt: new Date().toISOString(),
+      source: 'llm',
+    }
+  } catch (e) {
+    console.warn('[DreamEngine] LLM 生成失败，回退模板:', (e as any)?.message || e)
+    return fallback
   }
 }
 
 /**
- * 生成并保存今日梦境（如果今日已有则跳过）
+ * 生成并保存今日梦境（如果今日已有则跳过）—— 模板同步版（兼容旧调用）
  * @returns 是否生成了新梦境
  */
 export function generateTodayDream(memoryContext?: string): boolean {
   const today = new Date().toISOString().slice(0, 10)
   const existing = loadDreams()
-  
+
   // 检查今日是否已有梦境
   if (existing.some(d => d.date === today)) {
     console.log(`[DreamEngine] ⏭️ ${today} 已有梦境，跳过`)
@@ -222,14 +325,43 @@ export function generateTodayDream(memoryContext?: string): boolean {
   existing.push(dream)
   saveDreams(existing)
 
-  console.log(`[DreamEngine] 🌙 新梦境已生成: "${dream.title}"`)
-  
+  console.log(`[DreamEngine] 🌙 新梦境已生成（模板）: "${dream.title}"`)
+
   // 发送事件通知前端
   try {
     globalEventBus.emit(BusEvents.DREAM_NEW, dream)
   } catch { /* eventBus may not be ready */ }
 
   return true
+}
+
+/**
+ * 生成并保存今日梦境 —— 异步版（LLM 优先，失败回退模板）。
+ * 夜间 cron / 启动应调用此版本。
+ */
+export async function generateTodayDreamAsync(memoryContext?: string): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10)
+  const existing = loadDreams()
+  if (existing.some(d => d.date === today)) {
+    console.log(`[DreamEngine] ⏭️ ${today} 已有梦境，跳过`)
+    return false
+  }
+  if (todayInFlight) return false // 防止同一分钟内多个 cron tick 并发重复生成
+  todayInFlight = true
+  try {
+    const dream = await generateDreamAsync(memoryContext)
+    const after = loadDreams()
+    if (after.some(d => d.date === today)) return false
+    after.push(dream)
+    saveDreams(after)
+    console.log(`[DreamEngine] 🌙 新梦境已生成（${dream.source}）: "${dream.title}"`)
+    try {
+      globalEventBus.emit(BusEvents.DREAM_NEW, dream)
+    } catch { /* eventBus may not be ready */ }
+    return true
+  } finally {
+    todayInFlight = false
+  }
 }
 
 /**

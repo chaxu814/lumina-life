@@ -85,3 +85,21 @@ describe('PetEmotionFusion 有状态封装', () => {
     expect(f.get().v).toBeLessThan(before)
   })
 })
+
+describe('PetEmotionFusion.restore 持久化恢复', () => {
+  it('restore 后延续上次情绪，而不是回基线', () => {
+    const f = new PetEmotionFusion()
+    f.restore({ v: 0.8, a: 0.5, label: '幸福 💖' })
+    expect(f.get().v).toBeCloseTo(0.8, 2)
+    expect(f.get().label).toBe('幸福 💖')
+  })
+  it('null/非法值安全降级到基线', () => {
+    const f = new PetEmotionFusion()
+    f.restore(null)
+    expect(f.get().label).toBe(BASELINE.label)
+    f.restore({ v: 999, a: -999, label: '' })
+    expect(f.get().v).toBeLessThanOrEqual(1)
+    expect(f.get().a).toBeGreaterThanOrEqual(0)
+    expect(f.get().label).toBe(BASELINE.label)
+  })
+})

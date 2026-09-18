@@ -24,8 +24,11 @@ import { sendPetCommand, getPetConfig, getPetRecentEvents, getPetLastInteraction
 import { PetEmotionFusion } from './emotionFusion'
 import { getMemoryStore } from '../memory/memoryStore'
 import { buildPetMemoryContext } from './petMemoryBridge'
+import { buildLayeredRecall } from '../memory/layeredMemory'
+import { createMemoryStoreAdapter } from '../memory/layeredMemoryAdapter'
 import { tickDrives, applyInteraction, behaviorUrges, dominantUrge, DEFAULT_DRIVES, type DriveState, type InteractionKind } from './life/drives'
 import { safePerformance } from './life/performanceDsl'
+import { loadLifeState, scheduleLifeStateSave, saveLifeStateNow } from './lifeStateStore'
 
 // 🫀 连续情绪融合单例：LLM 每帧输出的离散 mood 经此平滑，避免情绪瞬切（详见 emotionFusion.ts）
 const petEmotion = new PetEmotionFusion()
@@ -36,29 +39,85 @@ const petEmotion = new PetEmotionFusion()
 
 let petDrives: DriveState = { ...DEFAULT_DRIVES }
 let lastDriveTs = Date.now()
+let interactionCount = 0
+let lifeStateLoaded = false
+
+/** 首次使用时从磁盘恢复内驱力/情绪（离线期间按冷落时长推进，重启不失忆） */
+function ensureLifeStateLoaded(): void {
+  if (lifeStateLoaded) return
+  lifeStateLoaded = true
+  try {
+    const saved = loadLifeState()
+    petDrives = { ...saved.drives }
+    petEmotion.restore(saved.emotion)
+    interactionCount = saved.interactionCount
+  } catch { /* 恢复失败保持默认 */ }
+}
+
+/** 防抖落盘当前生命状态 */
+function persistLifeState(): void {
+  try { scheduleLifeStateSave(petDrives, petEmotion.get(), interactionCount) } catch { /* 不阻塞主链路 */ }
+}
+
+/** 退出前同步落盘（main before-quit 调用），避免漏掉最后 2 秒 */
+export function flushPetLifeState(): void {
+  try { saveLifeStateNow() } catch { /* noop */ }
+}
+
+let lifeStateTimer: ReturnType<typeof setInterval> | null = null
+/**
+ * 应用启动时调用：立即从磁盘恢复内驱力/情绪（含离线冷落推进），
+ * 并开启独立于渲染进程的周期落盘（防止 pet 渲染页没跑 autonomy tick 时
+ * 状态不落盘、重启回基线）。幂等，重复调用安全。
+ */
+export function initPetLifeState(): void {
+  try {
+    ensureLifeStateLoaded()
+    if (lifeStateTimer == null) {
+      // 每 60s 兜底把「当前实时」状态交给防抖落盘（不依赖渲染页 tick）；
+      // 即时变更仍在 advanceDrives 里立刻 scheduleLifeStateSave。
+      lifeStateTimer = setInterval(() => {
+        try {
+          if (lifeStateLoaded) scheduleLifeStateSave(petDrives, petEmotion.get(), interactionCount)
+        } catch { /* noop */ }
+      }, 60000)
+      if (typeof (lifeStateTimer as any)?.unref === 'function') (lifeStateTimer as any).unref()
+    }
+  } catch { /* 不影响主链路 */ }
+}
 
 function currentMoodLabel(): string {
   try { return petEmotion.get().label } catch { return '平静 😐' }
 }
 
-/** 读取长期记忆注入文本（任何失败都安全降级为空，绝不阻塞主链路） */
-function petMemorySnippet(): string {
+/** 五层记忆召回（人格/事实/反思/近期/工作），失败安全降级为空串 */
+function petMemorySnippet(query?: string): string {
   try {
-    return buildPetMemoryContext(getMemoryStore(), { maxFacts: 6, maxSummaries: 2 }).snippet
+    const store = getMemoryStore()
+    const recall = buildLayeredRecall(createMemoryStoreAdapter(store), {
+      query,
+      budget: { persona: 4, facts: 6, reflection: 2, recent: 2, working: 3 },
+      maxLineLen: 70,
+    })
+    if (recall.prompt) return recall.prompt
+    // 极端情况下五层门面失败，退回旧桥
+    return buildPetMemoryContext(store, { maxFacts: 6, maxSummaries: 2 }).snippet
   } catch { return '' }
 }
 
 /** 推进内驱力；kind=本次互动类型，hadInteraction=这段时间是否有人理它 */
 function advanceDrives(kind?: InteractionKind, hadInteraction?: boolean): void {
   try {
+    ensureLifeStateLoaded()
     const now = new Date()
     const dtMin = Math.min(180, Math.max(0, (Date.now() - lastDriveTs) / 60000))
     petDrives = tickDrives(petDrives, {
       dtMin, hourOfDay: now.getHours(), sleeping: false,
       hadInteraction: hadInteraction ?? !!kind,
     })
-    if (kind) petDrives = applyInteraction(petDrives, kind)
+    if (kind) { petDrives = applyInteraction(petDrives, kind); interactionCount++ }
     lastDriveTs = Date.now()
+    persistLifeState()
   } catch { /* 内驱力异常不影响主链路 */ }
 }
 
@@ -102,9 +161,9 @@ const PERFORMANCE_GUIDE = `（可选）你还可以给 "performance" 字段做�
 规则：主动作仍用 action 表达，performance 只补充表情/视线/特效，不要与 action 重复同一个手势；effect 要应景且克制（被夸/治愈用 heart/heal，兴奋用 sparkle/stars）；平时不必给 performance。`
 
 /** 组装给大脑的「记忆 + 当前情绪 + 内驱力 + 表演能力」增强上下文 */
-function lifeContextBlock(opts?: { urge?: boolean }): string {
+function lifeContextBlock(opts?: { urge?: boolean; query?: string }): string {
   const parts: string[] = []
-  const mem = petMemorySnippet()
+  const mem = petMemorySnippet(opts?.query)
   if (mem) parts.push(mem)
   parts.push(`你此刻的情绪是「${currentMoodLabel()}」，请保持情绪连贯，不要无理由突变。`)
   if (opts?.urge) { const u = driveUrgeHint(); if (u) parts.push(u) }
@@ -155,7 +214,7 @@ const PERSONA_TONES: Record<string, string> = {
 }
 
 /** 对话意图 prompt（人格 + 猫爪能力动态注入） */
-function buildIntentPrompt(): string {
+function buildIntentPrompt(query?: string): string {
   const prefs = getPetPrefs()
   const tone = PERSONA_TONES[prefs.persona || ''] || ''
   const cp = prefs.catpaw || {}
@@ -163,7 +222,7 @@ function buildIntentPrompt(): string {
   const operateLine = operateOn
     ? `\nLumina Pet Handling 已开启：当用户明确要求操作电脑时，可额外输出 "cu" 字段，如 {"action":"operate","cu":{"type":"open_app","params":{"app":"notepad"}}}（type 仅限 open_app/keypress/type/wait）。`
     : `\nLumina Pet Handling 未开启：不要输出 operate/cu，用户要操作电脑时用 speech 撒娇说还没拿到权限喵。`
-  return INTENT_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + operateLine + lifeContextBlock()
+  return INTENT_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + operateLine + lifeContextBlock({ query })
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -269,7 +328,7 @@ export function dispatchIntent(intent: PetIntent): boolean {
   recentIntents.push({ action: intent.action, speech: intent.speech, ts: Date.now() })
   if (recentIntents.length > 6) recentIntents.shift()
   // 连续情绪融合：LLM 逐帧离散 mood 经平滑后再下发，避免上一句笑下一句哭的硬切
-  if (intent.mood) intent.mood = petEmotion.next(intent.mood).label
+  if (intent.mood) { intent.mood = petEmotion.next(intent.mood).label; persistLifeState() }
   sanitizePerformance(intent) // v0.2：表演 DSL 白名单清洗
   // 猫爪模式：电脑操作在主进程执行（权限门控），结果回播台词
   if (intent.action === 'operate' && intent.cu) {
@@ -308,7 +367,7 @@ export async function petChat(userText: string): Promise<PetChatResult> {
       const provider = createPetLLM(cfg)
       const res = await provider.call({
         messages: [
-          { role: 'system', content: buildIntentPrompt() },
+          { role: 'system', content: buildIntentPrompt(text) },
           { role: 'user', content: text },
         ],
         temperature: 0.9,
@@ -376,7 +435,7 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
     }
     const provider = createPetLLM(cfg)
     const ctx: string[] = []
-    const mem = petMemorySnippet()
+    const mem = petMemorySnippet(text)
     if (mem) ctx.push(mem)
     ctx.push(`你此刻的情绪是「${currentMoodLabel()}」，保持情绪连贯，不要无理由突变。`)
     const tone = PERSONA_TONES[getPetPrefs().persona || ''] || ''
@@ -447,7 +506,7 @@ export async function petAutonomyTick(opts?: { screenshot?: boolean }): Promise<
     const cfg = resolvePetBrainConfig()
     if (cfg) {
       const provider = createPetLLM(cfg)
-      const sysContent = AUTONOMY_SYSTEM_PROMPT + (PERSONA_TONES[getPetPrefs().persona || ''] || '') + lifeContextBlock({ urge: true })
+      const sysContent = AUTONOMY_SYSTEM_PROMPT + (PERSONA_TONES[getPetPrefs().persona || ''] || '') + lifeContextBlock({ urge: true, query: userContent })
       let res = await provider.call({
         messages: [
           { role: 'system', content: sysContent },

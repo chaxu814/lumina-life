@@ -35,14 +35,14 @@ import { getTeamRegistry, registerTeamMember, unregisterTeamMember, initAcpSyste
 import { initDeepResearch } from './deepResearch'  // 🔬 v3.11: Deep Research
 import { initCloudSync } from './cloudSync'  // ☁️ v3.11: 云同步
 // 🌙 v3.0: 梦境系统
-import { generateTodayDream, getAllDreams, getRecentDreams, getDreamByDate, deleteDream, getDreamStats } from './dream/dreamEngine'
+import { generateTodayDream, generateTodayDreamAsync, registerDreamLLM, getAllDreams, getRecentDreams, getDreamByDate, deleteDream, getDreamStats } from './dream/dreamEngine'
 // 多渠道推送
 import { pushMessage, updatePushConfig, getPushConfig, DEFAULT_PUSH_CONFIG } from './push/pushService'
 // 桌宠模式 -> 运行时动态加载，避免模块加载冲突
 //     v3.0 -> v4.0 Plan C: 独立进程架构，初始化 -> await import() 加载
 //     桌面小窗透明置顶，独立生命周期，与主进程通过 IPC 通信
 // Agent 真人秀
-import { startRealityShow, stopRealityShow, getShowHistory, triggerShowEvent, isRealityShowRunning, restartRealityShow } from './realityShow/realityShowEngine'
+import { startRealityShow, stopRealityShow, getShowHistory, triggerShowEvent, isRealityShowRunning, restartRealityShow, registerRealityShowLLM } from './realityShow/realityShowEngine'
 // 游戏化系统
 import { xpManager, XP_RULES, levelFromXp, xpProgress, getTitle } from './gamification/levels'
 import { achievementManager, ACHIEVEMENTS } from './gamification/achievements'
@@ -109,6 +109,40 @@ let isQuitting = false
 // 桌宠模块（独立进程，Plan C 架构）
 let petModule: Awaited<typeof import('./pet/petWindow')> | null = null
 
+// 梦境/真人秀共用 LLM 调用：复用桌宠大脑配置（团队/全局 Provider），未配置则抛错→各自回退模板
+async function lifeLLMCall(system: string, user: string): Promise<string> {
+  const { resolvePetBrainConfig, createPetLLM } = await import('./pet/petWindow')
+  const cfg = resolvePetBrainConfig()
+  if (!cfg) throw new Error('LLM not configured for dream/reality')
+  const provider = createPetLLM(cfg)
+  const res = await provider.call({
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    temperature: 0.9,
+    maxTokens: 420,
+  } as any)
+  return res?.text || ''
+}
+
+// 从记忆库抽取近期真实片段供梦境编织（五层记忆，任何失败安全降级为空）
+function dreamMemorySnippet(): string {
+  try {
+    const { getMemoryStore } = require('./memory/memoryStore')
+    const { buildLayeredRecall } = require('./memory/layeredMemory')
+    const { createMemoryStoreAdapter } = require('./memory/layeredMemoryAdapter')
+    const recall = buildLayeredRecall(createMemoryStoreAdapter(getMemoryStore()), {
+      budget: { persona: 4, facts: 10, reflection: 3, recent: 3, working: 4 },
+      maxLineLen: 90,
+    })
+    if (recall.prompt) return recall.prompt
+    // 五层门面失败时退回旧桥
+    const { buildPetMemoryContext } = require('./pet/petMemoryBridge')
+    return buildPetMemoryContext(getMemoryStore(), { maxFacts: 12, maxSummaries: 4 }).snippet || ''
+  } catch { return '' }
+}
+
 const WINDOW_CONFIG = {
   width: 1280,
   height: 820,
@@ -132,6 +166,8 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       autoplayPolicy: 'no-user-gesture-required',
+      backgroundThrottling: true, // 主窗被遮挡/最小化时节流定时器、动画与媒体，降低常驻内存/CPU
+      spellcheck: false,          // 非文档型应用，关闭拼写检查词典
     },
     icon: getAppIconPath(),
     show: false,
@@ -630,8 +666,9 @@ try {
 
   // ──  Phase 1 Week 1: 桌宠意图调度器（LLM → 动作标签 → Live2D）──
   try {
-    const { registerPetIntentIpc } = await import('./pet/intentDispatcher')
+    const { registerPetIntentIpc, initPetLifeState } = await import('./pet/intentDispatcher')
     registerPetIntentIpc()
+    initPetLifeState() // 启动即恢复内驱力/情绪并周期落盘，重启不回基线
   } catch (e: any) {
     console.warn('[main] ⚠️ 桌宠意图调度器加载失败（降级运行）:', e.message)
   }
@@ -749,13 +786,17 @@ const gamificationData = loadGamificationData()
   setInterval(() => {
     const now = new Date()
     if (now.getHours() === 3 && now.getMinutes() === 0) {
-      generateTodayDream()
+      generateTodayDreamAsync(dreamMemorySnippet()).catch(() => {})
     }
   }, 60_000)
   // 启动时也尝试一次（如果还不到凌??点，只对新用户生效）
-  setTimeout(() => generateTodayDream(), 10_000)
+  setTimeout(() => generateTodayDreamAsync(dreamMemorySnippet()).catch(() => {}), 10_000)
 
   // Agent 真人秀 ??启动后台生成??0 秒间隔）
+  // 梦境/真人秀接上 LLM（复用桌宠大脑配置；未配置时各自回退模板彩蛋）
+  registerDreamLLM(lifeLLMCall)
+  registerRealityShowLLM((_agent: string, sys: string) => lifeLLMCall(sys, ''))
+  // Agent 真人秀（后台生成，60s 间隔；内心独白优先 LLM，其余为剧本）
   startRealityShow(60_000)
 
   // 📡 新闻推送事??Windows 通知 + 转发到渲染进?
@@ -1256,6 +1297,11 @@ app.on('before-quit', () => {
   isQuitting = true
   // 🎮 保存游戏化数据（XP + 成就）
   try { saveGamificationData() } catch {}
+  // 🫀 保存桌宠内驱力/情绪（重启延续，不回基线）
+  try {
+    const { flushPetLifeState } = require('./pet/intentDispatcher')
+    flushPetLifeState()
+  } catch { /* intent dispatcher not loaded */ }
   cleanupSystemProcesses()
   // 🐍 v4.0 Plan C: 关闭 Python Agent Node
   try {

@@ -19,6 +19,7 @@ interface DreamEntry {
   mood: string
   tags: string[]
   createdAt: string
+  source?: 'llm' | 'template'
 }
 
 interface DreamStats {
@@ -109,7 +110,7 @@ export default function DreamPanel() {
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>🌙 梦境日记 <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 999, background: 'rgba(139,92,246,0.15)', color: '#a78bfa', verticalAlign: 'middle' }}>🧪 实验彩蛋</span></h2>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-            每天 03:00 由记忆片段 + 叙事模板生成的趣味彩蛋（非模型自由生成，仅作氛围点缀）
+            每天 03:00 由记忆片段编织。配置大脑模型后由模型自由生成（标 ✨），否则用叙事模板兜底（标 模板）
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -183,8 +184,15 @@ export default function DreamPanel() {
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#8b5cf6' }}>
                   {dream.mood} {dream.title}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                  {new Date(dream.date).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    padding: '1px 6px', borderRadius: 6, fontSize: 9,
+                    background: dream.source === 'llm' ? 'rgba(34,197,94,0.15)' : 'rgba(107,114,128,0.12)',
+                    color: dream.source === 'llm' ? '#22c55e' : 'var(--text-secondary)',
+                  }}>{dream.source === 'llm' ? '✨ AI 生成' : '模板'}</span>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {new Date(dream.date).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                  </div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>

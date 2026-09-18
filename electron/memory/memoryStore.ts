@@ -20,6 +20,7 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
+import { getMemoryDbPath } from '../paths'
 
 // ── 三层记忆类型 ────────────────────────────────────────
 
@@ -100,7 +101,9 @@ export class MemoryStore {
    */
   constructor(dbPath?: string) {
     const isMemory = dbPath === ':memory:'
-    const targetPath = isMemory ? ':memory:' : (dbPath || path.join(process.env.APPDATA || process.env.HOME || '.', 'lumina-memory.db'))
+    // 跨平台规范路径：Electron userData / macOS Application Support / Linux XDG；
+    // 旧版散落的 %APPDATA%/lumina-memory.db 会被继续沿用（不丢老用户数据）。
+    const targetPath = isMemory ? ':memory:' : (dbPath || getMemoryDbPath())
     if (!isMemory) {
       const dir = path.dirname(targetPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })

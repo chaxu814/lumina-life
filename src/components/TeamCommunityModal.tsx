@@ -10,6 +10,8 @@ import SocialPanel from '../panels/SocialPanel'
 import RealityShowPanel from '../panels/RealityShowPanel'
 import FamilyTreePanel from '../panels/FamilyTreePanel'
 import DreamPanel from '../panels/DreamPanel'
+import { useStore } from '../stores/appStore'
+import { isExperimental } from '../featureManifest'
 
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
@@ -28,6 +30,14 @@ interface TeamCommunityModalProps {
 
 export default function TeamCommunityModal({ open, onClose }: TeamCommunityModalProps) {
   const [activeSection, setActiveSection] = useState<SidebarId>('social')
+  const showExperimental = useStore((st) => st.showExperimental)
+  const setShowExperimental = useStore((st) => st.setShowExperimental)
+
+  // 实验功能（梦境/真人秀）可在设置里一键隐藏
+  const visibleItems = SIDEBAR_ITEMS.filter((it) => showExperimental || !isExperimental(it.id))
+  const effectiveSection: SidebarId = visibleItems.some((it) => it.id === activeSection)
+    ? activeSection
+    : (visibleItems[0]?.id ?? 'social')
 
   if (!open) return null
 
@@ -92,8 +102,8 @@ export default function TeamCommunityModal({ open, onClose }: TeamCommunityModal
 
           {/* 导航项列表 */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-            {SIDEBAR_ITEMS.map((item) => {
-              const active = activeSection === item.id
+            {visibleItems.map((item) => {
+              const active = effectiveSection === item.id
               return (
                 <button
                   key={item.id}
@@ -138,20 +148,42 @@ export default function TeamCommunityModal({ open, onClose }: TeamCommunityModal
             })}
           </div>
 
-          {/* 底部版本信息 */}
+          {/* 实验室开关 + 版本 */}
           <div
             style={{
-              padding: '8px 16px 0',
-              fontSize: 10,
-              color: 'var(--text-secondary)',
+              padding: '8px 12px 0',
               borderTop: '1px solid var(--border-light)',
               marginTop: 4,
               paddingTop: 10,
-              opacity: 0.6,
               fontFamily: '"Microsoft YaHei", "微软雅黑", sans-serif',
             }}
           >
-            Lumina Life v1.0.0
+            <button
+              onClick={() => setShowExperimental(!showExperimental)}
+              title="显示或隐藏梦境/真人秀等实验彩蛋"
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 8px', borderRadius: 8, border: 'none',
+                background: showExperimental ? 'var(--accent-50)' : 'transparent',
+                color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer',
+              }}
+            >
+              <span style={{
+                width: 28, height: 16, borderRadius: 9, position: 'relative',
+                background: showExperimental ? '#8b5cf6' : 'var(--surface-200)',
+                transition: 'background 0.15s', flexShrink: 0,
+              }}>
+                <span style={{
+                  position: 'absolute', top: 2, left: showExperimental ? 14 : 2,
+                  width: 12, height: 12, borderRadius: 6, background: '#fff',
+                  transition: 'left 0.15s',
+                }} />
+              </span>
+              <span>🧪 实验室彩蛋</span>
+            </button>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.6, padding: '4px 8px 0' }}>
+              Lumina Life v1.0.0
+            </div>
           </div>
         </div>
 
@@ -177,8 +209,8 @@ export default function TeamCommunityModal({ open, onClose }: TeamCommunityModal
             }}
           >
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-              {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.icon}{' '}
-              {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.label}
+              {SIDEBAR_ITEMS.find((i) => i.id === effectiveSection)?.icon}{' '}
+              {SIDEBAR_ITEMS.find((i) => i.id === effectiveSection)?.label}
             </div>
             <button
               onClick={onClose}
@@ -212,10 +244,10 @@ export default function TeamCommunityModal({ open, onClose }: TeamCommunityModal
 
           {/* 内容主体（可滚动） */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 20px' }}>
-            {activeSection === 'social' && <SocialPanel />}
-            {activeSection === 'reality' && <RealityShowPanel />}
-            {activeSection === 'familytree' && <FamilyTreePanel />}
-            {activeSection === 'dream' && <DreamPanel />}
+            {effectiveSection === 'social' && <SocialPanel />}
+            {effectiveSection === 'reality' && <RealityShowPanel />}
+            {effectiveSection === 'familytree' && <FamilyTreePanel />}
+            {effectiveSection === 'dream' && <DreamPanel />}
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 // tests/openclawClient.test.ts — OpenClaw 桥接客户端测试（注入假 fetch，无网络）
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { OpenClawClient, type FetchLike } from '../electron/channels/openclaw/openclawClient'
 
 function mockFetch(response: { ok?: boolean; status?: number; body?: any }, spyUrl?: { url: string; init: any }): FetchLike {
@@ -58,4 +58,56 @@ describe('OpenClawClient', () => {
     expect(body.message.text).toBe('打开记事本')
     expect(body.agentId).toBe('lumina')
   })
+
+  it('超时（AbortError）返回 openclaw-timeout', async () => {
+    const hang: FetchLike = (async (_url: string, init?: any) => {
+      return new Promise((_res, rej) => {
+        init.signal.addEventListener('abort', () => {
+          const e: any = new Error('aborted'); e.name = 'AbortError'; rej(e)
+        })
+      })
+    })
+    const c = new OpenClawClient({ baseUrl: 'http://x', timeoutMs: 20 }, hang)
+    const r = await c.ping()
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('openclaw-timeout')
+  })
 })
+
+// 渠道适配器：把 OpenClaw 当作「可选执行后端」，任何故障都安全回退
+describe('OpenClawAdapter 渠道适配器', () => {
+  let originalFetch: any
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('未配置 baseUrl：init/send/health 都安全返回 false，不抛错', async () => {
+    const { OpenClawAdapter } = await import('../electron/channels/adapters/openclaw')
+    const a = new OpenClawAdapter()
+    expect(await a.init({ credentials: {}, options: {} } as any)).toBe(false)
+    expect(await a.send({ text: 'x' } as any)).toBe(false)
+    expect(await a.healthCheck()).toBe(false)
+    await a.destroy()
+  })
+
+  it('网关可达：init=true、health=true、send 委托成功', async () => {
+    globalThis.fetch = (async (url: string) => {
+      if (url.endsWith('/health')) return { ok: true, status: 200, text: async () => JSON.stringify({ status: 'ok' }), json: async () => ({ status: 'ok' }) }
+      if (url.endsWith('/a2a/message/send')) return { ok: true, status: 200, text: async () => JSON.stringify({ text: 'ok' }), json: async () => ({ text: 'ok' }) }
+      return { ok: false, status: 404, text: async () => '', json: async () => ({}) }
+    }) as any
+    const { OpenClawAdapter } = await import('../electron/channels/adapters/openclaw')
+    const a = new OpenClawAdapter()
+    expect(await a.init({ credentials: { baseUrl: 'http://x' } } as any)).toBe(true)
+    expect(await a.healthCheck()).toBe(true)
+    expect(await a.send({ text: '执行', targetId: 't' } as any)).toBe(true)
+    await a.destroy()
+  })
+
+  it('网关不可达：init=false（不影响其它渠道）', async () => {
+    globalThis.fetch = (async () => { throw new Error('down') }) as any
+    const { OpenClawAdapter } = await import('../electron/channels/adapters/openclaw')
+    const a = new OpenClawAdapter()
+    expect(await a.init({ credentials: { baseUrl: 'http://x' } } as any)).toBe(false)
+  })
+})
+

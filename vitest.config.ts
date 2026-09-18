@@ -7,13 +7,35 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    // agentRunner 依赖链重（工具/Skill/记忆系统注册），冷加载约 5~8s，全量并发更慢；
-    // 默认 5s 超时会让动态 import 它的套件偶发超时并连锁误报，统一放宽（不改任何断言）。
+    // agentRunner 依赖链重（工具/Skill/记忆系统注册），冷加载 5~8s；
+    // 统一放宽测试/钩子超时，避免动态 import 它的用例偶发超时与连锁误报。
     testTimeout: 20000,
     hookTimeout: 20000,
     coverage: {
       provider: 'v8',
-      include: ['electron/agentRunner.ts', 'electron/memory/**/*.ts', 'electron/securityGuard.ts', 'electron/tokenEstimator.ts'],
+      // 只把「已建立实测的核心模块」纳入门禁，作为防回归门；
+      // 历史单体（agentRunner、memoryStore 等）在抽出可测核心后逐个补测，再逐步纳入。
+      include: [
+        'electron/core/reactEngine.ts',
+        'electron/memory/layeredMemory.ts',
+        'electron/memory/layeredMemoryAdapter.ts',
+        'electron/pet/lifeStateStore.ts',
+        'electron/pet/emotionFusion.ts',
+        'electron/pet/modelLibrary.ts',
+        'electron/pet/avatarRenderer.ts',
+        'electron/dream/dreamEngine.ts',
+        'electron/realityShow/realityShowEngine.ts',
+        'electron/securityGuard.ts',
+        'electron/tokenEstimator.ts',
+      ],
+      // 覆盖率门禁：CI 中 `vitest run --coverage` 低于阈值即失败
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        statements: 70,
+        branches: 55,
+        perFile: false,
+      },
     },
   },
   resolve: {

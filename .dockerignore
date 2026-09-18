@@ -1,0 +1,16 @@
+node_modules
+dist
+out
+.git
+.github
+*.md
+.vscode
+.preview
+coverage
+test-results
+# 本地打包产物
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.zip

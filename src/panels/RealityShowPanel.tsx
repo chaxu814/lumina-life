@@ -20,6 +20,7 @@ interface ShowEvent {
   title: string
   content: string
   severity?: 'info' | 'notice' | 'drama'
+  source?: 'llm' | 'template'
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -122,7 +123,7 @@ export default function RealityShowPanel() {
         <div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>🎬 Agent 真人秀 <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.18)', color: '#fff' }}>🧪 实验彩蛋</span></div>
           <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>
-            实验彩蛋 · 由预设事件库随机生成的幕后日常（非模型自由发挥）· {events.length} 条记录
+            实验彩蛋 · 内心独白在配置大脑模型后由模型生成（标 ✨），互动/冲突/成就为剧本 · {events.length} 条记录
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -179,6 +180,12 @@ export default function RealityShowPanel() {
                 }}>
                   {TYPE_LABELS[evt.type] ?? evt.type}
                 </span>
+                {evt.source === 'llm' && (
+                  <span style={{
+                    padding: '1px 6px', borderRadius: 4, fontSize: 9,
+                    background: 'rgba(34,197,94,0.15)', color: '#16a34a',
+                  }}>✨ AI 生成</span>
+                )}
                 {evt.agents.map(a => (
                   <span key={a} style={{
                     padding: '1px 6px', borderRadius: 4, fontSize: 9,

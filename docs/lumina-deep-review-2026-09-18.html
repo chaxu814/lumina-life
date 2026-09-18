@@ -49,6 +49,81 @@
       </div>
     </div>
 
+    <!-- ============ ②⁺ 当晚闭环修复（9/18 P1/P2 收尾） ============ -->
+    <div class="h2" style="color:#2f7d32;">②⁺ 当晚闭环修复对账：P1/P2 九项，实改·实测·如实标注</div>
+    <div class="card" style="border-left:4px solid #2f7d32;padding:14px 16px;margin-bottom:12px;">
+      <div style="font-size:14px;">
+        本轮在 9/18 报告基础上，对点名的 P1/P2 逐条动手：<b>能真做的全部落到代码并跑通测试与真机；需要模型/真机的只铺架构、不假装完成</b>。
+        验证口径：<b>vitest 596 通过 / 1 跳过（较报告时 547 增 49）</b>、<b>新增覆盖率门禁（核心模块行/函数 70%、分支 55%，实测聚合 72% 行 / 64% 分支）</b>、<b>tsc --strict 0 错、electron-vite 构建通过、Windows 安装包重打包并真机启动不崩</b>。
+      </div>
+    </div>
+    <div class="card" style="overflow-x:auto;margin-bottom:14px;">
+      <table style="min-width:820px;font-size:13px;">
+        <thead><tr style="background:rgba(0,0,0,0.03);">
+          <th style="width:17%;border-bottom:1px solid #E4E3DD;">报告点名问题</th>
+          <th style="width:56%;border-bottom:1px solid #E4E3DD;">本轮做了什么（实改 + 证据）</th>
+          <th style="width:14%;border-bottom:1px solid #E4E3DD;">结论</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">内驱力/情绪不持久，重启回基线</td>
+            <td style="border-bottom:1px solid #f0efe9;">新增 <b>pet-life-state.json 持久化</b>：drives + 连续情绪 + 互动计数，2s 防抖写、退出前同步 flush、<b>启动即恢复并开 60s 兜底落盘（不依赖渲染页 tick）</b>；读取时按离线时长推进（冷落期社交/好奇累积、夜间睡眠恢复精力，封顶 12h）。<b>真机验证：写入 social=0.99/计数=42 后重启，状态被正确读出并按离线推进、再次落盘，不再回基线。</b>单测覆盖基线/恢复/离线/夜间/上限。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已闭环</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">梦境/真人秀是模板彩蛋</td>
+            <td style="border-bottom:1px solid #f0efe9;">两引擎升 v1.1：<b>配置大脑模型后由模型生成（标 ✨），任何失败自动回退模板</b>；梦境数据迁到 userData/dreams.json、带并发门与 JSON 容错；真人秀仅「内心独白」走 LLM、互动/冲突仍为剧本。面板副标题与 <b>✨AI生成 / 模板 徽章</b>如实区分，不再对外宣称「全自由生成」。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已闭环·口径诚实</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">记忆默认仅 TF-IDF、分层不足</td>
+            <td style="border-bottom:1px solid #f0efe9;">新增 <b>五层记忆门面</b>（人格/事实/反思/近期/工作），内置零依赖 <b>BM25（中文 unigram+bigram、置信度+7 天时间衰减、按层预算、跨层去重）</b>，桌宠与梦境召回统一切到五层，失败回退旧桥；语义向量仍走<b>可选</b> Ollama/embedding（README 如实标注）。单测脱离 better-sqlite3 可跑。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已大幅增强</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">核心循环测试薄、无覆盖率门禁</td>
+            <td style="border-bottom:1px solid #f0efe9;">抽出可测的 <b>reactEngine 核心 ReAct 循环</b>并补 7 个用例（纯文本终态、工具后续跑、失败友好文案、中断、失控循环兜底、XML 工具格式解析剥离）；新增五层记忆、生命状态、梦境、真人秀、OpenClaw 等测试；<b>vitest 覆盖率门禁 + CI 独立 coverage job（Linux/Node22，不达标即红）</b>。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已闭环</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">功能蔓延（30+ 模块、单点不深）</td>
+            <td style="border-bottom:1px string:f0efe9;">新增 <b>功能分级清单 featureManifest</b>（core/beta/experimental 单一事实来源）：把聊天/人格/记忆/情绪/桌宠/团队钉为核心，梦境/真人秀标实验，团队社区弹窗加「🧪 实验室彩蛋」开关，默认聚焦「3 分钟生命时刻」。不删功能、但把成熟度对用户讲清。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip ok">已分层聚焦</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">形态单薄（仅 Live2D/Mao）</td>
+            <td style="border-bottom:1px solid #f0efe9;">模型库扩为 <b>live2d / vrm / mmd / pngtuber 四种 kind</b>，按后缀校验、给出不可渲染原因与 roadmap 提示，避免导入后静默黑屏。<b>但 three.js 的 VRM/MMD 真实渲染器本轮未实现</b>——只铺好契约与入口，属于诚实的架构预留。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">架构预留·非成品</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">渠道早期、OpenClaw 桥仅骨架</td>
+            <td style="border-bottom:1px solid #f0efe9;">OpenClaw 客户端/适配器契约补到 <b>9 个单测</b>（未配置/探活/超时/不可达/4xx/token 入头/A2A 委托/回退），确认「外部网关故障绝不拖垮主链路」。<b>真机配对与 7 渠道端到端联调仍需你在各自平台上验证</b>。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">契约已测·待真机</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">仅 Windows x64</td>
+            <td style="border-bottom:1px solid #f0efe9;">修了真正的跨平台坑：<b>记忆库/数据目录改为跨平台（win/mac/Linux/XDG，Windows 老用户散落的旧库自动沿用不丢数据）</b>；CLI 补 Linux 路径；新增 <b>Dockerfile（xvfb 无头跑 HTTP API）</b>与 .dockerignore；CI 本就有 win/mac/ubuntu 三系统构建矩阵，打包配置含 dmg/zip/AppImage/deb。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip warn">代码与CI就绪·待真机</span></td>
+          </tr>
+          <tr>
+            <td style="border-bottom:1px solid #f0efe9;font-weight:700;">内存偏高 / 原生模块 ABI</td>
+            <td style="border-bottom:1px solid #f0efe9;">主窗与两个宠物窗加 <b>backgroundThrottling + 关拼写检查</b>（隐藏/遮挡即停 RAF 与定时器）；实测稳态约 <b>783MB / 5 进程</b>（双渲染器+Electron 多进程是结构性下限，本轮不承诺大幅下降）。新增 rebuild:electron / rebuild:node 脚本，打包 electron-builder 自动重编 better-sqlite3，纯 Node 测试 ABI 警告有明确处理路径。</td>
+            <td style="border-bottom:1px solid #f0efe9;"><span class="chip gray">已缓解·结构性下限</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="border-left:4px solid #9a6d1f;padding:13px 16px;margin-bottom:20px;">
+      <div style="font-weight:700;color:#9a6d1f;font-size:14px;">仍需你/真机才能闭环的边界（不假装已完成）</div>
+      <ul style="margin:8px 0 0;padding-left:20px;font-size:13px;">
+        <li><b>macOS / Linux 未在真实机器上验证</b>：只有跨平台代码 + 三系统 CI 构建 + Docker；Linux 透明宠物窗需要合成器，dmg 未做 Apple 公证、Windows 未做代码签名（首装仍有系统提示）。</li>
+        <li><b>VRM / MMD 是契约预留</b>：kind 识别/校验/提示已就绪，真实三维渲染（three.js 等）尚未写。</li>
+        <li><b>渠道、全双工语音、透明窗、alpha-trim(125/150%)、UGC 加载</b>仍需逐项真机回归；<b>中文离线 STT</b> 默认仍是 tiny.en（不识中文），中文主链路走联网 Web Speech。</li>
+        <li>超大文件债仍在：GroupChatView 267KB、agentRunner 154KB、ChatPanel 125KB 等 <b>10 个大文件本轮未做大拆</b>（只抽核心+补测试），TODO/FIXME 由 63 降到 49；建议后续按面板逐个拆。</li>
+      </ul>
+    </div>
+
     <!-- ============ ① 仪表盘 ============ -->
     <div class="h2">① 体检仪表盘：一个体量很大、测试很扎实、已经能打包的工程</div>
     <div class="grid" style="margin-bottom:22px;">

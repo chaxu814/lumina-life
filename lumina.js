@@ -52,6 +52,7 @@ function findElectron() {
     path.join(scriptDir, 'node_modules', '.bin', 'electron'),
     path.join(scriptDir, 'node_modules', '.bin', 'electron.cmd'),
     path.join(scriptDir, 'node_modules', 'electron', 'dist', 'electron.exe'),
+    path.join(scriptDir, 'node_modules', 'electron', 'dist', 'electron'),
     path.join(scriptDir, 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron'),
   ];
 

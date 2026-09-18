@@ -102,9 +102,10 @@ __pycache__/
 venv/
 
 # ── User Data (DO NOT COMMIT) ────────────────────────────────
-data/
-memory/
-workspaces/
+# 根目录限定，避免误伤 electron/memory/ 等源码目录
+/data/
+/memory/
+/workspaces/
 
 # ── TypeScript ───────────────────────────────────────────────
 *.tsbuildinfo
@@ -166,4 +167,8 @@ pet-poc/
 /lumina-quests.json
 /async-tasks.json
 electron/MEMORY.md
+
+
+# HTML self-check screenshots
+_shots/
 

@@ -12,7 +12,7 @@
     "dev": "electron-vite dev",
     "build:pet-life": "esbuild electron/pet/life/runtime.ts --bundle --format=iife --global-name=LuminaLife --charset=utf8 --outfile=electron/pet/assets/pet-life.js",
     "build:pet-voice": "esbuild electron/pet/lifeSpeech/voiceClient.ts --bundle --format=iife --global-name=LuminaVoice --charset=utf8 --external:electron --outfile=electron/pet/assets/pet-voice.js",
-  "build": "npm run build:pet-life && npm run build:pet-voice && electron-vite build",
+    "build": "npm run build:pet-life && npm run build:pet-voice && electron-vite build",
     "preview": "electron-vite preview",
     "pack:win": "electron-vite build && electron-builder --win --x64",
     "pack:mac": "electron-vite build && electron-builder --mac --x64 --arm64",
@@ -22,7 +22,10 @@
     "lint:fix": "eslint electron/ src/ tests/ --ext .ts,.tsx,.js,.jsx --fix",
     "typecheck": "tsc --noEmit --strict",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3",
     "cli": "electron --no-sandbox out/main/index.js --cli",
     "api": "electron --no-sandbox out/main/index.js --api",
     "api:dev": "cross-env LUMINA_API_ENABLED=1 LUMINA_API_PORT=3456 electron --no-sandbox out/main/index.js",
@@ -37,10 +40,6 @@
       "output": "dist"
     },
     "extraResources": [
-      {
-        "from": "public/models",
-        "to": "models"
-      },
       {
         "from": "resources",
         "to": "resources"
@@ -134,6 +133,7 @@
     }
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.19",
     "@types/react": "^19.2.14",
@@ -142,6 +142,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^4.4.0",
+    "@vitest/coverage-v8": "^4.1.6",
     "electron": "^40.10.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^3.1.0",

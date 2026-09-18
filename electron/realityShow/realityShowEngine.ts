@@ -1,13 +1,16 @@
 // ============================================================
-// realityShow/realityShowEngine.ts — Agent 真人秀 v1.0
+// realityShow/realityShowEngine.ts — Agent 真人秀 v1.1
 //
 // 像一个 24/7 的直播真人秀，展示 Agent 们的"幕后生活"
 // 包括：正在做什么、互相之间的互动、随机内心独白
+//
+// 生成方式：
+//   - 注册了 LLM（主进程 registerRealityShowLLM）后，「内心独白」由模型结合
+//     近期活动真实生成；互动/冲突/成就仍是固定剧本（舞台布景）。
+//   - 未注册 / LLM 失败时，全部回退内置模板（离线彩蛋）。
+//   - 每条事件带 source 字段（llm/template），UI 据此如实标注「实验/彩蛋」。
 // ============================================================
 
-// [EXPERIMENTAL / easter egg] Reality-show events are randomly picked from
-// fixed thought/interaction/conflict arrays; they are NOT LLM-generated.
-// Label as "experimental easter egg" in UI/README.
 import { globalEventBus, BusEvents } from '../eventBus'
 
 // ═══════════════════════════════════════════════════════════
@@ -32,6 +35,8 @@ export interface ShowEvent {
   title: string
   content: string
   severity?: 'info' | 'notice' | 'drama'
+  /** 生成方式：LLM 真实生成 / 模板彩蛋（UI 据此标注实验） */
+  source?: 'llm' | 'template'
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -112,9 +117,16 @@ function pickRandom<T>(arr: T[]): T {
 }
 
 /**
- * 生成一条随机真人秀事件
+ * 生成一条随机真人秀事件（模板路径，统一盖 source=template）
  */
 export function generateShowEvent(): ShowEvent {
+  return stampTemplate(generateTemplateShowEvent())
+}
+
+/**
+ * 内部：按权重随机抽取一条模板事件
+ */
+function generateTemplateShowEvent(): ShowEvent {
   const rand = Math.random()
 
   // 35% 内心独白
@@ -175,6 +187,51 @@ export function generateShowEvent(): ShowEvent {
     title: '🎬 系统里程碑',
     content: `第 ${eventHistory.length + 1} 条真人秀记录诞生！Agent 们正在持续进化中~`,
     severity: 'notice',
+    source: 'template',
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LLM 真实「内心独白」（注入式，未注册则永远走模板）
+// ═══════════════════════════════════════════════════════════
+
+export type RealityLLMCaller = (agent: string, context: string) => Promise<string>
+let realityLLMCaller: RealityLLMCaller | null = null
+
+/** 主进程注册 LLM 调用器（agent 为 Lumina/热茶/Yak；返回一句独白） */
+export function registerRealityShowLLM(caller: RealityLLMCaller | null): void {
+  realityLLMCaller = caller
+}
+
+/** 各角色独白风格提示 */
+const AGENT_VOICE: Record<string, string> = {
+  Lumina: 'Lumina 是住在桌面的可爱猫娘，语气软萌、会撒娇、关心主人当下的状态',
+  '热茶': '热茶是严谨的代码审查担当，语气克制、爱挑逻辑、外冷内热',
+  'Yak': 'Yak 是数据与分析担当，会用指标/数字思考，冷静客观',
+}
+
+/** 模板事件一律标记来源 */
+function stampTemplate(e: ShowEvent): ShowEvent {
+  return { ...e, source: e.source ?? 'template' }
+}
+
+/**
+ * 异步生成一条事件：仅「内心独白」会尝试 LLM（其它类型仍是剧本，避免过度调用）。
+ * 任何失败都回退模板，绝不抛错。
+ */
+export async function generateShowEventAsync(context = ''): Promise<ShowEvent> {
+  const base = generateShowEvent()
+  if (!realityLLMCaller || base.type !== 'agent:thought') return base
+  try {
+    const agent = base.agents[0] || 'Lumina'
+    const sys = `你是桌面多 Agent 团队「Lumina Life」里的 ${agent}。${AGENT_VOICE[agent] || ''}。
+现在是 24 小时「真人秀」的一条内心独白，请输出一句 30 字以内、自然、像真实内心 OS 的话（不要引号、不要前缀、不要动作描写）。
+可以结合近期活动，但不要编造具体数字；偶尔撒娇、偶尔吐槽、偶尔关心，语气多样。`
+    const text = (await realityLLMCaller(agent, sys + (context ? `\n近期活动：${context.slice(0, 500)}` : ''))).trim()
+    if (!text) return base
+    return { ...base, content: text.slice(0, 120), source: 'llm' }
+  } catch (e) {
+    return base
   }
 }
 
@@ -184,30 +241,27 @@ export function generateShowEvent(): ShowEvent {
 export function startRealityShow(intervalMs: number = 60_000): void {
   if (generateTimer) return
 
-  // 立即生成一条
-  if (eventHistory.length === 0) {
-    const event = generateShowEvent()
+  const pushEvent = (event: ShowEvent): void => {
     eventHistory.push(event)
-    notifyListeners(event)
-  }
-
-  generateTimer = setInterval(() => {
-    // 随机间隔 30~90 秒内波动
-    const event = generateShowEvent()
-    eventHistory.push(event)
-
-    // 保持最多 MAX_EVENTS 条
-    if (eventHistory.length > MAX_EVENTS) {
-      eventHistory = eventHistory.slice(-MAX_EVENTS)
-    }
-
+    if (eventHistory.length > MAX_EVENTS) eventHistory = eventHistory.slice(-MAX_EVENTS)
     notifyListeners(event)
     lastGenerateTime = Date.now()
+    try { globalEventBus.emit(BusEvents.REALITY_SHOW_EVENT, event) } catch {}
+  }
 
-    // 也通过 eventBus 发出
-    try {
-      globalEventBus.emit(BusEvents.REALITY_SHOW_EVENT, event)
-    } catch {}
+  // 立即生成一条
+  if (eventHistory.length === 0) {
+    pushEvent(stampTemplate(generateShowEvent()))
+  }
+
+  let ticking = false
+  generateTimer = setInterval(() => {
+    if (ticking) return // 防止 LLM 慢调用导致叠加
+    ticking = true
+    generateShowEventAsync()
+      .then(pushEvent)
+      .catch(() => pushEvent(stampTemplate(generateShowEvent())))
+      .finally(() => { ticking = false })
   }, intervalMs + Math.random() * 30_000)
 
   console.log('[RealityShow] 🎬 真人秀已开播！')
@@ -229,11 +283,11 @@ export function stopRealityShow(): void {
  */
 export function triggerShowEvent(event?: Partial<ShowEvent>): ShowEvent {
   const e = event ? {
-    ...generateShowEvent(),
+    ...stampTemplate(generateShowEvent()),
     ...event,
     id: generateId(),
     timestamp: Date.now(),
-  } : generateShowEvent()
+  } : stampTemplate(generateShowEvent())
 
   eventHistory.push(e)
   if (eventHistory.length > MAX_EVENTS) {

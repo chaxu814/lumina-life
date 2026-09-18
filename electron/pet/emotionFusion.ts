@@ -180,6 +180,16 @@ export class PetEmotionFusion {
     return { ...this.state }
   }
 
+  /** 从持久化状态恢复（重启后延续情绪，而不是回到基线） */
+  restore(saved: { v?: number; a?: number; label?: string } | undefined | null): void {
+    if (!saved) return
+    this.state = {
+      v: Number.isFinite(saved.v) ? Math.max(-1, Math.min(1, saved.v as number)) : BASELINE.v,
+      a: Number.isFinite(saved.a) ? Math.max(0, Math.min(1, saved.a as number)) : BASELINE.a,
+      label: typeof saved.label === 'string' && saved.label ? saved.label : BASELINE.label,
+    }
+  }
+
   reset(): void {
     this.state = { ...BASELINE }
   }

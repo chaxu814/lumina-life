@@ -8,11 +8,44 @@
 
 import { sanitizeModelName, isSafeRelativePath } from './modelImporter'
 
+/**
+ * Avatar 形态（v0.3 起预留多形态）：
+ *   live2d   已实现：Cubism Live2D（.model3.json）
+ *   vrm      路线图：3D VRM（.vrm，three.js）
+ *   mmd      路线图：MikuMikuDance 模型（.pmx/.pmd）
+ *   pngtuber 路线图：静态立绘 + 口型切换（.png）
+ * 只有 live2d 是可渲染的；其余形态在 avatarRenderer 里显式标注为「暂未支持」，
+ * 避免让用户导入后得到一个静默黑屏。
+ */
+export type AvatarKind = 'live2d' | 'vrm' | 'mmd' | 'pngtuber'
+
+export const AVATAR_KINDS: AvatarKind[] = ['live2d', 'vrm', 'mmd', 'pngtuber']
+
+/** 各形态对应的入口文件后缀（小写，不含点） */
+export const KIND_ENTRY_EXT: Record<AvatarKind, string[]> = {
+  live2d: ['model3.json'],
+  vrm: ['vrm'],
+  mmd: ['pmx', 'pmd'],
+  pngtuber: ['png'],
+}
+
+export function isValidAvatarKind(kind: unknown): kind is AvatarKind {
+  return typeof kind === 'string' && (AVATAR_KINDS as string[]).includes(kind)
+}
+
+/** 校验某个形态的入口文件名后缀是否合法 */
+export function isValidEntryForKind(kind: AvatarKind, entryRel: string): boolean {
+  const lower = entryRel.toLowerCase().replace(/\\/g, '/')
+  return KIND_ENTRY_EXT[kind].some((ext) => lower.endsWith('.' + ext))
+}
+
 export interface ModelEntry {
   id: string
   name: string
-  /** 相对模型资产根目录的 model3.json 路径（POSIX 风格） */
+  /** 相对模型资产根目录的入口文件路径（POSIX 风格）；随 kind 不同后缀不同 */
   entryRel: string
+  /** 模型形态；缺省视为 live2d（向后兼容） */
+  kind?: AvatarKind
   builtin: boolean
   addedAt: number
   /** discoverProfile 后可回填的能力标记 */
@@ -27,7 +60,7 @@ export interface ModelLibraryData {
 
 /** 内置模型（恒定，不参与持久化） */
 export const BUILTIN_MODELS: ModelEntry[] = [
-  { id: 'Mao', name: 'Mao（魔法使）', entryRel: 'Mao/mao_pro.model3.json', builtin: true, addedAt: 0, hasFiveVowel: true },
+  { id: 'Mao', name: 'Mao（魔法使）', entryRel: 'Mao/mao_pro.model3.json', kind: 'live2d', builtin: true, addedAt: 0, hasFiveVowel: true },
 ]
 
 export class ModelLibrary {
@@ -44,10 +77,12 @@ export class ModelLibrary {
   }
 
   /** 注册/更新一个自定义模型 */
-  register(entry: { name?: string; entryRel: string; id?: string; channels?: number; hasFiveVowel?: boolean }, now = 0): { ok: boolean; id?: string; error?: string } {
+  register(entry: { name?: string; entryRel: string; id?: string; kind?: AvatarKind; channels?: number; hasFiveVowel?: boolean }, now = 0): { ok: boolean; id?: string; error?: string } {
     const entryRel = String(entry.entryRel ?? '').replace(/\\/g, '/')
-    if (!isSafeRelativePath(entryRel) || !/\.model3\.json$/i.test(entryRel)) {
-      return { ok: false, error: '模型入口必须是安全的相对 .model3.json 路径' }
+    const kind: AvatarKind = isValidAvatarKind(entry.kind) ? entry.kind : 'live2d'
+    if (!isSafeRelativePath(entryRel) || !isValidEntryForKind(kind, entryRel)) {
+      const expect = KIND_ENTRY_EXT[kind].map((e) => '.' + e).join(' / ')
+      return { ok: false, error: `模型入口必须是安全的相对 ${expect} 路径` }
     }
     const id = entry.id ? sanitizeModelName(entry.id) : sanitizeModelName(entry.name ?? entryRel.split('/').slice(-2, -1)[0])
     if (!id) return { ok: false, error: '无法生成有效模型 id' }
@@ -56,6 +91,7 @@ export class ModelLibrary {
       id,
       name: entry.name?.trim() || id,
       entryRel,
+      kind,
       builtin: false,
       addedAt: now,
       channels: entry.channels,
