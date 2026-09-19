@@ -90,4 +90,15 @@ describe('generator 主动台词接线契约', () => {
     // 我们 mock 的 coreToMood 恒返回「开心 😊」，验证 LLM 的「低落」没有被直接采用
     expect(d.mood).toBe('开心 😊')
   })
+
+  it('7. LLM 偷懒只给 say → 按情绪补可见动作（开口必动，不只动嘴）', async () => {
+    mockedChat.mockResolvedValueOnce(JSON.stringify({
+      shouldSpeak: true, action: 'say', speech: '今天好呀',
+    }))
+    const d = await generateProactive(baseEvent, baseCtx)
+    expect(d.shouldSpeak).toBe(true)
+    // mock 的 coreToMood 恒返回「开心 😊」，开心保底动作是 happy / wave
+    expect(['happy', 'wave']).toContain(d.action)
+    expect(d.action).not.toBe('say')
+  })
 })

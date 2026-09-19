@@ -37,7 +37,33 @@ export interface ProactiveGenContext {
   unfinishedQuestion?: string | null
 }
 
-const ACTIONS = 'wave/nod/think/sleep/wake/happy/sad/dance/blink/walk/say/idle'
+const ACTIONS = 'wave/nod/think/sleep/wake/happy/sad/angry/surprised/dance/clap/shake/blink/walk/say/idle'
+
+/** 可见的大动作集合（区别于只有口型的 say） */
+const VISIBLE_ACTIONS = new Set([
+  'wave', 'nod', 'think', 'sleep', 'wake', 'happy', 'sad', 'angry',
+  'surprised', 'dance', 'clap', 'shake', 'walk',
+])
+
+/**
+ * 动作保底：LLM 偷懒只给 say/idle/空（小模型最常见）时，
+ * 按当前连续情绪补一个「看得见」的身体动作，保证她一开口就有身体反应——
+ * 这是「活体」体感的关键，而不是只动嘴。
+ */
+function enrichAction(rawAction: string | undefined | null, mood: string, hour: number): string {
+  const a = (rawAction || '').toLowerCase().trim()
+  // LLM 明确给了有效大动作 → 尊重它
+  if (VISIBLE_ACTIONS.has(a)) return a
+  // 深夜只做睡/醒
+  if (hour >= 23 || hour < 6) return 'sleep'
+  // 按情绪补动作
+  if (/超开心|兴奋|幸福|开心/.test(mood)) return Math.random() < 0.5 ? 'happy' : 'wave'
+  if (/难过|低落/.test(mood)) return 'sad'
+  if (/闷闷不乐/.test(mood)) return 'think'
+  if (/疲惫/.test(mood)) return 'sleep'
+  // 平静：小幅点头/歪头，避免每次都手舞足蹈
+  return Math.random() < 0.55 ? 'nod' : 'think'
+}
 
 const SYSTEM_PROMPT = `你是 Lumina 桌宠的灵魂（住在用户桌面上的猫娘），温暖、调皮、像真人朋友一样自然。
 现在是你【主动开口】的时刻：根据当前时间、屏幕场景、你的内驱力和记忆，决定这一句话。
@@ -137,7 +163,8 @@ export async function generateProactive(
   if (parsed && typeof parsed.speech === 'string' && parsed.speech.trim()) {
     return {
       shouldSpeak: true,
-      action: typeof parsed.action === 'string' && parsed.action ? parsed.action : 'say',
+      // 动作保底：LLM 只给 say 时按情绪补可见动作，让她开口必动
+      action: enrichAction(parsed.action, finalMood, hour),
       speech: parsed.speech.trim().slice(0, 40),
       mood: finalMood, // 连续态覆盖 LLM 建议
       reason: `llm:${event.source}`,
@@ -148,7 +175,7 @@ export async function generateProactive(
   const fb = fallbackSpeech(event.source, hour)
   return {
     shouldSpeak: true,
-    action: fb.action,
+    action: enrichAction(fb.action, fb.mood, hour),
     speech: fb.speech,
     mood: fb.mood,
     reason: `fallback:${event.source}`,

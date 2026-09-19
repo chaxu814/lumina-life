@@ -1455,7 +1455,7 @@ function doBlink() {
   setTimeout(() => { animateParam('ParamEyeLOpen', 1, 140); animateParam('ParamEyeROpen', 1, 140); }, 110);
 }
 
-const FACE_EXPR_MAP = { happy: 'exp_02', sad: 'exp_05', angry: 'exp_08', joy: 'exp_04', blush: 'exp_06', surprise: 'exp_07', calm: 'exp_01', shy: 'exp_03' };
+const FACE_EXPR_MAP = { happy: 'exp_02', sad: 'exp_05', angry: 'exp_08', joy: 'exp_04', blush: 'exp_06', surprise: 'exp_07', calm: 'exp_01', shy: 'exp_06', sleepy: 'exp_03' };
 function setFace(exprName) {
   const exprId = FACE_EXPR_MAP[exprName] || (typeof exprName === 'string' && exprName.startsWith('exp_') ? exprName : null);
   if (!exprId) return;
@@ -1534,8 +1534,9 @@ function startIdleMotionLoop() {
     if (!model || state.sleeping || state.walking) return;
     if (Date.now() < _actionBusyUntil) return;  // 动作冷却中
     if (menuOpen || anyPanelOpen() || chatOpenNow()) return;
-    // 优先 Idle 组，没有就用空名组
-    const grp = modelMotions['Idle'] ? 'Idle' : '';
+    // 80% 播轻柔 Idle，20% 偶尔播模型自带的 special/mtn 动作（空名组），让她自己会「活动」
+    let grp = 'Idle';
+    if (modelMotions['']) grp = (modelMotions['Idle'] && Math.random() < 0.8) ? 'Idle' : '';
     playRandomMotion(grp);
   }, 6000 + Math.random() * 5000);  // 6~11 秒随机
 }
@@ -1553,8 +1554,8 @@ function markActionBusy(ms) { _actionBusyUntil = Date.now() + ms; }
 function applyMoodExpression(moodLabel) {
   if (!modelHasExpr) return;
   const map = {
-    '超开心 🎉': 'joy', '兴奋 🤩': 'happy', '幸福 💖': 'blush', '开心 😊': 'happy',
-    '闷闷不乐 😕': 'sad', '低落 😔': 'sad', '难过 😢': 'sad', '疲惫 😩': 'calm',
+    '超开心 🎉': 'joy', '兴奋 🤩': 'joy', '幸福 💖': 'blush', '开心 😊': 'happy',
+    '闷闷不乐 😕': 'sad', '低落 😔': 'sad', '难过 😢': 'sad', '疲惫 😩': 'sleepy',
     '平静 😐': 'calm',
   };
   const face = map[moodLabel];
