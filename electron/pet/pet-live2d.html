@@ -850,8 +850,10 @@ function gazeCenter() { const fc = focusControllerOf(); if (fc) fc.focus(0, 0, f
 
 let userScale = 1;
 function fitScale() {
-  const fitH = Math.max(innerHeight * 0.62, 100);
-  const fitW = Math.max(innerWidth * 0.5, 100);
+  // compact 物理小窗口角色要占满窗口（更高更宽）；全屏舞台仍按原比例（避免满屏夸张）
+  const compact = isCompactPet();
+  const fitH = Math.max(innerHeight * (compact ? 0.78 : 0.62), 100);
+  const fitW = Math.max(innerWidth * (compact ? 0.72 : 0.5), 100);
   return Math.min(fitH / state.naturalH, fitW / state.naturalW);
 }
 function applyScale() { if (!model) return; model.scale.set(fitScale() * userScale); clampPosition(); }
@@ -871,7 +873,8 @@ function groundY() { return innerHeight - 6 - Math.abs(model.height) / 2; }
 function clampPosition() {
   if (!model) return;
   const hw = modelHalfW() + 4;
-  if (model.x < hw) model.x = hw;
+  if (isCompactPet()) { model.x = innerWidth / 2; state.targetX = innerWidth / 2; }
+  else if (model.x < hw) model.x = hw;
   else if (model.x > innerWidth - hw) model.x = innerWidth - hw;
   if (!state.floating) { state.floatY = groundY(); model.y = state.floatY; }
   else { const hh = Math.abs(model.height) / 2 + 4; state.floatY = Math.min(innerHeight - hh, Math.max(hh, state.floatY)); }
@@ -936,6 +939,7 @@ function computeModelAlphaTrim() {
 
 function reportPetShape() {
   try {
+    if (isCompactPet()) return // compact 物理小窗口本就只包住角色，无需 SetWindowRgn（也避免对 DComp 透明窗的无效裁剪）
     if (!ipc) return // 修复：原误用未声明的 ipcRenderer，导致 pet:set-shape 从未上报、全屏透明窗压住后方视频黑屏
     const dpr = window.devicePixelRatio || 1
     const W = innerWidth, H = innerHeight
@@ -1150,6 +1154,14 @@ function positionProactiveCard() {
   const card = document.getElementById('proactive-card');
   if (!card || !model || !card.classList.contains('show')) return;
   const w = card.offsetWidth || 268, h = card.offsetHeight || 120;
+  if (isCompactPet()) {
+    // 小窗口：水平居中，贴角色头顶上方，避免和 420px 聊天面板/模型重叠
+    let cx = (innerWidth - w) / 2;
+    let cy = model.y - Math.abs(model.height) / 2 - h - 8;
+    cy = Math.max(8, Math.min(innerHeight - h - 8, cy));
+    card.style.left = cx + 'px'; card.style.top = cy + 'px';
+    return;
+  }
   const hw = modelHalfW();
   // 聊天窗打开时卡片摆到模型对侧，避免与 420px 聊天面板重叠
   let x;
@@ -1315,6 +1327,11 @@ function playAudioDataUrl(url, text) {
 
 function walk(dir) {
   if (state.locked) return; // 锁定时不移动
+  if (isCompactPet()) {
+    // 小窗口内不做水平位移（位置由窗口决定）：仅转身朝向，原地待机
+    if (model) { const s = Math.abs(model.scale.x); model.scale.x = dir > 0 ? s : -s; }
+    return;
+  }
   if (state.floating) { state.floating = false; state.floatY = groundY(); }
   state.walking = true;
   const hw = modelHalfW() + 8;
@@ -1333,7 +1350,7 @@ function emote(i) {
 function localIntent() {
   const stayPlaced = state.floating || Date.now() - state.lastPlaceAt < 60_000;
   const r = Math.random();
-  if (r < 0.30 && !stayPlaced) return { action: 'walk', dir: Math.random() < 0.5 ? -1 : 1 };
+  if (r < 0.30 && !stayPlaced && !isCompactPet()) return { action: 'walk', dir: Math.random() < 0.5 ? -1 : 1 };
   if (r < 0.60) return { action: 'emote', motion: Math.floor(Math.random() * 10) };
   if (r < 0.85) return { action: 'say' };
   return { action: 'idle' };
@@ -1712,15 +1729,19 @@ function startRenderLoop() {
       positionOverlays();
       return;
     }
-    if (state.walking) {
+    if (state.walking && !isCompactPet()) {
       const dx = state.targetX - model.x;
       if (Math.abs(dx) < 3) { state.walking = false; sendEvent('walk-stop'); }
       else model.x += Math.sign(dx) * state.speed * dt;
       bobT += dt * 0.25;
     } else bobT += dt * 0.06;
-    const hw = modelHalfW() + 4;
-    if (model.x < hw) model.x = hw;
-    else if (model.x > innerWidth - hw) model.x = innerWidth - hw;
+    if (isCompactPet()) {
+      model.x = innerWidth / 2; // 小窗口：模型恒居中，移动靠窗口
+    } else {
+      const hw = modelHalfW() + 4;
+      if (model.x < hw) model.x = hw;
+      else if (model.x > innerWidth - hw) model.x = innerWidth - hw;
+    }
     model.y += (state.floatY - model.y) * 0.25;
     if (state.walking) model.y += Math.sin(bobT) * 2;  // 仅走路时轻微起伏
     // 呼吸动画：仅在 prefs.breathing 开启时使用 ParamBreath（默认关闭，不再跳动）
@@ -1742,6 +1763,8 @@ function startRenderLoop() {
 
 /* ── 交互 & 穿透唤醒 ─────────────────────────────────────── */
 let ctMode = true;
+let PET_WINDOW_MODE = 'fullscreen'; // v6.4 compact 物理小窗口（主进程决定），拖拽改为移动窗口、模型锁定窗口中心
+const isCompactPet = () => PET_WINDOW_MODE === 'compact';
 let menuOpen = false;
 const lastMouse = { x: -1, y: -1 };
 
@@ -1814,7 +1837,7 @@ function applyHoverFade() {
 }
 
 /* ── 拖拽移动模型 ────────────────────────────────────────── */
-let dragging = false, dragMoved = 0, dragOffX = 0, dragOffY = 0;
+let dragging = false, dragMoved = 0, dragOffX = 0, dragOffY = 0, winGrabX = 0, winGrabY = 0;
 function fromUi(e) { return !!(e.target && e.target.closest && (e.target.closest('#chat-panel') || e.target.closest('#pet-menu') || e.target.closest('#neko-toolbar') || e.target.closest('#tb-collapsed') || e.target.closest('.nk-panel'))); }
 document.getElementById('pet-container').addEventListener('mousedown', (e) => {
   if (e.button !== 0 || !model || menuOpen) return;
@@ -1823,12 +1846,18 @@ document.getElementById('pet-container').addEventListener('mousedown', (e) => {
   if (state.locked) { say('我被固定住啦喵~'); return; }  // 🔒 锁定时禁止拖拽
   dragging = true; dragMoved = 0;
   dragOffX = e.clientX - model.x; dragOffY = e.clientY - model.y;
+  winGrabX = e.clientX; winGrabY = e.clientY; // compact：抓取点在窗口内偏移
   state.walking = false;
   if (HAS_IPC && ctMode) ipc.send('pet:set-ignore-mouse', false);
 });
 document.addEventListener('mousemove', (e) => {
   if (!dragging || !model) return;
   dragMoved += Math.abs(e.movementX || 1) + Math.abs(e.movementY || 1);
+  if (isCompactPet()) {
+    // compact：移动整个窗口（模型在窗口内保持居中），用光标屏幕坐标 + 抓取偏移
+    if (HAS_IPC) ipc.send('pet:window-move', { screenX: e.screenX, screenY: e.screenY, grabX: winGrabX, grabY: winGrabY });
+    return;
+  }
   const hw = modelHalfW() + 4, hh = Math.abs(model.height) / 2 + 4;
   model.x = Math.min(innerWidth - hw, Math.max(hw, e.clientX - dragOffX));
   model.y = Math.min(innerHeight - hh, Math.max(hh, e.clientY - dragOffY));
@@ -1838,6 +1867,11 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
+  if (isCompactPet()) {
+    if (HAS_IPC && dragMoved > 4) ipc.send('pet:window-move-end');
+    if (dragMoved > 4) { state.lastPlaceAt = Date.now(); sendEvent('drag-end'); }
+    return;
+  }
   if (dragMoved > 4) {
     state.floating = model.y < groundY() - 24;
     if (!state.floating) state.floatY = groundY();
@@ -2009,11 +2043,23 @@ const chatInput = document.getElementById('pet-chat-input');
 function chatOpenNow() { return chatPanel ? chatPanel.classList.contains('show') : false; }
 function positionChatPanel() {
   if (!chatPanel || !model) return;
-  const w = 420, h = chatPanel.offsetHeight || 480;
-  let x = model.x + modelHalfW() + 24;
-  if (x + w > innerWidth - 8) x = model.x - modelHalfW() - 24 - w;
-  chatPanel.style.left = Math.max(8, Math.min(innerWidth - w - 8, x)) + 'px';
-  chatPanel.style.top = Math.max(8, Math.min(innerHeight - h - 8, model.y - h / 2)) + 'px';
+  const compact = isCompactPet();
+  const w = compact ? Math.min(420, innerWidth - 24) : 420;
+  const h = chatPanel.offsetHeight || 480;
+  if (compact) { chatPanel.style.width = w + 'px'; }
+  let x, top;
+  if (compact) {
+    // 小窗口：水平居中，优先贴角色上方，空间不足则贴顶
+    x = (innerWidth - w) / 2;
+    top = model.y - h - 10;
+  } else {
+    x = model.x + modelHalfW() + 24;
+    if (x + w > innerWidth - 8) x = model.x - modelHalfW() - 24 - w;
+    x = Math.max(8, Math.min(innerWidth - w - 8, x));
+    top = model.y - h / 2;
+  }
+  chatPanel.style.left = x + 'px';
+  chatPanel.style.top = Math.max(8, Math.min(innerHeight - h - 8, top)) + 'px';
 }
 function addChatMsg(role, text) {
   if (!chatLog) return;
@@ -3022,6 +3068,10 @@ async function boot() {
   initLifeEngine(); // 🫀 v0.2
 
   if (HAS_IPC) {
+    ipc.invoke('pet:window-mode').then(m => {
+      PET_WINDOW_MODE = (m === 'compact') ? 'compact' : 'fullscreen';
+      if (PET_WINDOW_MODE === 'compact' && model) { applyScale(); state.targetX = model.x = innerWidth / 2; clampPosition(); }
+    }).catch(() => {});
     ipc.invoke('pet:config').then(cfg => {
       if (cfg && typeof cfg.scale === 'number') setUserScale(cfg.scale, false);
       if (cfg && (cfg.auto === 'off' || cfg.auto === 'light' || cfg.auto === 'heavy')) state.autoLevel = cfg.auto;
@@ -3038,7 +3088,7 @@ setInterval(fetchEmotion, 15000);
 window.addEventListener('resize', () => {
   applyScale();
   const hw = model ? modelHalfW() + 8 : 20;
-  state.targetX = Math.min(innerWidth - hw, Math.max(hw, state.targetX));
+  state.targetX = isCompactPet() ? innerWidth / 2 : Math.min(innerWidth - hw, Math.max(hw, state.targetX));
   // 重新定位打开的面板
   document.querySelectorAll('.nk-panel.show').forEach(p => {
     const btnId = { 'panel-audio': 'tb-voice', 'panel-tools': 'tb-tools', 'panel-settings': 'tb-settings', 'panel-sparkle': 'tb-sparkle' }[p.id];

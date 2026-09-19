@@ -68,6 +68,8 @@ export interface PetConfig {
   opacity: number         // 透明度 0~1
   scale: number           // 缩放 0.5~2.0
   auto: 'off' | 'light' | 'heavy'  // 自主行为级别：off 关闭 / light 轻度 / heavy 重度
+  x?: number              // compact 小窗口模式下记住的窗口左上角屏幕坐标（DIP）
+  y?: number
 }
 
 export interface PetEvent {
@@ -230,6 +232,8 @@ function ensurePetConfigLoaded(): void {
   if (typeof saved.scale === 'number') {config.scale = saved.scale}
   if (typeof saved.autoRestart === 'boolean') {config.autoRestart = saved.autoRestart}
   if (saved.auto === 'off' || saved.auto === 'light' || saved.auto === 'heavy') {config.auto = saved.auto}
+  if (typeof saved.x === 'number') {config.x = saved.x} // v6.4 compact 记住窗口位置
+  if (typeof saved.y === 'number') {config.y = saved.y}
 }
 function persistPetConfig(): void {
   const s = readPersistedPetState()
@@ -879,6 +883,33 @@ function setWindowClickThrough(enable: boolean): void {
 /**
  * 创建桌宠窗口
  */
+// ── v6.4 compact 物理小窗口（AIRI 式）：根治 Windows 全屏透明置顶窗压制 MPO 导致后方视频黑屏 ──
+// 旧模式是覆盖整屏的 layered 透明舞台，其全屏合成表面会让 DWM 退出硬件叠加（MPO），
+// 浏览器/播放器的硬件加速视频因此黑屏；SetWindowRgn(setShape) 对 Electron 的
+// DirectComposition 透明窗不可靠。新模式把窗口物理尺寸收缩到只包住角色，移动由主进程
+// setBounds 完成，小窗口不触发 MPO 退出。
+//   LUMINA_PET_WINDOW=fullscreen  回退旧全屏舞台；LUMINA_PET_WINDOW=compact 强制小窗口
+// 默认 Windows 用 compact；macOS/Linux 保持全屏（无该黑屏问题）。
+export const PET_WINDOW_W = 460
+export const PET_WINDOW_H = 720
+
+export function compactPetWindowEnabled(): boolean {
+  const mode = (process.env.LUMINA_PET_WINDOW || '').toLowerCase()
+  if (mode === 'fullscreen' || mode === 'legacy' || mode === '0') return false
+  if (mode === 'compact' || mode === '1') return true
+  return process.platform === 'win32'
+}
+
+/** 小窗口模式下把目标左上角钳制到显示器工作区内（避免拖出屏幕找不回），坐标为 DIP */
+function clampWindowPos(x: number, y: number, w: number, h: number): { x: number; y: number } {
+  const d = screen.getDisplayMatching({ x, y, width: w, height: h })
+  const a = d.workArea || d.bounds
+  return {
+    x: Math.round(Math.min(a.x + a.width - 60, Math.max(a.x - w + 60, x))),
+    y: Math.round(Math.min(a.y + a.height - 60, Math.max(a.y, y))),
+  }
+}
+
 export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow | null {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.show()
@@ -889,16 +920,35 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   ensurePetConfigLoaded()
 
   const display = screen.getPrimaryDisplay()
-  // 全屏舞台：覆盖整个屏幕（含任务栏区域），桌宠可在整块屏幕上活动
+  // v6.4：Windows 默认 compact 物理小窗口（只包住角色，不压制 MPO，后方视频不黑屏）；其余平台仍是全屏舞台
+  // compact 目前只适配 Live2D（pet-live2d.html）；自定义 VRM 形态暂回退全屏，避免小窗口布局错乱
+  const isCompact = compactPetWindowEnabled() && currentModelKind() !== 'vrm'
+  // 小屏（如 1366x768）保护：紧凑尺寸不超过工作区
+  const _wa = display.workArea
+  const winW = isCompact ? Math.min(PET_WINDOW_W, _wa.width - 20) : display.bounds.width
+  const winH = isCompact ? Math.min(PET_WINDOW_H, _wa.height - 20) : display.bounds.height
+  let winX = display.bounds.x
+  let winY = display.bounds.y
+  if (isCompact) {
+    const wa = display.workArea
+    const defX = wa.x + wa.width - PET_WINDOW_W - 36
+    const defY = wa.y + wa.height - PET_WINDOW_H - 36
+    winX = Number.isFinite(config.x) ? (config.x as number) : defX
+    winY = Number.isFinite(config.y) ? (config.y as number) : defY
+    const cPos = clampWindowPos(winX, winY, winW, winH)
+    winX = cPos.x; winY = cPos.y
+    console.log('[' + 'PetWindow' + '] compact 小窗口模式 ' + winW + 'x' + winH + '（不压制后方视频）；回退设 LUMINA_PET_WINDOW=fullscreen')
+  }
+  // 全屏舞台（非 compact）：覆盖整个屏幕（含任务栏区域），桌宠可在整块屏幕上活动
   const { x: workX, y: workY, width: screenWidth, height: screenHeight } = display.bounds
 
   const petCaps = currentPlatformCaps()
   if (petCaps.note) {console.log('[PetWindow] 平台能力：', petCaps.label, '-', petCaps.note)}
   petWindow = new BrowserWindow({
-    width: screenWidth,
-    height: screenHeight,
-    x: workX,
-    y: workY,
+    width: winW,
+    height: winH,
+    x: winX,
+    y: winY,
     transparent: petCaps.transparent,
     frame: false,
     alwaysOnTop: petCaps.alwaysOnTop,
@@ -1100,11 +1150,42 @@ export function registerPetIpc(): void {
       win.setIgnoreMouseEvents(!!ignore, { forward: true })
     }
   })
+  // ── v6.4 compact 小窗口：渲染层查询窗口模式（compact 时拖拽/移动走 setBounds）──
+  ipcMain.handle('pet:window-mode', () => {
+    // 与 createPetWindow 保持一致：VRM 形态暂回退全屏（compact 仅适配 Live2D）
+    return (compactPetWindowEnabled() && currentModelKind() !== 'vrm') ? 'compact' : 'fullscreen'
+  })
+  // compact 拖拽：渲染层给光标屏幕坐标 + 抓取点在窗口内偏移，主进程 setPosition（钳制工作区）
+  ipcMain.on('pet:window-move', (e, payload: { screenX?: number; screenY?: number; grabX?: number; grabY?: number }) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    const sx = Number(payload?.screenX), sy = Number(payload?.screenY)
+    const gx = Number(payload?.grabX) || 0, gy = Number(payload?.grabY) || 0
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
+    const [w, h] = win.getSize()
+    const c = clampWindowPos(Math.round(sx - gx), Math.round(sy - gy), w, h)
+    win.setPosition(c.x, c.y)
+  })
+  // compact 拖拽结束：持久化窗口位置
+  ipcMain.on('pet:window-move-end', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    const [x, y] = win.getPosition()
+    updatePetConfig({ x, y })
+  })
+  // compact 小窗口：定期把窗口位置写回配置（走路/边缘钳制等非拖拽场景也能记住位置）
+  ipcMain.on('pet:window-sync-pos', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    const [x, y] = win.getPosition()
+    if (config.x !== x || config.y !== y) { config.x = x; config.y = y; persistPetConfig() }
+  })
   // ── v6.2 窗口物理裁剪(setShape)：渲染页上报模型/UI 包围盒(物理像素)，把全屏透明舞台收缩到实际内容，
   //    避免全屏透明 WebGL 置顶窗占用 Windows 硬件叠加(MPO/DComp)，导致其后方视频/图片画面黑屏、花屏或不刷新。
   //    区域外窗口不渲染、不参与合成、不接收鼠标。macOS 不支持 setShape，直接忽略。
   ipcMain.on('pet:set-shape', (e, rects: Array<{ x: number; y: number; width: number; height: number }>) => {
     try {
+      if (compactPetWindowEnabled()) {return} // v6.4 compact 物理小窗口本就只包住角色，无需 SetWindowRgn（且对 DComp 透明窗不可靠）
       if (!currentPlatformCaps().setShape) {return} // 仅 Windows 支持 setShape；macOS/Linux 不裁剪
       const win = BrowserWindow.fromWebContents(e.sender)
       if (!win || win.isDestroyed()) {return}

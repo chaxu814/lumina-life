@@ -5,7 +5,7 @@
 // 覆盖四条关键分支：沉默 / 合法台词 / 坏 JSON 兜底 / LLM 抛错兜底，
 // 并断言产出的 action 一定是已知动作（不会下发一个页面不认识的动作）。
 // ============================================================
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // mock 掉真实 LLM 调用与连续情绪（保持纯逻辑测试，不碰 Electron/网络）
 vi.mock('../electron/proactive/resolveProactiveLLM', () => ({
@@ -40,6 +40,14 @@ const baseEvent = { source: 'autonomy_tick' as const }
 
 beforeEach(() => {
   mockedChat.mockReset()
+  // 固定为白天中午：enrichAction 在 23:00-6:00 会优先返回 sleep，
+  // 不固定时间会让「开心情绪保底 happy/wave」用例在夜间运行时偶发失败
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 0, 2, 12, 0, 0))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('generator 主动台词接线契约', () => {
