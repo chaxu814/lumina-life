@@ -607,10 +607,15 @@ export class ProactiveEngine extends EventEmitter {
     this.startOpportunityCheck()
 
     // 🧭 v6.1：配置并启动统一编排器（内驱力硬触发/退避/未答话头）
+    // 新行为开关默认开启；沿用现有 config 结构，未配置时全部 true。
     const orch = getProactiveOrchestrator()
     orch.configure({
       maxDaily: this.config.maxDailyProactive,
       minIntervalMs: this.config.minIntervalSeconds * 1000,
+      backoffEnabled: (this.config as any).backoffEnabled !== false,
+      driveHardTriggerEnabled: (this.config as any).driveHardTriggerEnabled !== false,
+      innerThoughtsEnabled: (this.config as any).innerThoughtsEnabled !== false,
+      followupTopicsEnabled: (this.config as any).followupTopicsEnabled !== false,
     })
     orch.start()
 
