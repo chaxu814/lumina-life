@@ -131,7 +131,7 @@ export class ProactiveOrchestrator {
       dailyCount: this.dailyCount,
       maxDaily: this.config.maxDaily,
       msSinceLastProactive: this.lastProactiveAt ? now - this.lastProactiveAt : Number.POSITIVE_INFINITY,
-      minIntervalMs: this.config.backoffEnabled ? Math.max(this.config.minIntervalMs, this.backoff.nextDelayMs(now)) : this.config.minIntervalMs,
+      minIntervalMs: this.config.backoffEnabled ? this.backoff.nextDelayMs(now) : this.config.minIntervalMs,
       cooldownMs: this.config.cooldownMs,
       petEnabled: isPetEnabled(),
       userSpeaking: this.userSpeaking,

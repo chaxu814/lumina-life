@@ -3063,14 +3063,7 @@ function startAutoBehavior() {
     ipc.invoke('pet:autonomy:tick').catch(() => {});
   }, 30 * 1000);
 
-  setInterval(() => {
-    if (state.sleeping || state.autoLevel === 'off' || prefs.proactive === false) return;
-    if (prefs.focusMode && document.hasFocus && !document.hasFocus()) return;
-    if (Math.random() < 0.25) {
-      const pool = ['想不想吃小蛋糕？', '要不要休息一下？', '今天也要加油喵~', '尾巴摇啊摇~', '刚刚做了一个梦…'];
-      say(pool[Math.floor(Math.random() * pool.length)]);
-    }
-  }, 45 * 1000);
+  // v6.1 已废弃：原 45s 随机写死搭话移除，主动发言统一走编排器 pet:autonomy:tick→onTrigger→LLM 现场生成
 
   setInterval(() => {
     if (state.sleeping || state.autoLevel !== 'heavy') return;
@@ -3081,15 +3074,7 @@ function startAutoBehavior() {
     else if (r < 0.75) { doWave(); }
   }, 18 * 1000);
 
-  setInterval(() => {
-    if (state.sleeping || state.autoLevel === 'off' || prefs.proactive === false) return;
-    if (prefs.focusMode && document.hasFocus && !document.hasFocus()) return;
-    if (Math.random() < 0.35) {
-      const topics = ['主人~你在忙什么呀？', '要不要起来走一走喵？', '我发现一个有意思的事想告诉你…', '要不要喝口水？别太累了喵。', '今天的心情怎么样呀？'];
-      const text = topics[Math.floor(Math.random() * topics.length)];
-      say(text); sendEvent('proactive-speak', { text });
-    }
-  }, 90 * 1000);
+  // v6.1 已废弃：原 90s 随机写死搭话移除，统一由编排器现场生成（退避/场景门控/记忆），避免死板重复
 
   setInterval(() => {
     if (state.sleeping || state.autoLevel === 'off' || prefs.privacyMode) return;
