@@ -24,6 +24,7 @@ import { UnfinishedThreadStore, isQuestion } from './unfinishedThread'
 import { shouldForceSpeak, shouldSleepMode } from './driveHardTrigger'
 import { generateInnerThoughts } from './innerThoughts'
 import { generateProactive } from './generator'
+import { FollowupTopicsStore, synthesizeFollowups } from './followupTopics'  // 📮 阶段四
 
 /** 编排器配置（从 proactiveEngine 透传默认值） */
 export interface OrchestratorConfig {
@@ -59,7 +60,9 @@ export class ProactiveOrchestrator {
   private lastProactiveAt = 0
   private userSpeaking = false
   private driveHardTimer: ReturnType<typeof setInterval> | null = null
+  private followupTimer: ReturnType<typeof setInterval> | null = null
   private started = false
+  private followups = new FollowupTopicsStore()  // 📮 阶段四
   private config: OrchestratorConfig = { ...DEFAULT_CONFIG }
   /** 阶段四注入：取「该提起的旧事」列表 */
   followupProvider: (() => string[]) | null = null
@@ -141,8 +144,10 @@ export class ProactiveOrchestrator {
       } catch { innerThought = '' }
     }
 
-    // ── followup 旧事（阶段四注入，此处先空）─────
-    const followups = this.followupProvider ? this.followupProvider() : []
+    // ── followup 旧事：开关开就从存储取前 3 条 ──
+    const followups = this.config.followupTopicsEnabled
+      ? this.followupProvider ? this.followupProvider() : this.followups.getActive(3)
+      : []
 
     // ── 现场生成 ────────────────────────────────
     const decision = await generateProactive(event, {
@@ -180,6 +185,12 @@ export class ProactiveOrchestrator {
     // 问句 → 挂起话头，等用户接
     if (intent.speech && isQuestion(intent.speech)) {
       this.threads.record(intent.speech, now)
+    }
+    // 这条台词自然接上了某条 followup → 标记已问，不再重复提起
+    if (intent.speech && this.config.followupTopicsEnabled) {
+      for (const t of followups) {
+        if (intent.speech.includes(t)) { this.followups.markAsked(t); break }
+      }
     }
     return decision
   }
@@ -220,11 +231,31 @@ export class ProactiveOrchestrator {
       }, 60_000)
       if (typeof (this.driveHardTimer as any)?.unref === 'function') (this.driveHardTimer as any).unref()
     }
+    // 📮 阶段四：每日 04:00 合成「该提起的旧事」
+    if (this.config.followupTopicsEnabled) {
+      const runDaily = () => { void (async () => {
+        try {
+          const topics = await synthesizeFollowups()
+          if (topics.length) this.followups.replaceWith(topics)
+        } catch { /* 合成失败保留旧列表 */ }
+      })() }
+      const scheduleNext = () => {
+        const now = new Date()
+        const next = new Date(now)
+        next.setHours(4, 0, 0, 0)
+        if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
+        const ms = next.getTime() - now.getTime()
+        this.followupTimer = setTimeout(() => { runDaily(); scheduleNext() }, ms)
+      }
+      scheduleNext()
+    }
   }
 
   stop(): void {
     if (this.driveHardTimer) clearInterval(this.driveHardTimer)
     this.driveHardTimer = null
+    if (this.followupTimer) clearTimeout(this.followupTimer)
+    this.followupTimer = null
     this.started = false
   }
 }
