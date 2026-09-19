@@ -73,15 +73,15 @@ function clamp(x: number, lo: number, hi: number): number {
 
 /** 把 LLM 原始 mood 文本归一到标准标签；无法识别返回 null */
 export function normalizeMoodLabel(raw: string | undefined | null): string | null {
-  if (!raw) return null
+  if (!raw) {return null}
   const text = String(raw).trim()
-  if (!text) return null
+  if (!text) {return null}
   // 1) 精确等于标准标签
   const exact = MOOD_POINTS.find(p => text === p.label)
-  if (exact) return exact.label
+  if (exact) {return exact.label}
   // 2) 关键字包含（按声明顺序，避免「开心」抢先匹配「超开心」）
   for (const p of MOOD_POINTS) {
-    if (p.keywords.some(k => text.includes(k))) return p.label
+    if (p.keywords.some(k => text.includes(k))) {return p.label}
   }
   return null
 }
@@ -108,7 +108,7 @@ function nearestLabelWithHysteresis(v: number, a: number, currentLabel: string, 
     if (cur) {
       const curD = dist(v, a, cur)
       // 当前标签没有明显更差（差距小于迟滞余量）就保持，防止抖动
-      if (curD <= bestD + hysteresis) return currentLabel
+      if (curD <= bestD + hysteresis) {return currentLabel}
     }
   }
   return best
@@ -125,7 +125,7 @@ export function fuseEmotionStep(
 ): EmotionState {
   const opt = { ...DEFAULTS, ...(options || {}) }
   const targetLabel = normalizeMoodLabel(rawTargetLabel)
-  if (!targetLabel) return { ...prev }
+  if (!targetLabel) {return { ...prev }}
 
   const target = pointOf(targetLabel)!
   // 1) EMA 惯性
@@ -182,7 +182,7 @@ export class PetEmotionFusion {
 
   /** 从持久化状态恢复（重启后延续情绪，而不是回到基线） */
   restore(saved: { v?: number; a?: number; label?: string } | undefined | null): void {
-    if (!saved) return
+    if (!saved) {return}
     this.state = {
       v: Number.isFinite(saved.v) ? Math.max(-1, Math.min(1, saved.v as number)) : BASELINE.v,
       a: Number.isFinite(saved.a) ? Math.max(0, Math.min(1, saved.a as number)) : BASELINE.a,

@@ -39,7 +39,7 @@ export default function TeamCommunityModal({ open, onClose }: TeamCommunityModal
     ? activeSection
     : (visibleItems[0]?.id ?? 'social')
 
-  if (!open) return null
+  if (!open) {return null}
 
   return (
     /* ── 背景遮罩 ── */

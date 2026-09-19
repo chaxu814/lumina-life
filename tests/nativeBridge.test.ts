@@ -209,18 +209,18 @@ function accumulateChunks(chunks: any[]) {
   const tools = new Map<number, { id: string; name: string; args: string }>()
   for (const ch of chunks) {
     const delta = ch.choices?.[0]?.delta
-    if (delta?.content) text += delta.content
+    if (delta?.content) {text += delta.content}
     if (delta?.tool_calls) {
       for (const tc of delta.tool_calls) {
         const i = tc.index ?? 0
-        if (!tools.has(i)) tools.set(i, { id: '', name: '', args: '' })
+        if (!tools.has(i)) {tools.set(i, { id: '', name: '', args: '' })}
         const a = tools.get(i)!
-        if (tc.id) a.id = tc.id
-        if (tc.function?.name) a.name = tc.function.name
-        if (tc.function?.arguments) a.args += tc.function.arguments
+        if (tc.id) {a.id = tc.id}
+        if (tc.function?.name) {a.name = tc.function.name}
+        if (tc.function?.arguments) {a.args += tc.function.arguments}
       }
     }
-    if (ch.choices?.[0]?.finish_reason) finish = ch.choices[0].finish_reason
+    if (ch.choices?.[0]?.finish_reason) {finish = ch.choices[0].finish_reason}
   }
   return { text, tools, finish }
 }

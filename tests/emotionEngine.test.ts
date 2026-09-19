@@ -90,7 +90,7 @@ function updateEmotion(
 function decayEmotion(current: EmotionState, minutes: number = 10): EmotionState {
   const decay = (current: number, target: number, rate: number): number => {
     const diff = target - current
-    if (Math.abs(diff) < 1) return target
+    if (Math.abs(diff) < 1) {return target}
     return current + diff * rate
   }
 
@@ -108,11 +108,11 @@ function decayEmotion(current: EmotionState, minutes: number = 10): EmotionState
  * 亲密度计算（基于互动次数和情绪）
  */
 function calcIntimacyLevel(score: number): IntimacyLevel {
-  if (score < 10) return { level: score, label: '陌生人' }
-  if (score < 30) return { level: score, label: ' acquaintance' }
-  if (score < 50) return { level: score, label: '朋友' }
-  if (score < 70) return { level: score, label: '好友' }
-  if (score < 90) return { level: score, label: '挚友' }
+  if (score < 10) {return { level: score, label: '陌生人' }}
+  if (score < 30) {return { level: score, label: ' acquaintance' }}
+  if (score < 50) {return { level: score, label: '朋友' }}
+  if (score < 70) {return { level: score, label: '好友' }}
+  if (score < 90) {return { level: score, label: '挚友' }}
   return { level: score, label: '灵魂伴侣' }
 }
 

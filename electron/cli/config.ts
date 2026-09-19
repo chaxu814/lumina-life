@@ -27,7 +27,7 @@ export async function handleConfig(args: string[]): Promise<{ ok: boolean; data?
   if (subcmd === 'set' && args.length >= 2) {
     const kv = args[1]
     const eqIdx = kv.indexOf('=')
-    if (eqIdx < 0) return { ok: false, error: '格式错误。使用: config set key=value' }
+    if (eqIdx < 0) {return { ok: false, error: '格式错误。使用: config set key=value' }}
 
     const key = kv.slice(0, eqIdx)
     const value = kv.slice(eqIdx + 1)

@@ -160,7 +160,7 @@ export class ModelCapabilityCache {
   private _load(): CapabilityStore {
     try {
       const dir = path.dirname(this.cachePath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       if (fs.existsSync(this.cachePath)) {
         const raw = fs.readFileSync(this.cachePath, 'utf-8')
         return JSON.parse(raw)
@@ -175,7 +175,7 @@ export class ModelCapabilityCache {
     try {
       this.store.updatedAt = new Date().toISOString()
       const dir = path.dirname(this.cachePath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       fs.writeFileSync(this.cachePath, JSON.stringify(this.store, null, 2), 'utf-8')
     } catch (err: any) {
       console.warn('[ModelCache] 保存缓存失败:', err.message)

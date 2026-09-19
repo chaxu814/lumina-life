@@ -46,7 +46,7 @@ async function walkDir(
   prefix: string
 ): Promise<string[]> {
   const results: string[] = []
-  if (maxDepth < 0 || results.length >= maxEntries) return results
+  if (maxDepth < 0 || results.length >= maxEntries) {return results}
 
   let entries: fs.Dirent[]
   try {
@@ -60,13 +60,13 @@ async function walkDir(
   const files = entries.filter(e => e.isFile())
 
   for (const entry of [...dirs, ...files]) {
-    if (results.length >= maxEntries) break
+    if (results.length >= maxEntries) {break}
     const type = entry.isDirectory() ? '[DIR]' : '[FILE]'
     const fullPath = path.join(dir, entry.name)
 
     if (pattern && !entry.isDirectory()) {
       const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
-      if (!regex.test(entry.name)) continue
+      if (!regex.test(entry.name)) {continue}
     }
 
     results.push(`${prefix}${type} ${entry.name}`)
@@ -116,7 +116,7 @@ export async function fileList(args: Record<string, any>): Promise<ToolResult> {
         const type = entry.isDirectory() ? '[DIR]' : '[FILE]'
         if (pattern && !entry.isDirectory()) {
           const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
-          if (!regex.test(entry.name)) continue
+          if (!regex.test(entry.name)) {continue}
         }
         items.push(`${type} ${entry.name}`)
       }

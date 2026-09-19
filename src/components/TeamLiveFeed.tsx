@@ -34,9 +34,9 @@ const MOOD_ACTIONS: Record<string, string[]> = {
   upset: ['不太开心 😔', '需要休息一下', '情绪有点低落'],
 }
 function randomAction(mood: number): string {
-  if (mood > 0.6) return MOOD_ACTIONS.high[Math.floor(Math.random() * MOOD_ACTIONS.high.length)]
-  if (mood > 0.2) return MOOD_ACTIONS.good[Math.floor(Math.random() * MOOD_ACTIONS.good.length)]
-  if (mood > -0.3) return MOOD_ACTIONS.low[Math.floor(Math.random() * MOOD_ACTIONS.low.length)]
+  if (mood > 0.6) {return MOOD_ACTIONS.high[Math.floor(Math.random() * MOOD_ACTIONS.high.length)]}
+  if (mood > 0.2) {return MOOD_ACTIONS.good[Math.floor(Math.random() * MOOD_ACTIONS.good.length)]}
+  if (mood > -0.3) {return MOOD_ACTIONS.low[Math.floor(Math.random() * MOOD_ACTIONS.low.length)]}
   return MOOD_ACTIONS.upset[Math.floor(Math.random() * MOOD_ACTIONS.upset.length)]
 }
 
@@ -65,7 +65,7 @@ export default function TeamLiveFeed() {
 
     const unsub = onEmotionChange((agentId, emotion) => {
       const meta = AGENT_META[agentId]
-      if (!meta) return
+      if (!meta) {return}
       const entry: TeamActivity = {
         id: nextId(),
         agentId,
@@ -87,9 +87,9 @@ export default function TeamLiveFeed() {
   useEffect(() => {
     const onStatus = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      if (!detail?.agentId) return
+      if (!detail?.agentId) {return}
       const meta = AGENT_META[detail.agentId]
-      if (!meta) return
+      if (!meta) {return}
       const status = detail.status || ''
       const statusLabels: Record<string, string> = {
         busy: '忙碌中 ⏰', away: '暂时离开 🚶', focus: '专注模式 🎯',
@@ -116,7 +116,7 @@ export default function TeamLiveFeed() {
   // ── 新条目自动滚到底 ─────────────────────────────────
   useEffect(() => {
     const el = containerRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el) {el.scrollTop = el.scrollHeight}
   }, [activities])
 
   // ── 显示最新的 5 条 ──────────────────────────────────

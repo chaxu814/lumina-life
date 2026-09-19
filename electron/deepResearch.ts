@@ -102,7 +102,7 @@ export class DeepResearch {
     // 2. 多轮搜索
     for (let round = 0; round < (this.config.maxRounds || 3); round++) {
       const queries = round === 0 ? subQuestions : await this.discoverNewQueries(question, allSources)
-      if (queries.length === 0) break
+      if (queries.length === 0) {break}
 
       onProgress?.(`🔎 第 ${round + 1} 轮搜索 (${queries.length} 条查询)...`)
 
@@ -395,7 +395,7 @@ ${findingsText}
     const seen = new Set<string>()
     return sources.filter(s => {
       const key = s.url || s.title
-      if (seen.has(key)) return false
+      if (seen.has(key)) {return false}
       seen.add(key)
       return true
     })
@@ -454,7 +454,7 @@ ${report.searchQueries.map(q => `- ${q}`).join('\n')}
     const baseUrl = this.config.llmBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com'
     const model = this.config.llmModel || process.env.LLM_MODEL || 'gpt-4o-mini'
 
-    if (!apiKey) return ''
+    if (!apiKey) {return ''}
 
     const url = new URL(baseUrl.replace(/\/+$/, '') + '/chat/completions')
     const isHttps = url.protocol === 'https:'
@@ -525,6 +525,6 @@ export function initDeepResearch(config?: DRConfig): DeepResearch {
 }
 
 export function getDeepResearch(): DeepResearch {
-  if (!_instance) _instance = new DeepResearch()
+  if (!_instance) {_instance = new DeepResearch()}
   return _instance
 }

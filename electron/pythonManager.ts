@@ -34,7 +34,7 @@ interface PythonManagerState {
   healthCheckTimer: ReturnType<typeof setInterval> | null
 }
 
-let state: PythonManagerState = {
+const state: PythonManagerState = {
   process: null,
   running: false,
   healthy: false,
@@ -154,7 +154,7 @@ async function killProcessOnPort(port: number): Promise<void> {
       `netstat -ano | findstr "LISTENING" | findstr ":${port} "`,
       { timeout: 3000, encoding: 'utf8' }
     ).toString().trim()
-    if (!result) return
+    if (!result) {return}
 
     // 提取 PID（最后一列）
     const lines = result.split('\n')
@@ -162,7 +162,7 @@ async function killProcessOnPort(port: number): Promise<void> {
     for (const line of lines) {
       const parts = line.trim().split(/\s+/)
       const pid = parseInt(parts[parts.length - 1], 10)
-      if (!isNaN(pid) && pid > 0) pids.add(pid)
+      if (!isNaN(pid) && pid > 0) {pids.add(pid)}
     }
 
     for (const pid of pids) {
@@ -213,14 +213,14 @@ export async function startPythonServices(): Promise<boolean> {
     proc.stdout?.on('data', (data: Buffer) => {
       const lines = data.toString().trim().split('\n')
       for (const line of lines) {
-        if (line) log(`[stdout] ${line}`)
+        if (line) {log(`[stdout] ${line}`)}
       }
     })
 
     proc.stderr?.on('data', (data: Buffer) => {
       const lines = data.toString().trim().split('\n')
       for (const line of lines) {
-        if (line) error(`[stderr] ${line}`)
+        if (line) {error(`[stderr] ${line}`)}
       }
     })
 
@@ -288,7 +288,7 @@ export function stopPythonServices(): void {
       proc.kill('SIGTERM')
       // 给 3 秒优雅退出，超时强制 kill
       setTimeout(() => {
-        if (!proc.killed) proc.kill('SIGKILL')
+        if (!proc.killed) {proc.kill('SIGKILL')}
       }, 3000)
     }
   } catch (err: any) {

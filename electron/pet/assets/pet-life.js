@@ -160,8 +160,12 @@ var LuminaLife = (() => {
     const supported = /* @__PURE__ */ new Set();
     const groups = /* @__PURE__ */ new Set();
     for (const p of params) {
-      if (p && typeof p.Id === "string") supported.add(p.Id);
-      if (p && typeof p.GroupId === "string") groups.add(p.GroupId);
+      if (p && typeof p.Id === "string") {
+        supported.add(p.Id);
+      }
+      if (p && typeof p.GroupId === "string") {
+        groups.add(p.GroupId);
+      }
     }
     const channelMap = {};
     for (const ch of STANDARD_CHANNELS) {
@@ -171,7 +175,9 @@ var LuminaLife = (() => {
         continue;
       }
       const cand = genericCandidates(ch).find((id) => supported.has(id));
-      if (cand) channelMap[ch] = cand;
+      if (cand) {
+        channelMap[ch] = cand;
+      }
     }
     return { modelName, supported, channelMap, groups: Array.from(groups) };
   }
@@ -193,9 +199,13 @@ var LuminaLife = (() => {
   function toParamPatches(profile, pose) {
     const out = [];
     for (const ch of STANDARD_CHANNELS) {
-      if (!(ch in pose) || pose[ch] === void 0) continue;
+      if (!(ch in pose) || pose[ch] === void 0) {
+        continue;
+      }
       const id = resolveParamId(profile, ch);
-      if (!id) continue;
+      if (!id) {
+        continue;
+      }
       const [lo, hi] = CHANNEL_RANGES[ch];
       const value = Math.max(lo, Math.min(hi, pose[ch]));
       out.push({ id, value });
@@ -249,7 +259,9 @@ var LuminaLife = (() => {
     /** action 层当前 envelope（淡入淡出 0~1）；fadeMs<=0 表示无淡变恒为 1 */
     envelope(l, now) {
       const fade = l.fadeMs && l.fadeMs > 0 ? l.fadeMs : null;
-      if (!fade) return 1;
+      if (!fade) {
+        return 1;
+      }
       const fadeIn = clamp((now - l.bornAt) / fade, 0, 1);
       const fadeOut = l.expiresAt === void 0 ? 1 : clamp((l.expiresAt - now) / fade, 0, 1);
       return Math.min(fadeIn, fadeOut);
@@ -257,7 +269,9 @@ var LuminaLife = (() => {
     /** 计算某一帧最终姿态（纯状态推进；now 注入） */
     frame(now) {
       for (const [id, l] of Array.from(this.layers)) {
-        if (l.expiresAt !== void 0 && now >= l.expiresAt) this.layers.delete(id);
+        if (l.expiresAt !== void 0 && now >= l.expiresAt) {
+          this.layers.delete(id);
+        }
       }
       const ordered = Object.keys(LAYER_PRIORITY).filter((id) => this.layers.has(id)).sort((a, b) => LAYER_PRIORITY[a] - LAYER_PRIORITY[b]);
       const out = {};
@@ -267,13 +281,21 @@ var LuminaLife = (() => {
         for (const id of ordered) {
           const l = this.layers.get(id);
           const val = l.pose[ch];
-          if (val === void 0) continue;
+          if (val === void 0) {
+            continue;
+          }
           let w = clamp(l.weight, 0, 1);
-          if (id === "action") w *= this.envelope(l, now);
-          if (w <= 1e-3) continue;
+          if (id === "action") {
+            w *= this.envelope(l, now);
+          }
+          if (w <= 1e-3) {
+            continue;
+          }
           acc = acc === void 0 ? val : lerp(acc, val, w);
         }
-        if (acc !== void 0) out[ch] = acc;
+        if (acc !== void 0) {
+          out[ch] = acc;
+        }
       }
       if (this.blinkAmount > 0) {
         const k = 1 - this.blinkAmount;
@@ -282,7 +304,9 @@ var LuminaLife = (() => {
       }
       const result = {};
       for (const ch of channels) {
-        if (!(ch in out)) continue;
+        if (!(ch in out)) {
+          continue;
+        }
         const [lo, hi] = CHANNEL_RANGES[ch];
         const target = clamp(out[ch], lo, hi);
         const prevVal = this.prev[ch];
@@ -349,9 +373,13 @@ var LuminaLife = (() => {
   function visemePose(viseme, open = 1) {
     const o = clamp01(open);
     const base = { visemeA: 0, visemeI: 0, visemeU: 0, visemeE: 0, visemeO: 0, mouthAngry: 0 };
-    if (viseme === "rest") return base;
+    if (viseme === "rest") {
+      return base;
+    }
     base[`viseme${viseme}`] = o;
-    if (viseme === "U") base.mouthAngry = 0.25 * o;
+    if (viseme === "U") {
+      base.mouthAngry = 0.25 * o;
+    }
     return base;
   }
   function gazePose(x, y, headFollow = 0.25) {
@@ -384,10 +412,16 @@ var LuminaLife = (() => {
   };
   var MOOD_LIST = Object.keys(MOOD_COORDS);
   function normalizeMood(raw) {
-    if (typeof raw !== "string") return null;
+    if (typeof raw !== "string") {
+      return null;
+    }
     const t = raw.trim();
-    if (!t) return null;
-    if (MOOD_LIST.includes(t)) return t;
+    if (!t) {
+      return null;
+    }
+    if (MOOD_LIST.includes(t)) {
+      return t;
+    }
     const table = [
       ["超开心 🎉", ["超开心", "超级开心"]],
       ["兴奋 🤩", ["兴奋", "激动"]],
@@ -400,7 +434,9 @@ var LuminaLife = (() => {
       ["疲惫 😩", ["疲惫", "累", "困", "倦", "无力"]]
     ];
     for (const [label, keys] of table) {
-      if (keys.some((k) => t.includes(k))) return label;
+      if (keys.some((k) => t.includes(k))) {
+        return label;
+      }
     }
     return null;
   }
@@ -487,7 +523,9 @@ var LuminaLife = (() => {
         continue;
       }
       if (CN_DIPHTHONG[ch]) {
-        for (const v of CN_DIPHTHONG[ch]) tokens.push({ kind: "viseme", viseme: v, dur: charMs * 0.7 });
+        for (const v of CN_DIPHTHONG[ch]) {
+          tokens.push({ kind: "viseme", viseme: v, dur: charMs * 0.7 });
+        }
         continue;
       }
       if (CN_VOWEL[ch]) {
@@ -536,7 +574,9 @@ var LuminaLife = (() => {
   }
   function sampleViseme(segs, atMs) {
     for (const s of segs) {
-      if (atMs >= s.start && atMs < s.end) return { viseme: s.viseme, open: s.open };
+      if (atMs >= s.start && atMs < s.end) {
+        return { viseme: s.viseme, open: s.open };
+      }
     }
     return { viseme: "rest", open: 0 };
   }
@@ -594,25 +634,42 @@ var LuminaLife = (() => {
   }
   function parsePerformance(input) {
     const errors = [];
-    if (!isObj(input)) return { ok: false, command: null, errors: ["performance 必须是对象"] };
+    if (!isObj(input)) {
+      return { ok: false, command: null, errors: ["performance 必须是对象"] };
+    }
     const command = { durationMs: 1200, blend: "override" };
     if (input.expression !== void 0) {
       const mood = normalizeMood(input.expression);
-      if (mood) command.expression = mood;
-      else if (typeof input.expression === "string" && BASIC_EXPRESSIONS.includes(input.expression))
+      if (mood) {
+        command.expression = mood;
+      } else if (typeof input.expression === "string" && BASIC_EXPRESSIONS.includes(input.expression)) {
         command.expression = input.expression;
-      else errors.push(`未知 expression: ${String(input.expression)}`);
+      } else {
+        errors.push(`未知 expression: ${String(input.expression)}`);
+      }
     }
     if (input.gaze !== void 0) {
       if (isObj(input.gaze)) {
         const g = {};
         const t = asGazeTarget(input.gaze.target);
-        if (input.gaze.target !== void 0 && !t) errors.push(`未知 gaze.target: ${String(input.gaze.target)}`);
-        if (t) g.target = t;
-        if (typeof input.gaze.x === "number") g.x = clamp4(input.gaze.x, -1, 1);
-        if (typeof input.gaze.y === "number") g.y = clamp4(input.gaze.y, -1, 1);
-        if (g.target !== void 0 || g.x !== void 0 || g.y !== void 0) command.gaze = g;
-      } else errors.push("gaze 必须是对象");
+        if (input.gaze.target !== void 0 && !t) {
+          errors.push(`未知 gaze.target: ${String(input.gaze.target)}`);
+        }
+        if (t) {
+          g.target = t;
+        }
+        if (typeof input.gaze.x === "number") {
+          g.x = clamp4(input.gaze.x, -1, 1);
+        }
+        if (typeof input.gaze.y === "number") {
+          g.y = clamp4(input.gaze.y, -1, 1);
+        }
+        if (g.target !== void 0 || g.x !== void 0 || g.y !== void 0) {
+          command.gaze = g;
+        }
+      } else {
+        errors.push("gaze 必须是对象");
+      }
     }
     const rawGesture = typeof input.gesture === "string" ? { name: input.gesture } : input.gesture;
     if (rawGesture !== void 0) {
@@ -624,30 +681,50 @@ var LuminaLife = (() => {
             intensity: typeof rawGesture.intensity === "number" ? clamp4(rawGesture.intensity, 0, 1) : 1,
             builtin: BUILTIN_GESTURES.includes(name)
           };
-        } else errors.push(`手势不在白名单: ${name}`);
-      } else if (input.gesture !== void 0) errors.push("gesture 必须是字符串或 {name,intensity}");
+        } else {
+          errors.push(`手势不在白名单: ${name}`);
+        }
+      } else if (input.gesture !== void 0) {
+        errors.push("gesture 必须是字符串或 {name,intensity}");
+      }
     }
     if (input.headTilt !== void 0) {
-      if (typeof input.headTilt === "number") command.headTilt = clamp4(input.headTilt, -1, 1);
-      else errors.push("headTilt 必须是数字");
+      if (typeof input.headTilt === "number") {
+        command.headTilt = clamp4(input.headTilt, -1, 1);
+      } else {
+        errors.push("headTilt 必须是数字");
+      }
     }
     if (input.motion !== void 0) {
-      if (typeof input.motion === "string" && /^[a-zA-Z0-9_-]{1,40}$/.test(input.motion)) command.motion = input.motion;
-      else errors.push(`非法 motion: ${String(input.motion)}`);
+      if (typeof input.motion === "string" && /^[a-zA-Z0-9_-]{1,40}$/.test(input.motion)) {
+        command.motion = input.motion;
+      } else {
+        errors.push(`非法 motion: ${String(input.motion)}`);
+      }
     }
     const rawEffect = typeof input.effect === "string" ? { name: input.effect } : input.effect;
     if (rawEffect !== void 0) {
       if (isObj(rawEffect) && typeof rawEffect.name === "string") {
         const name = rawEffect.name;
-        if (EFFECT_WHITELIST.has(name))
+        if (EFFECT_WHITELIST.has(name)) {
           command.effect = { name, amount: typeof rawEffect.amount === "number" ? clamp4(rawEffect.amount, 0, 1) : 0.8 };
-        else errors.push(`特效不在白名单: ${name}`);
-      } else if (input.effect !== void 0) errors.push("effect 必须是字符串或 {name,amount}");
+        } else {
+          errors.push(`特效不在白名单: ${name}`);
+        }
+      } else if (input.effect !== void 0) {
+        errors.push("effect 必须是字符串或 {name,amount}");
+      }
     }
-    if (typeof input.durationMs === "number") command.durationMs = clamp4(Math.round(input.durationMs), 300, 6e3);
-    if (input.blend === "add" || input.blend === "override") command.blend = input.blend;
+    if (typeof input.durationMs === "number") {
+      command.durationMs = clamp4(Math.round(input.durationMs), 300, 6e3);
+    }
+    if (input.blend === "add" || input.blend === "override") {
+      command.blend = input.blend;
+    }
     const hasAny = ["expression", "gaze", "gesture", "headTilt", "motion", "effect"].some((k) => command[k] !== void 0);
-    if (!hasAny) return { ok: false, command: null, errors: [...errors, "performance 没有任何有效字段"] };
+    if (!hasAny) {
+      return { ok: false, command: null, errors: [...errors, "performance 没有任何有效字段"] };
+    }
     return { ok: true, command, errors };
   }
   function safePerformance(input) {
@@ -657,7 +734,9 @@ var LuminaLife = (() => {
 
   // electron/pet/life/alphaTrim.ts
   function scanAlphaBounds(rgba, bw, bh, opts = {}) {
-    if (!rgba || bw <= 0 || bh <= 0) return null;
+    if (!rgba || bw <= 0 || bh <= 0) {
+      return null;
+    }
     const step = Math.max(1, Math.round(opts.step ?? 2));
     const ALPHA = opts.alphaThreshold ?? 28;
     const cap = opts.maxSide ?? 0.45;
@@ -668,14 +747,24 @@ var LuminaLife = (() => {
       for (let sx = 0; sx < bw; sx += step) {
         const a = rgba[rowBase + sx * 4 + 3];
         if (a > ALPHA) {
-          if (sx < minX) minX = sx;
-          if (sx > maxX) maxX = sx;
-          if (sy < minY) minY = sy;
-          if (sy > maxY) maxY = sy;
+          if (sx < minX) {
+            minX = sx;
+          }
+          if (sx > maxX) {
+            maxX = sx;
+          }
+          if (sy < minY) {
+            minY = sy;
+          }
+          if (sy > maxY) {
+            maxY = sy;
+          }
         }
       }
     }
-    if (maxX < 0) return null;
+    if (maxX < 0) {
+      return null;
+    }
     const l = Math.min(cap, Math.max(0, (minX - step) / bw));
     const r = Math.min(cap, Math.max(0, (bw - 1 - maxX - step) / bw));
     const t = Math.min(cap, Math.max(0, (minY - step) / bh));
@@ -757,12 +846,16 @@ var LuminaLife = (() => {
      * 元音形状仍按文本，张度改由真实语音能量驱动、停顿自动闭合。
      */
     setSpeechLevel(level) {
-      if (!this.speaking) return;
+      if (!this.speaking) {
+        return;
+      }
       this.levelMode = true;
       this.speechLevel = clamp012(level);
     }
     isSpeaking(now) {
-      if (!this.speaking) return false;
+      if (!this.speaking) {
+        return false;
+      }
       const last = this.segs[this.segs.length - 1];
       return now - this.speakStart <= (last?.end ?? 0) + 200;
     }
@@ -777,7 +870,9 @@ var LuminaLife = (() => {
     /** 只有实时音频电平（无文本/音素）时，按能量张合嘴（默认 A 元音） */
     setAudioLevel(level, now) {
       this.audioOpen = opennessFromRms(clamp012(level), this.audioOpen);
-      if (this.speaking) return;
+      if (this.speaking) {
+        return;
+      }
       if (this.audioOpen > 0.05) {
         this.mixer.setLayer("speech", visemePose("A", this.audioOpen), { weight: 1, now });
       } else {
@@ -787,11 +882,15 @@ var LuminaLife = (() => {
     /** 执行一条高层表演指令；返回需要渲染层补做的事（内置动作/特效/motion） */
     perform(input, now) {
       const cmd = safePerformance(input);
-      if (!cmd) return {};
+      if (!cmd) {
+        return {};
+      }
       const hints = {};
       if (cmd.expression) {
         const m = normalizeMood(cmd.expression);
-        if (m) this.setMood(m, now);
+        if (m) {
+          this.setMood(m, now);
+        }
       }
       if (cmd.gaze) {
         const tx = cmd.gaze.x ?? gazeTargetX(cmd.gaze.target);
@@ -799,7 +898,9 @@ var LuminaLife = (() => {
         this.setGaze(tx, ty, now, cmd.durationMs);
       }
       const actionPose = {};
-      if (cmd.headTilt !== void 0) actionPose.headRoll = cmd.headTilt * 12;
+      if (cmd.headTilt !== void 0) {
+        actionPose.headRoll = cmd.headTilt * 12;
+      }
       if (cmd.gesture && !cmd.gesture.builtin) {
         Object.assign(actionPose, parametricGesture(cmd.gesture.name, cmd.gesture.intensity));
       }
@@ -810,8 +911,12 @@ var LuminaLife = (() => {
         hints.gesture = cmd.gesture.name;
         hints.builtin = cmd.gesture.builtin;
       }
-      if (cmd.effect) hints.effect = cmd.effect;
-      if (cmd.motion) hints.motion = cmd.motion;
+      if (cmd.effect) {
+        hints.effect = cmd.effect;
+      }
+      if (cmd.motion) {
+        hints.motion = cmd.motion;
+      }
       return hints;
     }
     /** 每帧推进，返回可直接 setParameterValueById 的参数补丁 */
@@ -825,10 +930,13 @@ var LuminaLife = (() => {
         if (this.blinkStart >= 0) {
           const t = now - this.blinkStart;
           let amount = 0;
-          if (t < 70) amount = t / 70;
-          else if (t < 150) amount = 1;
-          else if (t < 220) amount = 1 - (t - 150) / 70;
-          else {
+          if (t < 70) {
+            amount = t / 70;
+          } else if (t < 150) {
+            amount = 1;
+          } else if (t < 220) {
+            amount = 1 - (t - 150) / 70;
+          } else {
             this.blinkStart = -1;
             amount = 0;
           }
@@ -851,14 +959,24 @@ var LuminaLife = (() => {
     }
   };
   function gazeTargetX(t) {
-    if (t === "left") return -0.8;
-    if (t === "right") return 0.8;
-    if (t === "user") return 0;
+    if (t === "left") {
+      return -0.8;
+    }
+    if (t === "right") {
+      return 0.8;
+    }
+    if (t === "user") {
+      return 0;
+    }
     return 0;
   }
   function gazeTargetY(t) {
-    if (t === "up") return -0.6;
-    if (t === "down") return 0.6;
+    if (t === "up") {
+      return -0.6;
+    }
+    if (t === "down") {
+      return 0.6;
+    }
     return 0;
   }
   return __toCommonJS(runtime_exports);

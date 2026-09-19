@@ -405,6 +405,6 @@ export function getRecommendedAgent(taskType: TaskType): string {
 /** 根据任务类型获取可选的执行者列表 */
 export function getAvailableAgents(taskType: TaskType) {
   const card = TASK_TYPE_CARDS.find(c => c.id === taskType)
-  if (!card) return TEAM_MEMBERS
+  if (!card) {return TEAM_MEMBERS}
   return TEAM_MEMBERS.filter(m => card.preferredAgents.includes(m.id))
 }

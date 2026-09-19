@@ -76,7 +76,7 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
   let nextBlink = 2 + Math.random() * 3
   let blinkTimer = 0
   function updateBlink(dt: number, t: number) {
-    if (!vrm?.expressionManager) return
+    if (!vrm?.expressionManager) {return}
     blinkTimer += dt
     if (blinkTimer > nextBlink) {
       // 一次眨眼 ~0.16s，用正弦在 0..1..0 间闭合
@@ -96,15 +96,15 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
     renderer.setSize(w, h, false)
     camera.left = -w / 2; camera.right = w / 2; camera.top = h / 2; camera.bottom = -h / 2
     camera.updateProjectionMatrix()
-    if (vrm) placeAndReport(w, h, dpr)
+    if (vrm) {placeAndReport(w, h, dpr)}
   }
 
   function placeAndReport(viewW: number, viewH: number, dpr: number) {
-    if (!vrm) return
+    if (!vrm) {return}
     const box = new THREE.Box3().setFromObject(vrm.scene)
     const size = new THREE.Vector3()
     box.getSize(size)
-    if (!size.y || !size.x) return
+    if (!size.y || !size.x) {return}
     const aspect = size.x / size.y
     const px = characterPixelSize(aspect, viewW, viewH, opts.layout)
     const scale = px.height / size.y
@@ -127,17 +127,17 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
   loader.load(
     opts.url,
     (gltf) => {
-      if (disposed) return
+      if (disposed) {return}
       vrm = gltf.userData.vrm as VRM
       if (!vrm) { opts.onError?.('文件不是有效的 VRM 模型'); return }
       VRMUtils.removeUnnecessaryVertices(gltf.scene)
       // VRM 0.x 朝向修正；VRM 1.0 加载器已转正
-      if ((vrm as any).meta?.specVersion?.startsWith?.('0')) VRMUtils.rotateVRM0(vrm)
+      if ((vrm as any).meta?.specVersion?.startsWith?.('0')) {VRMUtils.rotateVRM0(vrm)}
       root.add(gltf.scene)
       resize()
     },
     (ev) => {
-      if (ev.total > 0) opts.onProgress?.(Math.round((ev.loaded / ev.total) * 100))
+      if (ev.total > 0) {opts.onProgress?.(Math.round((ev.loaded / ev.total) * 100))}
     },
     (err: any) => {
       opts.onError?.(String(err?.message || err || 'VRM 加载失败'))
@@ -148,7 +148,7 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
   let raf = 0
   function tick() {
     raf = requestAnimationFrame(tick)
-    if (disposed) return
+    if (disposed) {return}
     const dt = Math.min(clock.getDelta(), 0.05)
     const t = clock.elapsedTime
     if (vrm) {
@@ -157,7 +157,7 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
       const chest = vrm.humanoid?.getNormalizedBoneNode?.('chest')
       const spine = vrm.humanoid?.getNormalizedBoneNode?.('spine')
       const bone = chest || spine
-      if (bone) bone.scale.set(1 + breath, 1 + breath * 0.4, 1 + breath)
+      if (bone) {bone.scale.set(1 + breath, 1 + breath * 0.4, 1 + breath)}
       // 待机：上半身轻微左右摆动 + 头部
       root.rotation.z = Math.sin(t * 0.55) * 0.015
       const head = vrm.humanoid?.getNormalizedBoneNode?.('head')
@@ -193,7 +193,7 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
       vrm?.scene?.traverse((o: any) => {
-        if (o.geometry) o.geometry.dispose?.()
+        if (o.geometry) {o.geometry.dispose?.()}
         if (o.material) {
           const mats = Array.isArray(o.material) ? o.material : [o.material]
           mats.forEach((m: any) => m.dispose?.())

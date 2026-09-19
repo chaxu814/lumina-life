@@ -25,13 +25,13 @@ export default function LoopToast() {
 
   // 5 秒自动消失
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {return}
     const timer = setTimeout(() => handleClose(), 8000)
     return () => clearTimeout(timer)
   }, [visible])
 
   const handleClose = useCallback(() => {
-    if (!visible) return
+    if (!visible) {return}
     setExiting(true)
     setTimeout(() => {
       dismissToast(visible.id)
@@ -40,7 +40,7 @@ export default function LoopToast() {
     }, 300) // 动画时间
   }, [visible, dismissToast])
 
-  if (!visible) return null
+  if (!visible) {return null}
 
   const elapsed = Math.round((Date.now() - visible.createdAt) / 1000)
   const elapsedStr = elapsed < 60 ? `${elapsed}s 前` : `${Math.round(elapsed / 60)}m 前`

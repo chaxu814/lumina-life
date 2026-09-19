@@ -37,7 +37,7 @@ export class AgentWorkspaceManager {
 
   /** 初始化所有 Agent 工作区 */
   initialize(): void {
-    if (this._initialized) return
+    if (this._initialized) {return}
     
     console.log('[AgentWorkspace] 🚀 初始化 Agent 工作区...')
     

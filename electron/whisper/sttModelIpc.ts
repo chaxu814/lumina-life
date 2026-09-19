@@ -46,7 +46,7 @@ function dirSizeMB(dir: string): number {
       const cur = stack.pop()!
       for (const ent of fs.readdirSync(cur, { withFileTypes: true })) {
         const full = path.join(cur, ent.name)
-        if (ent.isDirectory()) stack.push(full)
+        if (ent.isDirectory()) {stack.push(full)}
         else { try { total += fs.statSync(full).size } catch { /* ignore */ } }
       }
     }
@@ -58,13 +58,13 @@ function dirSizeMB(dir: string): number {
 export function isModelReady(): boolean {
   try {
     const dir = modelDir()
-    if (!fs.existsSync(path.join(dir, 'config.json'))) return false
+    if (!fs.existsSync(path.join(dir, 'config.json'))) {return false}
     let hasOnnx = false
     const walk = (d: string, depth: number): void => {
-      if (hasOnnx || depth > 3) return
+      if (hasOnnx || depth > 3) {return}
       for (const ent of fs.readdirSync(d, { withFileTypes: true })) {
         const full = path.join(d, ent.name)
-        if (ent.isDirectory()) walk(full, depth + 1)
+        if (ent.isDirectory()) {walk(full, depth + 1)}
         else if (ent.name.endsWith('.onnx')) { hasOnnx = true; return }
       }
     }
@@ -96,11 +96,11 @@ export function registerSttModelIpc(getWin: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('stt:download-model', async () => {
-    if (downloading) return { ok: false, error: 'already-downloading' }
+    if (downloading) {return { ok: false, error: 'already-downloading' }}
     if (!isTransformersPresent()) {
       return { ok: false, error: '缺少 @xenova/transformers 依赖（打包版本应已内置）' }
     }
-    if (isModelReady()) return { ok: true, alreadyReady: true, ...getOfflineStatus() }
+    if (isModelReady()) {return { ok: true, alreadyReady: true, ...getOfflineStatus() }}
 
     downloading = true
     const send = (payload: any) => { try { getWin()?.webContents.send('stt:download-progress', payload) } catch { /* ignore */ } }

@@ -17,7 +17,7 @@ export interface VrmLayoutOptions {
 
 /** 等比缩放到不超过最大高/宽 */
 export function scaleToFit(srcW: number, srcH: number, maxH: number, maxW: number): number {
-  if (!srcW || !srcH) return 1
+  if (!srcW || !srcH) {return 1}
   return Math.min(maxH / srcH, maxW / srcW)
 }
 

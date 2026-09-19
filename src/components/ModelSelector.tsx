@@ -14,7 +14,7 @@ const QUICK_PROVIDERS = [
 
 function findProviderLabel(provider: string): string {
   for (const p of QUICK_PROVIDERS) {
-    if (p.id === provider || provider === p.nameCn || provider.includes(p.id)) return p.label
+    if (p.id === provider || provider === p.nameCn || provider.includes(p.id)) {return p.label}
   }
   return provider || 'LLM'
 }
@@ -48,15 +48,15 @@ export default function ModelSelector() {
         setExpandedProvider(null)
       }
     }
-    if (showProviderMenu) document.addEventListener('mousedown', handler)
+    if (showProviderMenu) {document.addEventListener('mousedown', handler)}
     return () => document.removeEventListener('mousedown', handler)
   }, [showProviderMenu])
 
   // 获取供应商模型列表
   const fetchModelsForProvider = async (providerId: string) => {
-    if (providerModels[providerId]?.length) return
+    if (providerModels[providerId]?.length) {return}
     const pInfo = QUICK_PROVIDERS.find(p => p.id === providerId)
-    if (!pInfo) return
+    if (!pInfo) {return}
 
     const store = useStore.getState()
     const savedCfg = store.providerConfigs?.[pInfo.nameCn || pInfo.label]
@@ -87,7 +87,7 @@ export default function ModelSelector() {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     setAnchorRect({ left: rect.left, bottom: rect.bottom, width: rect.width })
     setShowProviderMenu(v => !v)
-    if (!showProviderMenu) setExpandedProvider(null)
+    if (!showProviderMenu) {setExpandedProvider(null)}
   }
 
   return (
@@ -155,8 +155,8 @@ export default function ModelSelector() {
                     fontWeight: active ? 600 : 400, fontSize: 12,
                     transition: 'background 0.1s',
                   }}
-                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#f9fafb' }}
-                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
+                  onMouseEnter={e => { if (!active) {e.currentTarget.style.background = '#f9fafb'} }}
+                  onMouseLeave={e => { if (!active) {e.currentTarget.style.background = 'transparent'} }}>
                   <span style={{ flex: 1 }}>{plainLabel(p.label)}</span>
                   <span style={{ fontSize: 8, fontWeight: 700, background: '#22c55e', color: '#fff', borderRadius: 3, padding: '1px 5px' }}>免费</span>
                   <span style={{ fontSize: 8, opacity: 0.3, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'none' }}>▶</span>
@@ -168,7 +168,7 @@ export default function ModelSelector() {
                         const store = useStore.getState()
                         switchLLMProvider(p.nameCn || p.label, p.url, m.id)
                         store.setLLMConfig({ model: m.id })
-                        if (p.id === 'opencode-zen') store.setLLMConfig({ apiKey: 'public' })
+                        if (p.id === 'opencode-zen') {store.setLLMConfig({ apiKey: 'public' })}
                         setShowProviderMenu(false)
                         setExpandedProvider(null)
                       }}
@@ -204,7 +204,7 @@ export default function ModelSelector() {
             const loading = providerLoading[p.id]
             return (
               <div key={p.id}>
-                <div onClick={() => { setExpandedProvider(isExpanded ? null : p.id); if (!isExpanded) fetchModelsForProvider(p.id) }}
+                <div onClick={() => { setExpandedProvider(isExpanded ? null : p.id); if (!isExpanded) {fetchModelsForProvider(p.id)} }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
@@ -213,8 +213,8 @@ export default function ModelSelector() {
                     fontWeight: active ? 600 : 400, fontSize: 12,
                     transition: 'background 0.1s',
                   }}
-                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#f9fafb' }}
-                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
+                  onMouseEnter={e => { if (!active) {e.currentTarget.style.background = '#f9fafb'} }}
+                  onMouseLeave={e => { if (!active) {e.currentTarget.style.background = 'transparent'} }}>
                   <span style={{ flex: 1 }}>{plainLabel(p.label)}</span>
                   {active && <span style={{ fontSize: 8, color: '#3b82f6' }}>●</span>}
                   <span style={{ fontSize: 8, opacity: 0.3, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'none' }}>▶</span>

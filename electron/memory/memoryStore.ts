@@ -106,7 +106,7 @@ export class MemoryStore {
     const targetPath = isMemory ? ':memory:' : (dbPath || getMemoryDbPath())
     if (!isMemory) {
       const dir = path.dirname(targetPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     }
     this.db = new Database(targetPath)
     this.db.pragma('journal_mode = WAL')
@@ -175,7 +175,7 @@ export class MemoryStore {
       ).get() as { sql?: string } | undefined
       const sql = row?.sql ?? ''
       // 已包含 agent_memory 则跳过
-      if (sql.includes('agent_memory')) return
+      if (sql.includes('agent_memory')) {return}
 
       console.log('[MemoryStore] 迁移 facts 表：扩展 category 约束...')
       this.db.exec(`
@@ -213,7 +213,7 @@ export class MemoryStore {
 
   getUserProfile(): UserProfile | null {
     const row = this.db.prepare("SELECT content FROM memory_fragments WHERE type='user_profile' ORDER BY id DESC LIMIT 1").get() as { content: string } | undefined
-    if (!row) return null
+    if (!row) {return null}
     try { return { ...JSON.parse(row.content) } } catch { return null }
   }
 
@@ -228,15 +228,15 @@ export class MemoryStore {
       timestamp: new Date().toISOString(),
     }
     const row = this.db.prepare("SELECT id FROM memory_fragments WHERE type='user_profile' ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined
-    if (row) this.updateFragment(row.id, JSON.stringify(merged))
-    else this.saveFragment('user_profile', JSON.stringify(merged))
+    if (row) {this.updateFragment(row.id, JSON.stringify(merged))}
+    else {this.saveFragment('user_profile', JSON.stringify(merged))}
   }
 
   // ── MEMORY 环境配置 ─────────────────────────────────────
 
   getMemoryConfig(): MemoryConfig | null {
     const row = this.db.prepare("SELECT content FROM memory_fragments WHERE type='memory_config' ORDER BY id DESC LIMIT 1").get() as { content: string } | undefined
-    if (!row) return null
+    if (!row) {return null}
     try { return JSON.parse(row.content) } catch { return null }
   }
 
@@ -251,8 +251,8 @@ export class MemoryStore {
       timestamp: new Date().toISOString(),
     }
     const row = this.db.prepare("SELECT id FROM memory_fragments WHERE type='memory_config' ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined
-    if (row) this.updateFragment(row.id, JSON.stringify(merged))
-    else this.saveFragment('memory_config', JSON.stringify(merged))
+    if (row) {this.updateFragment(row.id, JSON.stringify(merged))}
+    else {this.saveFragment('memory_config', JSON.stringify(merged))}
   }
 
   // ── 对话摘要 ────────────────────────────────────────────
@@ -379,7 +379,7 @@ export class MemoryStore {
 
   getPersona(): PersonaTraits | null {
     const row = this.db.prepare('SELECT traits_json FROM persona_traits ORDER BY id DESC LIMIT 1').get() as { traits_json: string } | undefined
-    if (!row) return null
+    if (!row) {return null}
     try { return JSON.parse(row.traits_json) } catch { return null }
   }
 
@@ -462,7 +462,7 @@ export class MemoryStore {
     // Layer 1: 事实
     const factsByCategory: Record<string, string[]> = {}
     for (const f of mem.facts) {
-      if (!factsByCategory[f.category]) factsByCategory[f.category] = []
+      if (!factsByCategory[f.category]) {factsByCategory[f.category] = []}
       factsByCategory[f.category].push(f.content)
     }
     if (Object.keys(factsByCategory).length > 0) {
@@ -490,19 +490,19 @@ export class MemoryStore {
 
     // 保留原有双层兼容
     const userLines: string[] = []
-    if (mem.user.preferences.length > 0) userLines.push(`偏好: ${mem.user.preferences.join('、')}`)
-    if (mem.user.habits.length > 0) userLines.push(`习惯: ${mem.user.habits.join('、')}`)
-    if (mem.user.communicationStyle) userLines.push(`沟通风格: ${mem.user.communicationStyle}`)
-    if (userLines.length > 0) parts.push('## 用户画像\n' + userLines.map(l => `- ${l}`).join('\n'))
+    if (mem.user.preferences.length > 0) {userLines.push(`偏好: ${mem.user.preferences.join('、')}`)}
+    if (mem.user.habits.length > 0) {userLines.push(`习惯: ${mem.user.habits.join('、')}`)}
+    if (mem.user.communicationStyle) {userLines.push(`沟通风格: ${mem.user.communicationStyle}`)}
+    if (userLines.length > 0) {parts.push('## 用户画像\n' + userLines.map(l => `- ${l}`).join('\n'))}
 
     const memLines: string[] = []
-    if (mem.memory.lessons.length > 0) memLines.push(`经验教训: ${mem.memory.lessons.join(' | ')}`)
-    if (mem.memory.projectConventions.length > 0) memLines.push(`项目约定: ${mem.memory.projectConventions.join(' | ')}`)
-    if (mem.memory.toolExperience.length > 0) memLines.push(`工具经验: ${mem.memory.toolExperience.join(' | ')}`)
-    if (memLines.length > 0) parts.push('## 环境配置\n' + memLines.map(l => `- ${l}`).join('\n'))
+    if (mem.memory.lessons.length > 0) {memLines.push(`经验教训: ${mem.memory.lessons.join(' | ')}`)}
+    if (mem.memory.projectConventions.length > 0) {memLines.push(`项目约定: ${mem.memory.projectConventions.join(' | ')}`)}
+    if (mem.memory.toolExperience.length > 0) {memLines.push(`工具经验: ${mem.memory.toolExperience.join(' | ')}`)}
+    if (memLines.length > 0) {parts.push('## 环境配置\n' + memLines.map(l => `- ${l}`).join('\n'))}
 
     const summaries = this.getRecentSummaries(3)
-    if (summaries.length > 0) parts.push('## 最近对话摘要\n' + summaries.map((s, i) => `[${i + 1}] ${s}`).join('\n'))
+    if (summaries.length > 0) {parts.push('## 最近对话摘要\n' + summaries.map((s, i) => `[${i + 1}] ${s}`).join('\n'))}
 
     return parts.join('\n\n')
   }
@@ -647,7 +647,7 @@ export class MemoryVectorStore {
             body: JSON.stringify({ model, prompt: text }),
             signal: AbortSignal.timeout(10000),
           })
-          if (!res.ok) throw new Error(`Ollama embedding 失败: ${res.status}`)
+          if (!res.ok) {throw new Error(`Ollama embedding 失败: ${res.status}`)}
           const data = await res.json()
           embeddings.push(data.embedding as number[])
         }
@@ -701,7 +701,7 @@ export class MemoryVectorStore {
           body: JSON.stringify({ texts }),
           signal: AbortSignal.timeout(15000),
         })
-        if (!res.ok) throw new Error(`Embedding 请求失败: ${res.status}`)
+        if (!res.ok) {throw new Error(`Embedding 请求失败: ${res.status}`)}
         const data = await res.json()
         return data.embeddings as number[][]
       }
@@ -749,7 +749,7 @@ export class MemoryVectorStore {
           }),
           signal: AbortSignal.timeout(15000),
         })
-        if (!res.ok) throw new Error(`Rerank 请求失败: ${res.status}`)
+        if (!res.ok) {throw new Error(`Rerank 请求失败: ${res.status}`)}
         const data = await res.json()
         return data.results as { index: number; score: number }[]
       }
@@ -864,7 +864,7 @@ export class MemoryVectorStore {
    * @param minScore 最低相似度阈值 (0-1)
    */
   async search(query: string, topK = 5, minScore = 0.1): Promise<SearchResult[]> {
-    if (this.entries.length === 0) return []
+    if (this.entries.length === 0) {return []}
 
     // 重建向量索引 (如需要)
     if (this.dirty) {
@@ -938,13 +938,13 @@ export class MemoryVectorStore {
    */
   searchByKeywords(query: string, topK = 5): VectorEntry[] {
     const keywords = this.tokenize(query)
-    if (keywords.length === 0) return this.entries.slice(0, topK)
+    if (keywords.length === 0) {return this.entries.slice(0, topK)}
 
     const scored = this.entries.map((entry) => {
       const textLower = entry.text.toLowerCase()
       let score = 0
       for (const kw of keywords) {
-        if (textLower.includes(kw)) score += 1
+        if (textLower.includes(kw)) {score += 1}
       }
       return { entry, score }
     })
@@ -1018,7 +1018,7 @@ export class MemoryVectorStore {
   }
 
   private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) return 0
+    if (a.length !== b.length) {return 0}
     let dotProduct = 0
     let normA = 0
     let normB = 0
@@ -1027,7 +1027,7 @@ export class MemoryVectorStore {
       normA += a[i] * a[i]
       normB += b[i] * b[i]
     }
-    if (normA === 0 || normB === 0) return 0
+    if (normA === 0 || normB === 0) {return 0}
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
   }
 
@@ -1062,7 +1062,7 @@ export class MemoryVectorStore {
   /** 提取匹配片段 */
   private extractSnippet(text: string, query: string, maxLen: number): string {
     const queryTokens = this.tokenize(query)
-    if (queryTokens.length === 0) return text.slice(0, maxLen) + (text.length > maxLen ? '...' : '')
+    if (queryTokens.length === 0) {return text.slice(0, maxLen) + (text.length > maxLen ? '...' : '')}
 
     // 找到第一个匹配位置
     let bestPos = 0
@@ -1084,7 +1084,7 @@ export class MemoryVectorStore {
 
   /** 使用外部 embedder 搜索 */
   private async searchWithExternal(query: string, topK: number, minScore: number): Promise<SearchResult[]> {
-    if (!this.externalEmbedder) return []
+    if (!this.externalEmbedder) {return []}
 
     const queryVecs = await this.externalEmbedder([query])
     const queryVec = queryVecs[0]
@@ -1115,12 +1115,12 @@ export class MemoryVectorStore {
 let _vectorStore: MemoryVectorStore | null = null
 
 export function getMemoryVectorStore(): MemoryVectorStore {
-  if (!_vectorStore) _vectorStore = new MemoryVectorStore()
+  if (!_vectorStore) {_vectorStore = new MemoryVectorStore()}
   return _vectorStore
 }
 
 let _store: MemoryStore | null = null
 export function getMemoryStore(dbPath?: string): MemoryStore {
-  if (!_store) _store = new MemoryStore(dbPath)
+  if (!_store) {_store = new MemoryStore(dbPath)}
   return _store
 }

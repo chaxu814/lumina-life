@@ -68,7 +68,7 @@ class BM25 {
         const tf = docTokens.filter(t => t === qToken).length
         const df = this.df.get(qToken) || 0
         
-        if (tf === 0 || df === 0) continue
+        if (tf === 0 || df === 0) {continue}
 
         // BM25 公式
         const idf = Math.log((this.totalDocs - df + 0.5) / (df + 0.5) + 1)
@@ -155,10 +155,10 @@ export class HybridMemoryRetrieval {
 
       // 转换为结果
       for (const { docIndex, score } of bm25Results) {
-        if (score < minScore) continue
+        if (score < minScore) {continue}
         
         const note = filteredNotes[docIndex]
-        if (!note) continue
+        if (!note) {continue}
 
         // 查找匹配文本
         const matchedText = this._findMatchedText(query, note.content)

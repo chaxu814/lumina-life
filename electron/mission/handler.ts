@@ -94,7 +94,7 @@ export function parseMissionCommand(
     }
     const list = dirs.map(d => {
       const prd = readPRD(d)
-      if (!prd) return `  📁 ${path.basename(d)} (无 PRD)`
+      if (!prd) {return `  📁 ${path.basename(d)} (无 PRD)`}
       const progress = getStoryProgress(prd)
       const done = allStoriesPassed(prd) ? '✅' : '🔄'
       return `  ${done} ${path.basename(d)} — ${prd.title} (${progress.done}/${progress.total})`

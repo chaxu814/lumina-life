@@ -181,17 +181,17 @@ function buildHistoryForAgent(
     const isOther = (AGENT_IDS as Set<string>).has(m.from) && !isTarget
 
     // 跳过无关消息（非 Agent / 非用户 / 非系统）
-    if (!isUser && !isSystem && !isTarget && !isOther) continue
+    if (!isUser && !isSystem && !isTarget && !isOther) {continue}
 
     // 系统消息处理
     if (isSystem) {
-      if (skipSystem) continue
-      if ((m.content || '').trim().length <= 5) continue
+      if (skipSystem) {continue}
+      if ((m.content || '').trim().length <= 5) {continue}
     }
 
     // 其他 Agent 限数
     if (isOther) {
-      if (otherCount >= MAX_OTHER_MSGS) continue
+      if (otherCount >= MAX_OTHER_MSGS) {continue}
       otherCount++
     }
 
@@ -255,7 +255,7 @@ function buildHistoryForAgent(
     }
 
     const est = Math.ceil(text.length / 4) + PER_MSG_OVERHEAD
-    if (tokenEst + est > MAX_HISTORY_TOKENS && result.length > 0) break
+    if (tokenEst + est > MAX_HISTORY_TOKENS && result.length > 0) {break}
     tokenEst += est
     result.unshift({ role, content: text })
   }
@@ -270,9 +270,9 @@ function buildHistoryForAgent(
     for (const entry of runningHistory) {
       const clipped = (entry.content || '').slice(0, 3000)
       const summaryKey = clipped.slice(0, 80).trim()
-      if (existingSummaries.has(summaryKey)) continue // 跳过已在 messages 中出现的条目
+      if (existingSummaries.has(summaryKey)) {continue} // 跳过已在 messages 中出现的条目
       const est = Math.ceil(clipped.length / 4) + PER_MSG_OVERHEAD
-      if (tokenEst + est > MAX_HISTORY_TOKENS) break
+      if (tokenEst + est > MAX_HISTORY_TOKENS) {break}
       tokenEst += est
       if (!addedSummaryHeader && tokenEst + 8 <= MAX_HISTORY_TOKENS) {
         result.push({ role: 'user' as const, content: '[--- 以下为团队协作阶段的结构化摘要 ---]' })
@@ -321,7 +321,7 @@ function stripReasoningPrefix(text: string): string {
       const remaining = text.slice(match[0].length).trim()
       // 🔧 提高最小长度阈值：剥离后剩余内容必须 ≥ 10 字才执行剥离
       //   防止误剥离后只剩残片
-      if (remaining.length >= 10) return remaining
+      if (remaining.length >= 10) {return remaining}
     }
   }
 
@@ -365,7 +365,7 @@ function cleanThinkingText(text: string): string {
   }
   
   // 如果清理后为空或只剩标点，返回原文本的简短摘要
-  if (cleaned.length < 3) return text.slice(0, 100)
+  if (cleaned.length < 3) {return text.slice(0, 100)}
   return cleaned
 }
 
@@ -375,17 +375,17 @@ function cleanThinkingText(text: string): string {
  * 适用于主回复 / 链式火花 / 决策讨论三条路径。
  */
 function deduplicateLLMContent(text: string): string {
-  if (text.length < 200) return text
+  if (text.length < 200) {return text}
   const paragraphs = text.split('\n\n').filter(p => p.trim().length >= 10)
-  if (paragraphs.length < 2) return text
+  if (paragraphs.length < 2) {return text}
   for (const para of paragraphs) {
     const sig = para.trim().slice(0, 40)
-    if (sig.length < 10) continue
+    if (sig.length < 10) {continue}
     const firstPos = text.indexOf(sig)
     const lastPos = text.lastIndexOf(sig)
     if (lastPos > firstPos && lastPos > text.length * 0.35) {
       const before = text.slice(0, lastPos).trim()
-      if (before.length > 100) return before
+      if (before.length > 100) {return before}
     }
   }
   return text
@@ -462,11 +462,11 @@ function getTaskTypeInstruction(taskType?: TaskType | null): string {
 function NextRefreshCountdown({ next }: { next: number | null }) {
   const [, setTick] = useState(0)
   useEffect(() => {
-    if (!next) return
+    if (!next) {return}
     const t = setInterval(() => setTick(n => n + 1), 1000)
     return () => clearInterval(t)
   }, [next])
-  if (!next) return null
+  if (!next) {return null}
   const sec = Math.max(0, Math.round((next - Date.now()) / 1000))
   const text = sec > 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`
   return (
@@ -544,7 +544,7 @@ export default function GroupChatView() {
   const compact = compactMode || devtoolsOpen
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api?.onDevToolsChanged) return
+    if (!api?.onDevToolsChanged) {return}
     return api.onDevToolsChanged((opened: boolean) => setDevtoolsOpen(opened))
   }, [])
 
@@ -562,11 +562,11 @@ export default function GroupChatView() {
     try {
       const api = (window as any).luminaAPI
       const acpResult = await api.acpList?.()
-      if (acpResult?.ok) setAcpMembers(acpResult.dynamic || [])
+      if (acpResult?.ok) {setAcpMembers(acpResult.dynamic || [])}
     } catch {}
   }
   const handleRegisterAcp = async () => {
-    if (!acpFormData.name || !acpFormData.url) return
+    if (!acpFormData.name || !acpFormData.url) {return}
     const api = (window as any).luminaAPI
     const result = await api.acpRegister?.({
       ...acpFormData,
@@ -585,8 +585,8 @@ export default function GroupChatView() {
   const handleRemoveAcp = async (id: string) => {
     const api = (window as any).luminaAPI
     const result = await api.acpUnregister?.(id)
-    if (result?.ok) await loadAcpMembers()
-    else alert(result?.error || '移除失败')
+    if (result?.ok) {await loadAcpMembers()}
+    else {alert(result?.error || '移除失败')}
   }
   // 首次加载 ACP 成员
   useEffect(() => { loadAcpMembers() }, [])
@@ -596,7 +596,7 @@ export default function GroupChatView() {
   useEffect(() => {
     const onTeamTab = (e: Event) => {
       const tab = (e as CustomEvent).detail?.tab
-      if (tab === 'moments' || tab === 'theater' || tab === 'daily') setTeamTab(tab)
+      if (tab === 'moments' || tab === 'theater' || tab === 'daily') {setTeamTab(tab)}
     }
     window.addEventListener('lumina:team-tab', onTeamTab as EventListener)
     return () => window.removeEventListener('lumina:team-tab', onTeamTab as EventListener)
@@ -670,7 +670,7 @@ export default function GroupChatView() {
         useAgentRuntime.getState().setContextUsage(ev.promptTokens, cw)
       }
     })
-    return () => { if (typeof unsub === 'function') unsub() }
+    return () => { if (typeof unsub === 'function') {unsub()} }
   }, [])
 
   // fix: 使用 useRef 替代普通 let 变量，彻底解决协作阶段思考步骤串台
@@ -844,10 +844,10 @@ export default function GroupChatView() {
 
   // 🆕 持久化 — v3.6: 只要有消息在动画中就不保存，让 animateTyping 完成时存
   useEffect(() => {
-    if (messages.length <= 1) return
+    if (messages.length <= 1) {return}
     // v3.6: 只要有一条消息还在动画中 → 不保存 → 防止空内容覆盖
     const hasAnimating = messages.some(m => m.from !== 'system' && !m.content && !(m as any)._animDone)
-    if (hasAnimating) return
+    if (hasAnimating) {return}
     saveGCMessages(activeSessionId, messages)
     const preview = messages.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || ''
     const updated: GCSession[] = [
@@ -870,7 +870,7 @@ export default function GroupChatView() {
   // 跟踪用户是否在底部，防止强制滚底打断翻阅
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
-    if (!el) return
+    if (!el) {return}
     // 距底部 < 80px 视为"在底部"
     isUserAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   }, [])
@@ -891,10 +891,10 @@ export default function GroupChatView() {
     setExpandedThinking(prev => {
       const next = new Set(prev)
       for (const m of messages) {
-        if (!m.thinkingSteps || m.thinkingSteps.length === 0) continue
+        if (!m.thinkingSteps || m.thinkingSteps.length === 0) {continue}
         // v8.1: 已完成的消息不自动展开（默认收起），仅正在输出的消息展开
         const isComplete = Boolean(m._animDone)
-        if (isComplete) continue
+        if (isComplete) {continue}
         if (!next.has(m.id)) {
           next.add(m.id)
           changed = true
@@ -924,8 +924,8 @@ export default function GroupChatView() {
       if (msgs.length > 0) {
         setMessages(msgs)
         const lastAgentMsg = [...msgs].reverse().find(m => AGENTS.some(a => a.id === m.from))
-        if (lastAgentMsg) setLastAgent(lastAgentMsg.from)
-        else setLastAgent(null)
+        if (lastAgentMsg) {setLastAgent(lastAgentMsg.from)}
+        else {setLastAgent(null)}
       } else {
         // 空会话也显示欢迎消息，防止旧消息残留
         setMessages([{
@@ -999,7 +999,7 @@ export default function GroupChatView() {
       setSttStatus({ listening: true, engine: 'web-speech', engineLabel: 'Web Speech', retryCount: 0 })
       sttService.setCallbacks(
         (text: string) => setInput(prev => prev + text),
-        (s: STTStatus) => { setSttStatus(s); if (!s.listening) setSttListening(false) },
+        (s: STTStatus) => { setSttStatus(s); if (!s.listening) {setSttListening(false)} },
       )
       await sttService.start()
     } catch (e) {
@@ -1087,14 +1087,14 @@ export default function GroupChatView() {
               const api = (window as any).luminaAPI
               if ((f as any).path && api?.fileExtractText) {
                 const result = await api.fileExtractText((f as any).path)
-                if (result?.text) extractedText = result.text
+                if (result?.text) {extractedText = result.text}
               }
               // fallback: 如果 file.path 不可用或失败，传文件内容
               if (!extractedText && api?.fileExtractTextFromBuffer) {
                 const buf = await f.arrayBuffer()
                 const uint8 = new Uint8Array(buf)
                 const result = await api.fileExtractTextFromBuffer(ext, Array.from(uint8))
-                if (result?.text) extractedText = result.text
+                if (result?.text) {extractedText = result.text}
               }
               if (extractedText) {
                 const truncated = extractedText.slice(0, 15000)
@@ -1124,7 +1124,7 @@ export default function GroupChatView() {
         })
       }
     }
-    if (newAttachments.length > 0) setGcAttachments(prev => [...prev, ...newAttachments])
+    if (newAttachments.length > 0) {setGcAttachments(prev => [...prev, ...newAttachments])}
   }, [])
 
   // ═══ v2.14: 消息内联按钮操作 ═══
@@ -1140,7 +1140,7 @@ export default function GroupChatView() {
     setTimeout(() => {
       gcTextareaRef.current?.focus()
       const el = gcTextareaRef.current
-      if (el) el.setSelectionRange(el.value.length, el.value.length)
+      if (el) {el.setSelectionRange(el.value.length, el.value.length)}
     }, 50)
   }, [setInput])
 
@@ -1160,7 +1160,7 @@ export default function GroupChatView() {
   }, [])
 
   const handleDeleteConfirm = useCallback(() => {
-    if (!deletingTarget) return
+    if (!deletingTarget) {return}
     setMessages(prev => prev.filter(m => m.id !== deletingTarget.id))
     setMsgCounter(c => c + 1)
     setDeletingTarget(null)
@@ -1168,7 +1168,7 @@ export default function GroupChatView() {
   }, [deletingTarget, setMessages])
 
   const handleGCFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return
+    if (!e.target.files) {return}
     await processGCFile(e.target.files)
     e.target.value = ''
   }, [processGCFile])
@@ -1176,7 +1176,7 @@ export default function GroupChatView() {
   const handleGCDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation()
     setGcDragOver(false)
-    if (e.dataTransfer.files.length > 0) await processGCFile(e.dataTransfer.files)
+    if (e.dataTransfer.files.length > 0) {await processGCFile(e.dataTransfer.files)}
   }, [processGCFile])
 
   // ═══ v2.7 流式打字效果 ═══
@@ -1269,7 +1269,7 @@ export default function GroupChatView() {
       /(正则|regex|sql|查询|排序|算法|数据结构|类|函数|方法)/i,
       /(怎么写|怎么改|怎么实现|实现.*?功能|添加.*?功能)/,
     ]
-    if (codingPatterns.some(p => p.test(text))) return 'coding'
+    if (codingPatterns.some(p => p.test(text))) {return 'coding'}
 
     const analysisPatterns = [
       /(分析|研究|调查|统计|对比|评估|report|报告)/,
@@ -1283,7 +1283,7 @@ export default function GroupChatView() {
       /(查找|检索|搜一下|查资料|找资料|查询)/,
       /(信息|资料|文档|文献|论文|文章|blog|博客)/i,
     ]
-    if (analysisPatterns.some(p => p.test(text))) return 'analysis'
+    if (analysisPatterns.some(p => p.test(text))) {return 'analysis'}
 
     const discussionPatterns = [
       /(讨论|聊聊|聊一下|商量|商议|商议一下|头脑风暴|各抒己见)/,
@@ -1295,7 +1295,7 @@ export default function GroupChatView() {
       /(如果.*?会怎样|假如|假设|设想)/,
       /(先说|先说下|说个事|有事商量|开个会)/,
     ]
-    if (discussionPatterns.some(p => p.test(text))) return 'discussion'
+    if (discussionPatterns.some(p => p.test(text))) {return 'discussion'}
 
     return 'chat'
   }
@@ -1312,7 +1312,7 @@ export default function GroupChatView() {
       /(部署架构|CI|CD|流水线|pipeline|持续集成)/i,
       /(迁移|升级|改造|兼容|适配)/,
     ]
-    if (largePatterns.some(p => p.test(text))) return 'large'
+    if (largePatterns.some(p => p.test(text))) {return 'large'}
 
     // 中型特征：多文件、组件/模块、接口
     const mediumPatterns = [
@@ -1324,7 +1324,7 @@ export default function GroupChatView() {
       /(增删改查|CRUD|表单|表格|列表|详情)/i,
       /(集成|对接|接入|调用|整合)/,
     ]
-    if (mediumPatterns.some(p => p.test(text))) return 'medium'
+    if (mediumPatterns.some(p => p.test(text))) {return 'medium'}
 
     // 默认为小型（单个文件、简单脚本、快速修改）
     return 'small'
@@ -1457,7 +1457,7 @@ export default function GroupChatView() {
         'mail_send', 'open_file',
       ]
       for (const t of CHAT_BLOCKED) {
-        if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+        if (!chatModeDisabled.includes(t)) {chatModeDisabled.push(t)}
       }
       return {
         mode: effectiveMode as 'chat' | 'agent',
@@ -1476,7 +1476,7 @@ export default function GroupChatView() {
         'mail_send', 'open_file',
       ]
       for (const t of CHAT_BLOCKED) {
-        if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+        if (!chatModeDisabled.includes(t)) {chatModeDisabled.push(t)}
       }
       return {
         mode: effectiveMode as 'chat' | 'agent',
@@ -1495,7 +1495,7 @@ export default function GroupChatView() {
         'mail_send', 'open_file',
       ]
       for (const t of CHAT_BLOCKED) {
-        if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+        if (!chatModeDisabled.includes(t)) {chatModeDisabled.push(t)}
       }
       return {
         mode: effectiveMode as 'chat' | 'agent',
@@ -1513,7 +1513,7 @@ export default function GroupChatView() {
       'mail_send', 'open_file',
     ]
     for (const t of CHAT_BLOCKED) {
-      if (!chatModeDisabled.includes(t)) chatModeDisabled.push(t)
+      if (!chatModeDisabled.includes(t)) {chatModeDisabled.push(t)}
     }
     return {
       mode: effectiveMode as 'chat' | 'agent',
@@ -1530,7 +1530,7 @@ export default function GroupChatView() {
     const card = TASK_TYPE_CARDS.find(c => c.id === taskType)
     const agent = TEAM_MEMBERS.find(m => m.id === agentId)
 
-    if (!card || !agent) return
+    if (!card || !agent) {return}
 
     // 构造派发消息
     const dispatchMsg = `📋 任务派发：${card.icon} ${card.name}\n\n` +
@@ -1561,7 +1561,7 @@ export default function GroupChatView() {
   }, [])
 
   const send = useCallback(async () => {
-    if ((!input.trim() && gcAttachments.length === 0) || sending) return
+    if ((!input.trim() && gcAttachments.length === 0) || sending) {return}
 
     const userText = input
     const currentAttachments = [...gcAttachments]
@@ -1594,7 +1594,7 @@ export default function GroupChatView() {
       const fileDescs = currentAttachments.map((a, i) => {
         const sizeStr = a.size > 1024 * 1024 ? `${(a.size / (1024 * 1024)).toFixed(1)}MB` : `${(a.size / 1024).toFixed(1)}KB`
         let desc = `[附件${i + 1}: ${a.name} (${sizeStr})]`
-        if (a.text) desc += `\n内容:\n${a.text}`
+        if (a.text) {desc += `\n内容:\n${a.text}`}
         return desc
       }).join('\n')
       fullText = `${userText}\n\n--- 上传文件 ---\n${fileDescs}`
@@ -1741,9 +1741,9 @@ export default function GroupChatView() {
       const currentPhase = collabPhaseRef.current  // 捕获当前阶段号
       const unsubTool = subscribeAgentEvents((ev: any) => {
         // 用户中止时立即停止累积思考步骤
-        if (abortRef.current) return
+        if (abortRef.current) {return}
         // fix: 阶段守卫 — 只处理当前阶段的 IPC 事件，旧阶段事件直接丢弃
-        if (collabPhaseRef.current !== currentPhase) return
+        if (collabPhaseRef.current !== currentPhase) {return}
         if (ev.type === 'thinking_stream') {
           // 推理内容累积到同一个步骤 — 不刷屏
           const stableKey = `reasoning:${collabCurrentMsgIdRef.current}`
@@ -1784,7 +1784,7 @@ export default function GroupChatView() {
           const { label, detail } = describeToolAction(ev.tool, ev.args)
           const notice = label + (detail ? `: ${detail}` : '')
           setToolNotice(notice)
-          if (toolNoticeTimer.current) clearTimeout(toolNoticeTimer.current)
+          if (toolNoticeTimer.current) {clearTimeout(toolNoticeTimer.current)}
           toolNoticeTimer.current = setTimeout(() => setToolNotice(null), 4000)
           phaseStepStartTimes.set(ev.tool, Date.now())
           pushCollabStep({
@@ -1796,7 +1796,7 @@ export default function GroupChatView() {
             timestamp: Date.now(),
           }, collabCurrentMsgIdRef.current)
         } else if (ev.type === 'tool_end') {
-          if (toolNoticeTimer.current) clearTimeout(toolNoticeTimer.current)
+          if (toolNoticeTimer.current) {clearTimeout(toolNoticeTimer.current)}
           toolNoticeTimer.current = setTimeout(() => setToolNotice(null), 1500)
           const startTime = phaseStepStartTimes.get(ev.tool)
           phaseStepStartTimes.delete(ev.tool)
@@ -1833,7 +1833,7 @@ export default function GroupChatView() {
         const raw = messages
           .slice(-120)
           .filter(m => {
-            if (m.from !== 'system') return true
+            if (m.from !== 'system') {return true}
             return (m.content || '').trim().length > 5
           })
           .map(m => ({
@@ -1849,14 +1849,14 @@ export default function GroupChatView() {
         const result: typeof raw = []
         for (let i = raw.length - 1; i >= 0; i--) {
           const itemEst = raw[i].content.length / 4 + 8
-          if (est + itemEst > BUDGET && result.length > 0) break
+          if (est + itemEst > BUDGET && result.length > 0) {break}
           est += itemEst
           result.unshift(raw[i])
         }
         return result
       })()
       // 累积历史：每个协作阶段完成后追加本阶段结果，供后续阶段参考
-      let runningHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [...collabHistory]
+      const runningHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [...collabHistory]
       // 同步 ref — 让主回复阶段能读取协作上下文
       runningHistoryRef.current = runningHistory
 
@@ -2013,7 +2013,7 @@ export default function GroupChatView() {
             conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
           })
 
-          let reviewReply = (phase2Result.content || '审阅完成').trimStart()
+          const reviewReply = (phase2Result.content || '审阅完成').trimStart()
           // 🆕 团队阶段错误检测
           if (phase2Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(reviewReply)) {
             console.log('[GroupChat] ⛔ Yak 审阅阶段出错或超时，中断协作链')
@@ -2096,7 +2096,7 @@ export default function GroupChatView() {
             runningHistoryRef.current = runningHistory // 🆕 v16.0-fix: 同步到 ref
             
             // 用修复后的代码替换 coderReply 供后续阶段使用
-            if (fixReply.length > 10) coderReply = fixReply
+            if (fixReply.length > 10) {coderReply = fixReply}
           }
 
           if (abortRef.current) { setSending(false); setReplyingAgent(null); return }
@@ -2246,8 +2246,8 @@ export default function GroupChatView() {
 
       const currentPhase = collabPhaseRef.current
       const unsubTool = subscribeAgentEvents((ev: any) => {
-        if (abortRef.current) return
-        if (collabPhaseRef.current !== currentPhase) return
+        if (abortRef.current) {return}
+        if (collabPhaseRef.current !== currentPhase) {return}
         if (ev.type === 'thinking_stream') {
           const stableKey = `reasoning:${collabCurrentMsgIdRef.current}`
           if (ev.isLast) {
@@ -2280,7 +2280,7 @@ export default function GroupChatView() {
         } else if (ev.type === 'tool_start') {
           const { label, detail } = describeToolAction(ev.tool, ev.args)
           setToolNotice(label + (detail ? `: ${detail}` : ''))
-          if (toolNoticeTimer.current) clearTimeout(toolNoticeTimer.current)
+          if (toolNoticeTimer.current) {clearTimeout(toolNoticeTimer.current)}
           toolNoticeTimer.current = setTimeout(() => setToolNotice(null), 4000)
           phaseStepStartTimes.set(ev.tool, Date.now())
           pushCollabStep({
@@ -2288,7 +2288,7 @@ export default function GroupChatView() {
             tool: ev.tool, args: detail, timestamp: Date.now(),
           }, collabCurrentMsgIdRef.current)
         } else if (ev.type === 'tool_end') {
-          if (toolNoticeTimer.current) clearTimeout(toolNoticeTimer.current)
+          if (toolNoticeTimer.current) {clearTimeout(toolNoticeTimer.current)}
           toolNoticeTimer.current = setTimeout(() => setToolNotice(null), 1500)
           const startTime = phaseStepStartTimes.get(ev.tool)
           phaseStepStartTimes.delete(ev.tool)
@@ -2315,7 +2315,7 @@ export default function GroupChatView() {
         const raw = messages
           .slice(-120)
           .filter(m => {
-            if (m.from !== 'system') return true
+            if (m.from !== 'system') {return true}
             return (m.content || '').trim().length > 5
           })
           .map(m => ({
@@ -2330,13 +2330,13 @@ export default function GroupChatView() {
         const result: typeof raw = []
         for (let i = raw.length - 1; i >= 0; i--) {
           const itemEst = raw[i].content.length / 4 + 8
-          if (est + itemEst > BUDGET && result.length > 0) break
+          if (est + itemEst > BUDGET && result.length > 0) {break}
           est += itemEst
           result.unshift(raw[i])
         }
         return result
       })()
-      let runningHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [...collabHistory]
+      const runningHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [...collabHistory]
       runningHistoryRef.current = runningHistory
 
       try {
@@ -2550,7 +2550,7 @@ export default function GroupChatView() {
             )
             runningHistoryRef.current = runningHistory
 
-            if (fixReply.length > 10) coderReply = fixReply
+            if (fixReply.length > 10) {coderReply = fixReply}
           }
 
           // 判断审查是否通过
@@ -2668,7 +2668,7 @@ export default function GroupChatView() {
 
       const unsubTool = subscribeAgentEvents((ev: any) => {
         // 用户中止时立即停止累积思考步骤
-        if (abortRef.current) return
+        if (abortRef.current) {return}
         if (ev.type === 'thinking_stream') {
           const stableKey = `reasoning:${currentReplyId}`
           if (ev.isLast) {
@@ -2725,7 +2725,7 @@ export default function GroupChatView() {
           const { label, detail } = describeToolAction(ev.tool, ev.args)
           const notice = label + (detail ? `: ${detail}` : '')
           setToolNotice(notice)
-          if (toolNoticeTimer.current) clearTimeout(toolNoticeTimer.current)
+          if (toolNoticeTimer.current) {clearTimeout(toolNoticeTimer.current)}
           toolNoticeTimer.current = setTimeout(() => setToolNotice(null), 4000)
           stepStartTimes.set(ev.tool, Date.now())
           pushStep({
@@ -2737,7 +2737,7 @@ export default function GroupChatView() {
             timestamp: Date.now(),
           })
         } else if (ev.type === 'tool_end') {
-          if (toolNoticeTimer.current) clearTimeout(toolNoticeTimer.current)
+          if (toolNoticeTimer.current) {clearTimeout(toolNoticeTimer.current)}
           toolNoticeTimer.current = setTimeout(() => setToolNotice(null), 1500)
           const startTime = stepStartTimes.get(ev.tool)
           stepStartTimes.delete(ev.tool)
@@ -2919,7 +2919,7 @@ export default function GroupChatView() {
             )
           ) {
             const rest = reply.slice(firstPara.length).trim()
-            if (rest.length >= 3) return rest
+            if (rest.length >= 3) {return rest}
           }
           return reply
         })()
@@ -3029,7 +3029,7 @@ export default function GroupChatView() {
 
           // ── 链式循环：最多 4 次链式火花 ──
           for (let chain = 0; chain < 4; chain++) {
-            if (abortRef.current) break
+            if (abortRef.current) {break}
 
             const helper = AGENTS.find(a => a.id === nextSpeakerId)!
             updateEmotion(helper.id, userText, { isGroupChat: true })
@@ -3136,7 +3136,7 @@ export default function GroupChatView() {
                   )
                 ) {
                   const rest = helperReply.slice(firstPara.length).trim()
-                  if (rest.length >= 3) helperReply = rest
+                  if (rest.length >= 3) {helperReply = rest}
                 }
               }
               // 链式火花 — 内容去重
@@ -3159,7 +3159,7 @@ export default function GroupChatView() {
 
             // 显示回复（流式打字）
             animateTyping(hId, helperReply)
-            try { const ct = cleanTtsText(helperReply); if (ct.length > 10 && !useStore.getState().ttsMuted) enqueueTTS(ct, getEffectiveVoice(helper.id)) } catch {}
+            try { const ct = cleanTtsText(helperReply); if (ct.length > 10 && !useStore.getState().ttsMuted) {enqueueTTS(ct, getEffectiveVoice(helper.id))} } catch {}
 
             // 更新状态
             spokenIds.push(helper.id)
@@ -3173,7 +3173,7 @@ export default function GroupChatView() {
               lastReply,
               alreadySpokenIds: spokenIds,
             })
-            if (!chainSpark) break
+            if (!chainSpark) {break}
             console.log(`🔗 链式火花: ${chainSpark.reason}`)
             nextSpeakerId = chainSpark.agentId
             nextContext = chainSpark.contextForLLM
@@ -3194,10 +3194,10 @@ export default function GroupChatView() {
         const isNetwork = /network|connect|refused|ECONN|fetch/i.test(errMsg)
         const isLLMError = /LLM|model|api.?key|token|rate.?limit|401|402|429|5\d{2}/i.test(errMsg)
         let hint = ''
-        if (isTimeout) hint = '（LLM 响应超时）'
-        else if (isNetwork) hint = '（网络连接失败）'
-        else if (isLLMError) hint = `（LLM 返回错误）`
-        else if (errMsg) hint = `（${errMsg.slice(0, 60)}）`
+        if (isTimeout) {hint = '（LLM 响应超时）'}
+        else if (isNetwork) {hint = '（网络连接失败）'}
+        else if (isLLMError) {hint = `（LLM 返回错误）`}
+        else if (errMsg) {hint = `（${errMsg.slice(0, 60)}）`}
         console.warn(`[GC] 链式火花失败: ${responder.name} - ${errMsg}`)
         // 用户主动中止时不显示错误提示
         if (!abortRef.current) {
@@ -3230,7 +3230,7 @@ export default function GroupChatView() {
       }])
       setMsgCounter(c => c + 1)
       animateTyping(mockId, mockReply)
-      try { const cleanT = cleanTtsText(mockReply); if (cleanT.length > 10 && !useStore.getState().ttsMuted) enqueueTTS(cleanT, getEffectiveVoice(responder.id)) } catch {}
+      try { const cleanT = cleanTtsText(mockReply); if (cleanT.length > 10 && !useStore.getState().ttsMuted) {enqueueTTS(cleanT, getEffectiveVoice(responder.id))} } catch {}
     }
 
     setReplyingAgent(null)
@@ -3242,7 +3242,7 @@ export default function GroupChatView() {
   sendRef.current = send
 
   const triggerDecision = useCallback(async () => {
-    if (!decQuestion.trim()) return
+    if (!decQuestion.trim()) {return}
     setDecLoading(true)
     setShowDecision(false)
 
@@ -3268,7 +3268,7 @@ export default function GroupChatView() {
         const toolIntent = detectToolIntent(decQuestion, false)
         const intentToolsPrompt = getGCToolsPromptForIntent(teamSecurity, toolIntent)
         for (const agentId of agentsToReply) {
-          if (abortRef.current) break
+          if (abortRef.current) {break}
           const agent = AGENTS.find(a => a.id === agentId)!
           const effectiveLlmConfig = getAgentLlmConfig(agentId) || { model: '', baseUrl: '', apiKey: '' }
           const toolIntent = detectToolIntent(decQuestion, false)
@@ -3305,7 +3305,7 @@ export default function GroupChatView() {
           setMsgCounter(c => c + 1)
 
           const unsubDec = subscribeAgentEvents((ev: any) => {
-            if (abortRef.current) return
+            if (abortRef.current) {return}
             if (ev.type === 'thinking_stream') {
               // 决策讨论也支持推理模型 — 复用 decThinkingAccum
               const stableKey = `dec-reasoning:${decMsgId}`
@@ -3433,7 +3433,7 @@ export default function GroupChatView() {
                 )
               ) {
                 const rest = reply.slice(firstPara.length).trim()
-                if (rest.length >= 3) return rest
+                if (rest.length >= 3) {return rest}
               }
               return reply
             })()
@@ -4407,7 +4407,7 @@ export default function GroupChatView() {
         {/* 🎯 选中角色后的欢迎氛围屏 */}
         {teamTab === 'chat' && selectedRole && messages.filter(m => m.from === 'user').length === 0 && (() => {
           const card = TASK_TYPE_CARDS.find(c => c.id === selectedRole)
-          if (!card) return null
+          if (!card) {return null}
           const agent = TEAM_MEMBERS.find(m => m.id === getRecommendedAgent(selectedRole))
           return (
             <div style={{
@@ -4965,7 +4965,7 @@ export default function GroupChatView() {
                         const el = document.getElementById(`gc-emoji-group-${gi}`)
                         if (el) {
                           const container = el.parentElement
-                          if (container) container.scrollTo({ top: el.offsetTop - 8, behavior: 'smooth' })
+                          if (container) {container.scrollTo({ top: el.offsetTop - 8, behavior: 'smooth' })}
                         }
                       }}
                       title={group.name}
@@ -4995,7 +4995,7 @@ export default function GroupChatView() {
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                         {group.emojis.map((emoji, ei) => {
-                          if (emoji === 'x') return <div key={ei} style={{ width: 30, height: 30 }} />
+                          if (emoji === 'x') {return <div key={ei} style={{ width: 30, height: 30 }} />}
                           return (
                             <button key={ei}
                               onClick={() => {

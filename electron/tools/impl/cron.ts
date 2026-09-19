@@ -36,7 +36,7 @@ let mainWindowRef: BrowserWindow | null = null
 
 function cronMatches(schedule: string, now: Date): boolean {
   const parts = schedule.split(' ')
-  if (parts.length !== 5) return false
+  if (parts.length !== 5) {return false}
 
   const [cronMin, cronHour, cronDay, cronMonth, cronWeek] = parts
   const minute = now.getMinutes()
@@ -46,7 +46,7 @@ function cronMatches(schedule: string, now: Date): boolean {
   const dayOfWeek = now.getDay()   // 0=周日
 
   const matchField = (cron: string, value: number): boolean => {
-    if (cron === '*') return true
+    if (cron === '*') {return true}
     // */N 步进: 每 N 个单位触发一次
     if (cron.startsWith('*/')) {
       const step = parseInt(cron.slice(2))
@@ -75,15 +75,15 @@ function cronMatches(schedule: string, now: Date): boolean {
 
 function checkAndTrigger(now: Date): void {
   for (const entry of cronEntries) {
-    if (!entry.enabled) continue
-    if (!cronMatches(entry.schedule, now)) continue
+    if (!entry.enabled) {continue}
+    if (!cronMatches(entry.schedule, now)) {continue}
 
     // 防止同一分钟重复触发
     const minuteKey = `${now.getHours()}:${now.getMinutes()}`
     const lastMinuteKey = entry.lastRunAt
       ? `${new Date(entry.lastRunAt).getHours()}:${new Date(entry.lastRunAt).getMinutes()}`
       : null
-    if (lastMinuteKey === minuteKey) continue
+    if (lastMinuteKey === minuteKey) {continue}
 
     entry.lastRunAt = now.toISOString()
 
@@ -111,7 +111,7 @@ function checkAndTrigger(now: Date): void {
  */
 export function startCronLoop(mainWindow: BrowserWindow, intervalMs = 30000): void {
   mainWindowRef = mainWindow
-  if (cronLoopInterval) clearInterval(cronLoopInterval)
+  if (cronLoopInterval) {clearInterval(cronLoopInterval)}
 
   // 首次立即检查
   checkAndTrigger(new Date())
@@ -206,7 +206,7 @@ export async function cronSchedule(args: Record<string, any>): Promise<ToolResul
 }
 
 export async function cronList(): Promise<ToolResult> {
-  if (cronEntries.length === 0) return { callId: '', ok: true, content: '(无定时任务)' }
+  if (cronEntries.length === 0) {return { callId: '', ok: true, content: '(无定时任务)' }}
   const list = cronEntries.map(e =>
     `  [${e.enabled ? '⏰' : '❌'}] #${e.id} "${e.name}"\n     调度: ${e.schedule} | 操作: ${e.action}${e.lastRunAt ? ` | 上次: ${new Date(e.lastRunAt).toLocaleString('zh-CN')}` : ''}`
   ).join('\n')
@@ -215,7 +215,7 @@ export async function cronList(): Promise<ToolResult> {
 
 export async function cronCancel(args: Record<string, any>): Promise<ToolResult> {
   const e = cronEntries.find(c => c.id === args.id)
-  if (!e) return { callId: '', ok: false, content: '', error: `未找到任务 #${args.id}` }
+  if (!e) {return { callId: '', ok: false, content: '', error: `未找到任务 #${args.id}` }}
   e.enabled = false
   return { callId: '', ok: true, content: `⏰ 任务 #${args.id} "${e.name}" 已取消` }
 }

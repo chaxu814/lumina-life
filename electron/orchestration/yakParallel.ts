@@ -168,7 +168,7 @@ export class TaskSplitter {
   private _computeParallelGroups(subTasks: SubTask[]): SubTask[][] {
     const groups: SubTask[][] = []
     const taskMap = new Map(subTasks.map(t => [t.id, t]))
-    let remaining = new Set(subTasks.map(t => t.id))
+    const remaining = new Set(subTasks.map(t => t.id))
     let iteration = 0
 
     while (remaining.size > 0 && iteration < 100) {
@@ -188,7 +188,7 @@ export class TaskSplitter {
         // 死锁 — 把剩余的全部作为一组（标记依赖异常）
         for (const id of remaining) {
           const task = taskMap.get(id)
-          if (task) ready.push(task)
+          if (task) {ready.push(task)}
         }
         break
       }
@@ -230,7 +230,7 @@ export class YakParallel {
     const hired: Intern[] = []
     for (let i = 0; i < count; i++) {
       const intern = this.pool.hire()
-      if (intern) hired.push(intern)
+      if (intern) {hired.push(intern)}
     }
     return hired
   }
@@ -501,7 +501,7 @@ export class YakParallel {
 let _instance: YakParallel | null = null
 
 export function getYakParallel(): YakParallel {
-  if (!_instance) _instance = new YakParallel()
+  if (!_instance) {_instance = new YakParallel()}
   return _instance
 }
 

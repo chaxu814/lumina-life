@@ -97,7 +97,7 @@ export default function WorkflowPanel() {
 
   // 删除自定义模板
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确定删除模板「${name}」？`)) return
+    if (!confirm(`确定删除模板「${name}」？`)) {return}
     try {
       const result = await api?.workflowDelete?.(id)
       if (result?.ok) {
@@ -113,7 +113,7 @@ export default function WorkflowPanel() {
 
   // 创建模板
   const handleCreate = async () => {
-    if (!createForm.name.trim()) return
+    if (!createForm.name.trim()) {return}
     try {
       const data: any = {
         name: createForm.name,

@@ -162,7 +162,7 @@ const rateLimit = (() => {
         await new Promise<void>((resolve, reject) => {
           const timer = setTimeout(() => {
             const idx = state.waitQueue.findIndex(q => q.resolve === resolve)
-            if (idx >= 0) state.waitQueue.splice(idx, 1)
+            if (idx >= 0) {state.waitQueue.splice(idx, 1)}
             reject(new Error('LLM 并发槽位等待超时'))
           }, Math.min(timeoutMs - elapsed, 30_000))
           state.waitQueue.push({
@@ -175,7 +175,7 @@ const rateLimit = (() => {
     release(): void {
       state.activeRequests = Math.max(0, state.activeRequests - 1)
       const next = state.waitQueue.shift()
-      if (next) next.resolve()
+      if (next) {next.resolve()}
     },
     pauseAll(durationMs: number): void {
       const until = Date.now() + durationMs
@@ -198,30 +198,30 @@ const rateLimit = (() => {
 // ═══════════════════════════════════════════════════════════
 
 export function isRetryable(err: unknown): boolean {
-  if (err instanceof TypeError) return true
+  if (err instanceof TypeError) {return true}
   const msg = String(err)
   // v4.0: AbortError (超时) → 可重试，尤其是在慢速模式下
-  if (/AbortError|The operation was aborted/i.test(msg)) return true
+  if (/AbortError|The operation was aborted/i.test(msg)) {return true}
   // 5xx 服务端错误
-  if (/\b5\d{2}\b/.test(msg)) return true
+  if (/\b5\d{2}\b/.test(msg)) {return true}
   // 429 限流
-  if (/\b429\b/.test(msg)) return true
+  if (/\b429\b/.test(msg)) {return true}
   // 连接拒绝 / 超时 / 重置
-  if (/ECONNREFUSED|ETIMEDOUT|ECONNRESET|ENOTFOUND|fetch failed/i.test(msg)) return true
+  if (/ECONNREFUSED|ETIMEDOUT|ECONNRESET|ENOTFOUND|fetch failed/i.test(msg)) {return true}
   // Socket 挂断
-  if (/socket hang up|read ECONNRESET/i.test(msg)) return true
+  if (/socket hang up|read ECONNRESET/i.test(msg)) {return true}
   // "No models loaded" → 不重试
-  if (/No models loaded|no model/i.test(msg)) return false
+  if (/No models loaded|no model/i.test(msg)) {return false}
   // 4xx 客户端错误 → 不重试（除 429）
-  if (/\b4\d{2}\b/.test(msg)) return false
+  if (/\b4\d{2}\b/.test(msg)) {return false}
   return true
 }
 
 export function extractRetryAfter(err: unknown): number | null {
   const msg = String(err)
   const match = msg.match(/Retry-After[:\s]+(\d+)/i)
-  if (match) return parseInt(match[1], 10) * 1000
-  if (/\b429\b/.test(msg)) return 5000
+  if (match) {return parseInt(match[1], 10) * 1000}
+  if (/\b429\b/.test(msg)) {return 5000}
   return null
 }
 
@@ -419,7 +419,7 @@ export async function fetchWithRetry(
       }
 
       const retryAfter = extractRetryAfter(err)
-      if (retryAfter) rateLimit.pauseAll(retryAfter)
+      if (retryAfter) {rateLimit.pauseAll(retryAfter)}
 
       if (attempt >= maxRetries) {
         console.error(`[LLMRetry] ❌ ${circuitId} 重试耗尽 (${attempt + 1} 次, ${Math.round((Date.now() - startTime) / 1000)}s): ${lastError.slice(0, 150)}`)
@@ -479,13 +479,13 @@ function setupStreamHeartbeat(
   timeoutId: NodeJS.Timeout,
   totalTimeout: number,
 ): void {
-  if (totalTimeout <= STREAM_HEARTBEAT_INTERVAL * 3) return // 超时太短，不值得心跳
+  if (totalTimeout <= STREAM_HEARTBEAT_INTERVAL * 3) {return} // 超时太短，不值得心跳
 
   let extendedCount = 0
   const maxExtensions = Math.floor(totalTimeout / STREAM_HEARTBEAT_INTERVAL) - 1
 
   const checkAndExtend = () => {
-    if (signal.aborted) return
+    if (signal.aborted) {return}
 
     if (extendedCount >= maxExtensions) {
       // 已经延长过多次，不再延长
@@ -584,10 +584,10 @@ export async function fetchStreamingWithHeartbeat(
       }
 
       const retryAfter = extractRetryAfter(err)
-      if (retryAfter) rateLimit.pauseAll(retryAfter)
+      if (retryAfter) {rateLimit.pauseAll(retryAfter)}
 
-      if (attempt >= maxRetries) throw err
-      if (!isRetryable(err)) throw err
+      if (attempt >= maxRetries) {throw err}
+      if (!isRetryable(err)) {throw err}
     }
 
     const backoff = Math.min(
@@ -654,7 +654,7 @@ async function fetchWithIdleTimeout(
 
   const resetIdleTimer = () => {
     lastActivityTime = Date.now()
-    if (idleTimer) clearTimeout(idleTimer)
+    if (idleTimer) {clearTimeout(idleTimer)}
     idleTimer = setTimeout(() => {
       // 空闲超时：自最后一次数据到达后 idleTimeoutMs 内无新数据
       if (!dataReceived) {
@@ -725,8 +725,8 @@ async function fetchWithIdleTimeout(
 
     return response
   } finally {
-    if (idleTimer) clearTimeout(idleTimer)
-    if (progressTimer) clearInterval(progressTimer)
+    if (idleTimer) {clearTimeout(idleTimer)}
+    if (progressTimer) {clearInterval(progressTimer)}
     if (onProgress) {
       onProgress(Math.round((Date.now() - startTime) / 1000), 'done')
     }

@@ -44,13 +44,13 @@ async function getDrivesWindows(includeNetwork: boolean): Promise<DriveInfo[]> {
     const lines = output.split('\n').filter(l => l.trim() && !l.startsWith('Node'))
     for (const line of lines) {
       const cols = line.split(',')
-      if (cols.length < 3) continue
+      if (cols.length < 3) {continue}
       const [_, deviceId, driveType, freeSpace, volumeName, size, fsType] = cols
 
       // driveType: 2=Removable, 3=Fixed, 4=Network, 5=CD-ROM
       const typeNum = parseInt(driveType)
-      if (typeNum === 5) continue // 跳过光驱
-      if (typeNum === 4 && !includeNetwork) continue // 默认跳过网络盘
+      if (typeNum === 5) {continue} // 跳过光驱
+      if (typeNum === 4 && !includeNetwork) {continue} // 默认跳过网络盘
 
       const totalSize = parseInt(size) || 0
       const freeSize = parseInt(freeSpace) || 0
@@ -82,7 +82,7 @@ async function getDrivesFallback(includeNetwork: boolean): Promise<DriveInfo[]> 
     const root = `${letter}:\\`
     try {
       const stat = await fs.promises.stat(root)
-      if (!stat.isDirectory()) continue
+      if (!stat.isDirectory()) {continue}
 
       // 快速获取容量（Windows 上可用但可能异步阻塞）
       try {
@@ -142,7 +142,7 @@ const driveTypeMap: Record<number, string> = {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return '未知'
+  if (bytes === 0) {return '未知'}
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0
   let size = bytes

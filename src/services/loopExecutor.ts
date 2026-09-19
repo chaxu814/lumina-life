@@ -85,7 +85,7 @@ function extractArtifacts(text: string): string[] {
   // 文件路径（Windows / Unix）
   const fileRe = /(?:[A-Z]:\\[\w\\.\-]+|\/[\w/.\-]+\.\w{1,5})/g
   while ((m = fileRe.exec(text)) !== null) {
-    if (!artifacts.includes(m[0])) artifacts.push(m[0])
+    if (!artifacts.includes(m[0])) {artifacts.push(m[0])}
   }
   return artifacts.slice(0, 5)
 }

@@ -201,14 +201,14 @@ const PROVIDER_CAPABILITIES: Record<ProviderKind, ProviderCapabilities> = {
  */
 export function identifyProvider(baseUrl: string): ProviderKind {
   const url = baseUrl.toLowerCase()
-  if (url.includes('api.openai') || url.includes('openai.com')) return 'openai'
-  if (url.includes('anthropic') || url.includes('claude')) return 'anthropic'
-  if (url.includes('deepseek')) return 'deepseek'
-  if (url.includes('ollama') || url.includes(':11434')) return 'ollama' // 兼容 127.0.0.1:11434 等等价写法
-  if (url.includes('localhost') || url.includes('127.0.0.1')) return 'lmstudio'
-  if (url.includes('dashscope')) return 'dashscope'
-  if (url.includes('siliconflow')) return 'siliconflow'
-  if (url.includes('bigmodel') || url.includes('zhipu')) return 'zhipu'
+  if (url.includes('api.openai') || url.includes('openai.com')) {return 'openai'}
+  if (url.includes('anthropic') || url.includes('claude')) {return 'anthropic'}
+  if (url.includes('deepseek')) {return 'deepseek'}
+  if (url.includes('ollama') || url.includes(':11434')) {return 'ollama'} // 兼容 127.0.0.1:11434 等等价写法
+  if (url.includes('localhost') || url.includes('127.0.0.1')) {return 'lmstudio'}
+  if (url.includes('dashscope')) {return 'dashscope'}
+  if (url.includes('siliconflow')) {return 'siliconflow'}
+  if (url.includes('bigmodel') || url.includes('zhipu')) {return 'zhipu'}
   return 'unknown'
 }
 
@@ -229,7 +229,7 @@ export function modelSupports(
 ): boolean {
   const caps = getProviderCapabilities(baseUrl)
   const value = caps[capability]
-  if (typeof value === 'boolean') return value
+  if (typeof value === 'boolean') {return value}
   return true // 默认安全
 }
 
@@ -352,7 +352,7 @@ export function adaptRequestBody(input: RequestAdapterInput): AdaptedRequest {
  * 从 Provider 特定格式的流式 chunk 中提取 token 用量
  */
 export function extractUsage(chunk: any, kind: ProviderKind): { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null {
-  if (!chunk) return null
+  if (!chunk) {return null}
 
   switch (kind) {
     case 'anthropic': {

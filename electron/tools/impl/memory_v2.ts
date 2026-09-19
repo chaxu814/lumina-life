@@ -66,19 +66,19 @@ export async function memoryGet(args: Record<string, any>): Promise<ToolResult> 
     }
     case 'facts': {
       const facts = store.getFacts(undefined, 20)
-      if (facts.length === 0) return { callId: '', ok: true, content: '(暂无事实记忆)' }
+      if (facts.length === 0) {return { callId: '', ok: true, content: '(暂无事实记忆)' }}
       const lines = facts.map((f, i) => `${i + 1}. [${f.category}] ${f.content} (${(f.confidence * 100).toFixed(0)}%)`)
       return { callId: '', ok: true, content: `📋 事实记忆 (${facts.length}条):\n${lines.join('\n')}` }
     }
     case 'reflections': {
       const refs = store.getReflections(10)
-      if (refs.length === 0) return { callId: '', ok: true, content: '(暂无反思记忆)' }
+      if (refs.length === 0) {return { callId: '', ok: true, content: '(暂无反思记忆)' }}
       const lines = refs.map((r, i) => `${i + 1}. [${r.topic}] ${r.insight}`)
       return { callId: '', ok: true, content: `💭 反思记忆 (${refs.length}条):\n${lines.join('\n')}` }
     }
     case 'persona': {
       const p = store.getPersona()
-      if (!p) return { callId: '', ok: true, content: '(暂无完整人格画像)' }
+      if (!p) {return { callId: '', ok: true, content: '(暂无完整人格画像)' }}
       const bar = (v: number) => '█'.repeat(Math.round(v * 5)) + '░'.repeat(5 - Math.round(v * 5))
       return { callId: '', ok: true, content: `🎭 人格画像:\n- 特质: ${p.traits.join('、')}\n- 开放:${bar(p.openness)} 尽责:${bar(p.conscientiousness)} 外向:${bar(p.extraversion)} 宜人:${bar(p.agreeableness)} 趣味:${bar(p.playfulness)}\n- 演化: ${p.evolutionLog.slice(-3).join(' | ')}` }
     }

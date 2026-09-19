@@ -28,7 +28,7 @@ const CACHE_TTL_MS = 1000 * 60 * 2 // 2 分钟
 
 function cacheGet(key: string): string | null {
   const item = searchCache.get(key)
-  if (!item) return null
+  if (!item) {return null}
   if (Date.now() > item.expire) { searchCache.delete(key); return null }
   return item.content
 }
@@ -107,52 +107,52 @@ function injectDateIfNeeded(query: string): string {
 // ═══════════════════════════════════════════════════════════
 
 function decodeBingRedirect(link: string): string {
-  if (!link) return ''
+  if (!link) {return ''}
   if (link.includes('/url?q=')) {
     try { return decodeURIComponent(link.split('/url?q=')[1].split('&')[0]) } catch { return link }
   }
-  if (link.startsWith('/')) return `https://cn.bing.com${link}`
-  if (link.startsWith('http')) return link
+  if (link.startsWith('/')) {return `https://cn.bing.com${link}`}
+  if (link.startsWith('http')) {return link}
   return ''
 }
 
 function looksSponsorLike(s?: string): boolean {
-  if (!s) return false
+  if (!s) {return false}
   const t = s.toLowerCase()
   return t.includes('赞助') || t.includes('广告') || t.includes('推广') || t.includes('sponsored') || t.includes('ad ')
 }
 
 function resultQualityScore(r: { title: string; link: string; desc: string }): number {
   let score = 0
-  if (r.title.length >= 12) score += 2
-  if (r.desc.length >= 40) score += 2
-  if (/^https?:\/\//i.test(r.link)) score += 1
-  if (!looksSponsorLike(r.title + ' ' + r.desc)) score += 3
-  if (r.link.includes('bing.com')) score -= 2
+  if (r.title.length >= 12) {score += 2}
+  if (r.desc.length >= 40) {score += 2}
+  if (/^https?:\/\//i.test(r.link)) {score += 1}
+  if (!looksSponsorLike(r.title + ' ' + r.desc)) {score += 3}
+  if (r.link.includes('bing.com')) {score -= 2}
   return score
 }
 
 function normalizeResults(results: Array<{ title: string; link: string; desc: string }>, max: number): string {
   const uniq = new Map<string, { title: string; link: string; desc: string }>()
   for (const r of results) {
-    if (!r.title) continue
+    if (!r.title) {continue}
     const key = r.title.toLowerCase().slice(0, 60) || r.link.toLowerCase()
     const prev = uniq.get(key)
     const curScore = resultQualityScore(r)
-    if (!prev || curScore > resultQualityScore(prev)) uniq.set(key, r)
+    if (!prev || curScore > resultQualityScore(prev)) {uniq.set(key, r)}
   }
   const out = Array.from(uniq.values()).slice(0, max)
-  if (out.length === 0) return '（未找到有效结果）'
+  if (out.length === 0) {return '（未找到有效结果）'}
   return out.map((r, i) => `${i + 1}. ${r.title}\n   ${decodeBingRedirect(r.link)}\n   ${r.desc}`).join('\n\n')
 }
 
 /** 验证结果是否有效（非空、非验证页、非错误） */
 function isValidResult(content: string): boolean {
-  if (!content || content.length < 20) return false
-  if (content.includes('（未找到有效结果）')) return false
-  if (content.includes('搜索出错') || content.includes('搜索超时')) return false
+  if (!content || content.length < 20) {return false}
+  if (content.includes('（未找到有效结果）')) {return false}
+  if (content.includes('搜索出错') || content.includes('搜索超时')) {return false}
   // 检查是否返回了 captcha 页面（个别引擎可能没检测到）
-  if (isCaptchaPage(content)) return false
+  if (isCaptchaPage(content)) {return false}
   return true
 }
 
@@ -178,7 +178,7 @@ function extractTopLinks(results: string, maxLinks: number): string[] {
 async function fetchPageContent(url: string): Promise<{ title: string; snippet: string } | null> {
   try {
     const html = await httpGetText(url, { 'Accept-Language': 'zh-CN,zh;q=0.9' }, 10000)
-    if (!html || isCaptchaPage(html)) return null
+    if (!html || isCaptchaPage(html)) {return null}
 
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
     const title = titleMatch ? stripHtml(titleMatch[1]).trim() : ''
@@ -210,8 +210,8 @@ async function fetchPageContent(url: string): Promise<{ title: string; snippet: 
     text = lines.join('\n')
 
     // 截取关键内容
-    if (text.length > 1500) text = text.slice(0, 1500) + '\n...(截断)'
-    if (!text || text.length < 50) return null
+    if (text.length > 1500) {text = text.slice(0, 1500) + '\n...(截断)'}
+    if (!text || text.length < 50) {return null}
 
     return { title, snippet: text }
   } catch {
@@ -225,7 +225,7 @@ async function enrichWithPageContent(
   query: string,
 ): Promise<string> {
   const links = extractTopLinks(originalContent, 2)
-  if (links.length === 0) return originalContent
+  if (links.length === 0) {return originalContent}
 
   const pageContents: string[] = []
   for (const url of links) {
@@ -237,7 +237,7 @@ async function enrichWithPageContent(
     }
   }
 
-  if (pageContents.length === 0) return originalContent
+  if (pageContents.length === 0) {return originalContent}
 
   return `${originalContent}\n\n━━━ 网页正文（AI 抓取）━━━\n\n${pageContents.join('\n\n---\n\n')}`
 }
@@ -280,7 +280,7 @@ async function searchBing(query: string, count: number): Promise<string> {
   try {
     const cacheKey = `bing:${query}:${count}`
     const cached = cacheGet(cacheKey)
-    if (cached) return cached
+    if (cached) {return cached}
 
     const url = `https://cn.bing.com/search?q=${encodeURIComponent(query)}&count=${count}`
     const html = await httpGetText(url, { 'Accept-Language': 'zh-CN,zh;q=0.9' }, 15000)
@@ -316,7 +316,7 @@ async function searchGoogle(query: string, count: number): Promise<string> {
   try {
     const cacheKey = `google:${query}:${count}`
     const cached = cacheGet(cacheKey)
-    if (cached) return cached
+    if (cached) {return cached}
 
     const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=${count}&hl=zh-CN`
     const html = await httpGetText(url, { 'Accept-Language': 'zh-CN,zh;q=0.9' }, 15000)
@@ -364,7 +364,7 @@ async function searchBaidu(query: string, count: number): Promise<string> {
   try {
     const cacheKey = `baidu:${query}:${count}`
     const cached = cacheGet(cacheKey)
-    if (cached) return cached
+    if (cached) {return cached}
 
     const url = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&rn=${count}&tn=baiduhome_pg`
     const html = await httpGetText(url, { 'Accept-Language': 'zh-CN,zh;q=0.9', 'Cookie': 'BAIDUID=;' }, 15000)
@@ -387,7 +387,7 @@ async function searchBaidu(query: string, count: number): Promise<string> {
     } else {
       for (const rb of resultBlocks) {
         const contextStart = html.indexOf(rb)
-        if (contextStart < 0) continue
+        if (contextStart < 0) {continue}
         const block = html.slice(contextStart, contextStart + 3000)
 
         const titleMatch = block.match(/<h3[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i) || block.match(/<a[^>]*>([\s\S]*?)<\/a>/i)
@@ -414,7 +414,7 @@ async function searchBaidu(query: string, count: number): Promise<string> {
 /** Brave Search API (JSON) — v5.5: 稳定性最高 */
 async function searchBrave(query: string, count: number, apiKey?: string): Promise<string> {
   try {
-    if (!apiKey) return '__BRAVE_NO_KEY__'
+    if (!apiKey) {return '__BRAVE_NO_KEY__'}
 
     const url = `https://api.search.brave.com/res/v1/web/search?${new URLSearchParams({
       q: query,
@@ -439,11 +439,11 @@ async function searchBrave(query: string, count: number, apiKey?: string): Promi
       const title = stripHtml(item.title || '').slice(0, 120)
       const link = item.url || item.link || ''
       const desc = stripHtml(item.description || item.snippet || '').slice(0, 240)
-      if (!title) continue
+      if (!title) {continue}
       results.push({ title, link, desc })
     }
 
-    if (results.length === 0) return `Brave 搜索 "${query}" 未找到结果`
+    if (results.length === 0) {return `Brave 搜索 "${query}" 未找到结果`}
     return normalizeResults(results, count)
   } catch (e) {
     return `Brave 搜索出错: ${e instanceof Error ? e.message : String(e)}`
@@ -543,7 +543,7 @@ function buildEngineOrder(preferred: string, braveApiKey?: string): EngineEntry[
   // 去重（如果用户指定的引擎恰好是 brave，不放两次）
   const seen = new Set<string>()
   return ordered.filter(e => {
-    if (seen.has(e.name)) return false
+    if (seen.has(e.name)) {return false}
     seen.add(e.name)
     return true
   })

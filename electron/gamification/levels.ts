@@ -87,12 +87,12 @@ export const LEVEL_TITLES: Record<number, string> = {
 
 export function getTitle(level: number): string {
   const exact = LEVEL_TITLES[level]
-  if (exact) return exact
+  if (exact) {return exact}
   // 取不超过当前等级的最高称号
   const keys = Object.keys(LEVEL_TITLES).map(Number).sort((a, b) => a - b)
   let title = '冒险者'
   for (const k of keys) {
-    if (k <= level) title = LEVEL_TITLES[k]
+    if (k <= level) {title = LEVEL_TITLES[k]}
   }
   return title
 }
@@ -154,7 +154,7 @@ class XpManager {
     // 不超过每日上限（按基础 XP 算，防止高倍率刷分）
     const dailyLeft = XP_RULES.DAILY_XP_CAP - this._todayXp
     const capped = Math.min(adjustedAmount, dailyLeft)
-    if (capped <= 0) return { levelUp: false, oldLevel: this.level, newLevel: this.level, multiplier, baseXp: amount }
+    if (capped <= 0) {return { levelUp: false, oldLevel: this.level, newLevel: this.level, multiplier, baseXp: amount }}
 
     const oldLevel = this.level
     this._totalXp += capped

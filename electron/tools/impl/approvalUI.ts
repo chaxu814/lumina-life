@@ -57,12 +57,12 @@ export function classifyApproval(toolName: string, args: Record<string, unknown>
   if (toolName === 'shell_exec') {
     const cmd = String(args.command || args.cmd || '').toLowerCase()
     for (const risk of highRiskCommands) {
-      if (cmd.includes(risk)) return 'critical'
+      if (cmd.includes(risk)) {return 'critical'}
     }
-    if (cmd.includes('sudo') || cmd.includes('su ')) return 'high'
-    if (cmd.includes('rm ') || cmd.includes('del ')) return 'high'
-    if (cmd.includes('curl') || cmd.includes('wget')) return 'medium'
-    if (cmd.includes('>') && !cmd.includes('echo')) return 'low' // 输出重定向
+    if (cmd.includes('sudo') || cmd.includes('su ')) {return 'high'}
+    if (cmd.includes('rm ') || cmd.includes('del ')) {return 'high'}
+    if (cmd.includes('curl') || cmd.includes('wget')) {return 'medium'}
+    if (cmd.includes('>') && !cmd.includes('echo')) {return 'low'} // 输出重定向
   }
 
   // ═══════════════════════════════════════════════════════
@@ -77,12 +77,12 @@ export function classifyApproval(toolName: string, args: Record<string, unknown>
       return 'critical'
     }
 
-    if (filePath.includes('.ENV') && !filePath.includes('.ENV.EXAMPLE')) return 'high'
-    if (filePath.includes('PACKAGE.JSON') || filePath.includes('TSCONFIG')) return 'medium'
+    if (filePath.includes('.ENV') && !filePath.includes('.ENV.EXAMPLE')) {return 'high'}
+    if (filePath.includes('PACKAGE.JSON') || filePath.includes('TSCONFIG')) {return 'medium'}
 
     // 任何盘符下的 Program Files 系统目录写保护
     const programFilesPattern = /\\(PROGRAM FILES|PROGRAM FILES \(X86\))\\(WINDOWS|COMMON FILES|INTERNET EXPLORER)/i
-    if (programFilesPattern.test(filePath)) return 'critical'
+    if (programFilesPattern.test(filePath)) {return 'critical'}
   }
 
   // ═══════════════════════════════════════════════════════
@@ -100,14 +100,14 @@ export function classifyApproval(toolName: string, args: Record<string, unknown>
   // 浏览器操作
   if (toolName === 'browser' && args.action === 'click') {
     const url = String(args.url || '')
-    if (url.includes('login') || url.includes('payment')) return 'medium'
+    if (url.includes('login') || url.includes('payment')) {return 'medium'}
   }
 
   // 网络请求
   if (toolName === 'web_fetch') {
     const url = String(args.url || '')
-    if (url.includes('127.0.0.1') || url.includes('localhost')) return 'low'
-    if (!url.startsWith('https://')) return 'medium'
+    if (url.includes('127.0.0.1') || url.includes('localhost')) {return 'low'}
+    if (!url.startsWith('https://')) {return 'medium'}
   }
 
   return null // 无需审批

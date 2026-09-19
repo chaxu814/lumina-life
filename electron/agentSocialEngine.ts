@@ -168,7 +168,7 @@ const SPONTANEOUS_TOPICS: TopicTemplate[] = [
 /** 获取队友的简短摘要（仅在需要时注入） */
 function getTeammateSummary(agentId: string): string {
   const p = TEAM_PERSONAS[agentId]
-  if (!p) return ''
+  if (!p) {return ''}
   return `${p.icon} ${p.name}：${p.personality.slice(0, 80)}`
 }
 
@@ -244,13 +244,13 @@ function buildMoEPrompt(
 
 /** 检测回复是否为空洞内容 */
 function isSubstantialReply(text: string): boolean {
-  if (!text || text.trim().length < 15) return false
+  if (!text || text.trim().length < 15) {return false}
   // 纯语气词
-  if (/^[\s]*[嗯哦啊哈呃诶呵嘿嗐嘛呢吧呀噢喔]+[\s!！。.,，…~～]*$/.test(text.trim())) return false
+  if (/^[\s]*[嗯哦啊哈呃诶呵嘿嗐嘛呢吧呀噢喔]+[\s!！。.,，…~～]*$/.test(text.trim())) {return false}
   // 无意义的单句
-  if (/^(嗯嗯|哦哦|哈哈|好的|行|对|是的|没错|好嘞|ok|OK)[\s!！。.]*$/i.test(text.trim())) return false
+  if (/^(嗯嗯|哦哦|哈哈|好的|行|对|是的|没错|好嘞|ok|OK)[\s!！。.]*$/i.test(text.trim())) {return false}
   // 只有一个字的回应
-  if (text.trim().length <= 3) return false
+  if (text.trim().length <= 3) {return false}
   return true
 }
 
@@ -388,8 +388,8 @@ export class AgentSocialEngine {
       trigger: ctxPartial.trigger,
     }
     // 守卫检查
-    if (this._shouldBlockSocialEngine()) return
-    if (this._userIsWaiting) return
+    if (this._shouldBlockSocialEngine()) {return}
+    if (this._userIsWaiting) {return}
     // 用户活跃时暂停团队自主聊天
     if (!llmCoordinator.requestPermission('SocialEngine', PRIORITY.SOCIAL)) {
       // 延迟到队列，等用户空闲后再聊
@@ -444,29 +444,29 @@ export class AgentSocialEngine {
   /** 尝试触发自发社交 */
   trySpontaneousSocial(): TopicTemplate | null {
     // 守卫检查
-    if (this._shouldBlockSocialEngine()) return null
+    if (this._shouldBlockSocialEngine()) {return null}
     const teamData = this.team.getTeamState()
-    if (!teamData) return null
+    if (!teamData) {return null}
 
     // 频率控制
     const now = Date.now()
-    if (now - this.lastSpontaneousTime < 30_000) return null  // 至少间隔 30s
-    if (this.dailySpontaneousCount >= 20) return null
+    if (now - this.lastSpontaneousTime < 30_000) {return null}  // 至少间隔 30s
+    if (this.dailySpontaneousCount >= 20) {return null}
 
     // 检查所有话题
     const eligible = SPONTANEOUS_TOPICS.filter(t => {
-      if (t.condition && !t.condition(teamData)) return false
+      if (t.condition && !t.condition(teamData)) {return false}
       return true
     })
 
-    if (eligible.length === 0) return null
+    if (eligible.length === 0) {return null}
 
     // 加权随机选择
     const totalWeight = eligible.reduce((s, t) => s + t.weight, 0)
     let roll = Math.random() * totalWeight
     for (const t of eligible) {
       roll -= t.weight
-      if (roll <= 0) return t
+      if (roll <= 0) {return t}
     }
 
     return eligible[eligible.length - 1]
@@ -475,7 +475,7 @@ export class AgentSocialEngine {
   /** 触发自发社交 */
   async activateSocial(topic: TopicTemplate): Promise<void> {
     // 守卫检查
-    if (this._shouldBlockSocialEngine()) return
+    if (this._shouldBlockSocialEngine()) {return}
     this.lastSpontaneousTime = Date.now()
     this.dailySpontaneousCount++
 
@@ -541,7 +541,7 @@ export class AgentSocialEngine {
   /** 尝试触发自发对话 */
   async trySpontaneousConversation(): Promise<boolean> {
     const topic = this.trySpontaneousSocial()
-    if (!topic) return false
+    if (!topic) {return false}
     await this.activateSocial(topic)
     return true
   }
@@ -553,7 +553,7 @@ export class AgentSocialEngine {
 
   /** 屏幕内容讨论触发 */
   async triggerScreenDiscussion(screenDesc: string): Promise<void> {
-    if (this._userIsWaiting || this.isProcessing) return
+    if (this._userIsWaiting || this.isProcessing) {return}
     await this.triggerConversation({
       mode: 'screen_watch',
       topic: `屏幕上的内容: ${screenDesc.slice(0, 80)}`,
@@ -568,7 +568,7 @@ export class AgentSocialEngine {
 
   /** 决策讨论触发 */
   async triggerDecisionDiscussion(proposal: DecisionProposal): Promise<void> {
-    if (this._userIsWaiting || this.isProcessing) return
+    if (this._userIsWaiting || this.isProcessing) {return}
     await this.triggerConversation({
       mode: 'decision',
       topic: proposal.question,
@@ -612,7 +612,7 @@ export class AgentSocialEngine {
 
       ctx.currentRound = round
       const speaker = currentSpeaker
-      if (!speaker) break
+      if (!speaker) {break}
 
       const speakerPersona = this.getAgentPersonaSafe(speaker)
 
@@ -734,9 +734,9 @@ export class AgentSocialEngine {
 
   private selectNextSpeaker(current: string, ctx: ConversationContext): string {
     const p = ctx.participants
-    if (!p) return 'lumina'
+    if (!p) {return 'lumina'}
     const idx = p.indexOf(current as TeamMemberId)
-    if (idx < 0 || idx >= p.length - 1) return p[0]
+    if (idx < 0 || idx >= p.length - 1) {return p[0]}
     return p[idx + 1]
   }
 
@@ -755,7 +755,7 @@ export class AgentSocialEngine {
 
 function getAgentPersonaSafe(agentId: string): { name: string; systemPrompt: string } | null {
   const persona = TEAM_PERSONAS[agentId]
-  if (!persona) return null
+  if (!persona) {return null}
   return {
     name: persona.name,
     systemPrompt: persona.systemPrompt,
@@ -776,11 +776,11 @@ export function getSocialEngine(
   try {
     const { getOrchestrator } = require('./core/agentOrchestrator')
     const orch = getOrchestrator()
-    if (orch.socialEngine) return orch.socialEngine
+    if (orch.socialEngine) {return orch.socialEngine}
   } catch {}
   // 本地创建
   if (!_socialEngineInstance) {
-    if (!llmCall) throw new Error('[SocialEngine] 首次调用需要 llmCall')
+    if (!llmCall) {throw new Error('[SocialEngine] 首次调用需要 llmCall')}
     _socialEngineInstance = new AgentSocialEngine(llmCall, toolLlmCall)
     // 同步到 orchestrator
     try {

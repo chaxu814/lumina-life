@@ -11,7 +11,7 @@ import { TokenEstimator } from '../tokenEstimator'
 
 /** 将 AgentMessage content 安全转为字符串 */
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -106,11 +106,11 @@ ${conversation.slice(0, 8000)}
       signal: AbortSignal.timeout(120_000),
     })
 
-    if (!res.ok) throw new Error(`压缩请求失败: ${res.status}`)
+    if (!res.ok) {throw new Error(`压缩请求失败: ${res.status}`)}
 
     const data = await res.json()
     const summary = data.choices?.[0]?.message?.content?.trim()
-    if (summary && summary.length > 50) return summary.slice(0, MAX_SUMMARY_LENGTH)
+    if (summary && summary.length > 50) {return summary.slice(0, MAX_SUMMARY_LENGTH)}
     return null
   } catch (err: any) {
     console.warn('[MemoryCompaction] LLM 压缩失败，使用规则摘要:', err.message)
@@ -139,7 +139,7 @@ function ruleBasedCompact(
 }
 
 export function createMemoryCompactionHook(workingDir: string): HookRegistration {
-  let lastCompactionTokens = 0
+  const lastCompactionTokens = 0
   const estimator = new TokenEstimator()
 
   return {
@@ -159,7 +159,7 @@ export function createMemoryCompactionHook(workingDir: string): HookRegistration
         input.messages.map(m => ({ content: m.content, role: m.role }))
       )
 
-      if (totalTokens < threshold) return
+      if (totalTokens < threshold) {return}
 
       console.log(`[MemoryCompaction] ⚠️ Agent[${agentId || 'default'}] 上下文 ${TokenEstimator.format(totalTokens)} tokens 超过阈值 ${TokenEstimator.format(threshold)}，触发压缩...`)
 
@@ -168,7 +168,7 @@ export function createMemoryCompactionHook(workingDir: string): HookRegistration
       const recentMsgs = input.messages.filter(m => m.role !== 'system').slice(-6)
       const toCompact = input.messages.filter(m => m.role !== 'system').slice(0, -6)
 
-      if (toCompact.length === 0) return
+      if (toCompact.length === 0) {return}
 
       // LLM 驱动压缩
       const hookCtx: HookContext = {

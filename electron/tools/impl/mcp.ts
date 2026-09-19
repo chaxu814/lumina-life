@@ -64,7 +64,7 @@ class MCPClient {
   }
 
   async connect(): Promise<void> {
-    if (this.connected) return
+    if (this.connected) {return}
 
     return new Promise((resolve, reject) => {
       try {
@@ -87,7 +87,7 @@ class MCPClient {
         this.buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim()) continue
+          if (!line.trim()) {continue}
           try {
             const resp: MCPResponse = JSON.parse(line)
             if (resp.id && this.resolveMap.has(resp.id)) {
@@ -158,21 +158,21 @@ class MCPClient {
       const origResolve = resolve
       this.resolveMap.set(id, (resp: MCPResponse) => {
         clearTimeout(timeout)
-        if (resp.error) reject(new Error(resp.error.message))
-        else origResolve(resp.result)
+        if (resp.error) {reject(new Error(resp.error.message))}
+        else {origResolve(resp.result)}
       })
     })
   }
 
   async listTools(): Promise<MCPTool[]> {
-    if (!this.connected) await this.connect()
+    if (!this.connected) {await this.connect()}
     const result = await this.sendRequest('tools/list')
     this.tools = result?.tools || []
     return this.tools
   }
 
   async callTool(name: string, args: Record<string, any>): Promise<MCPToolResult> {
-    if (!this.connected) await this.connect()
+    if (!this.connected) {await this.connect()}
     const result = await this.sendRequest('tools/call', { name, arguments: args })
     return result?.content || []
   }
@@ -214,7 +214,7 @@ class MCPServerManager {
   /** 连接指定服务器 */
   async connectServer(name: string): Promise<{ ok: boolean; error?: string; tools?: string[] }> {
     const config = this.serverConfigs.get(name)
-    if (!config) return { ok: false, error: `未知 MCP 服务器: ${name}` }
+    if (!config) {return { ok: false, error: `未知 MCP 服务器: ${name}` }}
 
     try {
       const client = new MCPClient(config)
@@ -266,7 +266,7 @@ class MCPServerManager {
     if (!client) {
       // 尝试自动连接
       const result = await this.connectServer(serverName)
-      if (!result.ok) return { ok: false, content: '', error: `MCP 服务器 "${serverName}" 未连接: ${result.error}` }
+      if (!result.ok) {return { ok: false, content: '', error: `MCP 服务器 "${serverName}" 未连接: ${result.error}` }}
     }
 
     try {

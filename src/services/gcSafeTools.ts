@@ -320,9 +320,9 @@ export function getToolNotification(toolName: string, args: Record<string, any>)
     browser: (a) => {
       const url = a.url || ''
       const action = a.action || ''
-      if (action === 'launch' || action === 'open' || action === 'navigate') return `🌐 正在打开浏览器：${url.slice(0, 50)}`
-      if (action === 'snapshot') return `🌐 正在截取网页快照`
-      if (action === 'click') return `🌐 正在点击网页元素`
+      if (action === 'launch' || action === 'open' || action === 'navigate') {return `🌐 正在打开浏览器：${url.slice(0, 50)}`}
+      if (action === 'snapshot') {return `🌐 正在截取网页快照`}
+      if (action === 'click') {return `🌐 正在点击网页元素`}
       return `🌐 浏览器操作：${action || url.slice(0, 50) || '...'}`
     },
     // 文件

@@ -43,7 +43,7 @@ function syncProcessingState(): void {
 let _subscribed = false
 
 export function initStateBridge(): void {
-  if (_subscribed) return
+  if (_subscribed) {return}
   _subscribed = true
 
   console.log('[StateBridge] 初始化...')

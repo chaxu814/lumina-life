@@ -99,8 +99,8 @@ export interface ProactiveConfig {
 /* ---------- 通知兼容层 ---------- */
 function safeNotify(title: string, body: string, icon?: string): void {
   try {
-    if (typeof Notification === 'undefined') return
-    if (!Notification.isSupported()) return
+    if (typeof Notification === 'undefined') {return}
+    if (!Notification.isSupported()) {return}
 
     // 先显式请求/检查权限，Windows 上 Electron 有时不会自动弹权限
     const notify = Notification as any
@@ -525,7 +525,7 @@ export class ProactiveEngine extends EventEmitter {
   private saveTriggersToFile(): void {
     try {
       const dir = path.dirname(this.getTriggersFilePath())
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       const data = this.triggers.map(t => ({
         id: t.id,
         enabled: t.enabled,
@@ -544,8 +544,8 @@ export class ProactiveEngine extends EventEmitter {
    */
   async testTrigger(id: string): Promise<void> {
     const trigger = this.triggers.find(t => t.id === id)
-    if (!trigger) throw new Error(`触发器 ${id} 不存在`)
-    if (!trigger.enabled) throw new Error(`触发器 ${id} 未启用`)
+    if (!trigger) {throw new Error(`触发器 ${id} 不存在`)}
+    if (!trigger.enabled) {throw new Error(`触发器 ${id} 未启用`)}
     this.activate(trigger)
   }
 
@@ -554,7 +554,7 @@ export class ProactiveEngine extends EventEmitter {
    * 仅在 `config.enabled === true` 时生效
    */
   start(): void {
-    if (!this.config.enabled) return
+    if (!this.config.enabled) {return}
 
     // 每分钟检查常规触发器
     this.checkTimer = setInterval(() => this.checkTriggers(), 60000)
@@ -632,12 +632,12 @@ export class ProactiveEngine extends EventEmitter {
    * 停止引擎：清除所有定时器，释放资源
    */
   stop(): void {
-    if (this.checkTimer) clearInterval(this.checkTimer)
-    if (this.screenWatchTimer) clearInterval(this.screenWatchTimer)
-    if (this.hotTopicTimer) clearInterval(this.hotTopicTimer)
-    if (this.dailyResetTimer) clearInterval(this.dailyResetTimer)
-    if (this.rhythmTimer) clearInterval(this.rhythmTimer)
-    if (this.dailyPaperTimer) clearInterval(this.dailyPaperTimer)
+    if (this.checkTimer) {clearInterval(this.checkTimer)}
+    if (this.screenWatchTimer) {clearInterval(this.screenWatchTimer)}
+    if (this.hotTopicTimer) {clearInterval(this.hotTopicTimer)}
+    if (this.dailyResetTimer) {clearInterval(this.dailyResetTimer)}
+    if (this.rhythmTimer) {clearInterval(this.rhythmTimer)}
+    if (this.dailyPaperTimer) {clearInterval(this.dailyPaperTimer)}
     this.stopOpportunityCheck()
     this.checkTimer = null
     this.screenWatchTimer = null
@@ -656,15 +656,15 @@ export class ProactiveEngine extends EventEmitter {
     // 同步屏幕/热搜开关到对应的触发器
     if (partial.screenWatchEnabled !== undefined) {
       const t = this.triggers.find(t => t.id === 'screen-watch')
-      if (t) t.enabled = partial.screenWatchEnabled
+      if (t) {t.enabled = partial.screenWatchEnabled}
     }
     if (partial.hotTopicEnabled !== undefined) {
       const t = this.triggers.find(t => t.id === 'hot-topic')
-      if (t) t.enabled = partial.hotTopicEnabled
+      if (t) {t.enabled = partial.hotTopicEnabled}
     }
     if (partial.dailyPaperEnabled !== undefined) {
       const t = this.triggers.find(t => t.id === 'daily-paper')
-      if (t) t.enabled = partial.dailyPaperEnabled
+      if (t) {t.enabled = partial.dailyPaperEnabled}
     }
     this.saveTriggersToFile()
     this.stop()
@@ -674,10 +674,10 @@ export class ProactiveEngine extends EventEmitter {
   // ── 🆕 屏幕感知（v6.1：读 ScreenAwareness.scene，不再截图问 VLM）──
 
   private async runScreenWatch(): Promise<void> {
-    if (this.isScreenWatchRunning) return
-    if (this.dailyCount >= this.config.maxDailyProactive) return
-    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) return
-    if (!llmCoordinator.requestPermission('Proactive.ScreenWatch', PRIORITY.PROACTIVE)) return
+    if (this.isScreenWatchRunning) {return}
+    if (this.dailyCount >= this.config.maxDailyProactive) {return}
+    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) {return}
+    if (!llmCoordinator.requestPermission('Proactive.ScreenWatch', PRIORITY.PROACTIVE)) {return}
 
     this.isScreenWatchRunning = true
     try {
@@ -688,7 +688,7 @@ export class ProactiveEngine extends EventEmitter {
         shouldComment: true, commentSuggestions: [], timestamp: Date.now(),
       }
       const trigger = this.triggers.find(t => t.id === 'screen-watch')
-      if (trigger) this.markTriggerFired(trigger)
+      if (trigger) {this.markTriggerFired(trigger)}
       await getProactiveOrchestrator().onTrigger({ source: 'screen', triggerId: 'screen-watch', scene })
     } catch (err) {
       console.error('[ProactiveEngine] 屏幕监控异常:', err)
@@ -701,10 +701,10 @@ export class ProactiveEngine extends EventEmitter {
   // ── 🆕 热搜感知 ──────────────────────────────────────
 
   private async runHotTopicCheck(): Promise<void> {
-    if (this.isHotTopicRunning) return
-    if (this.dailyCount >= this.config.maxDailyProactive) return
-    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) return
-    if (!llmCoordinator.requestPermission('Proactive.HotTopic', PRIORITY.PROACTIVE)) return
+    if (this.isHotTopicRunning) {return}
+    if (this.dailyCount >= this.config.maxDailyProactive) {return}
+    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) {return}
+    if (!llmCoordinator.requestPermission('Proactive.HotTopic', PRIORITY.PROACTIVE)) {return}
 
     this.isHotTopicRunning = true
     try {
@@ -713,10 +713,10 @@ export class ProactiveEngine extends EventEmitter {
         fetchWeiboHot(),
       ])
       const allTopics = [...biliTopics, ...weiboTopics]
-      if (allTopics.length === 0) return
+      if (allTopics.length === 0) {return}
 
       const trigger = this.triggers.find(t => t.id === 'hot-topic')
-      if (trigger) this.markTriggerFired(trigger)
+      if (trigger) {this.markTriggerFired(trigger)}
       // v6.1：选话题+生成搭话交给编排器 generator
       await getProactiveOrchestrator().onTrigger({
         source: 'hot_topic',
@@ -734,10 +734,10 @@ export class ProactiveEngine extends EventEmitter {
   // ── 🆕 Daily Paper ──────────────────────────────────────
 
   private async runDailyPaperCheck(): Promise<void> {
-    if (this.isDailyPaperRunning) return
-    if (this.dailyCount >= this.config.maxDailyProactive) return
-    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) return
-    if (!llmCoordinator.requestPermission('Proactive.DailyPaper', PRIORITY.PROACTIVE)) return
+    if (this.isDailyPaperRunning) {return}
+    if (this.dailyCount >= this.config.maxDailyProactive) {return}
+    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) {return}
+    if (!llmCoordinator.requestPermission('Proactive.DailyPaper', PRIORITY.PROACTIVE)) {return}
 
     this.isDailyPaperRunning = true
     try {
@@ -745,10 +745,10 @@ export class ProactiveEngine extends EventEmitter {
 
       // 筛选 paper 类别
       const paperItems = papers.filter((p: NewsItem) => p.category === 'paper')
-      if (paperItems.length === 0) return
+      if (paperItems.length === 0) {return}
 
       const trigger = this.triggers.find(t => t.id === 'daily-paper')
-      if (trigger) this.markTriggerFired(trigger)
+      if (trigger) {this.markTriggerFired(trigger)}
       // v6.1：选论文+生成搭话交给编排器 generator
       await getProactiveOrchestrator().onTrigger({
         source: 'daily_paper',
@@ -820,7 +820,7 @@ export class ProactiveEngine extends EventEmitter {
   }
 
   private startOpportunityCheck(): void {
-    if (this.opportunityCheckTimer) return
+    if (this.opportunityCheckTimer) {return}
     this.opportunityCheckTimer = setInterval(() => this.runOpportunityCheck(), 60000)
   }
 
@@ -832,11 +832,11 @@ export class ProactiveEngine extends EventEmitter {
   }
 
   private runOpportunityCheck(): void {
-    if (this.lastUserMessageTime === 0) return
-    if (this.dailyCount >= this.config.maxDailyProactive) return
+    if (this.lastUserMessageTime === 0) {return}
+    if (this.dailyCount >= this.config.maxDailyProactive) {return}
 
     const trigger = this.triggers.find(t => t.id === 'opportunity-after-chat')
-    if (!trigger || !trigger.enabled) return
+    if (!trigger || !trigger.enabled) {return}
 
     const gapSeconds = Math.floor((Date.now() - this.lastUserMessageTime) / 1000)
     const thresholdMatch = trigger.condition.match(/^gap:(\d+)$/)
@@ -865,14 +865,14 @@ export class ProactiveEngine extends EventEmitter {
    */
   updateTrigger(id: string, updates: Partial<ProactiveTrigger>): boolean {
     const idx = this.triggers.findIndex(t => t.id === id)
-    if (idx === -1) return false
+    if (idx === -1) {return false}
     this.triggers[idx] = { ...this.triggers[idx], ...updates }
     this.saveTriggersToFile()
     // 如果切换了屏幕感知/热搜感知/Daily Paper，同步到 config 并热重启
     if (id === 'screen-watch' || id === 'hot-topic' || id === 'daily-paper') {
-      if (id === 'screen-watch') this.config.screenWatchEnabled = !!updates.enabled
-      if (id === 'hot-topic') this.config.hotTopicEnabled = !!updates.enabled
-      if (id === 'daily-paper') this.config.dailyPaperEnabled = !!updates.enabled
+      if (id === 'screen-watch') {this.config.screenWatchEnabled = !!updates.enabled}
+      if (id === 'hot-topic') {this.config.hotTopicEnabled = !!updates.enabled}
+      if (id === 'daily-paper') {this.config.dailyPaperEnabled = !!updates.enabled}
       this.stop()
       this.start()
     }
@@ -914,7 +914,7 @@ export class ProactiveEngine extends EventEmitter {
    */
   forceActivate(id: string): boolean {
     const trigger = this.triggers.find(t => t.id === id)
-    if (!trigger) return false
+    if (!trigger) {return false}
     const message = trigger.template || TIME_TEMPLATES[trigger.id] || `[测试] 触发器 ${trigger.id} 已激活`
     this.activateWithMessage(trigger, message, true)
     return true
@@ -956,14 +956,14 @@ export class ProactiveEngine extends EventEmitter {
   // ── 内部 ─────────────────────────────────────────────
 
   private checkTriggers(): void {
-    if (this.dailyCount >= this.config.maxDailyProactive) return
+    if (this.dailyCount >= this.config.maxDailyProactive) {return}
 
     const now = Date.now()
-    if (now - this.lastProactive < this.config.minIntervalSeconds * 1000) return
+    if (now - this.lastProactive < this.config.minIntervalSeconds * 1000) {return}
 
     for (const trigger of this.triggers) {
-      if (!trigger.enabled) continue
-      if (trigger.lastTriggered && now - trigger.lastTriggered < trigger.cooldown * 1000) continue
+      if (!trigger.enabled) {continue}
+      if (trigger.lastTriggered && now - trigger.lastTriggered < trigger.cooldown * 1000) {continue}
 
       switch (trigger.type) {
         case 'time':
@@ -1023,10 +1023,10 @@ export class ProactiveEngine extends EventEmitter {
   }
 
   private activateWithMessage(trigger: ProactiveTrigger, message: string, skipCooldown = false): void {
-    if (!message) return
+    if (!message) {return}
 
     const now = Date.now()
-    if (!skipCooldown && trigger.lastTriggered && now - trigger.lastTriggered < trigger.cooldown * 1000) return
+    if (!skipCooldown && trigger.lastTriggered && now - trigger.lastTriggered < trigger.cooldown * 1000) {return}
 
     trigger.lastTriggered = now
     this.lastProactive = now
@@ -1073,7 +1073,7 @@ export class ProactiveEngine extends EventEmitter {
 
     // ── 🔧 v3.9.1/v6.x: Windows 系统通知（兼容层，失败不阻塞引擎） ──
     try {
-      if (!this.config.notificationsEnabled) return // 静默跳过
+      if (!this.config.notificationsEnabled) {return} // 静默跳过
       const iconPath = getAppIconPath()
       safeNotify('💡 Lumina 有话要说', message.slice(0, 120), iconPath)
     } catch {
@@ -1089,12 +1089,12 @@ export class ProactiveEngine extends EventEmitter {
   private matchCron(cron: string): boolean {
     const now = new Date()
     const parts = cron.split(' ')
-    if (parts.length !== 5) return false
+    if (parts.length !== 5) {return false}
 
     const [minute, hour, day, month, weekday] = parts
     const matches = (field: string, value: number): boolean => {
-      if (field === '*') return true
-      if (field === String(value)) return true
+      if (field === '*') {return true}
+      if (field === String(value)) {return true}
       return false
     }
 
@@ -1209,7 +1209,7 @@ export class ProactiveEngine extends EventEmitter {
   setDailyPaperEnabled(enabled: boolean): void {
     this.config.dailyPaperEnabled = enabled
     const t = this.triggers.find(t => t.id === 'daily-paper')
-    if (t) t.enabled = enabled
+    if (t) {t.enabled = enabled}
     this.saveTriggersToFile()
     this.stop()
     this.start()
@@ -1248,7 +1248,7 @@ export function getProactiveEngine(): ProactiveEngine {
 }
 
 export function initProactiveEngine(config?: Partial<ProactiveConfig>): ProactiveEngine {
-  if (_instance) _instance.stop()
+  if (_instance) {_instance.stop()}
   _instance = new ProactiveEngine(config)
   return _instance
 }

@@ -71,7 +71,7 @@ export class AnimationMixer {
   /** action 层当前 envelope（淡入淡出 0~1）；fadeMs<=0 表示无淡变恒为 1 */
   private envelope(l: LayerState, now: number): number {
     const fade = l.fadeMs && l.fadeMs > 0 ? l.fadeMs : null
-    if (!fade) return 1
+    if (!fade) {return 1}
     const fadeIn = clamp((now - l.bornAt) / fade, 0, 1)
     const fadeOut = l.expiresAt === undefined ? 1 : clamp((l.expiresAt - now) / fade, 0, 1)
     return Math.min(fadeIn, fadeOut)
@@ -81,7 +81,7 @@ export class AnimationMixer {
   frame(now: number): StandardPose {
     // 1) 清理过期层
     for (const [id, l] of Array.from(this.layers)) {
-      if (l.expiresAt !== undefined && now >= l.expiresAt) this.layers.delete(id)
+      if (l.expiresAt !== undefined && now >= l.expiresAt) {this.layers.delete(id)}
     }
 
     const ordered = (Object.keys(LAYER_PRIORITY) as LayerId[])
@@ -96,13 +96,13 @@ export class AnimationMixer {
       for (const id of ordered) {
         const l = this.layers.get(id)!
         const val = l.pose[ch]
-        if (val === undefined) continue
+        if (val === undefined) {continue}
         let w = clamp(l.weight, 0, 1)
-        if (id === 'action') w *= this.envelope(l, now)
-        if (w <= 0.001) continue
+        if (id === 'action') {w *= this.envelope(l, now)}
+        if (w <= 0.001) {continue}
         acc = acc === undefined ? val : lerp(acc, val, w)
       }
-      if (acc !== undefined) out[ch] = acc
+      if (acc !== undefined) {out[ch] = acc}
     }
 
     // 3) 眨眼：乘性闭合双眼
@@ -115,7 +115,7 @@ export class AnimationMixer {
     // 4) 变化率限速（与上一帧比较）
     const result: StandardPose = {}
     for (const ch of channels) {
-      if (!(ch in out)) continue
+      if (!(ch in out)) {continue}
       const [lo, hi] = CHANNEL_RANGES[ch]
       const target = clamp(out[ch] as number, lo, hi)
       const prevVal = this.prev[ch]
@@ -142,8 +142,8 @@ export function speechPoseFor(viseme: Viseme, open: number, browRaise = 0): Stan
   const map: Record<Exclude<Viseme, 'rest'>, StandardChannel> = {
     A: 'visemeA', I: 'visemeI', U: 'visemeU', E: 'visemeE', O: 'visemeO',
   }
-  for (const v of ['A', 'I', 'U', 'E', 'O'] as const) pose[map[v]] = 0
-  if (viseme !== 'rest') pose[map[viseme]] = clamp(open, 0, 1)
+  for (const v of ['A', 'I', 'U', 'E', 'O'] as const) {pose[map[v]] = 0}
+  if (viseme !== 'rest') {pose[map[viseme]] = clamp(open, 0, 1)}
   if (browRaise > 0) { pose.browLY = browRaise; pose.browRY = browRaise }
   return pose
 }

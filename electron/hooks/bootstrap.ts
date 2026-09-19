@@ -26,7 +26,7 @@ export function createBootstrapHook(workingDir: string): HookRegistration {
 
     async beforeReasoning(input: BeforeReasoningInput) {
       // 已完成的跳过
-      if (fs.existsSync(flagPath)) return
+      if (fs.existsSync(flagPath)) {return}
       // 文件不存在跳过（但标记已完成避免重复检测）
       if (!fs.existsSync(bootstrapPath)) {
         fs.writeFileSync(flagPath, new Date().toISOString())
@@ -34,7 +34,7 @@ export function createBootstrapHook(workingDir: string): HookRegistration {
       }
       // 不是首次用户交互则跳过
       const userMsgs = input.ctx.messages.filter(m => m.role === 'user')
-      if (userMsgs.length > 1) return
+      if (userMsgs.length > 1) {return}
 
       try {
         const content = fs.readFileSync(bootstrapPath, 'utf-8').trim()

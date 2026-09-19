@@ -61,11 +61,11 @@ export interface PostMomentParams {
 let db: Database.Database | null = null
 
 function getDb(): Database.Database {
-  if (db) return db
+  if (db) {return db}
 
   // 确保目录存在
   const dir = path.dirname(DB_PATH)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
 
   db = new Database(DB_PATH)
   db.pragma('journal_mode = WAL')
@@ -307,7 +307,7 @@ export function autoPost(params: PostMomentParams): Moment {
  */
 export function getRecentSummary(limit: number = 10): string {
   const { moments } = getTimeline({ limit })
-  if (moments.length === 0) return '（暂无动态）'
+  if (moments.length === 0) {return '（暂无动态）'}
 
   return moments.map(m => {
     const time = new Date(m.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -473,7 +473,7 @@ export function getLatestReport(type?: string): ReportRecord | null {
     params.push(type)
   }
   const row = db.prepare(`SELECT * FROM reports ${where} ORDER BY created_at DESC LIMIT 1`).get(...params) as any
-  if (!row) return null
+  if (!row) {return null}
   return {
     id: row.id,
     type: row.type,

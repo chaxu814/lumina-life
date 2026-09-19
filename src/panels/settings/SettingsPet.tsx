@@ -26,11 +26,11 @@ export default function SettingsPet() {
         if (cfg) {
           setPetClickThrough(!!cfg.clickThrough)
           setPetAutoRestart(!!cfg.autoRestart)
-          if (typeof cfg.scale === 'number') setPetScale(Math.round(cfg.scale * 100))
-          if (cfg.auto === 'off' || cfg.auto === 'light' || cfg.auto === 'heavy') setPetAuto(cfg.auto)
+          if (typeof cfg.scale === 'number') {setPetScale(Math.round(cfg.scale * 100))}
+          if (cfg.auto === 'off' || cfg.auto === 'light' || cfg.auto === 'heavy') {setPetAuto(cfg.auto)}
         }
         const m = await api()?.petGetModel?.()
-        if (m === 'Mao') setPetModel(m)
+        if (m === 'Mao') {setPetModel(m)}
       } catch {}
     })()
     const unsubState = api()?.onPetState?.((r: boolean) => { setPetRunning(!!r); if (r) { setStarting(false); setStartProgress(100) } })

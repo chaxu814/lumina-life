@@ -49,12 +49,12 @@ export type ModelErrorKind =
  * 以及链路本地 169.254.*。
  */
 export function isLocalEndpoint(baseUrl?: string | null): boolean {
-  if (!baseUrl) return false
+  if (!baseUrl) {return false}
   const u = String(baseUrl).toLowerCase()
-  if (/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|169\.254\.)/.test(u)) return true
-  if (/192\.168\.\d+\.\d+/.test(u)) return true
-  if (/10\.\d+\.\d+\.\d+/.test(u)) return true
-  if (/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/.test(u)) return true
+  if (/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|169\.254\.)/.test(u)) {return true}
+  if (/192\.168\.\d+\.\d+/.test(u)) {return true}
+  if (/10\.\d+\.\d+\.\d+/.test(u)) {return true}
+  if (/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/.test(u)) {return true}
   return false
 }
 
@@ -99,7 +99,7 @@ const VISION_NAME_PATTERNS: RegExp[] = [
 
 /** 按模型名启发式判断是否为视觉（多模态）模型 */
 export function looksLikeVisionModel(model?: string | null): boolean {
-  if (!model) return false
+  if (!model) {return false}
   const m = String(model).toLowerCase()
   return VISION_NAME_PATTERNS.some((re) => re.test(m))
 }
@@ -115,10 +115,10 @@ export function looksLikeVisionModel(model?: string | null): boolean {
 export function classifyModelError(status: number, rawText?: string | null): ModelErrorKind {
   const text = String(rawText || '').toLowerCase()
 
-  if (status === 401 || status === 403) return 'auth'
+  if (status === 401 || status === 403) {return 'auth'}
 
   // 流选项（旧 llama.cpp / 部分兼容层不识别）
-  if (/stream_options|include_usage/.test(text)) return 'stream_options'
+  if (/stream_options|include_usage/.test(text)) {return 'stream_options'}
 
   const anyOf = (patterns: RegExp[]) => patterns.some((re) => re.test(text))
 
@@ -173,9 +173,9 @@ export function classifyModelError(status: number, rawText?: string | null): Mod
 
 /** 从消息里移除图片 part（保留文本），用于纯文本模型降级 */
 function stripImageMessages(messages: any[] | undefined): any[] {
-  if (!Array.isArray(messages)) return []
+  if (!Array.isArray(messages)) {return []}
   return messages.map((m) => {
-    if (!m || !Array.isArray(m.content)) return m
+    if (!m || !Array.isArray(m.content)) {return m}
     const text = m.content
       .filter((p: any) => p && p.type === 'text')
       .map((p: any) => p.text || '')

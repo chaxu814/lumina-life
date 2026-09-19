@@ -57,7 +57,7 @@ export function registerCodingModeIpc(): void {
       return { success: true, diff: output }
     } catch (err: any) {
       // diff 返回非0表示有差异
-      if (err.stdout) return { success: true, diff: err.stdout }
+      if (err.stdout) {return { success: true, diff: err.stdout }}
       return { success: false, error: err.message }
     }
   })

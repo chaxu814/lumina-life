@@ -86,7 +86,7 @@ export class TeamContextManager {
 
   /** 获取上下文摘要（兼容旧接口） */
   getContext(): string | null {
-    if (!this.context.project) return null
+    if (!this.context.project) {return null}
     return JSON.stringify(this.context.project, null, 2)
   }
 
@@ -138,23 +138,23 @@ export class TeamContextManager {
 
   updateTaskStatus(taskId: string, status: TeamTask['status'], result?: string): boolean {
     const task = this.context.tasks.find((t) => t.id === taskId)
-    if (!task) return false
+    if (!task) {return false}
     task.status = status
     task.updatedAt = Date.now()
-    if (result) task.result = result
+    if (result) {task.result = result}
     return true
   }
 
   getTasks(filter?: { agentId?: string; status?: TeamTask['status'] }): TeamTask[] {
     let tasks = this.context.tasks
-    if (filter?.agentId) tasks = tasks.filter((t) => t.assignedTo === filter.agentId)
-    if (filter?.status) tasks = tasks.filter((t) => t.status === filter.status)
+    if (filter?.agentId) {tasks = tasks.filter((t) => t.assignedTo === filter.agentId)}
+    if (filter?.status) {tasks = tasks.filter((t) => t.status === filter.status)}
     return tasks
   }
 
   /** 获取团队任务面板的文本摘要 */
   getTaskBoard(): string {
-    if (this.context.tasks.length === 0) return '暂无团队任务。'
+    if (this.context.tasks.length === 0) {return '暂无团队任务。'}
 
     const todo = this.context.tasks.filter((t) => t.status === 'todo')
     const inProgress = this.context.tasks.filter((t) => t.status === 'in_progress')
@@ -210,7 +210,7 @@ export class TeamContextManager {
 
   getRecentDelegations(limit = 5): string {
     const logs = this.context.delegationLogs.slice(-limit)
-    if (logs.length === 0) return '暂无委托记录。'
+    if (logs.length === 0) {return '暂无委托记录。'}
 
     return (
       '【最近委托记录】\n' +
@@ -235,7 +235,7 @@ export class TeamContextManager {
   }
 
   getAnnouncements(): string {
-    if (this.context.announcements.length === 0) return ''
+    if (this.context.announcements.length === 0) {return ''}
     return '【团队公告】\n' + this.context.announcements.map((a) => `  ${a}`).join('\n')
   }
 
@@ -285,9 +285,9 @@ export function getTeamContextManager(): TeamContextManager {
   try {
     const { getOrchestrator } = require('./core/agentOrchestrator')
     const orch = getOrchestrator()
-    if (orch.teamContext) return orch.teamContext
+    if (orch.teamContext) {return orch.teamContext}
   } catch {}
-  if (!_teamContext) _teamContext = new TeamContextManager()
+  if (!_teamContext) {_teamContext = new TeamContextManager()}
   return _teamContext
 }
 

@@ -29,7 +29,7 @@ interface PersonalModalProps {
 export default function PersonalModal({ open, onClose }: PersonalModalProps) {
   const [activeSection, setActiveSection] = useState<SidebarId>('profile')
 
-  if (!open) return null
+  if (!open) {return null}
 
   return (
     /* ── 背景遮罩 ── */

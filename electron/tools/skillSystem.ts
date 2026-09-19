@@ -101,7 +101,7 @@ export async function executeSkill(name: string, args: Record<string, any>, call
 /** 辅助：执行原子工具 */
 async function callAtomicTool(name: string, args: Record<string, any>, callId: string): Promise<ToolResult> {
   const def = getToolDef(name)
-  if (!def) return { callId, ok: false, content: '', error: `工具 "${name}" 未注册` }
+  if (!def) {return { callId, ok: false, content: '', error: `工具 "${name}" 未注册` }}
   return executeTool(name, args)
 }
 
@@ -129,11 +129,11 @@ registerSkill({
     // 1. 先导航到页面（通过 browser 工具）
     const navCmd = `navigate to ${url}`
     const navResult = await callAtomicTool('browser', { command: navCmd }, callId)
-    if (!navResult.ok) return navResult
+    if (!navResult.ok) {return navResult}
 
     // 2. 扫描页面元素
     const snapshotResult = await callAtomicTool('browser', { command: 'snapshot' }, callId)
-    if (!snapshotResult.ok) return snapshotResult
+    if (!snapshotResult.ok) {return snapshotResult}
 
     // 3. 分析匹配结果并点击
     const clickCmd = `click element matching "${target}"`
@@ -276,7 +276,7 @@ registerSkill({
 
     // 1. 读取文件
     const readResult = await callAtomicTool('file_read', { path: file_path }, callId)
-    if (!readResult.ok) return readResult
+    if (!readResult.ok) {return readResult}
 
     // 2. 分析代码 (基于简单的模式匹配)
     const content = readResult.content
@@ -286,21 +286,21 @@ registerSkill({
 
     // 通用检查
     if (focus === 'all' || focus === 'security') {
-      if (content.includes('eval(')) issues.push('⚠️ 使用了 eval()，存在安全风险')
-      if (content.includes('innerHTML')) issues.push('⚠️ 使用了 innerHTML，考虑 XSS 风险')
-      if (content.includes('exec(') || content.includes('execSync(')) issues.push('⚠️ 直接执行命令，注意注入风险')
+      if (content.includes('eval(')) {issues.push('⚠️ 使用了 eval()，存在安全风险')}
+      if (content.includes('innerHTML')) {issues.push('⚠️ 使用了 innerHTML，考虑 XSS 风险')}
+      if (content.includes('exec(') || content.includes('execSync(')) {issues.push('⚠️ 直接执行命令，注意注入风险')}
     }
 
     if (focus === 'all' || focus === 'performance') {
       const longLines = lines.filter(l => l.length > 120)
-      if (longLines.length > 3) issues.push(`💡 ${longLines.length} 行超过 120 字符，建议拆分`)
-      if (lines.length > 500) issues.push(`💡 文件较长 (${lines.length} 行)，考虑拆分为多个模块`)
+      if (longLines.length > 3) {issues.push(`💡 ${longLines.length} 行超过 120 字符，建议拆分`)}
+      if (lines.length > 500) {issues.push(`💡 文件较长 (${lines.length} 行)，考虑拆分为多个模块`)}
     }
 
     if (focus === 'all' || focus === 'style') {
       const todoMatches = content.match(/TODO|FIXME|HACK/gi)
-      if (todoMatches && todoMatches.length > 0) issues.push(`📝 发现 ${todoMatches.length} 个 TODO/FIXME/HACK 标记`)
-      if (content.includes('console.log')) issues.push('💡 包含 console.log，生产环境建议移除')
+      if (todoMatches && todoMatches.length > 0) {issues.push(`📝 发现 ${todoMatches.length} 个 TODO/FIXME/HACK 标记`)}
+      if (content.includes('console.log')) {issues.push('💡 包含 console.log，生产环境建议移除')}
     }
 
     return {
@@ -329,7 +329,7 @@ registerSkill({
   async execute(args, callId) {
     const { project_type, project_dir } = args
     const results: string[] = []
-    let hasError = false
+    const hasError = false
 
     // 1. 检查目录
     const checkDir = await callAtomicTool('shell_exec', {
@@ -390,7 +390,7 @@ registerSkill({
 
     // 1. 获取时间
     const timeResult = await callAtomicTool('datetime', {}, callId)
-    if (timeResult.ok) checks.push(`⏰ ${timeResult.content}`)
+    if (timeResult.ok) {checks.push(`⏰ ${timeResult.content}`)}
 
     // 2. 检查系统资源
     const sysResult = await callAtomicTool('shell_exec', {
@@ -399,7 +399,7 @@ registerSkill({
         : 'uptime && free -h 2>/dev/null | head -2',
       timeout: 10000,
     }, callId)
-    if (sysResult.ok) checks.push(`💻 ${sysResult.content.slice(0, 200)}`)
+    if (sysResult.ok) {checks.push(`💻 ${sysResult.content.slice(0, 200)}`)}
 
     // 3. 检查空闲时间 (通过进程判断)
     const idleResult = await callAtomicTool('shell_exec', {
@@ -408,7 +408,7 @@ registerSkill({
         : 'date "+%H:%M"',
       timeout: 5000,
     }, callId)
-    if (idleResult.ok) checks.push(`🕐 当前: ${idleResult.content.trim()}`)
+    if (idleResult.ok) {checks.push(`🕐 当前: ${idleResult.content.trim()}`)}
 
     return {
       callId,

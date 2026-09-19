@@ -19,16 +19,16 @@ function extractOfficeTextNative(filePath: string): string | null {
     const results: string[] = []
 
     for (const entry of entries) {
-      if (!entry.name.endsWith('.xml') || entry.data.length === 0) continue
+      if (!entry.name.endsWith('.xml') || entry.data.length === 0) {continue}
       // 跳过样式/主题/关系/设置等非内容 XML
       if (entry.name.includes('/theme/') || entry.name.includes('/styles')
         || entry.name.includes('/fontTable') || entry.name.includes('/webSettings')
         || entry.name.includes('settings.xml') || entry.name.includes('/_rels/')
         || entry.name.includes('[Content_Types]') || entry.name.includes('/slideMasters/')
         || entry.name.includes('/slideLayouts/') || entry.name.includes('/tableStyles')
-        || entry.name.includes('/slideMacros/')) continue
+        || entry.name.includes('/slideMacros/')) {continue}
 
-      if (ext === '.pptx' && !entry.name.startsWith('ppt/slides/slide')) continue
+      if (ext === '.pptx' && !entry.name.startsWith('ppt/slides/slide')) {continue}
 
       const text = entry.data.toString('utf-8')
         .replace(/<[^>]+>/g, ' ')
@@ -40,7 +40,7 @@ function extractOfficeTextNative(filePath: string): string | null {
         .replace(/&#(\d+);/g, (_: string, n: string) => String.fromCharCode(parseInt(n, 10)))
         .replace(/\s+/g, ' ')
         .trim()
-      if (text) results.push(text)
+      if (text) {results.push(text)}
     }
 
     return results.length > 0 ? results.join('\n\n---\n\n').slice(0, 50000) : null
@@ -64,7 +64,7 @@ function extractPdfTextNative(filePath: string): string | null {
       const t = match[1]
         .replace(/\\(.)/g, '$1') // 处理转义 \( \) \\
         .trim()
-      if (t) texts.push(t)
+      if (t) {texts.push(t)}
     }
 
     //   匹配 TJ 数组: [(text) 120 (text2)] TJ
@@ -75,7 +75,7 @@ function extractPdfTextNative(filePath: string): string | null {
       if (parts) {
         for (const p of parts) {
           const t = p.slice(1, -1).replace(/\\(.)/g, '$1').trim()
-          if (t) texts.push(t)
+          if (t) {texts.push(t)}
         }
       }
     }
@@ -101,7 +101,7 @@ function extractPdfTextNative(filePath: string): string | null {
           })
           .replace(/[\x00-\x1f\x80-\xff]+/g, ' ')
           .replace(/\s+/g, ' ').trim()
-        if (decText) texts.push(decText)
+        if (decText) {texts.push(decText)}
       } catch {}
     }
 
@@ -122,7 +122,7 @@ function parseZipEntries(buf: Buffer): ZipEntry[] {
   for (let i = len - 22; i >= 0 && i > len - 66000; i--) {
     if (buf.readUInt32LE(i) === 0x06054b50) { eocdOffset = i; break }
   }
-  if (eocdOffset < 0) return entries
+  if (eocdOffset < 0) {return entries}
 
   // 2. 从 EOCD 读取中央目录偏移和条目数
   const cdOffset = buf.readUInt32LE(eocdOffset + 16)
@@ -131,9 +131,9 @@ function parseZipEntries(buf: Buffer): ZipEntry[] {
   // 3. 解析中央目录
   let cdPos = cdOffset
   for (let i = 0; i < cdEntries; i++) {
-    if (cdPos + 46 > len) break
+    if (cdPos + 46 > len) {break}
     const sig = buf.readUInt32LE(cdPos)
-    if (sig !== 0x02014b50) break  // PK\x01\x02
+    if (sig !== 0x02014b50) {break}  // PK\x01\x02
     const compression = buf.readUInt16LE(cdPos + 10)
     const compressedSize = buf.readUInt32LE(cdPos + 20)
     const uncompressedSize = buf.readUInt32LE(cdPos + 24)
@@ -173,7 +173,7 @@ function parseZipEntries(buf: Buffer): ZipEntry[] {
   return entries
 }
 
-let bridgeStatus: Record<string, { running: boolean; connected: boolean }> = {
+const bridgeStatus: Record<string, { running: boolean; connected: boolean }> = {
   discord: { running: false, connected: false },
   wechat: { running: false, connected: false },
   telegram: { running: false, connected: false },
@@ -184,7 +184,7 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
   // ─── Bridge (v2.7: 集成消息队列) ─────────────────
 
   ipcMain.handle('bridge:start', async (_event, platform: string) => {
-    if (!bridgeStatus[platform]) return { ok: false, error: `未知平台: ${platform}` }
+    if (!bridgeStatus[platform]) {return { ok: false, error: `未知平台: ${platform}` }}
     bridgeStatus[platform].running = true
     bridgeStatus[platform].connected = true
     console.log(`[Bridge] ${platform} 已启动 (v2.7 消息队列模式)`)
@@ -200,7 +200,7 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('bridge:stop', async (_event, platform: string) => {
-    if (!bridgeStatus[platform]) return { ok: false }
+    if (!bridgeStatus[platform]) {return { ok: false }}
     bridgeStatus[platform].running = false
     bridgeStatus[platform].connected = false
 
@@ -230,8 +230,8 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('window:minimize', () => mainWindow?.minimize())
   ipcMain.handle('window:maximize', () => {
-    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
-    else mainWindow?.maximize()
+    if (mainWindow?.isMaximized()) {mainWindow.unmaximize()}
+    else {mainWindow?.maximize()}
   })
   ipcMain.handle('window:close', () => mainWindow?.hide())
 
@@ -256,8 +256,8 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
     try {
       const memFile = join(app.getPath('userData'), 'memory.json')
       const confFile = join(app.getPath('userData'), 'lumina-config.json')
-      if (fs.existsSync(memFile)) fs.unlinkSync(memFile)
-      if (fs.existsSync(confFile)) fs.unlinkSync(confFile)
+      if (fs.existsSync(memFile)) {fs.unlinkSync(memFile)}
+      if (fs.existsSync(confFile)) {fs.unlinkSync(confFile)}
       return { success: true }
     } catch (err: any) { return { error: err.message } }
   })
@@ -265,7 +265,7 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('settings:reset', async () => {
     try {
       const confFile = join(app.getPath('userData'), 'lumina-config.json')
-      if (fs.existsSync(confFile)) fs.unlinkSync(confFile)
+      if (fs.existsSync(confFile)) {fs.unlinkSync(confFile)}
       return { success: true }
     } catch (err: any) { return { error: err.message } }
   })
@@ -293,10 +293,10 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('app:toggleDevtools', async () => {
-    if (!mainWindow) return { ok: false }
+    if (!mainWindow) {return { ok: false }}
     try {
-      if (mainWindow.webContents.isDevToolsOpened()) mainWindow.webContents.closeDevTools()
-      else mainWindow.webContents.openDevTools({ mode: 'detach' })
+      if (mainWindow.webContents.isDevToolsOpened()) {mainWindow.webContents.closeDevTools()}
+      else {mainWindow.webContents.openDevTools({ mode: 'detach' })}
     } catch { mainWindow.webContents.toggleDevTools() }
     return { ok: true }
   })
@@ -306,7 +306,7 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
     try {
       const absPath = join(__dirname, '..', '..', 'public', dirPath)
-      if (!fs.existsSync(absPath)) return []
+      if (!fs.existsSync(absPath)) {return []}
       return fs.readdirSync(absPath, { withFileTypes: true })
         .filter(e => e.isFile()).map(e => e.name)
     } catch { return [] }
@@ -347,21 +347,21 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
         const entries = parseZipEntries(buf)
         const results: string[] = []
         for (const entry of entries) {
-          if (!entry.name.endsWith('.xml') || entry.data.length === 0) continue
+          if (!entry.name.endsWith('.xml') || entry.data.length === 0) {continue}
           if (entry.name.includes('/theme/') || entry.name.includes('/styles')
             || entry.name.includes('/fontTable') || entry.name.includes('/webSettings')
             || entry.name.includes('settings.xml') || entry.name.includes('/_rels/')
             || entry.name.includes('[Content_Types]') || entry.name.includes('/slideMasters/')
             || entry.name.includes('/slideLayouts/') || entry.name.includes('/tableStyles')
-            || entry.name.includes('/slideMacros/')) continue
-          if (ext === 'pptx' && !entry.name.startsWith('ppt/slides/slide')) continue
+            || entry.name.includes('/slideMacros/')) {continue}
+          if (ext === 'pptx' && !entry.name.startsWith('ppt/slides/slide')) {continue}
           const text = entry.data.toString('utf-8')
             .replace(/<[^>]+>/g, ' ')
             .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
             .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
             .replace(/&#(\d+);/g, (_: string, n: string) => String.fromCharCode(parseInt(n, 10)))
             .replace(/\s+/g, ' ').trim()
-          if (text) results.push(text)
+          if (text) {results.push(text)}
         }
         return { text: results.length > 0 ? results.join('\n\n---\n\n').slice(0, 50000) : null }
       }
@@ -373,15 +373,15 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
         let match: RegExpExecArray | null
         while ((match = tjPattern.exec(content)) !== null) {
           const t = match[1].replace(/\\(.)/g, '$1').trim()
-          if (t) texts.push(t)
+          if (t) {texts.push(t)}
         }
         const tjArrayPattern = /\[([^\]]*)\]\s*TJ/g
         while ((match = tjArrayPattern.exec(content)) !== null) {
           const parts = match[1].match(/\(([^)]*)\)/g)
-          if (parts) for (const p of parts) {
+          if (parts) {for (const p of parts) {
             const t = p.slice(1, -1).replace(/\\(.)/g, '$1').trim()
-            if (t) texts.push(t)
-          }
+            if (t) {texts.push(t)}
+          }}
         }
         // try FlateDecode streams
         const streamPattern = /\/Filter\s*\/FlateDecode.*?stream\s*([\s\S]*?)\s*endstream/g
@@ -395,7 +395,7 @@ export function registerBridgeIpc(mainWindow: BrowserWindow): void {
               .replace(/<[^>]+>\s*Tj/g, ' ')
               .replace(/[\x00-\x1f\x80-\xff]+/g, ' ')
               .replace(/\s+/g, ' ').trim()
-            if (decText) texts.push(decText)
+            if (decText) {texts.push(decText)}
           } catch {}
         }
         const result = texts.join(' ').replace(/\s+/g, ' ').trim()

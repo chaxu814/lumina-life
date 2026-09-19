@@ -54,7 +54,7 @@ function buildMemorySnippet(query?: string): string {
       budget: { persona: 4, facts: 6, reflection: 2, recent: 2, working: 3 },
       maxLineLen: 70,
     })
-    if (recall.prompt) return recall.prompt
+    if (recall.prompt) {return recall.prompt}
     return buildPetMemoryContext(store, { maxFacts: 6, maxSummaries: 2 }).snippet
   } catch { return '' }
 }
@@ -103,9 +103,9 @@ export class ProactiveOrchestrator {
 
   /** 重逢分档：>5h 重逢语气，>1h 中性，<1h 轻微分别感（由调用方填 gapMinutes） */
   private gapTone(gapMinutes?: number): string {
-    if (gapMinutes === undefined) return ''
-    if (gapMinutes > 300) return '很久没见了，重逢的语气'
-    if (gapMinutes > 60) return '分别了一阵，普通重逢'
+    if (gapMinutes === undefined) {return ''}
+    if (gapMinutes > 300) {return '很久没见了，重逢的语气'}
+    if (gapMinutes > 60) {return '分别了一阵，普通重逢'}
     return '刚分开一会儿，轻微分别感'
   }
 
@@ -219,10 +219,10 @@ export class ProactiveOrchestrator {
   private markSpoken(speech: string): void {
     this.dailyCount++
     this.lastProactiveAt = Date.now()
-    if (this.config.backoffEnabled) this.backoff.recordAttempt()
+    if (this.config.backoffEnabled) {this.backoff.recordAttempt()}
     if (speech) {
       this.recentSpeeches.push(speech)
-      if (this.recentSpeeches.length > 10) this.recentSpeeches.shift()
+      if (this.recentSpeeches.length > 10) {this.recentSpeeches.shift()}
     }
   }
 
@@ -237,7 +237,7 @@ export class ProactiveOrchestrator {
    * 触发时构造 ProactiveEvent 调 onTrigger（见 proactiveEngine 改造）。
    */
   start(): void {
-    if (this.started) return
+    if (this.started) {return}
     this.started = true
     if (this.config.driveHardTriggerEnabled) {
       this.driveHardTimer = setInterval(() => {
@@ -249,21 +249,21 @@ export class ProactiveOrchestrator {
           }
         } catch { /* 不阻塞 */ }
       }, 60_000)
-      if (typeof (this.driveHardTimer as any)?.unref === 'function') (this.driveHardTimer as any).unref()
+      if (typeof (this.driveHardTimer as any)?.unref === 'function') {(this.driveHardTimer as any).unref()}
     }
     // 📮 阶段四：每日 04:00 合成「该提起的旧事」
     if (this.config.followupTopicsEnabled) {
       const runDaily = () => { void (async () => {
         try {
           const topics = await synthesizeFollowups()
-          if (topics.length) this.followups.replaceWith(topics)
+          if (topics.length) {this.followups.replaceWith(topics)}
         } catch { /* 合成失败保留旧列表 */ }
       })() }
       const scheduleNext = () => {
         const now = new Date()
         const next = new Date(now)
         next.setHours(4, 0, 0, 0)
-        if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
+        if (next.getTime() <= now.getTime()) {next.setDate(next.getDate() + 1)}
         const ms = next.getTime() - now.getTime()
         this.followupTimer = setTimeout(() => { runDaily(); scheduleNext() }, ms)
       }
@@ -272,9 +272,9 @@ export class ProactiveOrchestrator {
   }
 
   stop(): void {
-    if (this.driveHardTimer) clearInterval(this.driveHardTimer)
+    if (this.driveHardTimer) {clearInterval(this.driveHardTimer)}
     this.driveHardTimer = null
-    if (this.followupTimer) clearTimeout(this.followupTimer)
+    if (this.followupTimer) {clearTimeout(this.followupTimer)}
     this.followupTimer = null
     this.started = false
   }
@@ -283,6 +283,6 @@ export class ProactiveOrchestrator {
 // ── 单例 ─────────────────────────────────────────────────
 let _orchestrator: ProactiveOrchestrator | null = null
 export function getProactiveOrchestrator(): ProactiveOrchestrator {
-  if (!_orchestrator) _orchestrator = new ProactiveOrchestrator()
+  if (!_orchestrator) {_orchestrator = new ProactiveOrchestrator()}
   return _orchestrator
 }

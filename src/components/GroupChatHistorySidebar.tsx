@@ -103,7 +103,7 @@ export default function GroupChatHistorySidebar() {
     // dateStr is like "2026/8/9" — try to parse and format
     try {
       const d = new Date(dateStr)
-      if (isNaN(d.getTime())) return dateStr
+      if (isNaN(d.getTime())) {return dateStr}
       const mm = String(d.getMonth() + 1).padStart(2, '0')
       const dd = String(d.getDate()).padStart(2, '0')
       const hh = String(d.getHours()).padStart(2, '0')
@@ -115,8 +115,8 @@ export default function GroupChatHistorySidebar() {
   }
 
   const sorted = [...sessions].sort((a, b) => {
-    if ((a as any).pinned && !(b as any).pinned) return -1
-    if (!(a as any).pinned && (b as any).pinned) return 1
+    if ((a as any).pinned && !(b as any).pinned) {return -1}
+    if (!(a as any).pinned && (b as any).pinned) {return 1}
     return 0
   })
 
@@ -217,7 +217,7 @@ export default function GroupChatHistorySidebar() {
                     onChange={e => setEditTitle(e.target.value)}
                     onBlur={() => commitRename(s)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter') commitRename(s)
+                      if (e.key === 'Enter') {commitRename(s)}
                       if (e.key === 'Escape') { setEditingId(null) }
                     }}
                     autoFocus
@@ -271,10 +271,10 @@ export default function GroupChatHistorySidebar() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                     onMouseEnter={e => {
-                      if (!(s as any).pinned) (e.currentTarget as HTMLElement).style.color = 'var(--text-primary, #111827)'
+                      if (!(s as any).pinned) {(e.currentTarget as HTMLElement).style.color = 'var(--text-primary, #111827)'}
                     }}
                     onMouseLeave={e => {
-                      if (!(s as any).pinned) (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary, #9ca3af)'
+                      if (!(s as any).pinned) {(e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary, #9ca3af)'}
                     }}
                   >
                     📌

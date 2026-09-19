@@ -44,7 +44,7 @@ function isRecord(x: unknown): x is Record<string, unknown> {
 /** 校验 Live2D Cubism model3.json 的最小结构 */
 export function validateModel3(data: unknown): ValidationResult {
   const errors: string[] = []
-  if (!isRecord(data)) return { valid: false, errors: ['模型文件不是合法 JSON 对象'] }
+  if (!isRecord(data)) {return { valid: false, errors: ['模型文件不是合法 JSON 对象'] }}
 
   const version = data['Version']
   if (typeof version !== 'number' || version < 3 || version > 5) {
@@ -86,35 +86,35 @@ export function sanitizeModelName(raw: unknown, fallback = 'custom-model'): stri
 
 /** 安全相对路径：不含 ..、不以 / 或盘符开头、不含反斜杠逃逸 */
 export function isSafeRelativePath(p: unknown): p is string {
-  if (typeof p !== 'string' || !p.trim()) return false
+  if (typeof p !== 'string' || !p.trim()) {return false}
   const norm = p.replace(/\\/g, '/')
-  if (norm.startsWith('/')) return false
-  if (/^[a-zA-Z]:/.test(norm)) return false // Windows 盘符
+  if (norm.startsWith('/')) {return false}
+  if (/^[a-zA-Z]:/.test(norm)) {return false} // Windows 盘符
   const parts = norm.split('/')
-  if (parts.some(seg => seg === '..')) return false
+  if (parts.some(seg => seg === '..')) {return false}
   return true
 }
 
 /** 收集 model3.json 中所有被引用的资源相对路径 */
 export function collectReferencedFiles(data: unknown): string[] {
   const out: string[] = []
-  if (!isRecord(data)) return out
+  if (!isRecord(data)) {return out}
   const refs = data['FileReferences']
-  if (!isRecord(refs)) return out
+  if (!isRecord(refs)) {return out}
 
-  const pushStr = (v: unknown) => { if (typeof v === 'string') out.push(v) }
+  const pushStr = (v: unknown) => { if (typeof v === 'string') {out.push(v)} }
   pushStr(refs['Moc'])
   pushStr(refs['Physics'])
   pushStr(refs['Pose'])
   pushStr(refs['DisplayInfo'])
-  if (Array.isArray(refs['Textures'])) refs['Textures'].forEach(pushStr)
+  if (Array.isArray(refs['Textures'])) {refs['Textures'].forEach(pushStr)}
   if (Array.isArray(refs['Expressions'])) {
-    refs['Expressions'].forEach(e => { if (isRecord(e)) pushStr(e['File']) })
+    refs['Expressions'].forEach(e => { if (isRecord(e)) {pushStr(e['File'])} })
   }
   const motions = refs['Motions']
   if (isRecord(motions)) {
     for (const group of Object.values(motions)) {
-      if (Array.isArray(group)) group.forEach(m => { if (isRecord(m)) pushStr(m['File']) })
+      if (Array.isArray(group)) {group.forEach(m => { if (isRecord(m)) {pushStr(m['File'])} })}
     }
   }
   return out
@@ -142,7 +142,7 @@ export async function planModelImport(
   try { data = JSON.parse(entryText) } catch { throw new Error('入口 model3.json 不是合法 JSON') }
 
   const validation = validateModel3(data)
-  if (!validation.valid) throw new Error(`模型校验失败：${validation.errors.join('；')}`)
+  if (!validation.valid) {throw new Error(`模型校验失败：${validation.errors.join('；')}`)}
 
   // 入口相对源目录的目录前缀（资源通常相对 model3 所在目录）
   const entryDir = entryFile.includes('/') ? entryFile.replace(/[^/]+$/, '') : ''
@@ -150,7 +150,7 @@ export async function planModelImport(
   const uniq = Array.from(new Set(referenced))
 
   const unsafe = uniq.filter(p => !isSafeRelativePath(p))
-  if (unsafe.length) throw new Error(`发现不安全的资源路径：${unsafe.join('，')}`)
+  if (unsafe.length) {throw new Error(`发现不安全的资源路径：${unsafe.join('，')}`)}
 
   const files: PlannedFile[] = uniq.map(rel => ({ from: joinPath(srcDir, rel), rel }))
   return {

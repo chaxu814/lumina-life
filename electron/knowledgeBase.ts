@@ -174,7 +174,7 @@ export class KnowledgeBase {
     for (const t of Object.keys(tf)) {
       let count = 0
       for (const doc of allDocs) {
-        if (doc.content.includes(t)) count++
+        if (doc.content.includes(t)) {count++}
       }
       df[t] = Math.log((docCount + 1) / (count + 1)) + 1
     }
@@ -246,7 +246,7 @@ export class KnowledgeBase {
     this.dirty = true
 
     // 异步保存
-    setTimeout(() => { if (this.dirty) this.saveIndex() }, 1000)
+    setTimeout(() => { if (this.dirty) {this.saveIndex()} }, 1000)
 
     return doc
   }
@@ -322,7 +322,7 @@ export class KnowledgeBase {
     ]
 
     for (const kw of techKeywords) {
-      if (combined.includes(kw)) tags.add(kw)
+      if (combined.includes(kw)) {tags.add(kw)}
     }
 
     return Array.from(tags).slice(0, 10)
@@ -331,7 +331,7 @@ export class KnowledgeBase {
   /** 搜索 */
   search(query: string, topK: number = 5): KBSearchResult[] {
     const queryTokens = this.tokenize(query)
-    if (queryTokens.length === 0) return []
+    if (queryTokens.length === 0) {return []}
 
     // 查询向量
     const queryVec: Record<string, number> = {}
@@ -389,10 +389,10 @@ export class KnowledgeBase {
   /** 更新文档 */
   async updateDocument(id: string, updates: Partial<Pick<KBDocument, 'title' | 'content' | 'tags'>>): Promise<KBDocument | null> {
     const doc = this.documents.get(id)
-    if (!doc) return null
+    if (!doc) {return null}
 
-    if (updates.title) doc.title = updates.title
-    if (updates.tags) doc.tags = updates.tags
+    if (updates.title) {doc.title = updates.title}
+    if (updates.tags) {doc.tags = updates.tags}
     if (updates.content !== undefined) {
       const allDocs = Array.from(this.documents.values())
       const chunkTexts = this.chunkText(updates.content)
@@ -446,13 +446,13 @@ export class KnowledgeBase {
   /** 构建 RAG 上下文（供对话使用） */
   buildRAGContext(query: string, maxTokens: number = 2000): string {
     const results = this.search(query, 5)
-    if (results.length === 0) return ''
+    if (results.length === 0) {return ''}
 
     let context = '【知识库相关内容】\n'
     let totalLen = 0
     for (const r of results) {
       const entry = `📄 ${r.title} (相关度: ${(r.score * 100).toFixed(0)}%)\n${r.content}\n---\n`
-      if (totalLen + entry.length > maxTokens * 4) break
+      if (totalLen + entry.length > maxTokens * 4) {break}
       context += entry
       totalLen += entry.length
     }

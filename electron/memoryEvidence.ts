@@ -107,7 +107,7 @@ export class MemoryEvidenceEngine {
     if (existing) {
       // 更新已有记忆
       existing.mentionCount++
-      if (isNewSource) existing.sourceCount++
+      if (isNewSource) {existing.sourceCount++}
       existing.scores = this.calculateScores(existing, sourceReliability, importance)
       existing.compositeScore = this.computeComposite(existing.scores)
       existing.updatedAt = now
@@ -153,7 +153,7 @@ export class MemoryEvidenceEngine {
   /** LLM 评估记忆重要性 */
   setImportance(id: string, importance: number): boolean {
     const mem = this.memories.find(m => m.id === id)
-    if (!mem) return false
+    if (!mem) {return false}
 
     mem.scores.importance = Math.max(0, Math.min(importance, 1))
     mem.compositeScore = this.computeComposite(mem.scores)
@@ -165,7 +165,7 @@ export class MemoryEvidenceEngine {
   /** 标记记忆为矛盾/过时 */
   markContradicted(id: string): boolean {
     const mem = this.memories.find(m => m.id === id)
-    if (!mem) return false
+    if (!mem) {return false}
 
     mem.status = 'contradicted'
     mem.scores.confidence *= 0.3
@@ -187,7 +187,7 @@ export class MemoryEvidenceEngine {
   /** 获取所有记忆按评分排序 */
   getMemoriesByScore(type?: ScoredMemory['type']): ScoredMemory[] {
     let list = [...this.memories]
-    if (type) list = list.filter(m => m.type === type)
+    if (type) {list = list.filter(m => m.type === type)}
     return list.sort((a, b) => b.compositeScore - a.compositeScore)
   }
 
@@ -206,7 +206,7 @@ export class MemoryEvidenceEngine {
   /** 生成注入 System Prompt 的记忆摘要 */
   getPromptContext(maxMemories = 10): string {
     const highConf = this.getHighConfidenceMemories(maxMemories)
-    if (highConf.length === 0) return ''
+    if (highConf.length === 0) {return ''}
 
     const lines = highConf.map(m =>
       `- [${m.type}] (置信度:${(m.compositeScore * 100).toFixed(0)}%) ${m.content}`
@@ -260,8 +260,8 @@ export class MemoryEvidenceEngine {
   }
 
   private determineStatus(score: number): ScoredMemory['status'] {
-    if (score >= this.config.highConfidenceThreshold) return 'confirmed'
-    if (score >= this.config.lowConfidenceThreshold) return 'pending'
+    if (score >= this.config.highConfidenceThreshold) {return 'confirmed'}
+    if (score >= this.config.lowConfidenceThreshold) {return 'pending'}
     return 'outdated'
   }
 
@@ -270,9 +270,9 @@ export class MemoryEvidenceEngine {
     for (const mem of this.memories) {
       let support = 0
       for (const other of this.memories) {
-        if (other.id === mem.id) continue
+        if (other.id === mem.id) {continue}
         const similarity = this.textSimilarity(mem.content, other.content)
-        if (similarity > 0.4) support += similarity * 0.2
+        if (similarity > 0.4) {support += similarity * 0.2}
       }
       mem.scores.corroboration = Math.min(support, 1)
       mem.compositeScore = this.computeComposite(mem.scores)
@@ -321,11 +321,11 @@ export class MemoryEvidenceEngine {
       b.toLowerCase().replace(/[^\w\u4e00-\u9fff\s]/g, '').split(/\s+/).filter(w => w.length > 1)
     )
 
-    if (wordsA.size === 0 || wordsB.size === 0) return 0
+    if (wordsA.size === 0 || wordsB.size === 0) {return 0}
 
     let intersection = 0
     for (const w of wordsA) {
-      if (wordsB.has(w)) intersection++
+      if (wordsB.has(w)) {intersection++}
     }
 
     return intersection / Math.max(wordsA.size, wordsB.size)

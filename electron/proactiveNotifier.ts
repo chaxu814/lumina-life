@@ -18,7 +18,7 @@ let _initialized = false
  * 初始化通知桥接 — 监听 PROACTIVE_MESSAGE 事件并转发到渲染进程
  */
 export function initProactiveNotifier(): void {
-  if (_initialized) return
+  if (_initialized) {return}
   _initialized = true
 
   globalEventBus.on(BusEvents.PROACTIVE_MESSAGE, (payload: {

@@ -121,7 +121,7 @@ export class ProactiveChatManager {
 
   /** 启动主动对话检查（每 30 秒检查一次） */
   start(): void {
-    if (this.isRunning) return
+    if (this.isRunning) {return}
     this.isRunning = true
     this.lastUserActivity = Date.now()
 
@@ -163,7 +163,7 @@ export class ProactiveChatManager {
   /** 手动触发一次 */
   async triggerNow(id: string): Promise<void> {
     const trigger = this.triggers.find(t => t.id === id)
-    if (!trigger) return
+    if (!trigger) {return}
     trigger.lastTriggered = Date.now()
     this.onTrigger?.(trigger, trigger.prompt)
   }
@@ -177,17 +177,17 @@ export class ProactiveChatManager {
     const idleSeconds = Math.floor((Date.now() - this.lastUserActivity) / 1000)
 
     for (const trigger of this.triggers) {
-      if (!trigger.enabled) continue
+      if (!trigger.enabled) {continue}
 
       // 防重复触发（1 小时内不重复）
-      if (trigger.lastTriggered && Date.now() - trigger.lastTriggered < 3600000) continue
+      if (trigger.lastTriggered && Date.now() - trigger.lastTriggered < 3600000) {continue}
 
       let shouldTrigger = false
 
       if (trigger.type === 'idle') {
         // idle:300 格式
         const threshold = parseInt(trigger.condition.replace('idle:', ''), 10)
-        if (idleSeconds >= threshold) shouldTrigger = true
+        if (idleSeconds >= threshold) {shouldTrigger = true}
       } else if (trigger.type === 'time' || trigger.type === 'greeting' || trigger.type === 'reminder') {
         // 简单 cron 模拟：只解析 "分 时 * * *" 格式
         shouldTrigger = this.matchSimpleCron(trigger.condition, now)
@@ -203,7 +203,7 @@ export class ProactiveChatManager {
   /** 简单 cron 匹配（仅支持 "分 时" 格式） */
   private matchSimpleCron(cronExpr: string, now: Date): boolean {
     const parts = cronExpr.trim().split(/\s+/)
-    if (parts.length < 2) return false
+    if (parts.length < 2) {return false}
 
     const minute = parseInt(parts[0], 10)
     const hour = parseInt(parts[1], 10)

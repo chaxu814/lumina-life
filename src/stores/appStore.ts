@@ -519,7 +519,7 @@ export const useStore = create<AppStore>()(
       loadAgentLlmConfigs: async () => {
         try {
           const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
-          if (r?.configs) set({ agentLlmConfigs: r.configs })
+          if (r?.configs) {set({ agentLlmConfigs: r.configs })}
         } catch { /* 静默 */ }
       },
       getAgentLlmConfig: (agentId: string) => {
@@ -545,12 +545,12 @@ export const useStore = create<AppStore>()(
       syncProviderFromBackend: async () => {
         try {
           const win = window as any
-          if (!win.luminaAPI?.providerGetAll) return
+          if (!win.luminaAPI?.providerGetAll) {return}
           const result = await win.luminaAPI.providerGetAll()
-          if (!result) return
+          if (!result) {return}
 
           const { activeProviderId, configs } = result
-          if (!configs || Object.keys(configs).length === 0) return
+          if (!configs || Object.keys(configs).length === 0) {return}
 
           // 更新 providerConfigs
           const newProviderConfigs: Record<string, LLMConfig> = {}
@@ -648,15 +648,15 @@ export const useStore = create<AppStore>()(
 
         const byModel = [...(s.tokenUsage.byModel || [])]
         const idx = byModel.findIndex((m) => m.model === model)
-        if (idx >= 0) byModel[idx] = { model, tokens: byModel[idx].tokens + tokens }
-        else byModel.push({ model, tokens })
+        if (idx >= 0) {byModel[idx] = { model, tokens: byModel[idx].tokens + tokens }}
+        else {byModel.push({ model, tokens })}
 
         // 按 Agent 统计
         const byAgent = [...(s.tokenUsage.byAgent || [])]
         if (agentId) {
           const aIdx = byAgent.findIndex((a) => a.agentId === agentId)
-          if (aIdx >= 0) byAgent[aIdx] = { agentId, tokens: byAgent[aIdx].tokens + tokens }
-          else byAgent.push({ agentId, tokens })
+          if (aIdx >= 0) {byAgent[aIdx] = { agentId, tokens: byAgent[aIdx].tokens + tokens }}
+          else {byAgent.push({ agentId, tokens })}
         }
 
         // 清理 byModel — 只保留最近30条历史中出现的模型
@@ -810,7 +810,7 @@ export const useStore = create<AppStore>()(
       })),
       initializeModeListeners: () => {
         const api = (window as any).luminaAPI
-        if (!api) return () => {}
+        if (!api) {return () => {}}
 
         // 启动时拉取完整配置
         api.modeGet().then((state: any) => {
@@ -913,8 +913,8 @@ export const useStore = create<AppStore>()(
         const merged = { ...currentState, ...persistedState }
         // 如果气泡颜色是已知的浅色模式默认值，重置为空以使用 CSS 变量
         if (merged.profile) {
-          if (merged.profile.bubbleColorUser === '#eff6ff') merged.profile.bubbleColorUser = ''
-          if (merged.profile.bubbleColorAgent === '#f9fafb') merged.profile.bubbleColorAgent = ''
+          if (merged.profile.bubbleColorUser === '#eff6ff') {merged.profile.bubbleColorUser = ''}
+          if (merged.profile.bubbleColorAgent === '#f9fafb') {merged.profile.bubbleColorAgent = ''}
         }
         return merged
       },

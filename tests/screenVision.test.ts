@@ -8,7 +8,7 @@ describe('screenAwareness 屏幕感知', () => {
   it('dhash / 汉明距离 / 变化分数', () => {
     const same = new Array(72).fill(100)
     const decreasing: number[] = []
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 9; x++) decreasing.push(200 - x * 20)
+    for (let y = 0; y < 8; y++) {for (let x = 0; x < 9; x++) {decreasing.push(200 - x * 20)}}
     const h1 = dhash(same, 9, 8)
     const h2 = dhash(decreasing, 9, 8)
     expect(changeScore(h1, h1)).toBeCloseTo(0)
@@ -38,7 +38,7 @@ describe('screenAwareness 屏幕感知', () => {
     b.noteWindow('Code')
     b.decide(0)
     const decreasing: number[] = []
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 9; x++) decreasing.push(200 - x * 20)
+    for (let y = 0; y < 8; y++) {for (let x = 0; x < 9; x++) {decreasing.push(200 - x * 20)}}
     b.noteFrame(decreasing, 9, 8, 100)
     const changed = b.decide(20_000)
     expect(changed.capture).toBe(true)
@@ -61,7 +61,7 @@ describe('screenAwareness 屏幕感知', () => {
     const a = new ScreenAwareness()
     a.decide(0)
     const decreasing: number[] = []
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 9; x++) decreasing.push(200 - x * 20)
+    for (let y = 0; y < 8; y++) {for (let x = 0; x < 9; x++) {decreasing.push(200 - x * 20)}}
     a.noteFrame(decreasing, 9, 8, 100)
     expect(a.decide(2_000).reason).toBe('stable')
   })

@@ -329,7 +329,7 @@ export default function OnboardingWizard() {
   const completeOnboarding = useStore((s) => s.completeOnboarding)
 
   // 已完成引导 → 不渲染
-  if (!firstRun) return null
+  if (!firstRun) {return null}
 
   const current = STEPS[stepIndex]
   const total = STEPS.length

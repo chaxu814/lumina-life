@@ -27,13 +27,13 @@ export function dhash(gray: ArrayLike<number>, w: number, h: number): boolean[] 
 export function hammingDistance(a: boolean[], b: boolean[]): number {
   let n = Math.abs(a.length - b.length)
   const len = Math.min(a.length, b.length)
-  for (let i = 0; i < len; i++) if (a[i] !== b[i]) n++
+  for (let i = 0; i < len; i++) {if (a[i] !== b[i]) {n++}}
   return n
 }
 
 /** 画面变化分数 0~1 */
 export function changeScore(a: boolean[] | null, b: boolean[]): number {
-  if (!a || a.length === 0) return 1
+  if (!a || a.length === 0) {return 1}
   return hammingDistance(a, b) / Math.max(a.length, b.length, 1)
 }
 
@@ -48,11 +48,11 @@ const SCENE_KEYWORDS: Array<[SceneKind, string[]]> = [
 /** 根据活动窗口标题/进程名分类场景 */
 export function classifyScene(windowTitle?: string | null, appName?: string | null): SceneKind {
   const text = `${windowTitle ?? ''} ${appName ?? ''}`.toLowerCase()
-  if (!text.trim()) return 'idle'
+  if (!text.trim()) {return 'idle'}
   for (const [scene, kws] of SCENE_KEYWORDS) {
-    if (kws.some(k => text.includes(k.toLowerCase()))) return scene
+    if (kws.some(k => text.includes(k.toLowerCase()))) {return scene}
   }
-  if (/^(desktop|桌面|program manager|explorer|任务栏)/.test(text.trim())) return 'idle'
+  if (/^(desktop|桌面|program manager|explorer|任务栏)/.test(text.trim())) {return 'idle'}
   return 'other'
 }
 
@@ -107,7 +107,7 @@ export class ScreenAwareness {
     const switched = key !== this.lastWindowKey
     this.lastWindowKey = key
     this.scene = scene
-    if (switched) this.pendingSwitch = true
+    if (switched) {this.pendingSwitch = true}
     return switched
   }
 

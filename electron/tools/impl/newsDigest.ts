@@ -33,7 +33,7 @@ function getFingerprintPath(): string {
 }
 
 function loadFingerprints(): FingerprintStore {
-  if (_fingerprintCache) return _fingerprintCache
+  if (_fingerprintCache) {return _fingerprintCache}
   try {
     const filePath = getFingerprintPath()
     if (fs.existsSync(filePath)) {
@@ -52,7 +52,7 @@ function saveFingerprints(): void {
   try {
     const filePath = getFingerprintPath()
     const dir = path.dirname(filePath)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     fs.writeFileSync(filePath, JSON.stringify(_fingerprintCache, null, 2), 'utf-8')
   } catch (err) {
     console.warn('[NewsDigest] 指纹保存失败:', err)
@@ -134,7 +134,7 @@ export function resetFingerprints(): void {
 export function getFingerprintStats(): { total: number; oldest: string; newest: string } {
   const store = loadFingerprints()
   const timestamps = Object.values(store.seen)
-  if (timestamps.length === 0) return { total: 0, oldest: '-', newest: '-' }
+  if (timestamps.length === 0) {return { total: 0, oldest: '-', newest: '-' }}
   return {
     total: timestamps.length,
     oldest: new Date(Math.min(...timestamps)).toISOString(),
@@ -151,7 +151,7 @@ export function groupByCategory(items: FilteredItem[]): Record<string, FilteredI
 
   for (const item of items) {
     const cat = item.item.category
-    if (!groups[cat]) groups[cat] = []
+    if (!groups[cat]) {groups[cat] = []}
     groups[cat].push(item)
   }
 
@@ -216,8 +216,8 @@ export function assembleDigestBody(
       const sourceTag = showSource ? `  _${f.item.source}_` : ''
 
       lines.push(`**${i + 1}. ${f.item.title}**${sourceTag}`)
-      if (f.oneLiner) lines.push(`   ${f.oneLiner}`)
-      if (f.tags.length > 0) lines.push(`   🏷️ ${f.tags.slice(0, 3).join(', ')} ${scoreBar}`)
+      if (f.oneLiner) {lines.push(`   ${f.oneLiner}`)}
+      if (f.tags.length > 0) {lines.push(`   🏷️ ${f.tags.slice(0, 3).join(', ')} ${scoreBar}`)}
       lines.push(`   📎 ${f.item.url}`)
       lines.push('')
     }
@@ -263,7 +263,7 @@ export function assembleDigestHTML(
   }
 
   // 简单 Markdown → HTML 转换（够用就好）
-  let html = enhancedMd
+  const html = enhancedMd
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -295,7 +295,7 @@ export function assembleDigestHTML(
  * @returns      合并后的条目，同一事件只保留热度最高的一条
  */
 export function mergeCrossSourceDuplicates(items: NewsItem[]): NewsItem[] {
-  if (items.length <= 3) return items
+  if (items.length <= 3) {return items}
 
   function tokenize(s: string): Set<string> {
     return new Set(
@@ -308,7 +308,7 @@ export function mergeCrossSourceDuplicates(items: NewsItem[]): NewsItem[] {
 
   function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
     let inter = 0
-    for (const t of a) if (b.has(t)) inter++
+    for (const t of a) {if (b.has(t)) {inter++}}
     const union = new Set([...a, ...b])
     return inter / union.size
   }
@@ -317,10 +317,10 @@ export function mergeCrossSourceDuplicates(items: NewsItem[]): NewsItem[] {
   const THRESHOLD = 0.45
 
   for (let i = 0; i < items.length; i++) {
-    if (!keep[i]) continue
+    if (!keep[i]) {continue}
     const a = tokenize(items[i].title)
     for (let j = i + 1; j < items.length; j++) {
-      if (!keep[j]) continue
+      if (!keep[j]) {continue}
       const b = tokenize(items[j].title)
       const sim = jaccardSimilarity(a, b)
       if (sim >= THRESHOLD) {

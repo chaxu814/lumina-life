@@ -48,7 +48,7 @@ export class LiveSpeechDirector {
     }
     this.generation++
     this.splitter = new SentenceSplitter()
-    if (this.state !== 'listening') acts.push({ type: 'start_listening' })
+    if (this.state !== 'listening') {acts.push({ type: 'start_listening' })}
     this.state = 'listening'
     return acts
   }
@@ -56,7 +56,7 @@ export class LiveSpeechDirector {
   /** 用户说完并得到识别文本 */
   userUtterance(text: string): DirectorAction[] {
     const t = text.trim()
-    if (!t) return this.backToListen()
+    if (!t) {return this.backToListen()}
     this.generation++
     this.currentGen = this.generation
     this.splitter = new SentenceSplitter()
@@ -66,25 +66,25 @@ export class LiveSpeechDirector {
 
   /** LLM 增量 token（可携带 generation；过期代际直接忽略） */
   assistantChunk(text: string, generation?: number): DirectorAction[] {
-    if (generation !== undefined && generation !== this.currentGen) return []
+    if (generation !== undefined && generation !== this.currentGen) {return []}
     const acts: DirectorAction[] = []
     for (const s of this.splitter.push(text)) {
       this.pending++
       acts.push({ type: 'enqueue_speak', text: s, generation: this.currentGen })
     }
-    if (acts.length && this.state !== 'speaking') this.state = 'speaking'
+    if (acts.length && this.state !== 'speaking') {this.state = 'speaking'}
     return acts
   }
 
   /** LLM 输出结束，吐出残余半句 */
   assistantEnd(generation?: number): DirectorAction[] {
-    if (generation !== undefined && generation !== this.currentGen) return []
+    if (generation !== undefined && generation !== this.currentGen) {return []}
     const acts: DirectorAction[] = []
     const rest = this.splitter.flush()
     if (rest) {
       this.pending++
       acts.push({ type: 'enqueue_speak', text: rest, generation: this.currentGen })
-      if (this.state !== 'speaking') this.state = 'speaking'
+      if (this.state !== 'speaking') {this.state = 'speaking'}
     }
     return acts
   }
@@ -92,7 +92,7 @@ export class LiveSpeechDirector {
   /** 一句 TTS 播放结束 */
   sentenceSpoken(): DirectorAction[] {
     this.pending = Math.max(0, this.pending - 1)
-    if (this.pending === 0 && this.state === 'speaking') return this.backToListen()
+    if (this.pending === 0 && this.state === 'speaking') {return this.backToListen()}
     return []
   }
 

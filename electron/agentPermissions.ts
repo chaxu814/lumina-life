@@ -33,7 +33,7 @@ const DENIED: Record<AgentId, Set<string>> = {
 export function getDisabledToolsForAgent(agentId: AgentId): string[] {
   const allowed = PERMISSIONS[agentId]
   const denied = DENIED[agentId]
-  if (allowed.length === 0) return Array.from(denied)
+  if (allowed.length === 0) {return Array.from(denied)}
 
   // 用小集合判断，远小于全量工具
   const set = new Set(allowed)

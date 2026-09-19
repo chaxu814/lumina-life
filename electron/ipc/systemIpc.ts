@@ -26,7 +26,7 @@ const STT_PORT = 18090
 
 /** Windows 兼容的进程终止 */
 function killProcess(proc: ChildProcess | null): void {
-  if (!proc || proc.killed) return
+  if (!proc || proc.killed) {return}
   try {
     if (process.platform === 'win32') {
       // Windows: 用 taskkill 强制终止进程树
@@ -47,14 +47,14 @@ function startEdgeTts(serverPath: string, cwd: string): Promise<{ ok: boolean; p
       if (edgeTtsProcess && !edgeTtsProcess.killed) {
         try {
           const res = await fetch('http://127.0.0.1:' + EDGE_TTS_PORT + '/health', { signal: AbortSignal.timeout(500) })
-          if (res.ok) return resolve({ ok: true, port: EDGE_TTS_PORT })
+          if (res.ok) {return resolve({ ok: true, port: EDGE_TTS_PORT })}
         } catch {}
         // 进程存在但服务尚未响应 → 等待它就绪
         for (let i = 0; i < 20; i++) {
           await new Promise(r => setTimeout(r, 300))
           try {
             const res = await fetch('http://127.0.0.1:' + EDGE_TTS_PORT + '/health', { signal: AbortSignal.timeout(500) })
-            if (res.ok) return resolve({ ok: true, port: EDGE_TTS_PORT })
+            if (res.ok) {return resolve({ ok: true, port: EDGE_TTS_PORT })}
           } catch {}
         }
         // 等待超时 → 进程可能僵死
@@ -191,14 +191,14 @@ function setCrashFlag(): void {
 function clearCrashFlag(): void {
   try {
     const path = join(app.getPath('userData'), '.lumina-crashed')
-    if (fs.existsSync(path)) fs.unlinkSync(path)
+    if (fs.existsSync(path)) {fs.unlinkSync(path)}
   } catch {}
 }
 
 // ── 配置读写 ──────────────────────────────────────────
 
 function loadConfig(): Record<string, any> {
-  try { if (fs.existsSync(configPath)) return JSON.parse(fs.readFileSync(configPath, 'utf-8')) } catch {}
+  try { if (fs.existsSync(configPath)) {return JSON.parse(fs.readFileSync(configPath, 'utf-8'))} } catch {}
   return {}
 }
 
@@ -311,7 +311,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
         signal: controller.signal,
       })
       clearTimeout(timeout)
-      if (!res.ok) return { error: `TTS 服务返回: ${res.status}` }
+      if (!res.ok) {return { error: `TTS 服务返回: ${res.status}` }}
       // Plan C: Python Node 返回 hex 编码的 MP3（{"audio": "<hex>", "format": "mp3"}）
       const data = await res.json()
       const hexStr = typeof data.audio === 'string' ? data.audio : ''
@@ -344,10 +344,10 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
           prompt_text: params.refText || '',
         }),
       })
-      if (!res.ok) return { ok: false, detail: `SoVITS error: ${res.status}` }
+      if (!res.ok) {return { ok: false, detail: `SoVITS error: ${res.status}` }}
       const data = await res.json()
       const audioPath = data.audio_path || data.file_path
-      if (audioPath) mainWindow?.webContents.send('audio:play', audioPath)
+      if (audioPath) {mainWindow?.webContents.send('audio:play', audioPath)}
       return { ok: true, path: audioPath }
     } catch (err: any) { return { ok: false, detail: err.message } }
   })
@@ -375,7 +375,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
         }),
         signal: AbortSignal.timeout(120000),  // 🔧 v2.19: 120s 超时（日报生成需要更多时间）
       })
-      if (!response.ok) return { error: `HTTP ${response.status}` }
+      if (!response.ok) {return { error: `HTTP ${response.status}` }}
       const data = await response.json()
       return { content: data.choices?.[0]?.message?.content || '' }
     } catch (err: any) { return { error: err.message } }
@@ -703,7 +703,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     try {
       const { TEAM_PERSONAS } = require('../agentTeamPersonas')
       const persona = TEAM_PERSONAS[params.agentId]
-      if (!persona) return { error: 'Agent 不存在' }
+      if (!persona) {return { error: 'Agent 不存在' }}
       return { config: persona.llmConfig || { enabled: false } }
     } catch (err: any) { return { error: err.message } }
   })
@@ -727,7 +727,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     try {
       const { TEAM_PERSONAS } = require('../agentTeamPersonas')
       const persona = TEAM_PERSONAS[params.agentId]
-      if (!persona) return { error: 'Agent 不存在' }
+      if (!persona) {return { error: 'Agent 不存在' }}
 
       // 合并配置
       persona.llmConfig = {
@@ -750,7 +750,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
       try {
         const { getAgentPool } = require('../agentPool')
         const pool = getAgentPool()
-        if (pool) pool.reconfigureAgent(params.agentId)
+        if (pool) {pool.reconfigureAgent(params.agentId)}
       } catch { /* pool not initialized yet — fine */ }
 
       return { ok: true, config: persona.llmConfig }
@@ -870,7 +870,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('system:crashed', async () => {
     const path = join(app.getPath('userData'), '.lumina-crashed')
     try {
-      if (fs.existsSync(path)) return { crashed: true, timestamp: fs.readFileSync(path, 'utf-8') }
+      if (fs.existsSync(path)) {return { crashed: true, timestamp: fs.readFileSync(path, 'utf-8') }}
     } catch {}
     return { crashed: false }
   })
@@ -898,7 +898,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:status', async () => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { running: false, triggers: [], config: {}, dailyCount: 0 }
+        if (!engine) {return { running: false, triggers: [], config: {}, dailyCount: 0 }}
         return engine.getStatus()
       } catch { return { running: false, triggers: [], config: {}, dailyCount: 0 } }
     })
@@ -907,7 +907,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:update-config', async (_e, config: Record<string, any>) => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { ok: false }
+        if (!engine) {return { ok: false }}
         engine.updateConfig(config)
         return { ok: true }
       } catch { return { ok: false } }
@@ -917,7 +917,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:update-trigger', async (_e, id: string, updates: Record<string, any>) => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { ok: false }
+        if (!engine) {return { ok: false }}
         engine.updateTrigger(id, updates)
         return { ok: true }
       } catch { return { ok: false } }
@@ -927,7 +927,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:get-triggers', async () => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return []
+        if (!engine) {return []}
         return engine.getTriggers()
       } catch { return [] }
     })
@@ -936,7 +936,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:heartbeat', async () => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { ok: false }
+        if (!engine) {return { ok: false }}
         engine.heartbeat()
         return { ok: true }
       } catch { return { ok: false } }
@@ -946,7 +946,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:test-trigger', async (_e, id: string) => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { ok: false, error: '引擎未启动' }
+        if (!engine) {return { ok: false, error: '引擎未启动' }}
         await engine.testTrigger(id)
         return { ok: true }
       } catch (err: any) { return { ok: false, error: err.message } }
@@ -956,7 +956,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:setNotify', async (_e, enabled: boolean) => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { ok: false, error: '引擎未启动' }
+        if (!engine) {return { ok: false, error: '引擎未启动' }}
         engine.setNotify(enabled)
         return { ok: true }
       } catch (err: any) { return { ok: false, error: err.message } }
@@ -965,7 +965,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:screen-context', async () => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return null
+        if (!engine) {return null}
         return engine.getScreenContext?.() ?? null
       } catch { return null }
     })
@@ -973,7 +973,7 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     ipcMain.handle('proactive:user-message', async () => {
       try {
         const engine = getProactiveEngine()
-        if (!engine) return { ok: false }
+        if (!engine) {return { ok: false }}
         engine.onUserMessage?.()
         return { ok: true }
       } catch { return { ok: false } }
@@ -1146,7 +1146,7 @@ function extractModelsFromUnknownFormat(data: any): Array<{ id: string; multimod
   // 去重
   const seen = new Set<string>()
   return models.filter(model => {
-    if (seen.has(model.id)) return false
+    if (seen.has(model.id)) {return false}
     seen.add(model.id)
     return true
   })
@@ -1201,7 +1201,7 @@ async function handleLMStudioModels(params: { baseUrl: string; apiKey: string })
   // 两种 auth 策略：先试带 key，如果 401 再试无 key
   const authVariants = (apiKey: string): Array<string | null> => {
     const arr: Array<string | null> = [apiKey || null]
-    if (apiKey) arr.push(null) // 带 key 时也试无 key 兜底
+    if (apiKey) {arr.push(null)} // 带 key 时也试无 key 兜底
     return arr
   }
 
@@ -1211,7 +1211,7 @@ async function handleLMStudioModels(params: { baseUrl: string; apiKey: string })
         const url = base + path
         try {
           const headers: Record<string, string> = {}
-          if (key) headers['Authorization'] = 'Bearer ' + key
+          if (key) {headers['Authorization'] = 'Bearer ' + key}
           // 不发送 Content-Type 给 GET 请求，避免有些服务拒绝
 
           const response = await fetch(url, {
@@ -1585,7 +1585,7 @@ ipcMain.handle('news:fetch-quotes', async () => {
       'Referer': 'https://quote.eastmoney.com/',
     }, 10000)
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
     const data = JSON.parse(res.text)
     const rawQuotes = data?.data?.diff || []
@@ -1602,7 +1602,7 @@ ipcMain.handle('news:fetch-quotes', async () => {
       const turnover = item.f6 ?? 0
       const open = item.f17 ?? 0
       const prevClose = item.f18 ?? 0
-      if (!code || !name) return null
+      if (!code || !name) {return null}
       return { code, name, price, changePercent, changeAmount, high, low, volume, turnover, open, prevClose }
     }).filter(Boolean)
 

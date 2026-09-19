@@ -45,9 +45,9 @@ export class WakeWordGate {
   /** 返回命中的关键词（原始关键词），否则 null */
   matchKeyword(text: string): string | null {
     const n = this.normalize(text)
-    if (!n) return null
+    if (!n) {return null}
     for (const kw of this.keywords) {
-      if (n.includes(this.normalize(kw))) return kw
+      if (n.includes(this.normalize(kw))) {return kw}
     }
     return null
   }
@@ -59,7 +59,7 @@ export class WakeWordGate {
   /** 尝试唤醒；命中且过冷却返回 true 并开启会话窗口 */
   wake(text: string, now: number): { waked: boolean; keyword?: string } {
     const kw = this.matchKeyword(text)
-    if (!kw) return { waked: false }
+    if (!kw) {return { waked: false }}
     if (this.lastWakeAt !== null && now - this.lastWakeAt < this.cooldownMs) {
       return { waked: false, keyword: kw }
     }
@@ -74,8 +74,8 @@ export class WakeWordGate {
    * 关闭唤醒词→放行；会话窗口内→放行；句中含唤醒词→唤醒并放行；否则忽略。
    */
   shouldProcess(text: string, now: number): boolean {
-    if (!this.enabled) return true
-    if (this.isSessionActive(now)) return true
+    if (!this.enabled) {return true}
+    if (this.isSessionActive(now)) {return true}
     const r = this.wake(text, now)
     return r.waked || (r.keyword !== undefined && this.isSessionActive(now))
   }
@@ -85,6 +85,6 @@ export class WakeWordGate {
 
   setEnabled(on: boolean): void {
     this.enabled = on
-    if (!on) this.sessionUntil = 0
+    if (!on) {this.sessionUntil = 0}
   }
 }

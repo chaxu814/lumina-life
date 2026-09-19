@@ -62,7 +62,7 @@ export function extractUrls(text: string): string[] {
   return matches
     .map(u => u.replace(/[。，,;:;！!？?、。）》\)】]+$/, ''))
     .filter(u => {
-      if (seen.has(u)) return false
+      if (seen.has(u)) {return false}
       seen.add(u)
       return true
     })
@@ -170,7 +170,7 @@ function getCollectedDir(): string {
   for (const dir of candidates) {
     try {
       if (fs.existsSync(path.dirname(dir))) {
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
         return dir
       }
     } catch {}

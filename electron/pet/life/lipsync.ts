@@ -60,7 +60,7 @@ function tokenize(text: string, charMs: number, shortPauseMs: number, longPauseM
     if (/\s/.test(ch)) { tokens.push({ kind: 'pause', dur: charMs * 0.4 }); continue }
 
     if (CN_DIPHTHONG[ch]) {
-      for (const v of CN_DIPHTHONG[ch]) tokens.push({ kind: 'viseme', viseme: v, dur: charMs * 0.7 })
+      for (const v of CN_DIPHTHONG[ch]) {tokens.push({ kind: 'viseme', viseme: v, dur: charMs * 0.7 })}
       continue
     }
     if (CN_VOWEL[ch]) { tokens.push({ kind: 'viseme', viseme: CN_VOWEL[ch], dur: charMs }); continue }
@@ -102,7 +102,7 @@ export function textToVisemeSegments(text: string, opts: LipsyncOptions = {}): V
 /** 按时间采样当前口型；超出轨道末尾返回 rest */
 export function sampleViseme(segs: VisemeSeg[], atMs: number): { viseme: Viseme; open: number } {
   for (const s of segs) {
-    if (atMs >= s.start && atMs < s.end) return { viseme: s.viseme, open: s.open }
+    if (atMs >= s.start && atMs < s.end) {return { viseme: s.viseme, open: s.open }}
   }
   return { viseme: 'rest', open: 0 }
 }

@@ -69,10 +69,10 @@ const MOOD_LIST = Object.keys(MOOD_COORDS) as MoodLabel[]
 
 /** 容忍 LLM 漏 emoji / 措辞差异，归一到标准标签 */
 export function normalizeMood(raw: unknown): MoodLabel | null {
-  if (typeof raw !== 'string') return null
+  if (typeof raw !== 'string') {return null}
   const t = raw.trim()
-  if (!t) return null
-  if ((MOOD_LIST as string[]).includes(t)) return t as MoodLabel
+  if (!t) {return null}
+  if ((MOOD_LIST as string[]).includes(t)) {return t as MoodLabel}
   const table: Array<[MoodLabel, string[]]> = [
     ['超开心 🎉', ['超开心', '超级开心']],
     ['兴奋 🤩', ['兴奋', '激动']],
@@ -85,7 +85,7 @@ export function normalizeMood(raw: unknown): MoodLabel | null {
     ['疲惫 😩', ['疲惫', '累', '困', '倦', '无力']],
   ]
   for (const [label, keys] of table) {
-    if (keys.some(k => t.includes(k))) return label
+    if (keys.some(k => t.includes(k))) {return label}
   }
   return null
 }
@@ -148,7 +148,7 @@ export function coreToMood(core: Pick<CoreEmotion, 'valence' | 'arousal'>, curre
   }
   if (current && current !== best) {
     const cur = MOOD_COORDS[current]
-    if (cur && dist(core.valence, core.arousal, cur) <= bestD + hysteresis) return current
+    if (cur && dist(core.valence, core.arousal, cur) <= bestD + hysteresis) {return current}
   }
   return best
 }

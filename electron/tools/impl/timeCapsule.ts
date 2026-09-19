@@ -33,7 +33,7 @@ interface TimeCapsule {
   }
 }
 
-let capsules: TimeCapsule[] = []
+const capsules: TimeCapsule[] = []
 let capsuleIdCounter = 1
 
 // ═══════════════════════════════════════════════════════════

@@ -86,14 +86,14 @@ export default function ModeSettings() {
   const loadUsageStats = async () => {
     try {
       const result = await api?.usageToday?.()
-      if (result && !result.error) setUsage(result.data)
+      if (result && !result.error) {setUsage(result.data)}
     } catch {}
   }
 
   const loadModeDistribution = async () => {
     try {
       const result = await api?.usageModeDistribution?.()
-      if (result && !result.error) setModeDistribution(result.data || [])
+      if (result && !result.error) {setModeDistribution(result.data || [])}
     } catch {}
   }
 
@@ -101,13 +101,13 @@ export default function ModeSettings() {
   const loadCustomModes = async () => {
     try {
       const result = await api?.modeCustomList?.()
-      if (result?.ok) setCustomModes(result.modes || [])
+      if (result?.ok) {setCustomModes(result.modes || [])}
     } catch {}
   }
 
   // 创建自定义模式
   const handleCreateCustomMode = async () => {
-    if (!customForm.label.trim()) return
+    if (!customForm.label.trim()) {return}
     try {
       const result = await api?.modeCustomCreate?.({
         ...customForm,
@@ -120,7 +120,7 @@ export default function ModeSettings() {
         loadCustomModes()
         // 刷新模式状态
         const state = await api?.modeGet?.()
-        if (state) setLuminaMode(state)
+        if (state) {setLuminaMode(state)}
       } else {
         addLog(`❌ 创建失败: ${result?.error || '未知错误'}`)
       }
@@ -129,14 +129,14 @@ export default function ModeSettings() {
 
   // 删除自定义模式
   const handleDeleteCustomMode = async (id: string, label: string) => {
-    if (!confirm(`确定删除自定义模式「${label}」？不可撤销。`)) return
+    if (!confirm(`确定删除自定义模式「${label}」？不可撤销。`)) {return}
     try {
       const result = await api?.modeCustomDelete?.(id)
       if (result?.ok) {
         addLog(`🗑️ 已删除: ${label}`)
         loadCustomModes()
         const state = await api?.modeGet?.()
-        if (state) setLuminaMode(state)
+        if (state) {setLuminaMode(state)}
       } else {
         addLog(`❌ 删除失败: ${result?.error}`)
       }
@@ -160,14 +160,14 @@ export default function ModeSettings() {
 
   // 保存配置（持久化到后端）
   const saveConfig = async () => {
-    if (!editingMode) return
+    if (!editingMode) {return}
     try {
       await api?.modeUpdateConfig?.(editingMode, form)
       addLog(`✅ 已保存 ${MODE_LABELS[editingMode]} 配置`)
       setEditingMode(null)
       // 刷新前端状态
       const state = await api?.modeGet?.()
-      if (state) setLuminaMode(state)
+      if (state) {setLuminaMode(state)}
     } catch (e: any) {
       addLog(`❌ 保存失败: ${e.message}`)
     }

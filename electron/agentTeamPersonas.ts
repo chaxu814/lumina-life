@@ -135,7 +135,7 @@ export const TEAM_MEMBERS: Record<TeamMemberId, TeamMember> = {
  *  🧰 v1.0: 读取 global.__lumina_custom_profiles 合并自定义角色配置 */
 export function getConfiguredMembers(): TeamMember[] {
   const base = Object.values(TEAM_MEMBERS).filter(m => {
-    if (m.role === 'boss') return true
+    if (m.role === 'boss') {return true}
     try { return getAgentConfig().isConfigured(m.id as TeamMemberId) }
     catch { return m.configured }
   })
@@ -146,7 +146,7 @@ export function getConfiguredMembers(): TeamMember[] {
     systemPrompt: string; capabilities: string[]
   }> = (global as any).__lumina_custom_profiles
 
-  if (!customProfiles || customProfiles.length === 0) return base
+  if (!customProfiles || customProfiles.length === 0) {return base}
 
   const merged: TeamMember[] = []
   const customIds = new Set(customProfiles.map(p => p.id))
@@ -170,8 +170,8 @@ export function getConfiguredMembers(): TeamMember[] {
 
   // 添加不在 TEAM_MEMBERS 中的全新自定义角色（作为 worker 加入）
   for (const custom of customProfiles) {
-    if (!customIds.has(custom.id)) continue
-    if (merged.some(m => m.id === custom.id)) continue
+    if (!customIds.has(custom.id)) {continue}
+    if (merged.some(m => m.id === custom.id)) {continue}
     // 只添加额外（非覆盖）的自定义角色 — id 以 'custom_' 开头
     if (custom.id.startsWith('custom_')) {
       merged.push({
@@ -196,7 +196,7 @@ export function getConfiguredMembers(): TeamMember[] {
  *  v8.0: 使用 AgentConfig 运行时检查 LLM 配置 */
 export function getTeamStatusTable(): string {
   const members = Object.values(TEAM_MEMBERS).filter(m => m.role === 'worker')
-  if (members.length === 0) return ''
+  if (members.length === 0) {return ''}
 
   const rows = members.map(m => {
     let configured: boolean
@@ -285,7 +285,7 @@ export const MODE_TRIGGERS: { pattern: RegExp; mode: AgentMode }[] = [
 /** 检测用户输入意图，返回对应模式 */
 export function detectMode(input: string): AgentMode | null {
   for (const { pattern, mode } of MODE_TRIGGERS) {
-    if (pattern.test(input)) return mode
+    if (pattern.test(input)) {return mode}
   }
   return null
 }

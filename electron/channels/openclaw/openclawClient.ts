@@ -73,12 +73,12 @@ export class OpenClawClient {
 
   private headers(): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this.cfg.token) h['Authorization'] = `Bearer ${this.cfg.token}`
+    if (this.cfg.token) {h['Authorization'] = `Bearer ${this.cfg.token}`}
     return h
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<OpenClawResult<T>> {
-    if (!this.isConfigured()) return { ok: false, error: 'openclaw-not-configured' }
+    if (!this.isConfigured()) {return { ok: false, error: 'openclaw-not-configured' }}
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.cfg.timeoutMs)
     try {
@@ -98,7 +98,7 @@ export class OpenClawClient {
       }
       return { ok: true, status: res.status, data: parsed as T }
     } catch (err: any) {
-      if (err?.name === 'AbortError') return { ok: false, error: 'openclaw-timeout' }
+      if (err?.name === 'AbortError') {return { ok: false, error: 'openclaw-timeout' }}
       return { ok: false, error: 'openclaw-unreachable' }
     } finally {
       clearTimeout(timer)
@@ -146,6 +146,6 @@ export function configureOpenClaw(config: OpenClawConfig | null, fetchImpl?: Fet
 }
 
 export function getOpenClaw(): OpenClawClient {
-  if (!_default) _default = new OpenClawClient({ baseUrl: '' })
+  if (!_default) {_default = new OpenClawClient({ baseUrl: '' })}
   return _default
 }

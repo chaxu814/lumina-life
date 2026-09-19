@@ -30,7 +30,7 @@ function isElectronReady(): boolean {
 }
 
 function storePath(): string | null {
-  if (!isElectronReady()) return null
+  if (!isElectronReady()) {return null}
   return path.join(app.getPath('userData'), FILE_NAME)
 }
 
@@ -49,7 +49,7 @@ export async function synthesizeFollowups(
       facts.length ? '## 记住的事实\n' + facts.map(f => `- ${f.content}`).join('\n') : '',
     ].filter(Boolean).join('\n\n')
   } catch { return [] }
-  if (!material.trim()) return []
+  if (!material.trim()) {return []}
 
   // ── 调 LLM ──────────────────────────────────
   const call = llmCall || ((mat: string) => chatComplete({
@@ -69,7 +69,7 @@ export async function synthesizeFollowups(
   try {
     const raw = (await call(material)).trim()
     const m = raw.match(/\{[\s\S]*?\}/)
-    if (!m) return []
+    if (!m) {return []}
     const obj = JSON.parse(m[0])
     if (Array.isArray(obj.topics)) {
       return obj.topics.filter((t: any) => typeof t === 'string' && t.trim()).slice(0, RETAIN)
@@ -84,13 +84,13 @@ export class FollowupTopicsStore {
   private loaded = false
 
   private ensureLoaded(): void {
-    if (this.loaded) return
+    if (this.loaded) {return}
     this.loaded = true
     try {
       const p = storePath()
       if (p && fs.existsSync(p)) {
         const raw = JSON.parse(fs.readFileSync(p, 'utf8'))
-        if (Array.isArray(raw)) this.topics = raw.filter(t => t && typeof t.text === 'string')
+        if (Array.isArray(raw)) {this.topics = raw.filter(t => t && typeof t.text === 'string')}
       }
     } catch { this.topics = [] }
   }
@@ -99,7 +99,7 @@ export class FollowupTopicsStore {
     this.ensureLoaded()
     try {
       const p = storePath()
-      if (!p) return
+      if (!p) {return}
       fs.writeFileSync(p, JSON.stringify(this.topics, null, 2), 'utf8')
     } catch { /* 不阻塞 */ }
   }
@@ -130,7 +130,7 @@ export class FollowupTopicsStore {
     this.ensureLoaded()
     const before = this.topics.length
     this.topics = this.topics.filter(t => !t.asked && (now - t.createdAt) < MAX_AGE_MS)
-    if (this.topics.length !== before) this.persist()
+    if (this.topics.length !== before) {this.persist()}
   }
 
   /** 单测用：清空内存+文件 */

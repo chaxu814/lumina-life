@@ -190,7 +190,7 @@ class WorkflowTemplateManager {
 
   /** 获取单个模板 */
   getTemplate(id: string): WorkflowTemplate | undefined {
-    if (this.customTemplates.has(id)) return this.customTemplates.get(id)
+    if (this.customTemplates.has(id)) {return this.customTemplates.get(id)}
     return BUILTIN_TEMPLATES.find(t => t.id === id)
   }
 
@@ -213,7 +213,7 @@ class WorkflowTemplateManager {
   /** 更新模板 */
   updateTemplate(id: string, data: Partial<WorkflowTemplate>): WorkflowTemplate | null {
     const existing = this.customTemplates.get(id)
-    if (!existing) return null
+    if (!existing) {return null}
     const updated: WorkflowTemplate = {
       ...existing,
       ...data,
@@ -228,7 +228,7 @@ class WorkflowTemplateManager {
 
   /** 删除模板 */
   deleteTemplate(id: string): boolean {
-    if (!this.customTemplates.has(id)) return false
+    if (!this.customTemplates.has(id)) {return false}
     this.customTemplates.delete(id)
     this.persist()
     return true
@@ -243,7 +243,7 @@ class WorkflowTemplateManager {
    */
   activateTemplate(id: string): { ok: boolean; error?: string; template?: WorkflowTemplate } {
     const tpl = this.getTemplate(id)
-    if (!tpl) return { ok: false, error: `模板不存在: ${id}` }
+    if (!tpl) {return { ok: false, error: `模板不存在: ${id}` }}
 
     try {
       const modeMgr = getModeManager()

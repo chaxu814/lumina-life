@@ -59,15 +59,15 @@ export default function SettingsTTS() {
   const [sttFile, setSttFile] = useState('')
   const [sttErr, setSttErr] = useState('')
   const refreshStt = async () => {
-    try { const r = await window.luminaAPI?.sttOfflineStatus?.(); if (r?.ok) setSttOffline(r) } catch {}
+    try { const r = await window.luminaAPI?.sttOfflineStatus?.(); if (r?.ok) {setSttOffline(r)} } catch {}
   }
   useEffect(() => {
     refreshStt()
     let un: any = null
     try {
       un = window.luminaAPI?.onSttDownloadProgress?.((d: any) => {
-        if (typeof d.progress === 'number') setSttPct(Math.round(d.progress * 100))
-        if (d.file) setSttFile(d.file)
+        if (typeof d.progress === 'number') {setSttPct(Math.round(d.progress * 100))}
+        if (d.file) {setSttFile(d.file)}
         if (d.status === 'done') { setSttBusy(false); setSttPct(100); refreshStt() }
         if (d.status === 'error') { setSttBusy(false); setSttErr(d.message || '下载失败') }
       })
@@ -93,7 +93,7 @@ export default function SettingsTTS() {
     const check = async () => {
       try {
         const status = await window.luminaAPI?.edgeTtsStatus?.()
-        if (!cancelled && status?.running) setEdgeRunning(true)
+        if (!cancelled && status?.running) {setEdgeRunning(true)}
       } catch {}
     }
     const timer = setTimeout(check, 1500)
@@ -135,7 +135,7 @@ export default function SettingsTTS() {
   const startEdge = async () => {
     try {
       const res = await window.luminaAPI?.edgeTtsStart?.()
-      if (res?.ok) setEdgeRunning(true)
+      if (res?.ok) {setEdgeRunning(true)}
     } catch {}
   }
   const stopEdge = async () => {

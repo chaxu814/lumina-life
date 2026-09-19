@@ -129,7 +129,7 @@ export function parseProviderResponse(kind: ProviderKind, data: any): { text: st
 
 function getFetch(deps?: UnifiedDeps): FetchLike {
   const f = deps?.fetch || (globalThis as any).fetch
-  if (typeof f !== 'function') throw new UnifiedChatError('当前环境没有可用的 fetch', 'no-fetch', 'unknown')
+  if (typeof f !== 'function') {throw new UnifiedChatError('当前环境没有可用的 fetch', 'no-fetch', 'unknown')}
   return f as FetchLike
 }
 
@@ -164,7 +164,7 @@ export async function unifiedChatCompletion(input: UnifiedChatInput, deps?: Unif
     })
   } catch (err: any) {
     clearTimeout(timer)
-    if (err?.name === 'AbortError') throw new UnifiedChatError('请求超时或被取消', 'timeout', kind)
+    if (err?.name === 'AbortError') {throw new UnifiedChatError('请求超时或被取消', 'timeout', kind)}
     throw new UnifiedChatError(`无法连接到模型服务：${err?.message || 'network'}`, 'network', kind)
   } finally {
     input.signal?.removeEventListener('abort', onAbort)
@@ -205,7 +205,7 @@ export async function listModels(
   const root = baseUrl.replace(/\/+$/, '')
   const fetchImpl = getFetch(deps)
   const headers: Record<string, string> = {}
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  if (apiKey) {headers['Authorization'] = `Bearer ${apiKey}`}
 
   if (kind === 'ollama') {
     const res = await fetchImpl(`${root}/api/tags`, { method: 'GET', headers })

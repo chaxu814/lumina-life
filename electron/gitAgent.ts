@@ -200,10 +200,10 @@ ${diff.slice(0, 3000)}
     const hasDoc = files.some(f => f.endsWith('.md'))
 
     let type: GitDiffAnalysis['suggestedType'] = 'chore'
-    if (isNew) type = 'feat'
-    else if (hasDelete) type = 'refactor'
-    else if (hasTest) type = 'test'
-    else if (hasDoc) type = 'docs'
+    if (isNew) {type = 'feat'}
+    else if (hasDelete) {type = 'refactor'}
+    else if (hasTest) {type = 'test'}
+    else if (hasDoc) {type = 'docs'}
 
     return { summary: `${type}: 更新 ${files.length} 个文件`, files, suggestedType: type, breakingChange: false }
   }
@@ -355,7 +355,7 @@ ${diff.slice(0, 2000)}
   /** 一键：add → analyze → commit → push */
   async autoCommitAndPush(files?: string[]): Promise<GitCommitResult & { pushed: boolean }> {
     const result = await this.autoCommit(files)
-    if (!result.success) return { ...result, pushed: false }
+    if (!result.success) {return { ...result, pushed: false }}
     const pushed = await this.push()
     return { ...result, pushed }
   }
@@ -433,6 +433,6 @@ export function initGitAgent(repoPath: string, llmConfig?: any): GitAgent {
 }
 
 export function getGitAgent(): GitAgent {
-  if (!_instance) throw new Error('GitAgent 未初始化')
+  if (!_instance) {throw new Error('GitAgent 未初始化')}
   return _instance
 }

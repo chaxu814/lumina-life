@@ -117,7 +117,7 @@ export class ConfigWatcher extends EventEmitter {
 
   private _debounce(key: string, fn: () => void): void {
     const existing = this.debounceTimers.get(key)
-    if (existing) clearTimeout(existing)
+    if (existing) {clearTimeout(existing)}
     this.debounceTimers.set(key, setTimeout(() => {
       this.debounceTimers.delete(key)
       fn()

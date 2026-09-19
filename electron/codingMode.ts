@@ -122,7 +122,7 @@ function parseHunks(lines: string[]): Hunk[] {
   for (const line of lines) {
     const hunkMatch = line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/)
     if (hunkMatch) {
-      if (currentHunk) hunks.push(currentHunk)
+      if (currentHunk) {hunks.push(currentHunk)}
       currentHunk = {
         oldStart: parseInt(hunkMatch[1]),
         oldCount: parseInt(hunkMatch[2] || '1'),
@@ -145,13 +145,13 @@ function parseHunks(lines: string[]): Hunk[] {
     }
   }
 
-  if (currentHunk) hunks.push(currentHunk)
+  if (currentHunk) {hunks.push(currentHunk)}
   return hunks
 }
 
 /** 将单个 hunk 应用到 lines 数组（原地修改） */
 function applyHunk(lines: string[], hunk: Hunk): void {
-  let lineIdx = hunk.oldStart - 1 // 0-based
+  const lineIdx = hunk.oldStart - 1 // 0-based
   const result: string[] = []
   let consumed = 0
 
@@ -189,8 +189,8 @@ export function formatDiffPreview(block: DiffBlock): string {
 
   let added = 0, removed = 0
   for (const line of block.hunks) {
-    if (line.startsWith('+') && !line.startsWith('+++')) added++
-    if (line.startsWith('-') && !line.startsWith('---')) removed++
+    if (line.startsWith('+') && !line.startsWith('+++')) {added++}
+    if (line.startsWith('-') && !line.startsWith('---')) {removed++}
   }
 
   info.push(`${added} additions, ${removed} deletions`)

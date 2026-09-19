@@ -63,13 +63,13 @@ export function decideGate(input: GateInput): GateResult {
   const rand = input.rand ?? Math.random
 
   // a. 桌宠没开
-  if (!input.petEnabled) return { allowed: false, reason: 'pet_disabled' }
+  if (!input.petEnabled) {return { allowed: false, reason: 'pet_disabled' }}
 
   // b. 用户正在说话，不打断
-  if (input.userSpeaking) return { allowed: false, reason: 'user_speaking' }
+  if (input.userSpeaking) {return { allowed: false, reason: 'user_speaking' }}
 
   // c. 有没问完的话头 → 最高优先级，绕过冷却把话说完
-  if (input.hasUnfinishedThread) return { allowed: true, reason: 'unfinished_thread' }
+  if (input.hasUnfinishedThread) {return { allowed: true, reason: 'unfinished_thread' }}
 
   // d. 精力太低 → 放行但只做睡觉动作、不说话
   if (input.drives.energy < 0.2) {
@@ -77,15 +77,15 @@ export function decideGate(input: GateInput): GateResult {
   }
 
   // e. 今日配额
-  if (input.dailyCount >= input.maxDaily) return { allowed: false, reason: 'daily_quota' }
+  if (input.dailyCount >= input.maxDaily) {return { allowed: false, reason: 'daily_quota' }}
 
   // f. 最小间隔（冷却时间并入此判断）
   const minGap = Math.max(input.minIntervalMs, input.cooldownMs)
-  if (input.msSinceLastProactive < minGap) return { allowed: false, reason: 'min_interval' }
+  if (input.msSinceLastProactive < minGap) {return { allowed: false, reason: 'min_interval' }}
 
   // g~j. 场景概率
   const rate = scenePassRate(input.scene)
-  if (rate === 0) return { allowed: false, reason: 'scene_private' }
-  if (rand() < rate) return { allowed: true, reason: `scene_${input.scene}` }
+  if (rate === 0) {return { allowed: false, reason: 'scene_private' }}
+  if (rand() < rate) {return { allowed: true, reason: `scene_${input.scene}` }}
   return { allowed: false, reason: `scene_denied_${input.scene}` }
 }

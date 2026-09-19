@@ -155,17 +155,17 @@ class PersonalityConflictManager {
     this._modeDuration = Date.now() - this._modeStartTime
 
     // 冷却中
-    if (Date.now() - this._lastConflictTime < this._minConflictInterval) return
+    if (Date.now() - this._lastConflictTime < this._minConflictInterval) {return}
     // 模式持续时间太短（< 10 分钟）
-    if (this._modeDuration < 10 * 60 * 1000) return
+    if (this._modeDuration < 10 * 60 * 1000) {return}
 
     const persona = PERSONA_TRAITS[this._currentMode]
-    if (!persona || persona.rivalModes.length === 0) return
+    if (!persona || persona.rivalModes.length === 0) {return}
 
     // 随机选择一个 rival 模式作为挑战者
     const rivalMode = persona.rivalModes[Math.floor(Math.random() * persona.rivalModes.length)]
     const rivalPersona = PERSONA_TRAITS[rivalMode]
-    if (!rivalPersona) return
+    if (!rivalPersona) {return}
 
     // 计算冲突概率：模式持续越久概率越高
     // 10 分钟 → 2%, 30 分钟 → 10%, 60 分钟 → 25%, 120 分钟+ → 50%
@@ -174,7 +174,7 @@ class PersonalityConflictManager {
     // 额外随机因子（让冲突不可预测）
     const randomFactor = Math.random() * 0.05 // 额外 0-5% 的随机概率
 
-    if (Math.random() > probability + randomFactor) return
+    if (Math.random() > probability + randomFactor) {return}
 
     // 触发冲突！
     const challengerLines = rivalPersona.takeoverLines[this._currentMode]
@@ -183,7 +183,7 @@ class PersonalityConflictManager {
       '主人你别听她的！',
     ]
 
-    if (!challengerLines || challengerLines.length === 0) return
+    if (!challengerLines || challengerLines.length === 0) {return}
 
     const conflict: PersonalityConflict = {
       id: `conflict_${++this._conflictCount}`,
@@ -206,11 +206,11 @@ class PersonalityConflictManager {
 
   /** 外部触发的冲突（基于用户输入检测） */
   triggerConflict(fromMode: AgentMode, toMode: AgentMode, userInput?: string): PersonalityConflict | null {
-    if (Date.now() - this._lastConflictTime < 60 * 1000) return null // 1 分钟冷却
+    if (Date.now() - this._lastConflictTime < 60 * 1000) {return null} // 1 分钟冷却
 
     const fromPersona = PERSONA_TRAITS[fromMode]
     const toPersona = PERSONA_TRAITS[toMode]
-    if (!fromPersona || !toPersona) return null
+    if (!fromPersona || !toPersona) {return null}
 
     // 找到"被抢麦"的人格的回应
     const defendLines = fromPersona.defendLines[toMode] || [

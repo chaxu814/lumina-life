@@ -73,7 +73,7 @@ function makeFs(entryJson: Record<string, unknown>) {
   const copied: Array<[string, string]> = []
   const fs: ModelImporterFs = {
     readText: async p => {
-      if (!(p in mem)) throw new Error('ENOENT ' + p)
+      if (!(p in mem)) {throw new Error('ENOENT ' + p)}
       return mem[p]
     },
     fileExists: async p => p in mem,

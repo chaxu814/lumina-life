@@ -31,7 +31,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
   const recommendedAgent = selectedType ? TEAM_MEMBERS.find(m => m.id === getRecommendedAgent(selectedType)) : null
 
   const handleDispatch = () => {
-    if (!selectedType) return
+    if (!selectedType) {return}
 
     const agentId = selectedAgent === 'auto'
       ? getRecommendedAgent(selectedType)
@@ -54,7 +54,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
         justifyContent: 'center',
         zIndex: 9999,
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => { if (e.target === e.currentTarget) {onClose()} }}
     >
       <div style={{
         background: 'white',

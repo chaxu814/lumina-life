@@ -54,7 +54,7 @@ function isElectronReady(): boolean {
 }
 
 function statePath(): string | null {
-  if (!isElectronReady()) return null
+  if (!isElectronReady()) {return null}
   return path.join(app.getPath('userData'), FILE_NAME)
 }
 
@@ -70,7 +70,7 @@ function defaultState(): LifeState {
 /** 单步合并/校验，防止脏数据或老版本字段 */
 function normalize(raw: any): LifeState {
   const base = defaultState()
-  if (!raw || typeof raw !== 'object') return base
+  if (!raw || typeof raw !== 'object') {return base}
   const d = raw.drives || {}
   const e = raw.emotion || {}
   return {
@@ -96,7 +96,7 @@ function normalize(raw: any): LifeState {
  */
 export function applyOfflineGap(drives: DriveState, gapMin: number, now = new Date()): DriveState {
   const min = Math.max(0, Math.min(MAX_OFFLINE_MIN, gapMin))
-  if (min <= 0) return { ...drives }
+  if (min <= 0) {return { ...drives }}
   const hour = now.getHours()
   // 深夜（23:00-06:00）按离线 = 睡眠处理，恢复精力；其余时段按清醒冷落处理
   const sleeping = hour >= 23 || hour < 6
@@ -112,7 +112,7 @@ let saveTimer: NodeJS.Timeout | null = null
  * Electron 不可用时返回内存默认值，不抛错。
  */
 export function loadLifeState(): LifeState {
-  if (loaded) return cached
+  if (loaded) {return cached}
   loaded = true
   try {
     const p = statePath()
@@ -136,14 +136,14 @@ export function scheduleLifeStateSave(
   emotion: PersistedEmotion,
   interactionCount?: number,
 ): void {
-  if (saveTimer) clearTimeout(saveTimer)
+  if (saveTimer) {clearTimeout(saveTimer)}
   cached = {
     drives: { ...drives },
     emotion: { ...emotion },
     interactionCount: interactionCount ?? cached.interactionCount,
     updatedAt: new Date().toISOString(),
   }
-  if (!isElectronReady()) return
+  if (!isElectronReady()) {return}
   saveTimer = setTimeout(() => {
     saveLifeStateNow()
   }, SAVE_DEBOUNCE_MS)
@@ -153,7 +153,7 @@ export function scheduleLifeStateSave(
 export function saveLifeStateNow(): void {
   try {
     const p = statePath()
-    if (!p) return
+    if (!p) {return}
     cached.updatedAt = new Date().toISOString()
     fs.writeFileSync(p, JSON.stringify({ version: LIFE_STATE_VERSION, ...cached }, null, 2), 'utf8')
   } catch (e) {

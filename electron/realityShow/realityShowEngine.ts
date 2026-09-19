@@ -221,14 +221,14 @@ function stampTemplate(e: ShowEvent): ShowEvent {
  */
 export async function generateShowEventAsync(context = ''): Promise<ShowEvent> {
   const base = generateShowEvent()
-  if (!realityLLMCaller || base.type !== 'agent:thought') return base
+  if (!realityLLMCaller || base.type !== 'agent:thought') {return base}
   try {
     const agent = base.agents[0] || 'Lumina'
     const sys = `你是桌面多 Agent 团队「Lumina Life」里的 ${agent}。${AGENT_VOICE[agent] || ''}。
 现在是 24 小时「真人秀」的一条内心独白，请输出一句 30 字以内、自然、像真实内心 OS 的话（不要引号、不要前缀、不要动作描写）。
 可以结合近期活动，但不要编造具体数字；偶尔撒娇、偶尔吐槽、偶尔关心，语气多样。`
     const text = (await realityLLMCaller(agent, sys + (context ? `\n近期活动：${context.slice(0, 500)}` : ''))).trim()
-    if (!text) return base
+    if (!text) {return base}
     return { ...base, content: text.slice(0, 120), source: 'llm' }
   } catch (e) {
     return base
@@ -239,11 +239,11 @@ export async function generateShowEventAsync(context = ''): Promise<ShowEvent> {
  * 启动自动生成（每 30~90 秒生成一条）
  */
 export function startRealityShow(intervalMs: number = 60_000): void {
-  if (generateTimer) return
+  if (generateTimer) {return}
 
   const pushEvent = (event: ShowEvent): void => {
     eventHistory.push(event)
-    if (eventHistory.length > MAX_EVENTS) eventHistory = eventHistory.slice(-MAX_EVENTS)
+    if (eventHistory.length > MAX_EVENTS) {eventHistory = eventHistory.slice(-MAX_EVENTS)}
     notifyListeners(event)
     lastGenerateTime = Date.now()
     try { globalEventBus.emit(BusEvents.REALITY_SHOW_EVENT, event) } catch {}
@@ -256,7 +256,7 @@ export function startRealityShow(intervalMs: number = 60_000): void {
 
   let ticking = false
   generateTimer = setInterval(() => {
-    if (ticking) return // 防止 LLM 慢调用导致叠加
+    if (ticking) {return} // 防止 LLM 慢调用导致叠加
     ticking = true
     generateShowEventAsync()
       .then(pushEvent)

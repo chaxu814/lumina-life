@@ -57,7 +57,7 @@ class SubscriptionManager {
   private _save(): void {
     try {
       const dir = path.dirname(this.statePath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       fs.writeFileSync(this.statePath, JSON.stringify(this.state, null, 2), 'utf-8')
     } catch {}
   }
@@ -68,7 +68,7 @@ class SubscriptionManager {
   async manageSubscription(action: string, email?: string): Promise<{ ok: boolean; message: string; subscribers?: Subscriber[] }> {
     switch (action) {
       case 'subscribe':
-        if (!email) return { ok: false, message: '需要提供邮箱地址' }
+        if (!email) {return { ok: false, message: '需要提供邮箱地址' }}
         if (this.state.subscribers.some(s => s.email === email && s.active)) {
           return { ok: true, message: `${email} 已订阅` }
         }
@@ -84,7 +84,7 @@ class SubscriptionManager {
         return { ok: true, message: `${email} 订阅成功！` }
 
       case 'unsubscribe':
-        if (!email) return { ok: false, message: '需要提供邮箱地址' }
+        if (!email) {return { ok: false, message: '需要提供邮箱地址' }}
         const sub = this.state.subscribers.find(s => s.email === email)
         if (sub) {
           sub.active = false
@@ -114,7 +114,7 @@ class SubscriptionManager {
 
   /** 自动处理邮件退订（邮件中回复 "unsubscribe" 触发）*/
   async autoUnsubscribe(email: string): Promise<boolean> {
-    if (!this.state.autoUnsubscribe) return false
+    if (!this.state.autoUnsubscribe) {return false}
     await this.manageSubscription('unsubscribe', email)
     return true
   }

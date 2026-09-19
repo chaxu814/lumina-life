@@ -344,10 +344,10 @@ export function SettingBtn({
         ...style,
       }}
       onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.background = c.hover
+        if (!disabled) {e.currentTarget.style.background = c.hover}
       }}
       onMouseLeave={(e) => {
-        if (!disabled) e.currentTarget.style.background = c.bg
+        if (!disabled) {e.currentTarget.style.background = c.bg}
       }}
     >
       {loading ? (

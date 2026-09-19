@@ -212,7 +212,7 @@ export class MissionRunner {
 
       } catch (err: any) {
         appendProgress(this.state.loopDir, `迭代 ${iteration} 异常: ${err.message}`)
-        if (iteration >= prd.maxIterations) break
+        if (iteration >= prd.maxIterations) {break}
       }
     }
 
@@ -230,7 +230,7 @@ export class MissionRunner {
 
   /** 从 LLM 响应中提取 PRD JSON */
   private parsePRDFromResponse(text: string): PRD | null {
-    if (!text) return null
+    if (!text) {return null}
 
     // 尝试直接解析
     try {

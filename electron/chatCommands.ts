@@ -230,7 +230,7 @@ export class CommandRouter {
   /** 解析命令 */
   parse(input: string): ParsedCommand | null {
     const trimmed = input.trimStart()
-    if (!trimmed.startsWith('/')) return null
+    if (!trimmed.startsWith('/')) {return null}
 
     const parts = trimmed.slice(1).split(/\s+/)
     const commandName = parts[0].toLowerCase()
@@ -242,7 +242,7 @@ export class CommandRouter {
       command = COMMANDS.find(c => c.aliases.some(a => a.toLowerCase() === commandName))
     }
 
-    if (!command) return null
+    if (!command) {return null}
 
     return {
       command,
@@ -286,7 +286,7 @@ export class CommandRouter {
   generateHelp(commandName?: string): string {
     if (commandName) {
       const cmd = COMMANDS.find(c => c.name === commandName || c.aliases.includes(commandName))
-      if (!cmd) return `未知命令: ${commandName}`
+      if (!cmd) {return `未知命令: ${commandName}`}
       return `${cmd.name} — ${cmd.description}\n用法: ${cmd.usage}\n别名: ${cmd.aliases.join(', ')}`
     }
 
@@ -301,7 +301,7 @@ export class CommandRouter {
     }
 
     for (const [category, cmds] of Object.entries(categories)) {
-      if (cmds.length === 0) continue
+      if (cmds.length === 0) {continue}
       lines.push(`### ${category}`)
       for (const cmd of cmds) {
         lines.push(`- \`${cmd.usage}\` — ${cmd.description}`)

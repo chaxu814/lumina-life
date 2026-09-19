@@ -9,7 +9,7 @@ export async function handleCron(args: string[]): Promise<{ ok: boolean; data?: 
     try {
       const { getCronStats } = await import('../tools/impl/cron')
       const stats = getCronStats()
-      if (stats.entryCount === 0) return { ok: true, data: '暂无定时任务。' }
+      if (stats.entryCount === 0) {return { ok: true, data: '暂无定时任务。' }}
       const lines = stats.entries.map((t: any) =>
         `  ${t.id} ${t.name || '?'} | 调度: ${t.schedule || '?'} | ${t.enabled ? '✅ 启用' : '⏸️ 暂停'} | 操作: ${(t.action || '').slice(0, 50)}`
       )

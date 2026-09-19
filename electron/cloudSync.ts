@@ -135,7 +135,7 @@ export class CloudSync {
   // ═══════════════════════════════════════════════════════
 
   async sync(): Promise<{ success: boolean; pulled: number; pushed: number; error?: string }> {
-    if (!this.config.enabled) return { success: false, pulled: 0, pushed: 0, error: '未启用' }
+    if (!this.config.enabled) {return { success: false, pulled: 0, pushed: 0, error: '未启用' }}
 
     let pulled = 0, pushed = 0
 
@@ -173,7 +173,7 @@ export class CloudSync {
   }
 
   async pull(): Promise<boolean> {
-    if (!this.config.enabled) return false
+    if (!this.config.enabled) {return false}
     try {
       await this.exec('git pull --rebase origin main 2>&1 || echo "ok"', this.dataDir)
       return true
@@ -246,7 +246,7 @@ export class CloudSync {
   // ═══════════════════════════════════════════════════════
 
   private startAutoSync(): void {
-    if (this.syncTimer) clearInterval(this.syncTimer)
+    if (this.syncTimer) {clearInterval(this.syncTimer)}
 
     const intervalMs = (this.config.syncIntervalMinutes || 5) * 60000
     this.syncTimer = setInterval(() => {
@@ -302,7 +302,7 @@ node_modules/
   }
 
   private saveConfig(): void {
-    if (!fs.existsSync(this.dataDir)) fs.mkdirSync(this.dataDir, { recursive: true })
+    if (!fs.existsSync(this.dataDir)) {fs.mkdirSync(this.dataDir, { recursive: true })}
     fs.writeFileSync(path.join(this.dataDir, 'sync_config.json'), JSON.stringify(this.config, null, 2))
   }
 
@@ -323,6 +323,6 @@ export function initCloudSync(dataDir?: string): CloudSync {
 }
 
 export function getCloudSync(): CloudSync {
-  if (!_instance) _instance = new CloudSync()
+  if (!_instance) {_instance = new CloudSync()}
   return _instance
 }

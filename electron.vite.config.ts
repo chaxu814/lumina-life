@@ -13,7 +13,7 @@ function copyPetAssets() {
     name: 'copy-pet-assets',
     closeBundle() {
       try {
-        if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true })
+        if (!existsSync(destDir)) {mkdirSync(destDir, { recursive: true })}
         copyFileSync(resolve(srcDir, 'pet-live2d.html'), resolve(destDir, 'pet-live2d.html'))
         if (existsSync(resolve(srcDir, 'pet-vrm.html'))) {
           copyFileSync(resolve(srcDir, 'pet-vrm.html'), resolve(destDir, 'pet-vrm.html'))

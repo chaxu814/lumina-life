@@ -79,8 +79,8 @@ function recordWithSox(
 
     proc.on('close', (code) => {
       clearTimeout(timer)
-      if (code === 0 || code === null) resolve()
-      else reject(new Error(`sox rec 退出码 ${code}`))
+      if (code === 0 || code === null) {resolve()}
+      else {reject(new Error(`sox rec 退出码 ${code}`))}
     })
     proc.on('error', (err) => {
       clearTimeout(timer)
@@ -110,8 +110,8 @@ function recordWithFfmpeg(
     ]
     const proc = spawn('ffmpeg', args, { stdio: 'pipe' })
     proc.on('close', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`ffmpeg 退出码 ${code}`))
+      if (code === 0) {resolve()}
+      else {reject(new Error(`ffmpeg 退出码 ${code}`))}
     })
     proc.on('error', (err) => reject(err))
   })

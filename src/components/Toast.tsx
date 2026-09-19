@@ -29,7 +29,7 @@ export default function Toast() {
     return () => { _addToast = null }
   }, [addToast])
 
-  if (toasts.length === 0) return null
+  if (toasts.length === 0) {return null}
 
   return (
     <div style={{
@@ -69,7 +69,7 @@ interface ConfirmProps {
 }
 
 export function ConfirmDialog({ visible, title, message, onConfirm, onCancel }: ConfirmProps) {
-  if (!visible) return null
+  if (!visible) {return null}
 
   return (
     <div style={{

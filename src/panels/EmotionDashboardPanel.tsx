@@ -31,7 +31,7 @@ export default function EmotionDashboardPanel() {
     const loadEmotions = async () => {
       try {
         const api = (window as any).luminaAPI
-        if (!api?.teamEmotions) return
+        if (!api?.teamEmotions) {return}
         const data = await api.teamEmotions()
         if (data?.emotions) {
           const mapped: Record<string, EmotionData> = {}
@@ -61,7 +61,7 @@ export default function EmotionDashboardPanel() {
   useEffect(() => {
     const handler = (e: any) => {
       const { agentId, emotion } = e.detail || {}
-      if (!agentId || !emotion) return
+      if (!agentId || !emotion) {return}
       setEmotions(prev => ({
         ...prev,
         [agentId]: {
@@ -85,31 +85,31 @@ export default function EmotionDashboardPanel() {
   const selected = selectedAgent ? emotions[selectedAgent] : null
 
   const getMoodColor = (mood: number) => {
-    if (mood > 0.6) return '#10b981'
-    if (mood > 0.2) return '#3b82f6'
-    if (mood > -0.3) return '#f59e0b'
+    if (mood > 0.6) {return '#10b981'}
+    if (mood > 0.2) {return '#3b82f6'}
+    if (mood > -0.3) {return '#f59e0b'}
     return '#ef4444'
   }
 
   const getMoodEmoji = (mood: number) => {
-    if (mood > 0.6) return '😄'
-    if (mood > 0.2) return '😊'
-    if (mood > -0.3) return '😐'
-    if (mood > -0.6) return '😔'
+    if (mood > 0.6) {return '😄'}
+    if (mood > 0.2) {return '😊'}
+    if (mood > -0.3) {return '😐'}
+    if (mood > -0.6) {return '😔'}
     return '😢'
   }
 
   const getEnergyEmoji = (energy: number) => {
-    if (energy > 0.7) return '⚡'
-    if (energy > 0.4) return '🔋'
-    if (energy > 0.2) return '🪫'
+    if (energy > 0.7) {return '⚡'}
+    if (energy > 0.4) {return '🔋'}
+    if (energy > 0.2) {return '🪫'}
     return '😴'
   }
 
   const getAffinityEmoji = (affinity: number) => {
-    if (affinity > 0.7) return '❤️'
-    if (affinity > 0.4) return '💛'
-    if (affinity > 0.2) return '💙'
+    if (affinity > 0.7) {return '❤️'}
+    if (affinity > 0.4) {return '💛'}
+    if (affinity > 0.2) {return '💙'}
     return '🩶'
   }
 
@@ -124,7 +124,7 @@ export default function EmotionDashboardPanel() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
         {agentIds.map(id => {
           const emo = emotions[id]
-          if (!emo) return null
+          if (!emo) {return null}
           const moodColor = getMoodColor(emo.mood)
           const moodPercent = Math.round((emo.mood + 1) / 2 * 100)
           const energyPercent = Math.round(emo.energy * 100)

@@ -134,14 +134,14 @@ function getDreamDbPath(): string {
     const baseDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR || ''
     dir = baseDir ? path.join(baseDir, 'data') : path.join(__dirname, '..', '..', 'data')
   }
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
   return path.join(dir, 'dreams.json')
 }
 
 /** 旧版（data/dreams.json，打包时只读会失败）迁移到 userData */
 function migrateLegacyDreams(targetPath: string): void {
   try {
-    if (fs.existsSync(targetPath)) return
+    if (fs.existsSync(targetPath)) {return}
     const baseDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR || ''
     const oldDir = baseDir ? path.join(baseDir, 'data') : path.join(__dirname, '..', '..', 'data')
     const oldPath = path.join(oldDir, 'dreams.json')
@@ -155,7 +155,7 @@ function loadDreams(): DreamEntry[] {
   try {
     const p = getDreamDbPath()
     migrateLegacyDreams(p)
-    if (!fs.existsSync(p)) return []
+    if (!fs.existsSync(p)) {return []}
     const raw = fs.readFileSync(p, 'utf-8')
     const cache: DreamCache = JSON.parse(raw)
     return cache.entries || []
@@ -194,7 +194,7 @@ function generateTitle(content: string): string {
   // 取第一句的前 20 个字作为标题
   const firstSentence = content.split(/[。！？\n]/)[0]
   const trimmed = firstSentence.replace(/[「」""''（）()]/g, '').trim()
-  if (trimmed.length <= 25) return trimmed
+  if (trimmed.length <= 25) {return trimmed}
   return trimmed.slice(0, 22) + '…'
 }
 
@@ -260,15 +260,15 @@ function buildDreamPrompt(memoryContext?: string): { system: string; user: strin
 
 /** 从 LLM 文本里容错解析出梦境字段 */
 function parseDreamLLM(raw: string): Partial<DreamEntry> | null {
-  if (!raw) return null
+  if (!raw) {return null}
   let txt = raw.trim()
   const fence = txt.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fence) txt = fence[1].trim()
+  if (fence) {txt = fence[1].trim()}
   const m = txt.match(/\{[\s\S]*\}/)
-  if (!m) return null
+  if (!m) {return null}
   try {
     const obj = JSON.parse(m[0])
-    if (!obj || typeof obj.content !== 'string' || !obj.content.trim()) return null
+    if (!obj || typeof obj.content !== 'string' || !obj.content.trim()) {return null}
     return {
       title: typeof obj.title === 'string' && obj.title.trim() ? obj.title.trim() : generateTitle(obj.content),
       content: obj.content.trim(),
@@ -285,12 +285,12 @@ function parseDreamLLM(raw: string): Partial<DreamEntry> | null {
 export async function generateDreamAsync(memoryContext?: string): Promise<DreamEntry> {
   const today = new Date().toISOString().slice(0, 10)
   const fallback = generateDream(memoryContext)
-  if (!dreamLLMCaller) return fallback
+  if (!dreamLLMCaller) {return fallback}
   try {
     const { system, user } = buildDreamPrompt(memoryContext)
     const raw = await dreamLLMCaller(system, user)
     const parsed = parseDreamLLM(raw)
-    if (!parsed) return fallback
+    if (!parsed) {return fallback}
     return {
       id: generateId(),
       date: today,
@@ -346,12 +346,12 @@ export async function generateTodayDreamAsync(memoryContext?: string): Promise<b
     console.log(`[DreamEngine] ⏭️ ${today} 已有梦境，跳过`)
     return false
   }
-  if (todayInFlight) return false // 防止同一分钟内多个 cron tick 并发重复生成
+  if (todayInFlight) {return false} // 防止同一分钟内多个 cron tick 并发重复生成
   todayInFlight = true
   try {
     const dream = await generateDreamAsync(memoryContext)
     const after = loadDreams()
-    if (after.some(d => d.date === today)) return false
+    if (after.some(d => d.date === today)) {return false}
     after.push(dream)
     saveDreams(after)
     console.log(`[DreamEngine] 🌙 新梦境已生成（${dream.source}）: "${dream.title}"`)
@@ -391,7 +391,7 @@ export function getDreamByDate(date: string): DreamEntry | undefined {
 export function deleteDream(id: string): boolean {
   const entries = loadDreams()
   const idx = entries.findIndex(d => d.id === id)
-  if (idx === -1) return false
+  if (idx === -1) {return false}
   entries.splice(idx, 1)
   saveDreams(entries)
   return true
@@ -402,12 +402,12 @@ export function deleteDream(id: string): boolean {
  */
 export function getDreamStats(): { total: number; streak: number; latestDate: string | null } {
   const entries = getAllDreams()
-  if (entries.length === 0) return { total: 0, streak: 0, latestDate: null }
+  if (entries.length === 0) {return { total: 0, streak: 0, latestDate: null }}
 
   // 计算连续梦境天数
   let streak = 0
   const today = new Date().toISOString().slice(0, 10)
-  let checkDate = new Date(today)
+  const checkDate = new Date(today)
   
   for (let i = 0; i < 365; i++) {
     const dateStr = checkDate.toISOString().slice(0, 10)

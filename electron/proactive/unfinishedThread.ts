@@ -19,8 +19,8 @@ const FILE_NAME = 'proactive-unfinished.json'
 /** 是不是问句：句尾是 ?/？/吗/呢/吧/嘛，或句中含「呢/吗」 */
 export function isQuestion(text: string): boolean {
   const t = (text || '').trim()
-  if (!t) return false
-  if (/[?？吗呢吧嘛]$/.test(t)) return true
+  if (!t) {return false}
+  if (/[?？吗呢吧嘛]$/.test(t)) {return true}
   return /[呢吗]/.test(t)
 }
 
@@ -38,7 +38,7 @@ function isElectronReady(): boolean {
 }
 
 function threadPath(): string | null {
-  if (!isElectronReady()) return null
+  if (!isElectronReady()) {return null}
   return path.join(app.getPath('userData'), FILE_NAME)
 }
 
@@ -50,7 +50,7 @@ export class UnfinishedThreadStore {
   /** 她问了一个问题，记下来（覆盖旧的话头） */
   record(question: string, askedAt: number = Date.now()): void {
     const q = (question || '').trim()
-    if (!q) return
+    if (!q) {return}
     this.current = { question: q, askedAt }
     this.persist()
   }
@@ -76,7 +76,7 @@ export class UnfinishedThreadStore {
   }
 
   private ensureLoaded(): void {
-    if (this.loaded) return
+    if (this.loaded) {return}
     this.loaded = true
     try {
       const p = threadPath()
@@ -96,7 +96,7 @@ export class UnfinishedThreadStore {
     this.ensureLoaded()
     try {
       const p = threadPath()
-      if (!p) return
+      if (!p) {return}
       fs.writeFileSync(p, JSON.stringify(this.current, null, 2), 'utf8')
     } catch { /* 不阻塞主链路 */ }
   }

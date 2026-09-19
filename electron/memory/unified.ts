@@ -153,8 +153,8 @@ class UnifiedMemory {
         case 'semantic': {
           const allMemories = store.getAllMemories()
           for (const m of allMemories) {
-            if (results.length >= limit) break
-            if (query.keywords && !m.key.includes(query.keywords) && !m.value.includes(query.keywords)) continue
+            if (results.length >= limit) {break}
+            if (query.keywords && !m.key.includes(query.keywords) && !m.value.includes(query.keywords)) {continue}
             results.push({
               id: m.key,
               type: 'semantic',
@@ -264,7 +264,7 @@ class UnifiedMemory {
 let _instance: UnifiedMemory | null = null
 
 export function getUnifiedMemory(): UnifiedMemory {
-  if (!_instance) _instance = new UnifiedMemory()
+  if (!_instance) {_instance = new UnifiedMemory()}
   return _instance
 }
 

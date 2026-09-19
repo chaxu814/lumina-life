@@ -160,7 +160,7 @@ describe('MemoryStore (SQLite)', () => {
   })
 
   it('MemoryStore 构造函数不抛异常', () => {
-    if (!MemoryStore) return
+    if (!MemoryStore) {return}
     const dbPath = tempDbPath()
     try {
       const store = new MemoryStore(dbPath)

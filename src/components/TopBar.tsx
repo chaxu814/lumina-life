@@ -65,7 +65,7 @@ export default function TopBar() {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
-    if (effectiveApiKey) headers['Authorization'] = `Bearer ${effectiveApiKey}`
+    if (effectiveApiKey) {headers['Authorization'] = `Bearer ${effectiveApiKey}`}
 
     // 1) 先试轻量 GET（快，4s）
     const getEndpoints = [...new Set([
@@ -97,9 +97,9 @@ export default function TopBar() {
           }),
           signal: AbortSignal.timeout(8000),
         })
-        if (res.ok) online = true
+        if (res.ok) {online = true}
         // LM Studio 没加载模型时返回 400，但服务在线
-        else if (res.status === 400) online = true
+        else if (res.status === 400) {online = true}
       } catch { /* offline */ }
     }
 
@@ -148,7 +148,7 @@ export default function TopBar() {
   const compact = compactMode || devtoolsOpen
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api?.onDevToolsChanged) return
+    if (!api?.onDevToolsChanged) {return}
     return api.onDevToolsChanged((opened: boolean) => setDevtoolsOpen(opened))
   }, [])
 
@@ -223,7 +223,7 @@ export default function TopBar() {
           <div style={{ display: 'flex', gap: compact ? 4 : 8, alignItems: 'flex-start' }}>
             {TEAM_AGENTS.map(id => {
               const meta = AGENT_META[id]
-              if (!meta) return null
+              if (!meta) {return null}
               const status = getAgentStatus(id) as AgentStatus
               const statusLabel = getStatusLabel(status)
               const statusColor = statusLabel.color

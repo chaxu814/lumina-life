@@ -46,7 +46,7 @@ export interface FullDuplexBridge {
 
 /** 去除 markdown/引号/动作括号，避免把星号、舞台提示念出来 */
 export function cleanSpokenReply(raw: string): string {
-  if (!raw) return ''
+  if (!raw) {return ''}
   let t = String(raw)
   // 去掉 ``` 代码块
   t = t.replace(/```[\s\S]*?```/g, '，')
@@ -92,20 +92,20 @@ export class FullDuplexController {
 
   /** VAD/STT 检测到用户开始说话（AI 在说则打断） */
   async userStarted(): Promise<void> {
-    if (!this.enabled) return
+    if (!this.enabled) {return}
     const r = await this.sendEvent({ type: 'user_start' })
     await this.runActions(r.actions)
   }
 
   /** 识别到中间结果（仅做 UI 提示，不进状态机） */
   partial(text: string): void {
-    if (!this.enabled) return
+    if (!this.enabled) {return}
     this.bridge.onPartial?.(text)
   }
 
   /** 一句话识别完成 */
   async userUtterance(text: string): Promise<void> {
-    if (!this.enabled) return
+    if (!this.enabled) {return}
     const t = (text || '').trim()
     if (!t) {
       // 空识别：回到聆听
@@ -125,12 +125,12 @@ export class FullDuplexController {
     this.bridge.cancelSpeech()
     const r = await this.sendEvent({ type: 'reset' })
     this.latestGen = r.generation
-    if (this.enabled) this.bridge.onState?.('listening')
+    if (this.enabled) {this.bridge.onState?.('listening')}
   }
 
   private async sendEvent(params: { type: string; text?: string; generation?: number }): Promise<DirectorEventResult> {
     const r = await this.bridge.sendEvent(params)
-    if (typeof r.generation === 'number') this.latestGen = r.generation
+    if (typeof r.generation === 'number') {this.latestGen = r.generation}
     return r
   }
 
@@ -152,12 +152,12 @@ export class FullDuplexController {
       if (a.type === 'stop_listening') { this.bridge.onState?.('thinking'); continue }
       if (a.type === 'call_llm') {
         await this.runLlm(a.text, a.generation, seq)
-        if (this.speechSeq !== seq) return // 等待期间被打断
+        if (this.speechSeq !== seq) {return} // 等待期间被打断
         continue
       }
       if (a.type === 'enqueue_speak') {
         await this.runSpeak(a.text, a.generation, seq)
-        if (this.speechSeq !== seq) return // 等待期间被打断，后续句子全部丢弃
+        if (this.speechSeq !== seq) {return} // 等待期间被打断，后续句子全部丢弃
         continue
       }
     }
@@ -172,7 +172,7 @@ export class FullDuplexController {
       this.bridge.onError?.(e?.message || '对话失败')
       return
     }
-    if (this.stale(gen) || this.speechSeq !== seq) return // 已被新发言/打断作废
+    if (this.stale(gen) || this.speechSeq !== seq) {return} // 已被新发言/打断作废
     reply = cleanSpokenReply(reply)
     if (!reply) {
       this.bridge.onState?.('listening')
@@ -180,21 +180,21 @@ export class FullDuplexController {
     }
     // 整段回复喂给导演，由 SentenceSplitter 切成可播句子
     const r1 = await this.sendEvent({ type: 'assistant_chunk', text: reply, generation: gen })
-    if (this.stale(gen) || this.speechSeq !== seq) return
+    if (this.stale(gen) || this.speechSeq !== seq) {return}
     const r2 = await this.sendEvent({ type: 'assistant_end', generation: gen })
-    if (this.stale(gen) || this.speechSeq !== seq) return
+    if (this.stale(gen) || this.speechSeq !== seq) {return}
     await this.runActions([...r1.actions, ...r2.actions])
   }
 
   private async runSpeak(text: string, gen: number, seq: number): Promise<void> {
-    if (this.stale(gen) || this.speechSeq !== seq) return
+    if (this.stale(gen) || this.speechSeq !== seq) {return}
     this.bridge.onState?.('speaking')
     try {
       await this.bridge.speakSentence(text, gen)
     } catch {
       /* 被打断或播放失败：继续推进，避免卡死队列 */
     }
-    if (this.stale(gen) || this.speechSeq !== seq) return
+    if (this.stale(gen) || this.speechSeq !== seq) {return}
     const r = await this.sendEvent({ type: 'sentence_spoken' })
     await this.runActions(r.actions)
   }

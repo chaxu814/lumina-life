@@ -182,7 +182,7 @@ export abstract class BaseMemoryManager {
 
   /** 估算文本的 token 数（简单近似：中文 ~1.5 字符/token，英文 ~4 字符/token） */
   protected estimateTokens(text: string): number {
-    if (!text) return 0
+    if (!text) {return 0}
     let tokens = 0
     for (const char of text) {
       if (/[\u4e00-\u9fff]/.test(char)) {

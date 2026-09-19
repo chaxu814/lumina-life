@@ -144,7 +144,7 @@ export class SandboxManager {
   // ── 初始化 ─────────────────────────────────────────
 
   async init(): Promise<void> {
-    if (this.initialized) return
+    if (this.initialized) {return}
 
     // 加载持久化配置
     await this.loadConfig()
@@ -191,7 +191,7 @@ export class SandboxManager {
         const raw = await fs.promises.readFile(this.configPath, 'utf-8')
         const saved = JSON.parse(raw)
         // 合并保存的配置（保持结构兼容）
-        if (saved.defaultRoot) this.config.defaultRoot = saved.defaultRoot
+        if (saved.defaultRoot) {this.config.defaultRoot = saved.defaultRoot}
         if (saved.agents) {
           for (const [id, cfg] of Object.entries(saved.agents)) {
             this.config.agents[id] = cfg as AgentSandboxConfig
@@ -271,7 +271,7 @@ export class SandboxManager {
   /** 移除授权目录 */
   async removeAuthorizedDir(dirId: string): Promise<boolean> {
     const idx = this.config.authorizedDirs.findIndex(d => d.id === dirId)
-    if (idx === -1) return false
+    if (idx === -1) {return false}
     this.config.authorizedDirs.splice(idx, 1)
     await this.saveConfig()
     console.log(`[Sandbox] 已移除授权目录: ${dirId}`)
@@ -295,7 +295,7 @@ export class SandboxManager {
     operation: FileOperation,
   ): Promise<SandboxCheckResult> {
     // 初始化（如果还没做）
-    if (!this.initialized) await this.init()
+    if (!this.initialized) {await this.init()}
 
     // 标准化路径
     const normalizedPath = path.normalize(filePath)
@@ -466,11 +466,11 @@ export class SandboxManager {
     // 沙箱目录
     const agentCfg = this.config.agents[agentId]
     const sandboxDir = agentCfg?.sandboxDir || this.getOrCreateAgentSandboxDir(agentId)
-    if (fileNorm.startsWith(path.normalize(sandboxDir).toLowerCase())) return true
+    if (fileNorm.startsWith(path.normalize(sandboxDir).toLowerCase())) {return true}
 
     // 授权目录
     for (const authDir of this.config.authorizedDirs) {
-      if (fileNorm.startsWith(path.normalize(authDir.path).toLowerCase())) return true
+      if (fileNorm.startsWith(path.normalize(authDir.path).toLowerCase())) {return true}
     }
 
     return false

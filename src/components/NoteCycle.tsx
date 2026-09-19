@@ -57,11 +57,11 @@ function nowISO(): string {
 // 简单自动分类
 function guessCategory(text: string): string {
   const t = text.toLowerCase()
-  if (/代码|bug|修复|函数|api|接口|部署|git|commit|pr|merge|npm|yarn|install|编译|构建/i.test(t)) return '技术'
-  if (/会议|讨论|决策|需求|计划|排期|周报|日报|汇报|okr/i.test(t)) return '工作'
-  if (/学|读|看|听|课|书|文章|视频|笔记|知识/i.test(t)) return '学习'
-  if (/想法|灵感|创意|产品|设计|ux|ui|交互|体验/i.test(t)) return '创意'
-  if (/备忘|提醒|待办|todo|明天|下周|改天|约/i.test(t)) return '备忘'
+  if (/代码|bug|修复|函数|api|接口|部署|git|commit|pr|merge|npm|yarn|install|编译|构建/i.test(t)) {return '技术'}
+  if (/会议|讨论|决策|需求|计划|排期|周报|日报|汇报|okr/i.test(t)) {return '工作'}
+  if (/学|读|看|听|课|书|文章|视频|笔记|知识/i.test(t)) {return '学习'}
+  if (/想法|灵感|创意|产品|设计|ux|ui|交互|体验/i.test(t)) {return '创意'}
+  if (/备忘|提醒|待办|todo|明天|下周|改天|约/i.test(t)) {return '备忘'}
   return '随记'
 }
 
@@ -81,7 +81,7 @@ function NotesSection() {
 
   const addNote = () => {
     const text = input.trim()
-    if (!text) return
+    if (!text) {return}
     const note: NoteEntry = {
       id: `note_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
       content: text,
@@ -121,7 +121,7 @@ function NotesSection() {
         const updated = [...notes]
         categories.forEach((cat: string, i: number) => {
           const idx = updated.findIndex(n => n.id === uncategorized[i]?.id)
-          if (idx >= 0 && cat) updated[idx] = { ...updated[idx], category: cat, generated: true }
+          if (idx >= 0 && cat) {updated[idx] = { ...updated[idx], category: cat, generated: true }}
         })
         saveNotes(updated)
         showToast(`✅ 已分类 ${categories.length} 条笔记`)
@@ -277,7 +277,7 @@ function OrganizeSection() {
             { role: 'user', content: textForLLM }
           ]
         })
-        if (result?.content) summaryContent = result.content
+        if (result?.content) {summaryContent = result.content}
       } catch {}
 
       if (!summaryContent) {
@@ -530,7 +530,7 @@ export function LuminaDailyReport() {
                 if (msg.timestamp >= cutoff) { totalMsgs++; msg.role === 'user' ? userMsgs++ : assistantMsgs++ }
               }
             }
-            if (totalMsgs > 0) chatStats = `📊 今日共 ${totalMsgs} 条消息（你说了 ${userMsgs} 条，Lumina 回复了 ${assistantMsgs} 条）`
+            if (totalMsgs > 0) {chatStats = `📊 今日共 ${totalMsgs} 条消息（你说了 ${userMsgs} 条，Lumina 回复了 ${assistantMsgs} 条）`}
           }
         }
       } catch {}
@@ -790,7 +790,7 @@ export function TeamMilestones() {
   }
 
   const addMilestone = () => {
-    if (!form.date || !form.title) return
+    if (!form.date || !form.title) {return}
     const newM: Milestone = {
       id: `ms_${Date.now()}`,
       date: form.date,
@@ -809,7 +809,7 @@ export function TeamMilestones() {
 
   // 按年份分组
   const grouped = milestones.reduce((acc, m) => {
-    if (!acc[m.year]) acc[m.year] = []
+    if (!acc[m.year]) {acc[m.year] = []}
     acc[m.year].push(m)
     return acc
   }, {} as Record<number, Milestone[]>)
@@ -935,7 +935,7 @@ export function YakTechNotes() {
   }
 
   const addNote = () => {
-    if (!form.title || !form.content) return
+    if (!form.title || !form.content) {return}
     const newNote: YakNote = {
       id: `yak_${Date.now()}`,
       title: form.title,

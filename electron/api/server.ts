@@ -233,7 +233,7 @@ export class ApiServer {
 
     // 路由匹配
     for (const route of ROUTES) {
-      if (req.method !== route.method) continue
+      if (req.method !== route.method) {continue}
       const match = route.path.exec(pathname)
       if (match) {
         try {
@@ -252,7 +252,7 @@ export class ApiServer {
 
   private authenticate(req: http.IncomingMessage): boolean {
     const key = req.headers['x-api-key'] as string || req.headers['authorization'] as string
-    if (!key) return false
+    if (!key) {return false}
     // 支持 Bearer token
     const actualKey = key.startsWith('Bearer ') ? key.slice(7) : key
     return actualKey === this.config.apiKey

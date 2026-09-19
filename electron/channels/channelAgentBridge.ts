@@ -163,7 +163,7 @@ export class ChannelAgentBridge {
       }
     }
 
-    if (!llmConfig) return null
+    if (!llmConfig) {return null}
 
     const runner = new AgentRunner({
       mode: 'agent',
@@ -215,7 +215,7 @@ export class ChannelAgentBridge {
 let _bridge: ChannelAgentBridge | null = null
 
 export function getChannelAgentBridge(): ChannelAgentBridge {
-  if (!_bridge) _bridge = new ChannelAgentBridge()
+  if (!_bridge) {_bridge = new ChannelAgentBridge()}
   return _bridge
 }
 

@@ -68,12 +68,12 @@ export class ModelLibrary {
   private currentId: string | null = null
 
   constructor(data?: ModelLibraryData, now = 0) {
-    for (const b of BUILTIN_MODELS) this.map.set(b.id, { ...b })
+    for (const b of BUILTIN_MODELS) {this.map.set(b.id, { ...b })}
     if (data) {
-      for (const c of data.custom ?? []) this.register(c, now).ok && void 0
-      if (data.currentId && this.map.has(data.currentId)) this.currentId = data.currentId
+      for (const c of data.custom ?? []) {this.register(c, now).ok && void 0}
+      if (data.currentId && this.map.has(data.currentId)) {this.currentId = data.currentId}
     }
-    if (!this.currentId) this.currentId = BUILTIN_MODELS[0].id
+    if (!this.currentId) {this.currentId = BUILTIN_MODELS[0].id}
   }
 
   /** 注册/更新一个自定义模型 */
@@ -85,8 +85,8 @@ export class ModelLibrary {
       return { ok: false, error: `模型入口必须是安全的相对 ${expect} 路径` }
     }
     const id = entry.id ? sanitizeModelName(entry.id) : sanitizeModelName(entry.name ?? entryRel.split('/').slice(-2, -1)[0])
-    if (!id) return { ok: false, error: '无法生成有效模型 id' }
-    if (BUILTIN_MODELS.some(b => b.id === id)) return { ok: false, error: '与内置模型 id 冲突' }
+    if (!id) {return { ok: false, error: '无法生成有效模型 id' }}
+    if (BUILTIN_MODELS.some(b => b.id === id)) {return { ok: false, error: '与内置模型 id 冲突' }}
     this.map.set(id, {
       id,
       name: entry.name?.trim() || id,
@@ -103,9 +103,9 @@ export class ModelLibrary {
   /** 删除自定义模型；内置不可删；删除当前模型会回退到内置 */
   remove(id: string): boolean {
     const e = this.map.get(id)
-    if (!e || e.builtin) return false
+    if (!e || e.builtin) {return false}
     this.map.delete(id)
-    if (this.currentId === id) this.currentId = BUILTIN_MODELS[0].id
+    if (this.currentId === id) {this.currentId = BUILTIN_MODELS[0].id}
     return true
   }
 
@@ -117,7 +117,7 @@ export class ModelLibrary {
 
   /** 切换当前模型，必须已存在 */
   select(id: string): boolean {
-    if (!this.map.has(id)) return false
+    if (!this.map.has(id)) {return false}
     this.currentId = id
     return true
   }

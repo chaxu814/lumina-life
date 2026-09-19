@@ -37,7 +37,7 @@ export class SlackAdapter implements ChannelAdapter {
   }
 
   async send(request: ChannelSendRequest): Promise<boolean> {
-    if (!this.botToken) return false
+    if (!this.botToken) {return false}
 
     if (request.isGroup) {
       return this.sendChannelMessage(request.targetId, request.text)
@@ -51,7 +51,7 @@ export class SlackAdapter implements ChannelAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    if (!this.botToken) return false
+    if (!this.botToken) {return false}
     try {
       const data = await this.slackApiGet('auth.test')
       return data.ok === true
@@ -92,7 +92,7 @@ export class SlackAdapter implements ChannelAdapter {
 
   /** 验证 Slack 请求签名 */
   verifySignature(signature: string, timestamp: string, rawBody: string): boolean {
-    if (!this.signingSecret) return true // 无密钥时不验证
+    if (!this.signingSecret) {return true} // 无密钥时不验证
     const base = `v0:${timestamp}:${rawBody}`
     const hash = 'v0=' + crypto.createHmac('sha256', this.signingSecret).update(base).digest('hex')
     return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature))
@@ -122,9 +122,9 @@ export class SlackAdapter implements ChannelAdapter {
   /** 解析 Slack 事件为统一格式 */
   private parseEvent(event: any): ChannelMessage | null {
     // 只处理消息事件
-    if (event.type !== 'message') return null
+    if (event.type !== 'message') {return null}
     // 忽略 bot 消息（防止循环）
-    if (event.bot_id || event.subtype === 'bot_message') return null
+    if (event.bot_id || event.subtype === 'bot_message') {return null}
 
     return {
       id: event.client_msg_id || event.ts || `sl_${Date.now()}`,
@@ -141,7 +141,7 @@ export class SlackAdapter implements ChannelAdapter {
 
   /** 🆕 v16.0-fix: 异步解析用户名，填充 fromUserName */
   async resolveUserName(userId: string): Promise<string> {
-    if (!userId || !this.botToken) return ''
+    if (!userId || !this.botToken) {return ''}
     try {
       const data = await this.slackApiGet(`users.info?user=${userId}`)
       if (data.ok && data.user) {

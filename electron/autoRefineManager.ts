@@ -37,7 +37,7 @@ export class AutoRefineManager {
 
   /** 启动自动精炼 */
   start(): void {
-    if (!this._enabled) return
+    if (!this._enabled) {return}
     
     console.log('[AutoRefine] 🕐 启动自动精炼，间隔:', this._interval / 1000 / 60 / 60, '小时')
     

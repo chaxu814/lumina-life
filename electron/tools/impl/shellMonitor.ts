@@ -104,15 +104,15 @@ async function queryProcessMetrics(pid: number): Promise<{ memoryMB: number; cpu
         `if ($p) { Write-Output (\\"$($p.WorkingSet64)|$($p.TotalProcessorTime.TotalMilliseconds)\\" ) }"`
       )
       const trimmed = stdout.trim()
-      if (!trimmed || trimmed.includes('|NaN') || trimmed === '|') return null
+      if (!trimmed || trimmed.includes('|NaN') || trimmed === '|') {return null}
 
       const parts = trimmed.split('|')
-      if (parts.length < 2) return null
+      if (parts.length < 2) {return null}
 
       const memBytes = parseInt(parts[0], 10)
       const cpuMs = parseFloat(parts[1])
 
-      if (isNaN(memBytes) || isNaN(cpuMs)) return null
+      if (isNaN(memBytes) || isNaN(cpuMs)) {return null}
 
       return {
         memoryMB: memBytes / (1024 * 1024),
@@ -124,13 +124,13 @@ async function queryProcessMetrics(pid: number): Promise<{ memoryMB: number; cpu
       // cputime 格式 [dd-]hh:mm:ss 需要解析
       const stdout = await execPromise(`ps -o rss=,cputime= -p ${pid} 2>/dev/null || true`)
       const trimmed = stdout.trim()
-      if (!trimmed) return null
+      if (!trimmed) {return null}
 
       const [rssKb, cputime] = trimmed.split(/\s+/)
       const memoryMB = parseInt(rssKb, 10) / 1024
       const cpuMs = parseCpuTime(cputime)
 
-      if (isNaN(memoryMB) || isNaN(cpuMs)) return null
+      if (isNaN(memoryMB) || isNaN(cpuMs)) {return null}
       return { memoryMB, cpuMs }
     }
   } catch {
@@ -168,9 +168,9 @@ async function queryChildCount(pid: number): Promise<number> {
  * 解析 Unix ps cputime 格式 [dd-]hh:mm:ss → ms
  */
 function parseCpuTime(input: string): number {
-  if (!input || input === '-') return 0
+  if (!input || input === '-') {return 0}
   const match = input.match(/^(?:(\d+)-)?(\d+):(\d+):(\d+)$/)
-  if (!match) return 0
+  if (!match) {return 0}
   const days = parseInt(match[1] || '0', 10)
   const hours = parseInt(match[2], 10)
   const minutes = parseInt(match[3], 10)
@@ -327,7 +327,7 @@ export class ShellMonitor {
    */
   private async sampleProcess(pid: number): Promise<ProcessMetrics | null> {
     const base = await queryProcessMetrics(pid)
-    if (!base) return null
+    if (!base) {return null}
 
     const memoryMB = base.memoryMB
 
@@ -343,7 +343,7 @@ export class ShellMonitor {
         // CPU% = (CPU 时间增量 / 实际时间增量) / 核心数 * 100
         cpuPercent = (dcpuMs / dtMs) / this.cpuCoreCount * 100
         // 将很小的值归零
-        if (cpuPercent < 0.5) cpuPercent = 0
+        if (cpuPercent < 0.5) {cpuPercent = 0}
       }
     }
 
@@ -360,7 +360,7 @@ export class ShellMonitor {
    */
   private async evaluateViolations(pid: number, metrics: ProcessMetrics): Promise<void> {
     const cb = this.violationCallbacks.get(pid)
-    if (!cb) return
+    if (!cb) {return}
     const now = metrics.sampledAt
 
     // 1️⃣ 内存超限 → 立即 kill

@@ -79,7 +79,7 @@ export default function SecurityPanel({ embedded }: { embedded?: boolean } = {})
 
   // ── 添加授权目录 ──────────────────────────────────
   const handleAddDir = useCallback(async () => {
-    if (!newDirPath.trim()) return
+    if (!newDirPath.trim()) {return}
     try {
       const api = (window as any).luminaAPI
       if (api?.sandboxAddAuthorizedDir) {
@@ -500,6 +500,6 @@ export default function SecurityPanel({ embedded }: { embedded?: boolean } = {})
     </div>
   )
 
-  if (embedded) return renderContent()
+  if (embedded) {return renderContent()}
   return <div className="panel">{renderContent()}</div>
 }

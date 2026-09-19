@@ -119,7 +119,7 @@ let petModule: Awaited<typeof import('./pet/petWindow')> | null = null
 async function lifeLLMCall(system: string, user: string): Promise<string> {
   const { resolvePetBrainConfig, createPetLLM } = await import('./pet/petWindow')
   const cfg = resolvePetBrainConfig()
-  if (!cfg) throw new Error('LLM not configured for dream/reality')
+  if (!cfg) {throw new Error('LLM not configured for dream/reality')}
   const provider = createPetLLM(cfg)
   const res = await provider.call({
     messages: [
@@ -142,7 +142,7 @@ function dreamMemorySnippet(): string {
       budget: { persona: 4, facts: 10, reflection: 3, recent: 3, working: 4 },
       maxLineLen: 90,
     })
-    if (recall.prompt) return recall.prompt
+    if (recall.prompt) {return recall.prompt}
     // 五层门面失败时退回旧桥
     const { buildPetMemoryContext } = require('./pet/petMemoryBridge')
     return buildPetMemoryContext(getMemoryStore(), { maxFacts: 12, maxSummaries: 4 }).snippet || ''
@@ -577,7 +577,7 @@ const socialLlmCall = async (
     _context?: Record<string, unknown>,
   ): Promise<string> => {
     const cfg = getAgentConfig().get(personaId as any)
-    if (!cfg || !cfg.enabled || !cfg.model || !cfg.endpoint) return ''
+    if (!cfg || !cfg.enabled || !cfg.model || !cfg.endpoint) {return ''}
     try {
       const provider = new LLMProvider({
         baseUrl: cfg.endpoint,
@@ -898,7 +898,7 @@ try {
   })
   ipcMain.handle('proactive:test-trigger', (_e: any, id: string) => {
     const trigger = getProactiveEngine().getTriggers().find(t => t.id === id)
-    if (!trigger) return { ok: false, error: '触发器不存在' }
+    if (!trigger) {return { ok: false, error: '触发器不存在' }}
     // 强制激活指定触发器
     getProactiveEngine().forceActivate(id)
     return { ok: true }
@@ -1235,7 +1235,7 @@ const sessionManager = getSessionManager()
       const pool = getSkillPool()
       const workspaceId = p.args[0] || 'default'
       const skills = pool.listWorkspaceSkills(workspaceId)
-      if (skills.length === 0) return { success: true, message: `workspace "${workspaceId}" 中没有安??skills。` }
+      if (skills.length === 0) {return { success: true, message: `workspace "${workspaceId}" 中没有安??skills。` }}
       const list = skills.map(s => `${s.emoji} **${s.name}** v${s.version} ??${s.description}`).join('\n')
       return { success: true, message: `## ${workspaceId} ??Skills\n\n${list}` }
     },
@@ -1260,12 +1260,12 @@ const sessionManager = getSessionManager()
     },
     approve: async (p) => {
       const result = getApprovalService().approve(p.args[0])
-      if (!result) return { success: false, message: `审批失败: 未找??ID "${p.args[0]}" 或已过期。` }
+      if (!result) {return { success: false, message: `审批失败: 未找??ID "${p.args[0]}" 或已过期。` }}
       return { success: true, message: `已批准操?? ${result.toolName}` }
     },
     deny: async (p) => {
       const result = getApprovalService().deny(p.args[0], '用户拒绝')
-      if (!result) return { success: false, message: `拒绝失败: 未找??ID "${p.args[0]}" 或已过期。` }
+      if (!result) {return { success: false, message: `拒绝失败: 未找??ID "${p.args[0]}" 或已过期。` }}
       return { success: true, message: `已拒绝操?? ${result.toolName}` }
     },
     plan: async (p) => {
@@ -1294,7 +1294,7 @@ const sessionManager = getSessionManager()
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin') {app.quit()}
 })
 
 app.on('activate', () => {
@@ -1331,7 +1331,7 @@ try {
     const active = sm.listSessions({ completed: false })
     for (const s of active) {
       const data = sm.loadSession(s.id)
-      if (data) sm.completeSession(s.id)
+      if (data) {sm.completeSession(s.id)}
     }
   } catch { /* ignore */ }
 })
@@ -1422,12 +1422,12 @@ function registerV27Ipc(mainWindow: BrowserWindow): void {
   // ── Chat Commands ───────────────────────────────────
   ipcMain.handle('command:parse', (_e, input: string) => {
     const parsed = getCommandRouter().parse(input)
-    if (!parsed) return null
+    if (!parsed) {return null}
     return { command: parsed.command.name, args: parsed.args }
   })
   ipcMain.handle('command:execute', async (_e, input: string) => {
     const parsed = getCommandRouter().parse(input)
-    if (!parsed) return { success: false, message: '不是有效命令' }
+    if (!parsed) {return { success: false, message: '不是有效命令' }}
     return await getCommandRouter().execute(parsed)
   })
   ipcMain.handle('command:help', (_e, cmdName?: string) =>
@@ -1617,7 +1617,7 @@ function registerAcpIpc(): void {
       const fs = require('fs')
       if (fs.existsSync(acpMembersPath)) {
         const members = JSON.parse(fs.readFileSync(acpMembersPath, 'utf-8'))
-        for (const m of members) registerTeamMember(m)
+        for (const m of members) {registerTeamMember(m)}
         console.log('[ACP] Loaded ' + members.length + ' ACP members')
       }
     } catch (e: any) { console.warn('[ACP] Load failed:', e.message) }
@@ -1654,7 +1654,7 @@ function registerAcpIpc(): void {
           maxTokens: config.maxTokens || 4096,
         },
       })
-      if (result) persistAcpMembers()
+      if (result) {persistAcpMembers()}
       return { ok: result }
     } catch (e: any) { return { ok: false, error: e.message } }
   })
@@ -1663,8 +1663,8 @@ function registerAcpIpc(): void {
     try {
       const registry = getTeamRegistry()
       const existing = registry.getMember(id) as any
-      if (!existing) return { ok: false, error: 'Member not found' }
-      if (registry.isBuiltIn(id)) return { ok: false, error: 'Cannot edit built-in member' }
+      if (!existing) {return { ok: false, error: 'Member not found' }}
+      if (registry.isBuiltIn(id)) {return { ok: false, error: 'Cannot edit built-in member' }}
       registry.unregister(id)
       registerTeamMember({ ...existing, ...updates, id, acpConfig: { ...(existing.acpConfig || {}), ...(updates.acpConfig || {}) } })
       persistAcpMembers()
@@ -1684,7 +1684,7 @@ function registerAcpIpc(): void {
   })
 
   ipcMain.handle('acp:unregister', (_e: any, id: string) => {
-    try { const ok = unregisterTeamMember(id); if (ok) persistAcpMembers(); return { ok } }
+    try { const ok = unregisterTeamMember(id); if (ok) {persistAcpMembers();} return { ok } }
     catch (e: any) { return { ok: false, error: e.message } }
   })
 
@@ -1692,8 +1692,8 @@ function registerAcpIpc(): void {
     try {
       const registry = getTeamRegistry()
       const member = registry.getMember(id) as any
-      if (!member) return { ok: false, error: 'Member not found' }
-      if (!member.acpConfig?.url) return { ok: false, error: 'ACP member has no URL configured' }
+      if (!member) {return { ok: false, error: 'Member not found' }}
+      if (!member.acpConfig?.url) {return { ok: false, error: 'ACP member has no URL configured' }}
       return { ok: true, response: '[ACP] Message sent to ' + member.name, simulated: true }
     } catch (e: any) { return { ok: false, error: e.message } }
   })

@@ -43,17 +43,17 @@ function saveLocalSeed(posts: MomentPost[]) {
 
 // ─── 工具函数 ──────────────────────────────────────
 function fmtTime(ts: number) {
-  if (!ts) return '刚刚'
+  if (!ts) {return '刚刚'}
   const d = new Date(ts)
-  if (isNaN(d.getTime())) return '刚刚'
+  if (isNaN(d.getTime())) {return '刚刚'}
   const diff = Date.now() - ts
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  if (diff < 60000) {return '刚刚'}
+  if (diff < 3600000) {return `${Math.floor(diff / 60000)}分钟前`}
+  if (diff < 86400000) {return `${Math.floor(diff / 3600000)}小时前`}
   const yesterday = new Date(Date.now() - 86400000)
-  if (d.toDateString() === yesterday.toDateString()) return '昨天'
+  if (d.toDateString() === yesterday.toDateString()) {return '昨天'}
   if (d.getFullYear() === new Date().getFullYear())
-    return `${d.getMonth() + 1}月${d.getDate()}日`
+    {return `${d.getMonth() + 1}月${d.getDate()}日`}
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
 }
 
@@ -113,7 +113,7 @@ export default function AgentMoments() {
   // ── 发布 (→ SQLite) ───────────────────────────
   const postMoment = async () => {
     const text = input.trim()
-    if (!text) return
+    if (!text) {return}
     try {
       const result = await window.luminaAPI.momentsPost({
         agentId: 'user', agentName: '我', content: text, type: 'thought',
@@ -147,7 +147,7 @@ export default function AgentMoments() {
       try {
         const result = await window.luminaAPI.momentsLike(numId, 'user')
         setPosts(prev => prev.map(p => {
-          if (p.id !== numId) return p
+          if (p.id !== numId) {return p}
           return { ...p, likes: result.likeCount, likedByMe: result.liked }
         }))
         return
@@ -155,7 +155,7 @@ export default function AgentMoments() {
     }
     // fallback ID: localStorage 模式
     setPosts(prev => prev.map(p => {
-      if (p.id !== id) return p
+      if (p.id !== id) {return p}
       return { ...p, likes: p.likedByMe ? p.likes - 1 : p.likes + 1, likedByMe: !p.likedByMe }
     }))
   }

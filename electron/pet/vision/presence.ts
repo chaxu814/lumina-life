@@ -54,7 +54,7 @@ export class PresenceMonitor {
   /** 显式授权（不自动开始采样） */
   authorize(): void {
     this.authorized = true
-    if (this.state === 'disabled') this.state = 'off'
+    if (this.state === 'disabled') {this.state = 'off'}
     this.blockedReason = null
   }
 
@@ -78,14 +78,14 @@ export class PresenceMonitor {
 
   /** 暂停采样（保持授权） */
   disable(): void {
-    if (this.authorized) this.state = 'off'
-    else this.state = 'disabled'
+    if (this.authorized) {this.state = 'off'}
+    else {this.state = 'disabled'}
   }
 
   /** 是否到了采样时刻（未授权/未开启恒为 false） */
   shouldSample(now: number): boolean {
-    if (this.state !== 'on') return false
-    if (this.lastSampleAt === null) return true
+    if (this.state !== 'on') {return false}
+    if (this.lastSampleAt === null) {return true}
     return now - this.lastSampleAt >= this.sampleIntervalMs
   }
 
@@ -94,12 +94,12 @@ export class PresenceMonitor {
 
   /** 喂入人脸检测结果（仅 on 状态接受） */
   feedDetection(r: DetectionResult, now: number): boolean {
-    if (this.state !== 'on') return false
+    if (this.state !== 'on') {return false}
     if (r.present) {
       this.lastPresentAt = now
       this.presentCount++
-      if (r.lookingAtScreen) this.lastLookingAt = now
-      if (r.expression) this.lastExpression = r.expression
+      if (r.lookingAtScreen) {this.lastLookingAt = now}
+      if (r.expression) {this.lastExpression = r.expression}
     }
     return true
   }

@@ -34,7 +34,7 @@ export class OpenClawAdapter implements ChannelAdapter {
   }
 
   async send(request: ChannelSendRequest): Promise<boolean> {
-    if (!this.client) return false
+    if (!this.client) {return false}
     const r = await this.client.sendTask({ text: request.text, targetId: request.targetId })
     if (!r.ok) {
       console.warn(`[OpenClaw] 任务委托失败（${r.error}），上层应回退本地执行`)
@@ -49,7 +49,7 @@ export class OpenClawAdapter implements ChannelAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    if (!this.client) return false
+    if (!this.client) {return false}
     const r = await this.client.ping()
     return r.ok
   }

@@ -125,10 +125,10 @@ export class AccessController {
   /** 检查文件读取权限 */
   checkReadPath(agentId: TeamMemberId, filePath: string): PermissionCheckResult {
     const perm = this.permissions.get(agentId)
-    if (!perm) return deny(`${agentId} 无权限配置`)
+    if (!perm) {return deny(`${agentId} 无权限配置`)}
 
-    if (perm.allowedReadPaths.includes('*')) return allow()
-    if (perm.allowedReadPaths.some(p => filePath.startsWith(p))) return allow()
+    if (perm.allowedReadPaths.includes('*')) {return allow()}
+    if (perm.allowedReadPaths.some(p => filePath.startsWith(p))) {return allow()}
 
     return deny(`${agentId} 无权限读取 ${filePath}`, '尝试用 file_search 先找到文件')
   }
@@ -136,13 +136,13 @@ export class AccessController {
   /** 检查文件写入权限 */
   checkWritePath(agentId: TeamMemberId, filePath: string): PermissionCheckResult {
     const perm = this.permissions.get(agentId)
-    if (!perm) return deny(`${agentId} 无权限配置`)
+    if (!perm) {return deny(`${agentId} 无权限配置`)}
 
     if (perm.allowedWritePaths.length === 0) {
       return deny(`${agentId} 不允许写任何文件`, '请联系 Lumina 处理文件操作')
     }
-    if (perm.allowedWritePaths.includes('*')) return allow()
-    if (perm.allowedWritePaths.some(p => filePath.startsWith(p))) return allow()
+    if (perm.allowedWritePaths.includes('*')) {return allow()}
+    if (perm.allowedWritePaths.some(p => filePath.startsWith(p))) {return allow()}
 
     return deny(`${agentId} 无权写入 ${filePath}`)
   }
@@ -150,7 +150,7 @@ export class AccessController {
   /** 检查工具调用权限 */
   checkToolAccess(agentId: TeamMemberId, toolName: string): PermissionCheckResult {
     const perm = this.permissions.get(agentId)
-    if (!perm) return deny(`${agentId} 无权限配置`)
+    if (!perm) {return deny(`${agentId} 无权限配置`)}
 
     // 白名单工具始终允许
     const safeTools = [
@@ -161,11 +161,11 @@ export class AccessController {
       'get_current_time', 'get_token_usage',
       'skill_run', 'use_skill',
     ]
-    if (safeTools.includes(toolName)) return allow()
+    if (safeTools.includes(toolName)) {return allow()}
 
     // 检查危险工具白名单
-    if (perm.allowedDangerousTools.includes('*')) return allow()
-    if (perm.allowedDangerousTools.includes(toolName)) return allow()
+    if (perm.allowedDangerousTools.includes('*')) {return allow()}
+    if (perm.allowedDangerousTools.includes(toolName)) {return allow()}
 
     return deny(`${agentId} 不允许使用 ${toolName}`, '这是安全敏感操作，需要 Lumina 处理')
   }
@@ -173,13 +173,13 @@ export class AccessController {
   /** 检查网络访问 */
   checkNetworkAccess(agentId: TeamMemberId, domain: string): PermissionCheckResult {
     const perm = this.permissions.get(agentId)
-    if (!perm) return deny(`${agentId} 无权限配置`)
+    if (!perm) {return deny(`${agentId} 无权限配置`)}
 
     if (!perm.networkAccess) {
       return deny(`${agentId} 不允许网络访问`)
     }
-    if (perm.allowedDomains.includes('*')) return allow()
-    if (perm.allowedDomains.some(d => domain.includes(d) || d.includes(domain))) return allow()
+    if (perm.allowedDomains.includes('*')) {return allow()}
+    if (perm.allowedDomains.some(d => domain.includes(d) || d.includes(domain))) {return allow()}
 
     return deny(`${agentId} 无权访问 ${domain}`)
   }
@@ -187,13 +187,13 @@ export class AccessController {
   /** 检查 shell 命令 */
   checkShellCommand(agentId: TeamMemberId, command: string): PermissionCheckResult {
     const perm = this.permissions.get(agentId)
-    if (!perm) return deny(`${agentId} 无权限配置`)
+    if (!perm) {return deny(`${agentId} 无权限配置`)}
 
     if (!perm.shellAccess) {
       return deny(`${agentId} 不允许执行 shell 命令`)
     }
-    if (perm.allowedCommands.includes('*')) return allow()
-    if (perm.allowedCommands.some(c => command.startsWith(c))) return allow()
+    if (perm.allowedCommands.includes('*')) {return allow()}
+    if (perm.allowedCommands.some(c => command.startsWith(c))) {return allow()}
 
     // 检查危险命令
     const dangerousPatterns = ['rm -rf', 'format', 'dd ', '> /dev/', 'mkfs', 'shutdown', 'reboot']
@@ -225,7 +225,7 @@ export class AccessController {
 
   /** 获取违规记录 */
   getViolations(agentId?: TeamMemberId): AccessViolation[] {
-    if (agentId) return this.violations.filter(v => v.agentId === agentId)
+    if (agentId) {return this.violations.filter(v => v.agentId === agentId)}
     return [...this.violations]
   }
 
@@ -242,7 +242,7 @@ export class AccessController {
   /** 更新权限 */
   updatePermissions(agentId: TeamMemberId, patch: Partial<AgentPermissions>): boolean {
     const existing = this.permissions.get(agentId)
-    if (!existing) return false
+    if (!existing) {return false}
     Object.assign(existing, patch)
     return true
   }
@@ -250,7 +250,7 @@ export class AccessController {
   /** 重置为默认权限 */
   resetPermissions(agentId: TeamMemberId): boolean {
     const defaults = DEFAULT_PERMISSIONS[agentId]
-    if (!defaults) return false
+    if (!defaults) {return false}
     this.permissions.set(agentId, { ...defaults })
     return true
   }
@@ -282,7 +282,7 @@ function deny(reason: string, suggestion?: string): PermissionCheckResult {
 let _controller: AccessController | null = null
 
 export function getAccessController(): AccessController {
-  if (!_controller) _controller = new AccessController()
+  if (!_controller) {_controller = new AccessController()}
   return _controller
 }
 

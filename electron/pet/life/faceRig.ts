@@ -57,9 +57,9 @@ export function poseForEmotion(core: CoreEmotion): StandardPose {
 export function visemePose(viseme: Viseme, open = 1): StandardPose {
   const o = clamp01(open)
   const base: StandardPose = { visemeA: 0, visemeI: 0, visemeU: 0, visemeE: 0, visemeO: 0, mouthAngry: 0 }
-  if (viseme === 'rest') return base
+  if (viseme === 'rest') {return base}
   base[`viseme${viseme}` as StandardChannel] = o
-  if (viseme === 'U') base.mouthAngry = 0.25 * o // 噘嘴
+  if (viseme === 'U') {base.mouthAngry = 0.25 * o} // 噘嘴
   return base
 }
 

@@ -102,12 +102,12 @@ export class ApprovalService extends EventEmitter {
     timeoutMs?: number
   }): ApprovalRequest | null {
     // 级别 OFF → 直接放行
-    if (this.config.executionLevel === ToolExecutionLevel.OFF) return null
+    if (this.config.executionLevel === ToolExecutionLevel.OFF) {return null}
 
     // 检查该风险级别是否需要审批
-    if (!this.shouldRequireApproval(params.riskLevel)) return null
+    if (!this.shouldRequireApproval(params.riskLevel)) {return null}
 
-    if (!this.config.enabled) return null
+    if (!this.config.enabled) {return null}
 
     // 容量检查
     if (this.pending.size >= this.config.maxPending) {
@@ -193,7 +193,7 @@ export class ApprovalService extends EventEmitter {
   /** 语言切换后重新发射心跳（刷新文案） */
   private reemitHeartbeats(): void {
     for (const [id, req] of this.pending) {
-      if (req.status !== 'pending') continue
+      if (req.status !== 'pending') {continue}
       const elapsed = Date.now() - req.createdAt
       const remaining = Math.max(0, req.timeoutMs - elapsed)
       this.emit('approval:heartbeat', {
@@ -226,7 +226,7 @@ export class ApprovalService extends EventEmitter {
     note?: string,
   ): ApprovalRequest | null {
     const request = this.pending.get(requestId)
-    if (!request || request.status !== 'pending') return null
+    if (!request || request.status !== 'pending') {return null}
 
     // 状态变更
     request.status = decision === ApprovalDecision.APPROVED ? 'approved'
@@ -269,7 +269,7 @@ export class ApprovalService extends EventEmitter {
   /** 🆕 v8.1: 等待用户决策 — 返回 Promise, agentRunner 可 await */
   waitForDecision(requestId: string, timeoutMs?: number): Promise<ApprovalDecision> {
     const existing = this.pendingResolvers.get(requestId)
-    if (existing) return Promise.resolve(ApprovalDecision.TIMEOUT)
+    if (existing) {return Promise.resolve(ApprovalDecision.TIMEOUT)}
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -346,7 +346,7 @@ export class ApprovalService extends EventEmitter {
         toRemove.push(id)
       }
     }
-    for (const id of toRemove) this.completed.delete(id)
+    for (const id of toRemove) {this.completed.delete(id)}
 
     // 容量保护
     if (this.completed.size > 500) {
@@ -359,7 +359,7 @@ export class ApprovalService extends EventEmitter {
 
     // 清理超时的待审批（兜底）
     for (const [id, req] of this.pending) {
-      if (req.status !== 'pending') continue
+      if (req.status !== 'pending') {continue}
       if (now - req.createdAt > req.timeoutMs + 60_000) {
         this.deny(id, t(this.locale, 'reason_timeout', { timeout: Math.round(req.timeoutMs / 1000) }), ApprovalDecision.TIMEOUT)
       }
@@ -368,8 +368,8 @@ export class ApprovalService extends EventEmitter {
 
   /** 停止所有定时器 */
   stop(): void {
-    if (this.cleanupTimer) clearInterval(this.cleanupTimer)
-    for (const [id] of this.heartbeatTimers) this.clearTimers(id)
+    if (this.cleanupTimer) {clearInterval(this.cleanupTimer)}
+    for (const [id] of this.heartbeatTimers) {this.clearTimers(id)}
   }
 
   // ── 生成人类可读的操作描述 (静态工厂) ──────────────
@@ -386,7 +386,7 @@ export class ApprovalService extends EventEmitter {
       notification: (a) => `发送通知: ${a.title || '?'}`,
     }
     const fn = desc[toolName]
-    if (fn) return fn(args)
+    if (fn) {return fn(args)}
     return `${toolName}: ${JSON.stringify(args).slice(0, 100)}`
   }
 

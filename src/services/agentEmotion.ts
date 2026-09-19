@@ -84,7 +84,7 @@ const EMOTION_STORAGE_KEY = 'lumina_agent_emotions'
 function loadEmotions(): Record<string, AgentEmotion> {
   try {
     const raw = localStorage.getItem(EMOTION_STORAGE_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) {return JSON.parse(raw)}
   } catch {}
   return {}
 }
@@ -93,7 +93,7 @@ function saveEmotions(data: Record<string, AgentEmotion>): void {
   try { localStorage.setItem(EMOTION_STORAGE_KEY, JSON.stringify(data)) } catch {}
 }
 
-let emotionCache: Record<string, AgentEmotion> = loadEmotions()
+const emotionCache: Record<string, AgentEmotion> = loadEmotions()
 
 // ═══════════════════════════════════════════════════════════
 // 基础操作
@@ -115,9 +115,9 @@ export function getEmotion(agentId: string): AgentEmotion {
 /** 手动设置某 Agent 情绪 */
 export function setEmotion(agentId: string, patch: Partial<Pick<AgentEmotion, 'mood' | 'energy' | 'affinity'>>): AgentEmotion {
   const current = getEmotion(agentId)
-  if (patch.mood !== undefined) current.mood = _clamp(patch.mood, -1, 1)
-  if (patch.energy !== undefined) current.energy = _clamp(patch.energy, 0, 1)
-  if (patch.affinity !== undefined) current.affinity = _clamp(patch.affinity, 0, 1)
+  if (patch.mood !== undefined) {current.mood = _clamp(patch.mood, -1, 1)}
+  if (patch.energy !== undefined) {current.energy = _clamp(patch.energy, 0, 1)}
+  if (patch.affinity !== undefined) {current.affinity = _clamp(patch.affinity, 0, 1)}
   current.lastUpdated = Date.now()
   emotionCache[agentId] = current
   saveEmotions(emotionCache)
@@ -230,7 +230,7 @@ export function emotionContext(agentId: string): string {
   const status = getAgentStatus(agentId)
   const statusText = getCustomStatusText(agentId)
   let desc = `[当前情绪: ${label.label}]`
-  if (statusText) desc += ` [状态: ${statusText}]`
+  if (statusText) {desc += ` [状态: ${statusText}]`}
   return desc
 }
 
@@ -319,7 +319,7 @@ function _recordEmotionHistory(agentId: string, e: AgentEmotion): void {
     const raw = localStorage.getItem(key)
     const history: { mood: number; energy: number }[] = raw ? JSON.parse(raw) : []
     history.push({ mood: e.mood, energy: e.energy })
-    if (history.length > 50) history.splice(0, history.length - 50)
+    if (history.length > 50) {history.splice(0, history.length - 50)}
     localStorage.setItem(key, JSON.stringify(history))
   } catch {}
 }
@@ -335,7 +335,7 @@ export function onEmotionChange(fn: EmotionListener): () => void {
   emotionListeners.push(fn)
   return () => {
     const idx = emotionListeners.indexOf(fn)
-    if (idx >= 0) emotionListeners.splice(idx, 1)
+    if (idx >= 0) {emotionListeners.splice(idx, 1)}
   }
 }
 
@@ -387,8 +387,8 @@ function loadCustomStatuses(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(CUSTOM_STATUS_KEY) || '{}') } catch { return {} }
 }
 
-let statusCache: Record<string, AgentStatus> = loadStatuses()
-let customStatusCache: Record<string, string> = loadCustomStatuses()
+const statusCache: Record<string, AgentStatus> = loadStatuses()
+const customStatusCache: Record<string, string> = loadCustomStatuses()
 
 export function getAgentStatus(agentId: string): AgentStatus {
   return statusCache[agentId] || 'online'
@@ -476,7 +476,7 @@ const ENTERPRISE_KEY = 'lumina_enterprise_config'
 export function getEnterpriseConfig(): EnterpriseFeatures {
   try {
     const raw = localStorage.getItem(ENTERPRISE_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) {return JSON.parse(raw)}
   } catch {}
   return {
     ssoEnabled: false,
@@ -528,7 +528,7 @@ function _accumulatePending(agentId: string, userText: string, current: AgentEmo
 /** 取出并清空 pending 缓冲 */
 function _flushPending(agentId: string): { mood: number; energy: number; affinity: number } {
   const buf = _pendingBuffers[agentId]
-  if (!buf) return { mood: 0, energy: 0, affinity: 0 }
+  if (!buf) {return { mood: 0, energy: 0, affinity: 0 }}
   const result = {
     mood: _clamp(buf.mood, -0.3, 0.3),
     energy: _clamp(buf.energy, -0.2, 0.2),
@@ -543,9 +543,9 @@ function _getEmotionMomentum(agentId: string): { moodDir: number; energyDir: num
   const key = `lumina_emotion_history_${agentId}`
   try {
     const raw = localStorage.getItem(key)
-    if (!raw) return { moodDir: 0, energyDir: 0 }
+    if (!raw) {return { moodDir: 0, energyDir: 0 }}
     const history: { mood: number; energy: number }[] = JSON.parse(raw)
-    if (history.length < 3) return { moodDir: 0, energyDir: 0 }
+    if (history.length < 3) {return { moodDir: 0, energyDir: 0 }}
     const recent = history.slice(-3)
     let moodDir = 0, energyDir = 0
     for (let i = 1; i < recent.length; i++) {
@@ -578,16 +578,16 @@ let _driftStarted = false
 /** 根据时段返回能量修正值 */
 function _timeOfDayEnergyBias(): number {
   const h = new Date().getHours()
-  if (h >= 7 && h <= 10) return 0.08    // 早晨：偏精神
-  if (h >= 13 && h <= 15) return -0.06  // 午后：偏慵懒
-  if (h >= 22 || h <= 5) return -0.1    // 深夜：偏疲惫
-  if (h >= 18 && h <= 21) return 0.04   // 傍晚：偏放松
+  if (h >= 7 && h <= 10) {return 0.08}    // 早晨：偏精神
+  if (h >= 13 && h <= 15) {return -0.06}  // 午后：偏慵懒
+  if (h >= 22 || h <= 5) {return -0.1}    // 深夜：偏疲惫
+  if (h >= 18 && h <= 21) {return 0.04}   // 傍晚：偏放松
   return 0
 }
 
 /** 启动情绪随机漂移（每个 Agent 独立定时器） */
 export function startEmotionDrift(): void {
-  if (_driftStarted) return
+  if (_driftStarted) {return}
   _driftStarted = true
 
   for (const agentId of DRIFT_AGENT_IDS) {
@@ -599,7 +599,7 @@ export function startEmotionDrift(): void {
       try {
         const current = getEmotion(agentId)
         // 如果被手动覆写，跳过自动漂移
-        if (isManualEmotion(agentId)) return
+        if (isManualEmotion(agentId)) {return}
 
         const hourBias = _timeOfDayEnergyBias()
         const moodDrift = (Math.random() - 0.5) * 2 * profile.volatility + profile.moodBias * 0.05

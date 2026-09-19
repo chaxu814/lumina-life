@@ -27,9 +27,9 @@ function mockData(channel: string, ...args: any[]): any {
   if (channel === 'diagnostics:quick-check') {
     return [{ name: 'IPC 不可用', pass: true, detail: 'Electron IPC 未连接，使用模拟模式' }]
   }
-  if (channel === 'diagnostics:timeline') return []
-  if (channel === 'diagnostics:latency') return []
-  if (channel === 'diagnostics:export-report') return { generatedAt: new Date().toISOString(), summary: {} }
+  if (channel === 'diagnostics:timeline') {return []}
+  if (channel === 'diagnostics:latency') {return []}
+  if (channel === 'diagnostics:export-report') {return { generatedAt: new Date().toISOString(), summary: {} }}
   return null
 }
 
@@ -91,7 +91,7 @@ export default function DiagnosticsPanel() {
 
   useEffect(() => {
     loadAll()
-    if (!autoRefresh) return
+    if (!autoRefresh) {return}
     const interval = setInterval(loadAll, 3000)
     return () => clearInterval(interval)
   }, [loadAll, autoRefresh])
@@ -123,9 +123,9 @@ export default function DiagnosticsPanel() {
 
   const timeAgo = (ts: string) => {
     const diff = Date.now() - new Date(ts).getTime()
-    if (diff < 1000) return '刚刚'
-    if (diff < 60000) return `${Math.round(diff / 1000)}秒前`
-    if (diff < 3600000) return `${Math.round(diff / 60000)}分钟前`
+    if (diff < 1000) {return '刚刚'}
+    if (diff < 60000) {return `${Math.round(diff / 1000)}秒前`}
+    if (diff < 3600000) {return `${Math.round(diff / 60000)}分钟前`}
     return `${Math.round(diff / 3600000)}小时前`
   }
 

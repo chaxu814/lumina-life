@@ -71,7 +71,7 @@ let _runasAvailable: boolean | null = null
  * @returns 沙箱目录路径
  */
 export function ensureFileWallSandbox(customRoot?: string): string {
-  if (_initialized && _sandboxRoot) return _sandboxRoot
+  if (_initialized && _sandboxRoot) {return _sandboxRoot}
 
   _sandboxRoot = customRoot || getDefaultSandboxRoot()
 
@@ -178,13 +178,13 @@ export function isLowIntegrityActive(): boolean {
  * @returns 包装后的命令
  */
 export function wrapLowIntegrity(command: string, sandboxDir?: string): string {
-  if (process.platform !== 'win32') return command
+  if (process.platform !== 'win32') {return command}
   // runas 之前失败过？跳过包装
-  if (_runasAvailable === false) return command
+  if (_runasAvailable === false) {return command}
   // 避免重复包装
-  if (/^runas\s+\/trustlevel:/i.test(command.trim())) return command
+  if (/^runas\s+\/trustlevel:/i.test(command.trim())) {return command}
   // 空命令不包装
-  if (!command.trim()) return command
+  if (!command.trim()) {return command}
 
   // cmd.exe 内部 `""` = 一个引号字面量
   const safeCmd = command.replace(/"/g, '""')
@@ -209,7 +209,7 @@ export function markRunasUnavailable(): void {
  * 尝试检测 runas 是否可用（不阻塞，不抛出）
  */
 export async function probeRunasAvailability(): Promise<boolean> {
-  if (_runasAvailable !== null) return _runasAvailable
+  if (_runasAvailable !== null) {return _runasAvailable}
   if (process.platform !== 'win32') {
     _runasAvailable = false
     return false

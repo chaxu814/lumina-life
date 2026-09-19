@@ -68,8 +68,8 @@ let _win: BrowserWindow | null = null
 let _creating: Promise<BrowserWindow | null> | null = null
 
 async function annotator(): Promise<BrowserWindow | null> {
-  if (_win && !_win.isDestroyed()) return _win
-  if (_creating) return _creating
+  if (_win && !_win.isDestroyed()) {return _win}
+  if (_creating) {return _creating}
   _creating = (async () => {
     try {
       const w = new BrowserWindow({
@@ -96,15 +96,15 @@ async function annotator(): Promise<BrowserWindow | null> {
 export async function annotateGrid(png: Buffer): Promise<AnnotatedImage | null> {
   try {
     const dims = pngDimensions(png)
-    if (!dims) return null
+    if (!dims) {return null}
     const w = await annotator()
-    if (!w || w.isDestroyed()) return null
+    if (!w || w.isDestroyed()) {return null}
     const grid = gridDims(dims.w, dims.h, 10)
     const b64png = png.toString('base64')
     const out = await w.webContents.executeJavaScript(
       `window.__cuGrid(${JSON.stringify(b64png)},${grid.cols},${grid.rows})`, true,
     )
-    if (!out || !out.b64) return null
+    if (!out || !out.b64) {return null}
     return { b64: out.b64, mime: 'image/jpeg', grid }
   } catch (e) {
     console.warn('[cuAnnotate] grid failed:', e)
@@ -116,9 +116,9 @@ export async function annotateGrid(png: Buffer): Promise<AnnotatedImage | null> 
 export async function annotateZoom(png: Buffer, crop: NormRect): Promise<AnnotatedImage | null> {
   try {
     const dims = pngDimensions(png)
-    if (!dims) return null
+    if (!dims) {return null}
     const w = await annotator()
-    if (!w || w.isDestroyed()) return null
+    if (!w || w.isDestroyed()) {return null}
     const sx = Math.round((crop.nx0 / 100) * dims.w)
     const sy = Math.round((crop.ny0 / 100) * dims.h)
     const sw = Math.max(1, Math.round(((crop.nx1 - crop.nx0) / 100) * dims.w))
@@ -128,7 +128,7 @@ export async function annotateZoom(png: Buffer, crop: NormRect): Promise<Annotat
     const out = await w.webContents.executeJavaScript(
       `window.__cuZoom(${JSON.stringify(b64png)},${sx},${sy},${sw},${sh},${grid.cols},${grid.rows})`, true,
     )
-    if (!out || !out.b64) return null
+    if (!out || !out.b64) {return null}
     return { b64: out.b64, mime: 'image/jpeg', grid, crop }
   } catch (e) {
     console.warn('[cuAnnotate] zoom failed:', e)

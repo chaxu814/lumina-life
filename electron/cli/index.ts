@@ -162,7 +162,7 @@ async function runCLI(argv: string[]): Promise<void> {
 let initialized = false
 
 async function initCore(): Promise<void> {
-  if (initialized) return
+  if (initialized) {return}
   initialized = true
 
   registerAllTools()

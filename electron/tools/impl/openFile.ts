@@ -142,7 +142,7 @@ function scanProgramFiles(name: string): Promise<string[]> {
         // 先看顶级子目录名
         const entries = fs.readdirSync(dir, { withFileTypes: true })
         for (const entry of entries) {
-          if (!entry.isDirectory()) continue
+          if (!entry.isDirectory()) {continue}
           if (entry.name.toLowerCase().includes(searchName)) {
             // 在这个目录里找 .exe
             try {
@@ -282,7 +282,7 @@ function doOpenPath(absPath: string, typeLabel: string): ToolResult {
   try {
     const { shell } = require('electron')
     const errorMsg = shell.openPath(absPath)
-    if (!errorMsg) return { callId: '', ok: true, content: `✅ 已打开${typeLabel}: ${absPath}` }
+    if (!errorMsg) {return { callId: '', ok: true, content: `✅ 已打开${typeLabel}: ${absPath}` }}
     throw new Error(errorMsg)
   } catch {
     // 回退: cmd start

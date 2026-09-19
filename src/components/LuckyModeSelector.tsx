@@ -213,7 +213,7 @@ export default function LuckyModeSelector({
                 key={preset.id}
                 onClick={() => {
                   onPresetChange(preset.id)
-                  if (instantApply) setShowDropdown(false)
+                  if (instantApply) {setShowDropdown(false)}
                 }}
                 style={{
                   display: 'flex',

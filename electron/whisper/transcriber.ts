@@ -62,7 +62,7 @@ export class WhisperTranscriber {
    * 初始化模型（首次调用自动下载）
    */
   async initialize(options: TranscribeOptions = {}): Promise<void> {
-    if (this.initialized && !options.forceReDownload) return
+    if (this.initialized && !options.forceReDownload) {return}
 
     // 中文链路必须选多语种模型（绝不能用 tiny.en）；默认即多语种 base
     const language = options.language || 'zh'

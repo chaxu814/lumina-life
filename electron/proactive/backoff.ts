@@ -26,7 +26,7 @@ const HARD_CAP_MS = 3_600_000 // >=7: 60min 硬顶
 /** 某一级别需要等待多久 */
 export function computeBackoffMs(level: number): number {
   const lv = Math.max(0, Math.floor(level))
-  if (lv >= 7) return HARD_CAP_MS
+  if (lv >= 7) {return HARD_CAP_MS}
   return BACKOFF_TABLE[lv]
 }
 
@@ -39,8 +39,8 @@ export function computeBackoffMs(level: number): number {
  */
 export function maybeLevelUp(level: number, rand: () => number = Math.random): number {
   const lv = Math.max(0, Math.floor(level))
-  if (lv < 3) return lv + 1
-  if (lv >= 7) return 7
+  if (lv < 3) {return lv + 1}
+  if (lv >= 7) {return 7}
   return rand() < 0.09 ? lv + 1 : lv
 }
 
@@ -52,7 +52,7 @@ export class BackoffState {
   lastAttemptAt = 0
 
   constructor(opts?: { now?: number }) {
-    if (opts?.now !== undefined) this.lastAttemptAt = opts.now
+    if (opts?.now !== undefined) {this.lastAttemptAt = opts.now}
   }
 
   /** 用户互动了 → 立刻清零，她又「活过来了」 */
@@ -69,7 +69,7 @@ export class BackoffState {
 
   /** 距离下次允许发言还需等待多少毫秒（已过的时间自动扣除；从未发言返回 0） */
   nextDelayMs(now: number = Date.now()): number {
-    if (this.lastAttemptAt === 0) return 0
+    if (this.lastAttemptAt === 0) {return 0}
     const waited = now - this.lastAttemptAt
     return Math.max(0, computeBackoffMs(this.level) - waited)
   }

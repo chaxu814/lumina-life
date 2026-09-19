@@ -61,17 +61,17 @@ function asGazeTarget(x: unknown): GazeTarget | undefined {
 /** 解析并规范化一段表演指令（输入不可信） */
 export function parsePerformance(input: unknown): ParseResult {
   const errors: string[] = []
-  if (!isObj(input)) return { ok: false, command: null, errors: ['performance 必须是对象'] }
+  if (!isObj(input)) {return { ok: false, command: null, errors: ['performance 必须是对象'] }}
 
   const command: NormalizedPerformance = { durationMs: 1200, blend: 'override' }
 
   // 表情：9 mood 标签或基础表情
   if (input.expression !== undefined) {
     const mood = normalizeMood(input.expression)
-    if (mood) command.expression = mood
+    if (mood) {command.expression = mood}
     else if (typeof input.expression === 'string' && (BASIC_EXPRESSIONS as readonly string[]).includes(input.expression))
-      command.expression = input.expression as BasicExpression
-    else errors.push(`未知 expression: ${String(input.expression)}`)
+      {command.expression = input.expression as BasicExpression}
+    else {errors.push(`未知 expression: ${String(input.expression)}`)}
   }
 
   // 视线
@@ -79,12 +79,12 @@ export function parsePerformance(input: unknown): ParseResult {
     if (isObj(input.gaze)) {
       const g: NormalizedPerformance['gaze'] = {}
       const t = asGazeTarget(input.gaze.target)
-      if (input.gaze.target !== undefined && !t) errors.push(`未知 gaze.target: ${String(input.gaze.target)}`)
-      if (t) g.target = t
-      if (typeof input.gaze.x === 'number') g.x = clamp(input.gaze.x, -1, 1)
-      if (typeof input.gaze.y === 'number') g.y = clamp(input.gaze.y, -1, 1)
-      if (g.target !== undefined || g.x !== undefined || g.y !== undefined) command.gaze = g
-    } else errors.push('gaze 必须是对象')
+      if (input.gaze.target !== undefined && !t) {errors.push(`未知 gaze.target: ${String(input.gaze.target)}`)}
+      if (t) {g.target = t}
+      if (typeof input.gaze.x === 'number') {g.x = clamp(input.gaze.x, -1, 1)}
+      if (typeof input.gaze.y === 'number') {g.y = clamp(input.gaze.y, -1, 1)}
+      if (g.target !== undefined || g.x !== undefined || g.y !== undefined) {command.gaze = g}
+    } else {errors.push('gaze 必须是对象')}
   }
 
   // 手势
@@ -98,20 +98,20 @@ export function parsePerformance(input: unknown): ParseResult {
           intensity: typeof rawGesture.intensity === 'number' ? clamp(rawGesture.intensity, 0, 1) : 1,
           builtin: (BUILTIN_GESTURES as readonly string[]).includes(name),
         }
-      } else errors.push(`手势不在白名单: ${name}`)
-    } else if (input.gesture !== undefined) errors.push('gesture 必须是字符串或 {name,intensity}')
+      } else {errors.push(`手势不在白名单: ${name}`)}
+    } else if (input.gesture !== undefined) {errors.push('gesture 必须是字符串或 {name,intensity}')}
   }
 
   // 头侧倾
   if (input.headTilt !== undefined) {
-    if (typeof input.headTilt === 'number') command.headTilt = clamp(input.headTilt, -1, 1)
-    else errors.push('headTilt 必须是数字')
+    if (typeof input.headTilt === 'number') {command.headTilt = clamp(input.headTilt, -1, 1)}
+    else {errors.push('headTilt 必须是数字')}
   }
 
   // motion3 名（只允许安全字符，防止路径穿越）
   if (input.motion !== undefined) {
-    if (typeof input.motion === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(input.motion)) command.motion = input.motion
-    else errors.push(`非法 motion: ${String(input.motion)}`)
+    if (typeof input.motion === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(input.motion)) {command.motion = input.motion}
+    else {errors.push(`非法 motion: ${String(input.motion)}`)}
   }
 
   // 特效
@@ -120,16 +120,16 @@ export function parsePerformance(input: unknown): ParseResult {
     if (isObj(rawEffect) && typeof rawEffect.name === 'string') {
       const name = rawEffect.name
       if (EFFECT_WHITELIST.has(name))
-        command.effect = { name, amount: typeof rawEffect.amount === 'number' ? clamp(rawEffect.amount, 0, 1) : 0.8 }
-      else errors.push(`特效不在白名单: ${name}`)
-    } else if (input.effect !== undefined) errors.push('effect 必须是字符串或 {name,amount}')
+        {command.effect = { name, amount: typeof rawEffect.amount === 'number' ? clamp(rawEffect.amount, 0, 1) : 0.8 }}
+      else {errors.push(`特效不在白名单: ${name}`)}
+    } else if (input.effect !== undefined) {errors.push('effect 必须是字符串或 {name,amount}')}
   }
 
-  if (typeof input.durationMs === 'number') command.durationMs = clamp(Math.round(input.durationMs), 300, 6000)
-  if (input.blend === 'add' || input.blend === 'override') command.blend = input.blend
+  if (typeof input.durationMs === 'number') {command.durationMs = clamp(Math.round(input.durationMs), 300, 6000)}
+  if (input.blend === 'add' || input.blend === 'override') {command.blend = input.blend}
 
   const hasAny = ['expression', 'gaze', 'gesture', 'headTilt', 'motion', 'effect'].some(k => (command as any)[k] !== undefined)
-  if (!hasAny) return { ok: false, command: null, errors: [...errors, 'performance 没有任何有效字段'] }
+  if (!hasAny) {return { ok: false, command: null, errors: [...errors, 'performance 没有任何有效字段'] }}
   return { ok: true, command, errors }
 }
 

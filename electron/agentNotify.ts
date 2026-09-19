@@ -41,7 +41,7 @@ function stripMarkdown(text: string): string {
 
 /** 主窗口是否处于后台（未聚焦 / 最小化 / 隐藏） */
 function isBackground(win: BrowserWindow | null | undefined): boolean {
-  if (!win || win.isDestroyed()) return false
+  if (!win || win.isDestroyed()) {return false}
   try {
     return !win.isFocused() || win.isMinimized() || !win.isVisible()
   } catch {
@@ -58,7 +58,7 @@ function resetPending(): void {
 
 function flushNow(win: BrowserWindow | null | undefined): void {
   flushTimer = null
-  if (pendingCount <= 0) return
+  if (pendingCount <= 0) {return}
   const count = pendingCount
   const who = pendingWho
   const body = pendingBody
@@ -67,10 +67,10 @@ function flushNow(win: BrowserWindow | null | undefined): void {
   pendingBody = ''
 
   // 合并等待期间用户已回到前台 → 不打扰
-  if (!isBackground(win)) return
+  if (!isBackground(win)) {return}
 
   try {
-    if (!Notification.isSupported()) return
+    if (!Notification.isSupported()) {return}
     const title = count > 1 ? `${who} 等 ${count} 条新回复` : `${who} 已回复`
     const notif = new Notification({
       title,
@@ -80,7 +80,7 @@ function flushNow(win: BrowserWindow | null | undefined): void {
     notif.on('click', () => {
       try {
         if (win && !win.isDestroyed()) {
-          if (win.isMinimized()) win.restore()
+          if (win.isMinimized()) {win.restore()}
           win.show()
           win.focus()
         }
@@ -104,7 +104,7 @@ export function notifyAgentReply(
   try {
     // 前台正在看 → 不打扰，并撤销尚未发出的合并通知
     if (!isBackground(mainWindow)) {
-      if (flushTimer) resetPending()
+      if (flushTimer) {resetPending()}
       return
     }
 

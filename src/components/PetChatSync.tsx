@@ -20,7 +20,7 @@ export default function PetChatSync() {
 
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api?.onPetSyncMessage) return
+    if (!api?.onPetSyncMessage) {return}
 
     // ── 确保固定对话存在 ──
     const ensurePetConv = () => {
@@ -47,12 +47,12 @@ export default function PetChatSync() {
 
     // ── 桌宠 → 主聊天 ──
     const unsubPetMsg = api.onPetSyncMessage(async (data: { text: string; from: string }) => {
-      if (processingRef.current) return
-      if (!data?.text) return
+      if (processingRef.current) {return}
+      if (!data?.text) {return}
 
       const store = useStore.getState()
       let conv = store.conversations.find((c: any) => c.id === PET_CONV_ID)
-      if (!conv) conv = ensurePetConv()
+      if (!conv) {conv = ensurePetConv()}
 
       const ts = Date.now()
       syncedTimestamps.current.add(ts)
@@ -127,13 +127,13 @@ export default function PetChatSync() {
     // ── 主聊天 → 桌宠（订阅 store，监听固定对话的新消息）──
     const unsubStore = useStore.subscribe((state: any) => {
       const conv = state.conversations.find((c: any) => c.id === PET_CONV_ID)
-      if (!conv) return
+      if (!conv) {return}
 
       const count = conv.messages.length
       if (count > lastMsgCount.current) {
         const newMsgs = conv.messages.slice(lastMsgCount.current)
         for (const msg of newMsgs) {
-          if (msg.role === 'system') continue
+          if (msg.role === 'system') {continue}
           // 跳过刚从桌宠同步过来的消息
           if (syncedTimestamps.current.has(msg.timestamp)) {
             syncedTimestamps.current.delete(msg.timestamp)

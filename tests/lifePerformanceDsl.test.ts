@@ -52,6 +52,6 @@ describe('performanceDsl 表演 DSL', () => {
   })
 
   it('内置手势集合包含现有动作', () => {
-    for (const g of ['wave', 'nod', 'clap', 'dance']) expect(BUILTIN_GESTURES).toContain(g)
+    for (const g of ['wave', 'nod', 'clap', 'dance']) {expect(BUILTIN_GESTURES).toContain(g)}
   })
 })

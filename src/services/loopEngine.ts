@@ -115,9 +115,9 @@ export class LoopEngine {
 
   /** 停止引擎（应用退出/清理时调用） */
   dispose(): void {
-    if (this.timer) clearInterval(this.timer)
+    if (this.timer) {clearInterval(this.timer)}
     this.timer = null
-    if (this.cronCleanup) this.cronCleanup()
+    if (this.cronCleanup) {this.cronCleanup()}
     this.cronCleanup = null
   }
 
@@ -148,7 +148,7 @@ export class LoopEngine {
     opts?: { agentId?: string; suggestedTriggers?: LoopTrigger[] },
   ): Promise<LoopTask | null> {
     const trimmed = (goal || '').trim()
-    if (!trimmed) return null
+    if (!trimmed) {return null}
 
     const now = Date.now()
     const id = genId('loop')
@@ -210,7 +210,7 @@ export class LoopEngine {
   /** LLM 动态拆解：goal → { strategy, subtasks, trigger } */
   private async decompose(goal: string): Promise<Decomposition | null> {
     const cfg = this.getLLMConfig()
-    if (!cfg?.baseUrl || !cfg.model) return null
+    if (!cfg?.baseUrl || !cfg.model) {return null}
 
     const prompt = this.buildDecompositionPrompt(goal)
     try {
@@ -226,7 +226,7 @@ export class LoopEngine {
           '你的职责：把一个长程 OKR 目标拆解为可执行的子任务链，并给出合理的循环触发建议。',
       })
       const raw = res?.content
-      if (!raw) return null
+      if (!raw) {return null}
       const parsed = extractJson(raw) as Record<string, any> | null
       return this.normalizeDecomposition(parsed)
     } catch (e: any) {
@@ -262,7 +262,7 @@ export class LoopEngine {
   }
 
   private normalizeDecomposition(parsed: Record<string, any> | null): Decomposition | null {
-    if (!parsed || typeof parsed !== 'object') return null
+    if (!parsed || typeof parsed !== 'object') {return null}
     const strategy = typeof parsed.strategy === 'string' ? parsed.strategy.trim() : ''
     const rawSubs = Array.isArray(parsed.subtasks) ? parsed.subtasks : []
     const subtasks = rawSubs
@@ -286,7 +286,7 @@ export class LoopEngine {
         keywords: Array.isArray(t.keywords) ? t.keywords.map(String) : undefined,
       }
     }
-    if (!strategy && subtasks.length === 0) return null
+    if (!strategy && subtasks.length === 0) {return null}
     return { strategy: strategy || '按子任务链循环执行', subtasks, trigger }
   }
 
@@ -322,7 +322,7 @@ export class LoopEngine {
   /** 用户审阅确认 → 开始运转 */
   async confirmLoop(id: string): Promise<LoopTask | undefined> {
     const loop = this.getLoop(id)
-    if (!loop || (loop.status !== 'reviewing' && loop.status !== 'paused' && loop.status !== 'configuring')) return loop
+    if (!loop || (loop.status !== 'reviewing' && loop.status !== 'paused' && loop.status !== 'configuring')) {return loop}
     loop.status = 'running'
     loop.logs.push({ time: Date.now(), event: 'confirm', detail: '用户确认，开始运转' })
     await this.persist()
@@ -332,7 +332,7 @@ export class LoopEngine {
 
   async pauseLoop(id: string): Promise<LoopTask | undefined> {
     const loop = this.getLoop(id)
-    if (!loop) return loop
+    if (!loop) {return loop}
     loop.status = 'paused'
     loop.progress.current = null
     loop.logs.push({ time: Date.now(), event: 'pause' })
@@ -343,7 +343,7 @@ export class LoopEngine {
 
   async resumeLoop(id: string): Promise<LoopTask | undefined> {
     const loop = this.getLoop(id)
-    if (!loop) return loop
+    if (!loop) {return loop}
     loop.status = 'running'
     loop.logs.push({ time: Date.now(), event: 'resume' })
     await this.persist()
@@ -353,7 +353,7 @@ export class LoopEngine {
 
   async stopLoop(id: string): Promise<LoopTask | undefined> {
     const loop = this.getLoop(id)
-    if (!loop) return loop
+    if (!loop) {return loop}
     loop.status = 'done'
     loop.progress.current = null
     loop.logs.push({ time: Date.now(), event: 'stop' })
@@ -373,10 +373,10 @@ export class LoopEngine {
   /** 定时检查所有触发器（interval + cron） */
   checkTriggers(now: Date = new Date()): void {
     for (const loop of this.tasks) {
-      if (loop.status !== 'running') continue
-      if (this.runningLoops.has(loop.id)) continue
+      if (loop.status !== 'running') {continue}
+      if (this.runningLoops.has(loop.id)) {continue}
       for (const trigger of loop.triggers) {
-        if (!trigger.enabled) continue
+        if (!trigger.enabled) {continue}
         if (this.triggerMatches(loop, trigger, now)) {
           void this.runCycle(loop.id, trigger)
           break // 一个循环一次只跑一个触发器
@@ -389,19 +389,19 @@ export class LoopEngine {
     switch (trigger.type) {
       case 'interval': {
         const intervalMs = Number(trigger.config?.intervalMs)
-        if (!(intervalMs > 0)) return false
+        if (!(intervalMs > 0)) {return false}
         // 从未跑过：以启动时刻为基准，避免启动即触发
-        if (!loop.lastRunAt) return false
+        if (!loop.lastRunAt) {return false}
         return now.getTime() - loop.lastRunAt >= intervalMs
       }
       case 'cron': {
         const schedule = String(trigger.config?.schedule || '')
-        if (!schedule) return false
-        if (!cronMatches(schedule, now)) return false
+        if (!schedule) {return false}
+        if (!cronMatches(schedule, now)) {return false}
         // 同一分钟防重
         const key = `${loop.id}:${trigger.id}`
         const minuteKey = `${now.getHours()}:${now.getMinutes()}`
-        if (this.lastCronHit.get(key) === minuteKey) return false
+        if (this.lastCronHit.get(key) === minuteKey) {return false}
         this.lastCronHit.set(key, minuteKey)
         return true
       }
@@ -418,7 +418,7 @@ export class LoopEngine {
   async notifyMessage(text: string): Promise<string[]> {
     const fired: string[] = []
     for (const loop of this.tasks) {
-      if (loop.status !== 'running' || this.runningLoops.has(loop.id)) continue
+      if (loop.status !== 'running' || this.runningLoops.has(loop.id)) {continue}
       const hit = loop.triggers.some(t =>
         t.enabled && t.type === 'message' && this.keywordsHit(t.config?.keywords, text),
       )
@@ -434,7 +434,7 @@ export class LoopEngine {
   async notifyEvent(eventName: string, _payload?: unknown): Promise<string[]> {
     const fired: string[] = []
     for (const loop of this.tasks) {
-      if (loop.status !== 'running' || this.runningLoops.has(loop.id)) continue
+      if (loop.status !== 'running' || this.runningLoops.has(loop.id)) {continue}
       const hit = loop.triggers.some(t =>
         t.enabled && t.type === 'api_event' && String(t.config?.event) === eventName,
       )
@@ -448,14 +448,14 @@ export class LoopEngine {
 
   /** 复用主进程 cron 引擎：cron:triggered 事件按名称/调度匹配 Loop */
   private async onExternalCronTrigger(data: any): Promise<void> {
-    if (!data || typeof data !== 'object') return
+    if (!data || typeof data !== 'object') {return}
     const name = String(data.name || '')
     const schedule = String(data.schedule || '')
     const action = String(data.action || '')
     for (const loop of this.tasks) {
-      if (loop.status !== 'running' || this.runningLoops.has(loop.id)) continue
+      if (loop.status !== 'running' || this.runningLoops.has(loop.id)) {continue}
       for (const trigger of loop.triggers) {
-        if (!trigger.enabled) continue
+        if (!trigger.enabled) {continue}
         const tSchedule = String(trigger.config?.schedule || '')
         const tName = String(trigger.config?.name || '')
         if (trigger.type === 'cron' && (tSchedule === schedule || (tName && name.includes(tName)))) {
@@ -479,8 +479,8 @@ export class LoopEngine {
    */
   async runCycle(id: string, trigger?: LoopTrigger): Promise<LoopTask | undefined> {
     const loop = this.getLoop(id)
-    if (!loop || loop.status !== 'running') return loop
-    if (this.runningLoops.has(id)) return loop
+    if (!loop || loop.status !== 'running') {return loop}
+    if (this.runningLoops.has(id)) {return loop}
 
     this.runningLoops.add(id)
     const now = Date.now()
@@ -495,8 +495,8 @@ export class LoopEngine {
     try {
       // 1) 顺序执行每个 pending/failed 且未耗尽重试的子任务
       for (const st of loop.subtasks) {
-        if (st.status === 'done') continue
-        if (st.status === 'failed' && st.retryCount >= st.maxRetries) continue
+        if (st.status === 'done') {continue}
+        if (st.status === 'failed' && st.retryCount >= st.maxRetries) {continue}
 
         st.status = 'running'
         st.startedAt = Date.now()
@@ -525,8 +525,8 @@ export class LoopEngine {
       const doneTitles = loop.subtasks.filter(s => s.status === 'done').map(s => s.title)
       const failedTitles = loop.subtasks.filter(s => s.status === 'failed').map(s => s.title)
       const outputLines: string[] = []
-      if (doneTitles.length) outputLines.push(`✅ 完成：${doneTitles.join('、')}`)
-      if (failedTitles.length) outputLines.push(`⚠️ 未完成：${failedTitles.join('、')}`)
+      if (doneTitles.length) {outputLines.push(`✅ 完成：${doneTitles.join('、')}`)}
+      if (failedTitles.length) {outputLines.push(`⚠️ 未完成：${failedTitles.join('、')}`)}
       outputLines.push(`🔄 第 ${loop.runCount + 1} 轮循环结束于 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
 
       loop.runCount += 1
@@ -578,7 +578,7 @@ export class LoopEngine {
   // ── 内部工具 ─────────────────────────────────────────────
 
   private getLLMConfig(): LLMConfig | undefined {
-    if (this.opts.getLLMConfig) return this.opts.getLLMConfig()
+    if (this.opts.getLLMConfig) {return this.opts.getLLMConfig()}
     try {
       // 动态读取，避免在引擎构造时依赖 store 已初始化
       return useStoreRef.getState().llmConfig
@@ -589,7 +589,7 @@ export class LoopEngine {
 
   private keywordsHit(keywords: unknown, text: string): boolean {
     const kw = Array.isArray(keywords) ? keywords.map(String) : []
-    if (kw.length === 0) return false
+    if (kw.length === 0) {return false}
     const lower = text.toLowerCase()
     return kw.some(k => k && lower.includes(k.toLowerCase()))
   }
@@ -658,7 +658,7 @@ const OKR_VERBS = ['盯盘', '盯', '看', '收集', '追踪', '整理', '汇总
  */
 export function detectLoopIntent(text: string): LoopIntent | null {
   const t = (text || '').trim()
-  if (!t) return null
+  if (!t) {return null}
 
   const hasHelp = /帮我|请帮我|能不能|你可以|安排/.test(t)
   let freq: string | null = null
@@ -671,8 +671,8 @@ export function detectLoopIntent(text: string): LoopIntent | null {
   const verb = OKR_VERBS.find(v => t.includes(v))
 
   // 需要至少：有动词 + （有「帮我」或「频率/定期」）
-  if (!verb) return null
-  if (!hasHelp && !hasSchedule && !freq) return null
+  if (!verb) {return null}
+  if (!hasHelp && !hasSchedule && !freq) {return null}
 
   // 触发规则
   const intervalMs = freq ? (FREQ_HOURS[freq] ?? 24) * 3600 * 1000 : 24 * 3600 * 1000

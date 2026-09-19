@@ -86,9 +86,9 @@ export default function AchievementWall({ unlockedAchievements, onClose }: Achie
 
   // 筛选
   const filtered = useMemo(() => {
-    if (filter === 'all') return trophies
-    if (filter === 'unlocked') return trophies.filter(t => t.unlocked)
-    if (filter === 'locked') return trophies.filter(t => !t.unlocked && !t.hidden)
+    if (filter === 'all') {return trophies}
+    if (filter === 'unlocked') {return trophies.filter(t => t.unlocked)}
+    if (filter === 'locked') {return trophies.filter(t => !t.unlocked && !t.hidden)}
     return trophies.filter(t => t.tier === filter)
   }, [trophies, filter])
 
@@ -100,7 +100,7 @@ export default function AchievementWall({ unlockedAchievements, onClose }: Achie
     const unlockedByTier = { bronze: 0, silver: 0, gold: 0, platinum: 0 }
     trophies.forEach(t => {
       byTier[t.tier]++
-      if (t.unlocked) unlockedByTier[t.tier]++
+      if (t.unlocked) {unlockedByTier[t.tier]++}
     })
     return { total, unlocked, byTier, unlockedByTier, pct: total > 0 ? Math.round(unlocked / total * 100) : 0 }
   }, [trophies])
@@ -117,7 +117,7 @@ export default function AchievementWall({ unlockedAchievements, onClose }: Achie
 
   // ESC 关闭
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') {onClose()} }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
@@ -289,7 +289,7 @@ export default function AchievementWall({ unlockedAchievements, onClose }: Achie
       {/* 选中奖杯详情弹窗 */}
       {selectedTrophy && (() => {
         const t = trophies.find(tt => tt.id === selectedTrophy)
-        if (!t) return null
+        if (!t) {return null}
         const s = TIER_STYLES[t.tier]
         return (
           <div style={{

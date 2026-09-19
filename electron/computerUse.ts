@@ -233,7 +233,7 @@ export class ComputerUse {
 
       switch (action.type) {
         case 'click': {
-          if (num('nx') === undefined && num('x') === undefined) return false
+          if (num('nx') === undefined && num('x') === undefined) {return false}
           const r = await executeCuAction(
             { action_type: 'click', nx: num('nx'), ny: num('ny'), x: num('x'), y: num('y') },
             view,
@@ -243,7 +243,7 @@ export class ComputerUse {
         case 'drag': {
           const startNorm = num('nx') !== undefined, startPx = num('x') !== undefined
           const endNorm = num('nx2') !== undefined, endPx = (num('x2') ?? num('drag_end_x')) !== undefined
-          if ((!startNorm && !startPx) || (!endNorm && !endPx)) return false
+          if ((!startNorm && !startPx) || (!endNorm && !endPx)) {return false}
           const r = await executeCuAction({
             action_type: 'drag',
             nx: num('nx'), ny: num('ny'), nx2: num('nx2'), ny2: num('ny2'),
@@ -340,7 +340,7 @@ ${historyDesc || '（无）'}
   private parseAnalysisResponse(response: string): ScreenAnalysis {
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('No JSON found')
+      if (!jsonMatch) {throw new Error('No JSON found')}
       const parsed = JSON.parse(jsonMatch[0])
       return {
         description: parsed.description || '',
@@ -359,7 +359,7 @@ ${historyDesc || '（无）'}
   }
 
   private parseAction(suggested: string): CUAction | null {
-    if (!suggested || suggested === 'DONE') return null
+    if (!suggested || suggested === 'DONE') {return null}
 
     const clickMatch = suggested.match(/click\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/i)
     if (clickMatch) {
@@ -367,22 +367,22 @@ ${historyDesc || '（无）'}
     }
 
     const typeMatch = suggested.match(/type\s*\(\s*"([^"]*?)"\s*\)/i)
-    if (typeMatch) return { type: 'type', params: { text: typeMatch[1] } }
+    if (typeMatch) {return { type: 'type', params: { text: typeMatch[1] } }}
 
     const keyMatch = suggested.match(/keypress\s*\(\s*"([^"]*?)"\s*\)/i)
-    if (keyMatch) return { type: 'keypress', params: { key: keyMatch[1] } }
+    if (keyMatch) {return { type: 'keypress', params: { key: keyMatch[1] } }}
 
     const scrollMatch = suggested.match(/scroll\s*\(\s*"(\w+)"\s*,\s*(\d+)\s*\)/i)
-    if (scrollMatch) return { type: 'scroll', params: { direction: scrollMatch[1], amount: Number(scrollMatch[2]) } }
+    if (scrollMatch) {return { type: 'scroll', params: { direction: scrollMatch[1], amount: Number(scrollMatch[2]) } }}
 
     const waitMatch = suggested.match(/wait\s*\(\s*(\d+)\s*\)/i)
-    if (waitMatch) return { type: 'wait', params: { ms: Number(waitMatch[1]) } }
+    if (waitMatch) {return { type: 'wait', params: { ms: Number(waitMatch[1]) } }}
 
     const clipboardMatch = suggested.match(/clipboard\s*\(\s*"([^"]*?)"\s*\)/i)
-    if (clipboardMatch) return { type: 'clipboard', params: { text: clipboardMatch[1] } }
+    if (clipboardMatch) {return { type: 'clipboard', params: { text: clipboardMatch[1] } }}
 
     const openMatch = suggested.match(/open_app\s*\(\s*"([^"]*?)"\s*\)/i)
-    if (openMatch) return { type: 'open_app', params: { app: openMatch[1] } }
+    if (openMatch) {return { type: 'open_app', params: { app: openMatch[1] } }}
 
     return null
   }
@@ -396,7 +396,7 @@ ${historyDesc || '（无）'}
     const baseUrl = this.config.llmBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com'
     const model = this.config.llmModel || process.env.LLM_VISION_MODEL || 'gpt-4o'
 
-    if (!apiKey) throw new Error('No API key configured')
+    if (!apiKey) {throw new Error('No API key configured')}
 
     const url = new URL(baseUrl.replace(/\/+$/, '') + '/chat/completions')
     const isHttps = url.protocol === 'https:'
@@ -451,7 +451,7 @@ ${historyDesc || '（无）'}
   // ═══════════════════════════════════════════════════════
 
   private async confirmAction(action: CUAction): Promise<boolean> {
-    if (this.config.safetyLevel === 'auto') return true
+    if (this.config.safetyLevel === 'auto') {return true}
 
     const desc = `${action.type}(${JSON.stringify(action.params)})`
     this.log(`🔒 确认操作: ${desc}`)

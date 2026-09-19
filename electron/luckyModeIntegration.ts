@@ -331,7 +331,7 @@ export function getLuckyDelegationControl(
     tokenBudget: 0,
   }
 
-  if (_config.preset === 'off') return defaults
+  if (_config.preset === 'off') {return defaults}
 
   switch (_config.preset) {
     case 'default':
@@ -373,7 +373,7 @@ export function shouldStopDelegationLoop(
   currentRound: number,
   totalRounds: number,
 ): { shouldStop: boolean; reason: string | null } {
-  if (_config.preset === 'off') return { shouldStop: false, reason: null }
+  if (_config.preset === 'off') {return { shouldStop: false, reason: null }}
 
   // 目标模式：检查 token 预算
   if (_config.preset === 'goal' && _config.goal.isActive) {
@@ -638,7 +638,7 @@ export function getEmotionalLoopStrategy(mood?: string): EmotionalLoopStrategy {
  * 在应用启动时调用一次
  */
 export function initLuckyModeIntegration(): void {
-  if (_integrationInitialized) return
+  if (_integrationInitialized) {return}
   _integrationInitialized = true
 
   console.log('[LuckyIntegration] 🔌 深度集成已激活')

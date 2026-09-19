@@ -37,7 +37,7 @@ export interface VoiceHooks {
 
 // ── 16k 单声道 WAV 编码（本地 Whisper 兜底用）─────────────────
 function downsampleTo16k(input: Float32Array, inRate: number): Float32Array {
-  if (inRate === 16000) return input
+  if (inRate === 16000) {return input}
   const ratio = inRate / 16000
   const newLen = Math.round(input.length / ratio)
   const out = new Float32Array(newLen)
@@ -55,7 +55,7 @@ function downsampleTo16k(input: Float32Array, inRate: number): Float32Array {
 function encodeWav16k(pcm: Float32Array, sampleRate = 16000): string {
   const buf = new ArrayBuffer(44 + pcm.length * 2)
   const view = new DataView(buf)
-  const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)) }
+  const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) {view.setUint8(off + i, s.charCodeAt(i))} }
   writeStr(0, 'RIFF')
   view.setUint32(4, 36 + pcm.length * 2, true)
   writeStr(8, 'WAVE'); writeStr(12, 'fmt ')
@@ -116,17 +116,17 @@ class VoiceClient {
   start(opts: VoiceStartOptions = {}, hooks: VoiceHooks = {}): void {
     this.opts = { ...this.opts, ...opts }
     this.hooks = hooks
-    if (this.running) return
+    if (this.running) {return}
     this.running = true
 
     this.controller = new FullDuplexController({
       sendEvent: async (p) => {
-        if (!ipc) return { actions: [], generation: 0, queueSize: 0 }
+        if (!ipc) {return { actions: [], generation: 0, queueSize: 0 }}
         return ipc.invoke('pet:live-speech:event', p)
       },
       callLlm: async (text) => {
         const r = await ipc.invoke('pet:voice-chat', { text })
-        if (!r || !r.ok) throw new Error(r?.error || '语音对话失败')
+        if (!r || !r.ok) {throw new Error(r?.error || '语音对话失败')}
         return r.text || ''
       },
       speakSentence: (text) => this.speak(text),
@@ -147,7 +147,7 @@ class VoiceClient {
   }
 
   stop(): void {
-    if (!this.running) return
+    if (!this.running) {return}
     this.running = false
     if (this.webStartTimer) { clearTimeout(this.webStartTimer); this.webStartTimer = null }
     try { this.controller?.setEnabled(false) } catch {}
@@ -160,7 +160,7 @@ class VoiceClient {
 
   // ── Web Speech 流式识别 ──────────────────────────
   private startWebSpeech(SR: any): void {
-    if (!this.running) return
+    if (!this.running) {return}
     this.sttMode = 'web'
     const rec = new SR()
     this.recognition = rec
@@ -191,8 +191,8 @@ class VoiceClient {
       let finalText = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i]
-        if (r.isFinal) finalText += r[0].transcript
-        else interim += r[0].transcript
+        if (r.isFinal) {finalText += r[0].transcript}
+        else {interim += r[0].transcript}
       }
       // AI 正在说话时，扬声器容易把自己的 TTS 回灌进麦克风（回声）。
       // 此时只在拿到「最终结果」才判定为用户打断，避免 interim 回声把自己打断；
@@ -211,7 +211,7 @@ class VoiceClient {
     }
     rec.onerror = (e: any) => {
       const err = e?.error || ''
-      if (err === 'no-speech' || err === 'aborted') return
+      if (err === 'no-speech' || err === 'aborted') {return}
       if (err === 'network' || err === 'service-not-allowed' || err === 'not-allowed' || err === 'audio-capture' || err === 'language-not-supported') {
         // Electron 常缺 Google 语音服务 / 国内网络不通 → 降级本地
         if (this.sttMode === 'web') {
@@ -242,7 +242,7 @@ class VoiceClient {
 
   // ── 本地麦克风：能量 VAD 切句 → Whisper 离线识别 ─────
   private startLocalMic(): void {
-    if (!this.running) return
+    if (!this.running) {return}
     this.sttMode = 'local'
     // 本地识别路径：开启回声消除/降噪，尽量避免把扬声器里的 TTS 当成用户说话（回声自激）
     const audio: MediaTrackConstraints = this.opts.micDevice
@@ -274,7 +274,7 @@ class VoiceClient {
         let p = 0; for (const c of collect) { merged.set(c, p); p += c.length }
         collect.length = 0
         speaking = false; speechMs = 0; silenceMs = 0
-        if (total < inRate * 0.3) return // 太短（<0.3s）丢弃（userStarted 在说话起始已发）
+        if (total < inRate * 0.3) {return} // 太短（<0.3s）丢弃（userStarted 在说话起始已发）
         const pcm = downsampleTo16k(merged, inRate)
         const b64 = encodeWav16k(pcm)
         this.hooks.onStatus?.('本地识别中…', 'info')
@@ -292,13 +292,13 @@ class VoiceClient {
       }
 
       node.onaudioprocess = (ev: any) => {
-        if (!this.running || this.sttMode !== 'local') return
+        if (!this.running || this.sttMode !== 'local') {return}
         const chunk = ev.inputBuffer.getChannelData(0)
         const now = Date.now()
         // 能量
         let sum = 0; for (let i = 0; i < chunk.length; i += 4) { const v = chunk[i]; sum += v * v }
         const rms = Math.sqrt(sum / (chunk.length / 4))
-        if (!speaking) noiseFloor = noiseFloor * 0.98 + Math.min(noiseFloor, rms) * 0.02
+        if (!speaking) {noiseFloor = noiseFloor * 0.98 + Math.min(noiseFloor, rms) * 0.02}
         const threshold = Math.max(0.012, noiseFloor * 3.5)
         if (rms > threshold) {
           if (!speaking) { speaking = true; speechMs = 0; this.controller?.userStarted().catch(() => {}) }
@@ -307,8 +307,8 @@ class VoiceClient {
         } else if (speaking) {
           silenceMs += FRAME_MS; speechMs += FRAME_MS
           collect.push(chunk.slice(0))
-          if (silenceMs >= 700) finish()
-          else if (speechMs >= 12000) finish()
+          if (silenceMs >= 700) {finish()}
+          else if (speechMs >= 12000) {finish()}
         }
         lastT = now
       }
@@ -351,32 +351,32 @@ class VoiceClient {
           if (data.audio) {
             const hex = data.audio
             const bytes = new Uint8Array(hex.length / 2)
-            for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16)
+            for (let i = 0; i < bytes.length; i++) {bytes[i] = parseInt(hex.substr(i * 2, 2), 16)}
             const blob = new Blob([bytes], { type: 'audio/wav' })
             return URL.createObjectURL(blob)
           }
         }
       } catch (e) {
-        if (token !== this.ttsToken) throw new Error('cancelled')
+        if (token !== this.ttsToken) {throw new Error('cancelled')}
         // 降级 edge
       }
     }
     const r = await ipc.invoke('edge-tts:speak', { text })
-    if (token !== this.ttsToken) throw new Error('cancelled')
+    if (token !== this.ttsToken) {throw new Error('cancelled')}
     return r?.audio || ''
   }
 
   private async speak(text: string): Promise<void> {
-    if (!text) return
+    if (!text) {return}
     const token = ++this.ttsToken
     this.cancelPlaybackOnly()
     try {
       const url = await this.synth(text, token)
-      if (token !== this.ttsToken || !url) return
+      if (token !== this.ttsToken || !url) {return}
       const ctx = this.ensureAudioCtx()
       const buf = await (await fetch(url)).arrayBuffer()
       const audio = await ctx.decodeAudioData(buf)
-      if (token !== this.ttsToken) return
+      if (token !== this.ttsToken) {return}
       await new Promise<void>((resolve) => {
         const src = ctx.createBufferSource()
         src.buffer = audio
@@ -395,7 +395,7 @@ class VoiceClient {
         try { engine?.speak?.(text, performance.now()) } catch {}
         let finished = false
         const finish = () => {
-          if (finished) return
+          if (finished) {return}
           finished = true
           try { engine?.stopSpeak?.(performance.now()) } catch {}
           if (this.currentSrc === src) { this.currentSrc = null; this.playResolver = null }
@@ -411,8 +411,8 @@ class VoiceClient {
   }
 
   private ensureAudioCtx(): AudioContext {
-    if (!this.audioCtx) this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    if (this.audioCtx.state === 'suspended') this.audioCtx.resume().catch(() => {})
+    if (!this.audioCtx) {this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()}
+    if (this.audioCtx.state === 'suspended') {this.audioCtx.resume().catch(() => {})}
     return this.audioCtx
   }
 
@@ -426,7 +426,7 @@ class VoiceClient {
     }
     const resolver = this.playResolver
     this.playResolver = null
-    if (resolver) try { resolver() } catch {}
+    if (resolver) {try { resolver() } catch {}}
     try { (window as any).__petLifeEngine?.stopSpeak?.(performance.now()) } catch {}
   }
 

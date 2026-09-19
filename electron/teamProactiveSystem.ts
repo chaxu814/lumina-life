@@ -41,7 +41,7 @@ export class TeamProactiveSystem {
   // ══════════════════════════════════════════════════════
 
   start(): void {
-    if (this.running) return
+    if (this.running) {return}
     this.running = true
 
     const team = getTeamManager()
@@ -108,12 +108,12 @@ export class TeamProactiveSystem {
 
   stop(): void {
     this.running = false
-    if (this.morningTimer) clearTimeout(this.morningTimer)
-    if (this.eveningTimer) clearTimeout(this.eveningTimer)
-    if (this.idleCheckTimer) clearInterval(this.idleCheckTimer)
-    if (this.screenCheckTimer) clearInterval(this.screenCheckTimer)
-    if (this.memoryConsolidationTimer) clearInterval(this.memoryConsolidationTimer)
-    if (this.decayTimer) clearInterval(this.decayTimer)
+    if (this.morningTimer) {clearTimeout(this.morningTimer)}
+    if (this.eveningTimer) {clearTimeout(this.eveningTimer)}
+    if (this.idleCheckTimer) {clearInterval(this.idleCheckTimer)}
+    if (this.screenCheckTimer) {clearInterval(this.screenCheckTimer)}
+    if (this.memoryConsolidationTimer) {clearInterval(this.memoryConsolidationTimer)}
+    if (this.decayTimer) {clearInterval(this.decayTimer)}
     console.log('[TeamProactive] 已停止')
   }
 
@@ -145,7 +145,7 @@ export class TeamProactiveSystem {
     const team = getTeamManager()
     const config = team.getConfig()
 
-    if (!config.screenDiscussionEnabled) return
+    if (!config.screenDiscussionEnabled) {return}
 
     // 有趣的屏幕内容触发讨论
     const interestingKeywords = ['代码', 'bug', 'error', 'IDE', 'bilibili', '视频', '游戏', '文档', '设计']
@@ -185,20 +185,20 @@ export class TeamProactiveSystem {
       resolvedAt: null,
     }
 
-    if (!social) return '社交引擎未初始化，无法发起决策讨论。'
+    if (!social) {return '社交引擎未初始化，无法发起决策讨论。'}
     await social.triggerDecisionDiscussion(proposal)
 
     // v4.0: triggerDecisionDiscussion 现在是异步触发，不返回 ctx
     // 获取当前活跃对话来汇总意见
     const activeCtx = social.getActiveConversation()
-    if (!activeCtx) return '决策讨论已触发，等待团队回复...'
+    if (!activeCtx) {return '决策讨论已触发，等待团队回复...'}
     
     const summary = this.summarizeDecision(activeCtx, team)
     return summary
   }
 
   private summarizeDecision(ctx: any, team: any): string {
-    if (!ctx || ctx.history.length === 0) return '团队暂无明确意见。'
+    if (!ctx || ctx.history.length === 0) {return '团队暂无明确意见。'}
 
     const opinions: string[] = []
     for (const msg of ctx.history) {
@@ -265,8 +265,8 @@ export class TeamProactiveSystem {
       this.scheduleRitual(type, timeStr, callback)
     }, delay)
 
-    if (type === 'morning') this.morningTimer = timer
-    else this.eveningTimer = timer
+    if (type === 'morning') {this.morningTimer = timer}
+    else {this.eveningTimer = timer}
   }
 
   /** 用户活动通知 — 由主进程 heartbeat 或消息发送时调用 */
@@ -292,6 +292,6 @@ export function initTeamProactive(): TeamProactiveSystem {
 }
 
 export function getTeamProactive(): TeamProactiveSystem {
-  if (!_teamProactive) throw new Error('[TeamProactive] 未初始化')
+  if (!_teamProactive) {throw new Error('[TeamProactive] 未初始化')}
   return _teamProactive
 }

@@ -8,7 +8,7 @@ import { scanAlphaBounds, backingPixelScale } from '../electron/pet/life/alphaTr
 /** 造一块 RGBA 缓冲，[x0,x1)×[y0,y1) 区域填不透明 */
 function makeFrame(w: number, h: number, rect?: { x0: number; y0: number; x1: number; y1: number; a?: number }): Uint8Array {
   const buf = new Uint8Array(w * h * 4)
-  if (!rect) return buf
+  if (!rect) {return buf}
   for (let y = rect.y0; y < rect.y1; y++) {
     for (let x = rect.x0; x < rect.x1; x++) {
       const i = (y * w + x) * 4

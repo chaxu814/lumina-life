@@ -18,7 +18,7 @@ const memoryPath = join(app.getPath('userData'), 'lumina-memory.db')
 const vectorStore = new MemoryVectorStore()
 
 function loadConfig(): Record<string, any> {
-  try { if (fs.existsSync(configPath)) return JSON.parse(fs.readFileSync(configPath, 'utf-8')) } catch {}
+  try { if (fs.existsSync(configPath)) {return JSON.parse(fs.readFileSync(configPath, 'utf-8'))} } catch {}
   return {}
 }
 
@@ -43,7 +43,7 @@ export function registerMemoryIpc(): void {
   ipcMain.handle('config:loadFromDb', async (_event, key: string) => {
     const profile = getMemoryStore(memoryPath).getUserProfile()
     const pref = profile?.preferences?.find(p => p.startsWith(`${key}:`))
-    if (!pref) return null
+    if (!pref) {return null}
     try { return JSON.parse(pref.slice(key.length + 1)) } catch { return null }
   })
 
@@ -65,11 +65,11 @@ export function registerMemoryIpc(): void {
 
   ipcMain.handle('memory:get', (_event, section: string) => {
     const store = getMemoryStore(memoryPath)
-    if (section === 'user') return store.getUserProfile()
-    if (section === 'memory') return store.getMemoryConfig()
-    if (section === 'facts') return store.getFacts()
-    if (section === 'reflections') return store.getReflections()
-    if (section === 'persona') return store.getPersona()
+    if (section === 'user') {return store.getUserProfile()}
+    if (section === 'memory') {return store.getMemoryConfig()}
+    if (section === 'facts') {return store.getFacts()}
+    if (section === 'reflections') {return store.getReflections()}
+    if (section === 'persona') {return store.getPersona()}
     return store.getStructuredMemory()
   })
 
@@ -276,7 +276,7 @@ export function registerMemoryIpc(): void {
       savedConfig.rerank.model || 'bge-reranker-v2-m3',
       savedConfig.rerank.topK || 10
     ).then(success => {
-      if (success) console.log('[MemoryIpc] ✅ 已从配置恢复 Rerank')
+      if (success) {console.log('[MemoryIpc] ✅ 已从配置恢复 Rerank')}
     })
   }
 
@@ -291,7 +291,7 @@ export function registerMemoryIpc(): void {
    */
   function loadHistoryForSession(sessionId: string): MessageHistory | null {
     const session = sessionManager.loadSession(sessionId)
-    if (!session || !session.messages) return null
+    if (!session || !session.messages) {return null}
 
     const history = new MessageHistory(session.messages, scrollContext)
     return history
@@ -303,7 +303,7 @@ export function registerMemoryIpc(): void {
   function loadCurrentHistory(): MessageHistory | null {
     // 获取最近活跃的会话
     const sessions = sessionManager.listSessions({ limit: 1 })
-    if (sessions.length === 0) return null
+    if (sessions.length === 0) {return null}
     return loadHistoryForSession(sessions[0].id)
   }
 

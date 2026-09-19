@@ -96,7 +96,7 @@ const CIPHER_KEY = crypto.scryptSync('lumina-provider-key-v1', 'provider-salt', 
 const IV_LENGTH = 16
 
 function encryptApiKey(text: string): string {
-  if (!text) return ''
+  if (!text) {return ''}
   try {
     const iv = crypto.randomBytes(IV_LENGTH)
     const cipher = crypto.createCipheriv('aes-256-cbc', CIPHER_KEY, iv)
@@ -109,10 +109,10 @@ function encryptApiKey(text: string): string {
 }
 
 function decryptApiKey(encrypted: string): string {
-  if (!encrypted) return ''
+  if (!encrypted) {return ''}
   try {
     const parts = encrypted.split(':')
-    if (parts[0] !== 'v1' || parts.length < 3) return encrypted // 未加密或旧格式
+    if (parts[0] !== 'v1' || parts.length < 3) {return encrypted} // 未加密或旧格式
     const iv = Buffer.from(parts[1], 'hex')
     const data = parts.slice(2).join(':')
     const decipher = crypto.createDecipheriv('aes-256-cbc', CIPHER_KEY, iv)
@@ -146,12 +146,12 @@ export class ProviderManager {
   private tryLoadFromQwenPawAgent(baseDir: string): boolean {
     const agentId = process.env.LUMINA_AGENT_ID || 'lumina'
     const agentJsonPath = path.join(baseDir, 'workspaces', agentId, 'agent.json')
-    if (!fs.existsSync(agentJsonPath)) return false
+    if (!fs.existsSync(agentJsonPath)) {return false}
 
     try {
       const raw = JSON.parse(fs.readFileSync(agentJsonPath, 'utf-8'))
       const activeModel = raw.active_model
-      if (!activeModel?.provider_id || !activeModel?.model) return false
+      if (!activeModel?.provider_id || !activeModel?.model) {return false}
 
       const qpProviderId = activeModel.provider_id
       const modelName = activeModel.model
@@ -204,7 +204,7 @@ export class ProviderManager {
   // ── 初始化 ───────────────────────────────────────────
 
   async initialize(): Promise<void> {
-    if (this.initialized) return
+    if (this.initialized) {return}
     this.initialized = true
 
     // 优先从 QwenPaw agent.json 同步
@@ -220,7 +220,7 @@ export class ProviderManager {
           // 解密内存中的 API Key
           for (const id of Object.keys(this.store.providers)) {
             const cfg = this.store.providers[id]
-            if (cfg.apiKey) cfg.apiKey = decryptApiKey(cfg.apiKey)
+            if (cfg.apiKey) {cfg.apiKey = decryptApiKey(cfg.apiKey)}
           }
           console.log(`[ProviderManager] ✅ 已加载 ${Object.keys(this.store.providers).length} 个供应商配置`)
           return
@@ -260,10 +260,10 @@ export class ProviderManager {
   /** 获取某供应商的当前配置（含默认值回退） */
   getProviderConfig(id: string): ProviderConfig | null {
     const def = this.getDefinition(id)
-    if (!def) return null
+    if (!def) {return null}
 
     const saved = this.store.providers[id]
-    if (!saved) return null
+    if (!saved) {return null}
 
     return {
       baseUrl: saved.baseUrl || def.defaultBaseUrl,
@@ -299,10 +299,10 @@ export class ProviderManager {
       const cfg = this.store.providers[def.id]
       if (def.requiresApiKey) {
         // 云端：需要 baseUrl + apiKey
-        if (cfg?.baseUrl && cfg?.apiKey) result.push(def.id)
+        if (cfg?.baseUrl && cfg?.apiKey) {result.push(def.id)}
       } else {
         // 本地：只需要 baseUrl
-        if (cfg?.baseUrl || def.defaultBaseUrl) result.push(def.id)
+        if (cfg?.baseUrl || def.defaultBaseUrl) {result.push(def.id)}
       }
     }
     return result
@@ -311,7 +311,7 @@ export class ProviderManager {
   /** 保存某供应商的配置 */
   setProviderConfig(id: string, config: Partial<ProviderConfig>): void {
     const def = this.getDefinition(id)
-    if (!def) return
+    if (!def) {return}
 
     const existing = this.store.providers[id] || {
       baseUrl: def.defaultBaseUrl,
@@ -353,7 +353,7 @@ export class ProviderManager {
 
   setActiveProvider(id: string): void {
     const def = this.getDefinition(id)
-    if (!def) return
+    if (!def) {return}
 
     // 确保该供应商至少有一个默认配置项
     if (!this.store.providers[id]) {
@@ -390,11 +390,11 @@ export class ProviderManager {
   /** 获取当前激活供应商的完整配置（快捷方式） */
   getActiveConfig(): { definition: ProviderDefinition; config: ProviderConfig } | null {
     const id = this.store.activeProviderId
-    if (!id) return null
+    if (!id) {return null}
 
     const def = this.getDefinition(id)
     const config = this.getProviderConfig(id)
-    if (!def || !config) return null
+    if (!def || !config) {return null}
 
     return { definition: def, config }
   }
@@ -403,7 +403,7 @@ export class ProviderManager {
 
   async fetchModels(id: string, override?: { baseUrl?: string; apiKey?: string }): Promise<{ models: ModelInfo[]; error?: string }> {
     const config = this.getProviderConfig(id)
-    if (!config) return { models: [], error: '供应商未配置' }
+    if (!config) {return { models: [], error: '供应商未配置' }}
 
     // 🔧 优先使用界面当前填写的地址/密钥（未点保存也能正确获取列表）
     const baseUrl = override?.baseUrl?.trim() || config.baseUrl
@@ -417,9 +417,9 @@ export class ProviderManager {
           return await this._fetchOllamaModels(baseUrl)
         default: {
           const kind = resolveNativeKind(baseUrl, this.getDefinition(id)?.protocol)
-          if (kind === 'anthropic') return await this._fetchAnthropicModels(baseUrl, apiKey)
-          if (kind === 'gemini') return await this._fetchGeminiModels(baseUrl, apiKey)
-          if (kind === 'azure') return this._fetchAzureModels()
+          if (kind === 'anthropic') {return await this._fetchAnthropicModels(baseUrl, apiKey)}
+          if (kind === 'gemini') {return await this._fetchGeminiModels(baseUrl, apiKey)}
+          if (kind === 'azure') {return this._fetchAzureModels()}
           return await this._fetchOpenAIModels(baseUrl, apiKey)
         }
       }
@@ -432,7 +432,7 @@ export class ProviderManager {
 
   async testConnection(id: string): Promise<ConnectionTestResult> {
     const config = this.getProviderConfig(id)
-    if (!config) return { success: false, error: '供应商未配置' }
+    if (!config) {return { success: false, error: '供应商未配置' }}
 
     // 本地模型不需要 model 也能测通（只需 server 在线）
     if (!config.model && !this.getDefinition(id)?.isLocal) {
@@ -475,7 +475,7 @@ export class ProviderManager {
           body: JSON.stringify(plan.body),
           signal: AbortSignal.timeout(15000),
         })
-        if (nativeResp.ok) return { success: true, latency: Date.now() - startTime }
+        if (nativeResp.ok) {return { success: true, latency: Date.now() - startTime }}
         const nativeErr = await nativeResp.text().catch(() => '')
         return { success: false, error: `HTTP ${nativeResp.status}: ${nativeErr.slice(0, 200)}` }
       }
@@ -518,7 +518,7 @@ export class ProviderManager {
   private _save(): void {
     try {
       const dir = path.dirname(this.configPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
 
       // 深拷贝并加密 API Key
       const toSave: ProviderStore = {
@@ -622,7 +622,7 @@ export class ProviderManager {
           const models = raw
             .map((m: any) => ({ id: m.id || m.model || '', multimodal: false, vision: false }))
             .filter((m: ModelInfo) => m.id)
-          if (models.length > 0) return { models }
+          if (models.length > 0) {return { models }}
           // 🔧 连接正常但列表为空：不再返回伪模型条目，如实报告原因
           return { models: [], error: 'LM Studio 已连接，但模型列表为空 — 请先在 LM Studio 中下载并加载模型' }
         }
@@ -646,14 +646,14 @@ export class ProviderManager {
         const models = (data.models || [])
           .map((m: any) => ({ id: m.name || m.model || '', multimodal: false, vision: false }))
           .filter((m: ModelInfo) => m.id)
-        if (models.length > 0) return { models }
+        if (models.length > 0) {return { models }}
       }
       errors.push(`/api/tags → ${resp.status}`)
     } catch (e: any) { errors.push(e.message) }
 
     // 回退 OpenAI 兼容
     const fallback = await this._fetchOpenAIModels(baseUrl, '')
-    if (fallback.models.length > 0) return fallback
+    if (fallback.models.length > 0) {return fallback}
     errors.push(...(fallback.error ? [fallback.error] : []))
 
     return { models: [], error: errors.join('; ') }

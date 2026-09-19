@@ -21,7 +21,7 @@ describe('lipsync 五元音口型', () => {
   it('标点产生停顿(rest)，时间轴单调递增，结尾闭合', () => {
     const segs = textToVisemeSegments('哦，好。')
     expect(segs.some(s => s.viseme === 'rest')).toBe(true)
-    for (let i = 1; i < segs.length; i++) expect(segs[i].start).toBeGreaterThanOrEqual(segs[i - 1].end - 1)
+    for (let i = 1; i < segs.length; i++) {expect(segs[i].start).toBeGreaterThanOrEqual(segs[i - 1].end - 1)}
     expect(sampleViseme(segs, 10_000_000).viseme).toBe('rest')
   })
 

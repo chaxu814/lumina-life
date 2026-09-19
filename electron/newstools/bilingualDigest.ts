@@ -131,7 +131,7 @@ async function _batchTranslate(
     const { getProviderManager } = await import('../core/providerManager')
     const pm = getProviderManager?.()
     const activeConfig = pm?.getActiveConfig?.()
-    if (!activeConfig?.config?.baseUrl) return items
+    if (!activeConfig?.config?.baseUrl) {return items}
 
     const { LLMProvider } = await import('../core/llmProvider')
     const provider = new LLMProvider({

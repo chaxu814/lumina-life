@@ -99,7 +99,7 @@ export const mailMarkReadDef: ToolDef = {
 
 export async function mailMarkReadHandler(args: Record<string, any>): Promise<ToolResult> {
   const { mail_id } = args
-  if (!mail_id) return { callId: '', ok: false, content: '', error: 'mail_id 必填' }
+  if (!mail_id) {return { callId: '', ok: false, content: '', error: 'mail_id 必填' }}
 
   if (mail_id === 'all') {
     const count = markAllRead()

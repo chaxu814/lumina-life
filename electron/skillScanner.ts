@@ -232,7 +232,7 @@ export function scanSkill(skillDir: string): ScanResult {
 
       if (entry.isDirectory()) {
         // 跳过 node_modules
-        if (entry.name === 'node_modules' || entry.name === '.git') continue
+        if (entry.name === 'node_modules' || entry.name === '.git') {continue}
         walkDir(fullPath, relativePath)
         continue
       }
@@ -249,11 +249,11 @@ export function scanSkill(skillDir: string): ScanResult {
       const lines = content.split('\n')
       for (const rule of SCANNER_RULES) {
         // 检查文件模式
-        if (!rule.filePattern.test(entry.name) && !rule.filePattern.test(relativePath)) continue
+        if (!rule.filePattern.test(entry.name) && !rule.filePattern.test(relativePath)) {continue}
 
         // 检查内容模式
         const match = content.match(rule.contentPattern)
-        if (!match) continue
+        if (!match) {continue}
 
         // 找到匹配行号
         let lineNum = 0

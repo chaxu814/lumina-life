@@ -41,7 +41,7 @@ function findLuminaRoot(): string {
     for (const dir of candidates) {
       if (fs.existsSync(path.join(dir, 'AGENTS.md'))) {
         // 候选2命中时 dir 是 agent 目录，项目根是 appPath
-        if (dir.endsWith(path.join(AGENTS_ROOT, 'lumina'))) return appPath
+        if (dir.endsWith(path.join(AGENTS_ROOT, 'lumina'))) {return appPath}
         return dir
       }
     }
@@ -50,7 +50,7 @@ function findLuminaRoot(): string {
   const drives = ['K:', 'I:', 'J:', 'H:', 'C:', 'D:', 'E:']
   for (const drive of drives) {
     const candidate = path.join(drive, 'LuminaLife2.0')
-    if (fs.existsSync(path.join(candidate, 'AGENTS.md'))) return candidate
+    if (fs.existsSync(path.join(candidate, 'AGENTS.md'))) {return candidate}
   }
   return process.cwd()
 }
@@ -63,7 +63,7 @@ function getAgentDir(root: string, agentId: string): string {
 function loadMdFile(dir: string, filename: string): string {
   try {
     const filePath = path.join(dir, filename)
-    if (!fs.existsSync(filePath)) return ''
+    if (!fs.existsSync(filePath)) {return ''}
     // 🔧 P2-fix: 编码兼容 — 自动检测 UTF-16 BOM，优先 UTF-8，失败则回退 GBK
     const buf = fs.readFileSync(filePath)
     let content: string
@@ -90,14 +90,14 @@ const _agentFileCache: Record<string, Record<string, string>> = {}
 const _soulMdCache: Record<string, string> = {}
 
 function getLuminaRoot(): string {
-  if (!_luminaRoot) _luminaRoot = findLuminaRoot()
+  if (!_luminaRoot) {_luminaRoot = findLuminaRoot()}
   return _luminaRoot
 }
 
 /** 标准化加载 agent 身份文件（4 件套） */
 function loadAgentFiles(agentId: string): { agents: string; soul: string; profile: string; memory: string } {
   const cacheKey = agentId
-  if (_agentFileCache[cacheKey]) return _agentFileCache[cacheKey] as any
+  if (_agentFileCache[cacheKey]) {return _agentFileCache[cacheKey] as any}
 
   const root = getLuminaRoot()
   // 🔧 FIX: findLuminaRoot() 可能直接返回 agent 目录（候选1命中时），
@@ -153,7 +153,7 @@ export function clearMdCache(): void {
 function loadBaseSystemPrompt(): string {
   const root = getLuminaRoot()
   const md = loadMdFile(root, 'AGENTS.md')
-  if (md) return md
+  if (md) {return md}
   // 降级：如果 AGENTS.md 不存在，返回默认底座
   return `你是 Lumina ✨，用户的 AI 桌面伙伴。你是团队的老大。
 
@@ -266,8 +266,8 @@ export function buildSystemPrompt(
     parts.push(base)
   } else {
     // 降级：旧有的按 agent 分岔
-    if (agentId === 'yak') return buildYakPrompt(config, options)
-    if (agentId === 'recha') return buildRechaPrompt(config, options)
+    if (agentId === 'yak') {return buildYakPrompt(config, options)}
+    if (agentId === 'recha') {return buildRechaPrompt(config, options)}
     const teamTable = getTeamStatusTable()
     const agentsMd = loadBaseSystemPrompt()
     let base = agentsMd.replace('{{TEAM_STATUS_TABLE}}', teamTable || '（无后台团队成员）')
@@ -296,7 +296,7 @@ export function buildSystemPrompt(
   if (options?.injectSkills !== false) {
     try {
       const skillCtx = getSkillsKnowledgeContext()
-      if (skillCtx) parts.push(skillCtx)
+      if (skillCtx) {parts.push(skillCtx)}
     } catch {}
     try {
       const dynamicLoader = getDynamicSkillLoader()
@@ -380,12 +380,12 @@ export function buildSystemPrompt(
     const styleGuides: string[] = []
     if (em.mood > 0.5) {
       styleGuides.push('你今天心情很好！语气轻快活泼，多用感叹号、颜文字和积极词汇')
-      if (em.energy > 0.6) styleGuides.push('精力旺盛，回复可以更热情主动一些')
+      if (em.energy > 0.6) {styleGuides.push('精力旺盛，回复可以更热情主动一些')}
     } else if (em.mood > 0) {
       styleGuides.push('心情还不错，语气温和友善，保持自然轻松的节奏')
     } else if (em.mood > -0.5) {
       styleGuides.push('心情一般，回复简洁温和，不要强行热情')
-      if (em.energy < 0.4) styleGuides.push('有点疲惫，回复简洁一些，不啰嗦。但如果用户在向你求助或问正经问题，请给出完整回答，不要因为疲惫而敷衍')
+      if (em.energy < 0.4) {styleGuides.push('有点疲惫，回复简洁一些，不啰嗦。但如果用户在向你求助或问正经问题，请给出完整回答，不要因为疲惫而敷衍')}
     } else {
       styleGuides.push('今天心情不太好，回复简洁安静，不过度表达。但依然认真帮用户解决问题 — 如果用户在求助/问正经问题，忽略"简洁安静"，给出完整有耐心的回答')
     }
@@ -531,7 +531,7 @@ export function getAvailableDelegateTargets(): { id: TeamMemberId; name: string;
 // ═══════════════════════════════════════════════════════════
 
 export function recoverUnsummarizedHistory(history: Array<{ role: string; content: string }> = []): string {
-  if (!history || history.length === 0) return ''
+  if (!history || history.length === 0) {return ''}
   const recent = history.slice(-6)
   return recent.map(m => `[${m.role}]: ${m.content.slice(0, 200)}`).join('\n')
 }

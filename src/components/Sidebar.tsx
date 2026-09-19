@@ -16,9 +16,9 @@ function GamificationProgressBar() {
     const load = async () => {
       try {
         const api = (window as any).luminaAPI
-        if (!api?.gamificationStats) return
+        if (!api?.gamificationStats) {return}
         const s = await api.gamificationStats()
-        if (s) setStats(s)
+        if (s) {setStats(s)}
       } catch {}
     }
     load()
@@ -38,19 +38,19 @@ function GamificationProgressBar() {
     const iv = setInterval(load, 60000)
     return () => {
       clearInterval(iv)
-      if (unsubXp) unsubXp()
-      if (unsubLv) unsubLv()
+      if (unsubXp) {unsubXp()}
+      if (unsubLv) {unsubLv()}
     }
   }, [])
 
   // XP 浮动提示自动消失
   useEffect(() => {
-    if (!xpFloat) return
+    if (!xpFloat) {return}
     const t = setTimeout(() => setXpFloat(null), 1800)
     return () => clearTimeout(t)
   }, [floatKey])
 
-  if (!stats) return null
+  if (!stats) {return null}
 
   const tierEmoji = stats.level >= 16 ? '💎' : stats.level >= 11 ? '🥇' : stats.level >= 6 ? '🥈' : '🥉'
   const pct = Math.min(100, (stats.progress || 0) * 100)
@@ -134,7 +134,7 @@ function PetSidebarToggle() {
     const next = !petRunning
     try {
       const res = await (window as any).luminaAPI?.petToggle?.(next)
-      if (res?.ok) setPetRunning(next)
+      if (res?.ok) {setPetRunning(next)}
     } catch {}
   }
   return (
@@ -214,7 +214,7 @@ export default function Sidebar() {
   const [devtoolsOpen, setDevtoolsOpen] = useState(false)
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api?.onDevToolsChanged) return
+    if (!api?.onDevToolsChanged) {return}
     return api.onDevToolsChanged((opened: boolean) => setDevtoolsOpen(opened))
   }, [])
   const compact = compactMode || devtoolsOpen

@@ -208,11 +208,11 @@ const ALL_QUESTS: QuestDef[] = [
     xpReward: 100,
     check: (s) => {
       let count = 0
-      if (s.messagesToday >= 5) count++
-      if (s.toolCallsToday >= 1) count++
-      if (s.newsReadToday >= 1) count++
-      if (s.chatsWithTeam >= 1) count++
-      if (s.tasksCompleted >= 1) count++
+      if (s.messagesToday >= 5) {count++}
+      if (s.toolCallsToday >= 1) {count++}
+      if (s.newsReadToday >= 1) {count++}
+      if (s.chatsWithTeam >= 1) {count++}
+      if (s.tasksCompleted >= 1) {count++}
       return Math.min(count, 3)
     },
   },
@@ -281,13 +281,13 @@ class QuestManager {
 
     const selected = new Set<QuestDef>()
     // 必选：1 easy, 1 medium
-    if (easy.length > 0) selected.add(easy[0])
-    if (medium.length > 0) selected.add(medium[0])
+    if (easy.length > 0) {selected.add(easy[0])}
+    if (medium.length > 0) {selected.add(medium[0])}
 
     // 剩下随机补满
     const remaining = shuffled.filter(q => !selected.has(q))
     for (const q of remaining) {
-      if (selected.size >= QUESTS_PER_DAY) break
+      if (selected.size >= QUESTS_PER_DAY) {break}
       selected.add(q)
     }
 
@@ -342,10 +342,10 @@ class QuestManager {
     let xpGained = 0
 
     for (const progress of this._state.quests) {
-      if (progress.completed && progress.claimed) continue
+      if (progress.completed && progress.claimed) {continue}
 
       const def = this.getQuestDef(progress.questId)
-      if (!def) continue
+      if (!def) {continue}
 
       const newProgress = def.check(fullStats)
       const oldProgress = progress.current
@@ -387,10 +387,10 @@ class QuestManager {
   /** 领取任务奖励（用于需要手动点击领取的场景） */
   claimReward(questId: string): boolean {
     const progress = this._state.quests.find(q => q.questId === questId)
-    if (!progress || !progress.completed || progress.claimed) return false
+    if (!progress || !progress.completed || progress.claimed) {return false}
 
     const def = this.getQuestDef(questId)
-    if (!def) return false
+    if (!def) {return false}
 
     progress.claimed = true
     xpManager.addXp(def.xpReward, `领取任务「${def.title}」奖励`)
@@ -400,7 +400,7 @@ class QuestManager {
 
   /** 领取连续签到 bonus */
   claimStreakBonus(): number {
-    if (this._state.streakBonus <= 0) return 0
+    if (this._state.streakBonus <= 0) {return 0}
     const bonus = this._state.streakBonus * 10
     xpManager.addXp(bonus, '连续签到奖励')
     this._state.streakBonus = 0
@@ -434,7 +434,7 @@ class QuestManager {
   private _saveState(): void {
     try {
       const dir = path.dirname(this.statePath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       fs.writeFileSync(this.statePath, JSON.stringify(this._state, null, 2), 'utf-8')
     } catch (e) {
       console.warn('[QuestManager] 保存失败:', e)

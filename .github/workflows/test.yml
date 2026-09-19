@@ -112,9 +112,10 @@ jobs:
         run: npx tsc --noEmit --strict
         continue-on-error: true
 
-      - name: ESLint check
-        run: npx eslint electron/ src/ tests/ --ext .ts,.tsx,.js,.jsx --max-warnings 50
-        continue-on-error: true
+      - name: ESLint check (flat config)
+        run: npx eslint .
+        # ESLint v9 flat config（eslint.config.js）；历史问题已降级 warn 渐进收敛，
+        # 会真出 bug 的规则（prefer-const/no-var）保持 error，故 lint 应稳定 exit 0。
 
   build:
     strategy:

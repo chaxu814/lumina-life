@@ -31,7 +31,7 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
   const activeSkillCount = skillConfig.enabled.length
 
   const handleAddPersona = () => {
-    if (!newPersona.name.trim()) return
+    if (!newPersona.name.trim()) {return}
     const id = 'custom-' + Date.now()
     addCustomPersona({ id, ...newPersona, name: newPersona.name.trim() })
     setNewPersona({ name: '', desc: '', icon: '🤖', systemPrompt: '' })
@@ -40,7 +40,7 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
 
   const handleDeletePersona = (id: string) => {
     // 不能删除内置人格
-    if (DEFAULT_PERSONAS.some(p => p.id === id)) return
+    if (DEFAULT_PERSONAS.some(p => p.id === id)) {return}
     removeCustomPersona(id)
   }
 
@@ -206,7 +206,7 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
     </>
   )
 
-  if (embedded) return renderContent()
+  if (embedded) {return renderContent()}
   return <div className="panel">{renderContent()}</div>
 }
 

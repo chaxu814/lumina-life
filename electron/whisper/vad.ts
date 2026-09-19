@@ -65,11 +65,11 @@ export class VoiceActivityDetector {
 
     // 维护前置环形缓冲
     this.preRoll.push({ atMs, frame })
-    while (this.preRoll.length && atMs - this.preRoll[0].atMs > this.preRollMs) this.preRoll.shift()
+    while (this.preRoll.length && atMs - this.preRoll[0].atMs > this.preRollMs) {this.preRoll.shift()}
 
     if (this.state === 'silent') {
       if (voiced) {
-        if (this.candidateStart === null) this.candidateStart = atMs
+        if (this.candidateStart === null) {this.candidateStart = atMs}
         if (atMs - this.candidateStart >= this.startMs) {
           this.state = 'speaking'
           this.speechStart = this.candidateStart
@@ -84,7 +84,7 @@ export class VoiceActivityDetector {
       if (voiced) {
         this.lastUnvoicedAt = null
       } else {
-        if (this.lastUnvoicedAt === null) this.lastUnvoicedAt = atMs
+        if (this.lastUnvoicedAt === null) {this.lastUnvoicedAt = atMs}
         if (atMs - this.lastUnvoicedAt >= this.endMs) {
           const start = this.speechStart ?? atMs
           const duration = this.lastUnvoicedAt - start

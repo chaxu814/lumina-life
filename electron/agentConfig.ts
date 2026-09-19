@@ -105,10 +105,10 @@ function detectAvailableProviders(): ProviderEnvMapping[] {
     const baseUrl = process.env[mapping.baseUrlEnv] || ''
     const apiKey = process.env[mapping.apiKeyEnv] || defaultKey
     if (mapping.provider === 'lmstudio' || mapping.provider === 'ollama') {
-      if (baseUrl) available.push(mapping)
+      if (baseUrl) {available.push(mapping)}
       continue
     }
-    if (baseUrl && apiKey) available.push(mapping)
+    if (baseUrl && apiKey) {available.push(mapping)}
   }
   return available
 }
@@ -159,7 +159,7 @@ function encrypt(text: string): string {
 function decrypt(encrypted: string): string {
   try {
     const parts = encrypted.split(':')
-    if (parts.length !== 2) return encrypted
+    if (parts.length !== 2) {return encrypted}
     const iv = Buffer.from(parts[0], 'hex')
     const decipher = crypto.createDecipheriv('aes-256-cbc', crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32), iv)
     let decrypted = decipher.update(parts[1], 'hex', 'utf8')
@@ -196,7 +196,7 @@ class AgentConfigManager {
 
   /** 🔧 P2-fix: 解析配置路径，检测 legacy 目录 */
   private _resolveConfigPath(configPath?: string): { configPath: string; legacyPath?: string } {
-    if (configPath) return { configPath }
+    if (configPath) {return { configPath }}
 
     const userData = process.env.LUMINA_USER_DATA ||
       path.join(require('electron').app?.getPath('userData') || process.cwd())
@@ -253,7 +253,7 @@ class AgentConfigManager {
 
   /** 从磁盘加载 */
   load(): AgentConfigMap {
-    if (this._loaded) return this._configs
+    if (this._loaded) {return this._configs}
     this._loaded = true
     try {
       if (fs.existsSync(this._configPath)) {
@@ -320,7 +320,7 @@ class AgentConfigManager {
 
   _save(): void {
     const dir = path.dirname(this._configPath)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     const toSave: Record<string, any> = {}
     for (const id of ['lumina', 'yak', 'recha'] as AgentId[]) {
       const c = this._configs[id]
@@ -384,18 +384,18 @@ class AgentConfigManager {
   syncFromGlobalProvider(): boolean {
     try {
       const providerPath = path.join(path.dirname(this._configPath), 'lumina-providers.json')
-      if (!fs.existsSync(providerPath)) return false
+      if (!fs.existsSync(providerPath)) {return false}
 
       const raw = JSON.parse(fs.readFileSync(providerPath, 'utf-8'))
       const activeId: string = raw.activeProviderId || ''
       const providerCfg = raw.providers?.[activeId]
-      if (!providerCfg || !providerCfg.enabled) return false
+      if (!providerCfg || !providerCfg.enabled) {return false}
 
       const endpoint = providerCfg.baseUrl || ''
       const model = providerCfg.model || ''
       const apiKey = providerCfg.apiKey || ''
 
-      if (!endpoint || !model) return false
+      if (!endpoint || !model) {return false}
 
       for (const id of ['lumina', 'yak', 'recha'] as AgentId[]) {
         this._configs[id] = {
@@ -433,7 +433,7 @@ class AgentConfigManager {
     const result: string[] = []
     for (const def of PROVIDER_ENV_MAP) {
       if (def.provider === 'lmstudio' || def.provider === 'ollama') {
-        if (process.env[def.baseUrlEnv]) result.push(def.provider)
+        if (process.env[def.baseUrlEnv]) {result.push(def.provider)}
         continue
       }
       if (process.env[def.baseUrlEnv] && (process.env[def.apiKeyEnv] || process.env['LUMINA_DEFAULT_API_KEY'])) {
@@ -445,7 +445,7 @@ class AgentConfigManager {
 
   autoRefreshFromEnv(agentId: AgentId): boolean {
     const current = this._configs[agentId]
-    if (!current || !current.provider) return false
+    if (!current || !current.provider) {return false}
 
     // 🆕 v10.8: 用户手动保存的配置优先 — 不自动覆盖
     //   如果用户在 UI 上手动配置过（有 configuredAt 且有 endpoint/model），
@@ -480,7 +480,7 @@ class AgentConfigManager {
 
     // 不覆盖用户手动指定的 LAN 地址为 localhost
     const isDefaultLocal = !globalEndpoint || globalEndpoint.includes('127.0.0.1')
-    if (isDefaultLocal && current.endpoint && current.endpoint !== globalEndpoint) return false
+    if (isDefaultLocal && current.endpoint && current.endpoint !== globalEndpoint) {return false}
 
     let changed = false
     if (globalEndpoint && globalEndpoint !== current.endpoint) {

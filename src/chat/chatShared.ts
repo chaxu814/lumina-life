@@ -87,7 +87,7 @@ export function saveGCSessions(ss: GCSession[]) {
 export function loadGCMessages(sid: string): GCMsg[] {
   try {
     const raw = localStorage.getItem(`lumina_gc_${sid}`)
-    if (!raw) return []
+    if (!raw) {return []}
     const msgs: GCMsg[] = JSON.parse(raw)
     // 过滤空白气泡 — 但保留有思考步骤的消息（即使内容为空）
     return msgs.filter(m =>
@@ -155,11 +155,11 @@ export function saveLLMData(
   enabled: boolean, next: number | null,
 ): void {
   try {
-    if (tasks) localStorage.setItem('lumina_autonomy_tasks', JSON.stringify(tasks))
-    if (posts) localStorage.setItem('lumina_autonomy_posts', JSON.stringify(posts))
+    if (tasks) {localStorage.setItem('lumina_autonomy_tasks', JSON.stringify(tasks))}
+    if (posts) {localStorage.setItem('lumina_autonomy_posts', JSON.stringify(posts))}
     localStorage.setItem('lumina_autonomy_enabled', String(enabled))
     // 修复: next 为 0 时也需要保存（if(next) 对 0 为 falsy）
-    if (next !== null && next !== undefined) localStorage.setItem('lumina_autonomy_next', JSON.stringify(next))
+    if (next !== null && next !== undefined) {localStorage.setItem('lumina_autonomy_next', JSON.stringify(next))}
   } catch { /* ignore */ }
 }
 
@@ -289,8 +289,8 @@ export function cleanTtsText(text: string): string {
     .replace(/[\u{2300}-\u{23FF}]/gu, '').replace(/[\u{2B50}\u{2B06}\u{2B07}\u{2B05}\u{27A1}\u{2934}\u{2935}\u{25AA}\u{25AB}\u{25B6}\u{25C0}\u{25FB}\u{25FC}\u{25FD}\u{25FE}]/gu, '')
     .replace(/[\u{200D}]/gu, '').replace(/[\u{FE0F}]/gu, '')
     .replace(/\n{3,}/g, '\n\n').split('\n').map(l => l.trim()).join('\n').trim()
-  if (!cleaned || cleaned.length < 3) cleaned = text.replace(/```[\s\S]*?```/g, '代码省略').trim()
-  if (!cleaned) cleaned = text.slice(0, 200)
+  if (!cleaned || cleaned.length < 3) {cleaned = text.replace(/```[\s\S]*?```/g, '代码省略').trim()}
+  if (!cleaned) {cleaned = text.slice(0, 200)}
   return cleaned
 }
 

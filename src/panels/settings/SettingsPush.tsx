@@ -37,7 +37,7 @@ export default function SettingsPush() {
   }
 
   const testServerChan = async () => {
-    if (!pushConfig.serverChanKey) return
+    if (!pushConfig.serverChanKey) {return}
     setTestingChan(true)
     setTestChanResult(null)
     try {
@@ -48,7 +48,7 @@ export default function SettingsPush() {
   }
 
   const testDingTalk = async () => {
-    if (!pushConfig.dingTalkWebhook) return
+    if (!pushConfig.dingTalkWebhook) {return}
     setTestingDing(true)
     setTestDingResult(null)
     try {

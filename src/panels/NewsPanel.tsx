@@ -137,8 +137,8 @@ export default function NewsPanel() {
       (window.luminaAPI as any).newsDigestGetConfig?.(),
       (window.luminaAPI as any).newsSourcesGetAvailable?.(),
     ]).then(([cfg, sources]) => {
-      if (cfg) setConfig(cfg)
-      if (sources) setAvailableSources(sources)
+      if (cfg) {setConfig(cfg)}
+      if (sources) {setAvailableSources(sources)}
     }).catch(() => {})
   }, [])
 
@@ -170,8 +170,8 @@ export default function NewsPanel() {
         setError(err.message || '采集失败')
       }
     } finally {
-      if (fetchLockRef.current === 'auto') fetchLockRef.current = 'idle'
-      if (mountedRef.current) setLoading(false)
+      if (fetchLockRef.current === 'auto') {fetchLockRef.current = 'idle'}
+      if (mountedRef.current) {setLoading(false)}
     }
   }, [setDigest])
 
@@ -189,21 +189,21 @@ export default function NewsPanel() {
           console.log(`[NewsPanel] ✅ 已推送 ${result.pushedToMail} 条新闻到邮箱`)
         }
       }
-    } catch (err: any) {      if (mountedRef.current) setError(err.message || '采集+推送失败')
+    } catch (err: any) {      if (mountedRef.current) {setError(err.message || '采集+推送失败')}
     } finally {
       fetchLockRef.current = 'idle'
-      if (mountedRef.current) setCollecting(false)
+      if (mountedRef.current) {setCollecting(false)}
     }
   }
 
   const handlePushToMail = async () => {
-    if (!digest || digest.items.length === 0) return
+    if (!digest || digest.items.length === 0) {return}
     try { await (window.luminaAPI as any).newsPushToMail()
     } catch (err: any) { console.warn('[NewsPanel] 推送失败', err) }
   }
 
   const handleSaveConfig = async () => {
-    if (!config) return
+    if (!config) {return}
     try {
       await (window.luminaAPI as any).newsDigestUpdateConfig(config)
       setConfigSaved(true)
@@ -241,7 +241,7 @@ export default function NewsPanel() {
 
   const playAllNews = async () => {
     const items = filteredItems
-    if (items.length === 0) return
+    if (items.length === 0) {return}
     setShowAnchor(true)
     setAnchorPlaying(true)
     setAnchorIndex(0)
@@ -263,17 +263,17 @@ export default function NewsPanel() {
     try {
       const api = (window as any).luminaAPI
       const res = await api.newsMCPGenerateDigest(20, true)
-      if (res?.ok) setBilingualDigest(res)
+      if (res?.ok) {setBilingualDigest(res)}
     } catch (e: any) { console.warn('[NewsPanel] 双语日报生成失败:', e) }
     finally { setDigestLoading(false) }
   }
 
   const handleSubscribe = async () => {
-    if (!subEmail) return
+    if (!subEmail) {return}
     try {
       const api = (window as any).luminaAPI
       const res = await api.newsMCPManageSubscription('subscribe', subEmail)
-      if (res?.ok) setSubEmail('')
+      if (res?.ok) {setSubEmail('')}
       await loadSubscriptions()
     } catch (e: any) { console.warn('[NewsPanel] 订阅失败:', e) }
   }
@@ -290,7 +290,7 @@ export default function NewsPanel() {
     try {
       const api = (window as any).luminaAPI
       const res = await api.newsMCPManageSubscription('list')
-      if (res?.subscribers) setSubs(res.subscribers)
+      if (res?.subscribers) {setSubs(res.subscribers)}
     } catch {}
   }
 
@@ -439,18 +439,18 @@ export default function NewsPanel() {
     setQuotesLoading(true)
     try {
       const res = await (window.luminaAPI as any).newsFetchQuotes()
-      if (res.ok) setQuotesData({ indices: res.indices, stocks: res.stocks, updatedAt: res.updatedAt })
+      if (res.ok) {setQuotesData({ indices: res.indices, stocks: res.stocks, updatedAt: res.updatedAt })}
     } catch (err: any) { console.warn('[NewsPanel] 行情获取失败:', err)
     } finally { setQuotesLoading(false) }
   }, [setQuotesData])
 
   useEffect(() => {
-    if (activeTab === 'quotes') fetchQuotes()
+    if (activeTab === 'quotes') {fetchQuotes()}
   }, [activeTab, fetchQuotes])
 
   // ── 筛选 ──
   const filteredItems = digest?.items.filter(item => {
-    if (filter === 'all') return true
+    if (filter === 'all') {return true}
     return item.category === filter
   }) || []
   const categoryCount = (cat: string) => digest?.items.filter(i => i.category === cat).length || 0
@@ -970,7 +970,7 @@ function SMTPConfigSection() {
     setSmtpSaving(true)
     try {
       const res = await (window.luminaAPI as any).smtpSetConfig(patch)
-      if (res.ok && res.config) setSmtp(res.config)
+      if (res.ok && res.config) {setSmtp(res.config)}
       setSmtpTestResult({ ok: true, msg: '已保存' })
     } catch (e: any) {
       setSmtpTestResult({ ok: false, msg: e.message })
@@ -979,7 +979,7 @@ function SMTPConfigSection() {
     setTimeout(() => setSmtpTestResult(null), 3000)
   }
 
-  if (!smtp) return null
+  if (!smtp) {return null}
 
   return (
     <div className="mb-3">

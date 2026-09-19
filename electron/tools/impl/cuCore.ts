@@ -121,7 +121,7 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
     max_tokens: 1024,
     temperature: 0.3,
   }
-  if (jsonMode) bodyObj.response_format = { type: 'json_object' }
+  if (jsonMode) {bodyObj.response_format = { type: 'json_object' }}
   // 软提示：本地端点 + 模型名不像 VLM（不硬拦，避免误伤自命名的视觉模型；失败时再给明确提示）
   if (isLocalEndpoint(cfg.url) && !looksLikeVisionModel(cfg.model)) {
     console.warn(`[CU] 视觉端点模型「${cfg.model}」从命名看不像视觉模型，若看屏/识图失败，请换 Qwen2.5-VL / GPT-4o / GLM-4V 等 VLM`)
@@ -150,12 +150,12 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
             const msg = String(j.error.message || j.error || 'vlm_err')
             const kind = classifyModelError(code, msg + ' ' + d)
             // 纯文本模型收到图片 → 给出明确的换模型提示，而不是一坨 400
-            if (kind === 'vision' || kind === 'tools') return reject(new Error(visionHint()))
+            if (kind === 'vision' || kind === 'tools') {return reject(new Error(visionHint()))}
             return reject(new Error(msg))
           }
           if (code >= 400) {
             const kind = classifyModelError(code, d)
-            if (kind === 'vision' || kind === 'tools') return reject(new Error(visionHint()))
+            if (kind === 'vision' || kind === 'tools') {return reject(new Error(visionHint()))}
             return reject(new Error(`vlm_http_${code}:${d.slice(0, 200)}`))
           }
           resolve(j.choices?.[0]?.message?.content || '')
@@ -195,7 +195,7 @@ function screenshotFallbackPS(pngPath: string): Promise<string> {
       { timeout: 8000, windowsHide: true },
       (err) => {
         if (err) { try { fs.unlinkSync(pngPath) } catch {}; reject(new Error(`screenshot_fallback:${err.code || 'unknown'}`)); return }
-        try { if (fs.statSync(pngPath).size > 0) resolve(pngPath); else reject(new Error('screenshot_fallback:empty')) }
+        try { if (fs.statSync(pngPath).size > 0) {resolve(pngPath);} else {reject(new Error('screenshot_fallback:empty'))} }
         catch (e: any) { reject(new Error(`screenshot_fallback:${e.message}`)) }
       })
   })
@@ -205,7 +205,7 @@ export async function captureScreenBuffer(): Promise<Buffer> {
   try {
     // screenshot-desktop 不传 filename 时直接返回 PNG Buffer
     const buf = await screenshot({ format: 'png' }) as unknown as Buffer
-    if (buf && buf.length > 0) return buf
+    if (buf && buf.length > 0) {return buf}
     throw new Error('empty_capture')
   } catch (e: any) {
     console.warn('[cuCore] screenshot-desktop failed, fallback PowerShell:', e?.message || e)
@@ -240,10 +240,10 @@ export async function captureScreen(): Promise<CuScreen> {
 function execCmd(cmd: string, args: string[], timeout = 15000): Promise<string> {
   return new Promise<string>(resolve => {
     const child = cp.execFile(cmd, args, { timeout, windowsHide: true }, (err, stdout, stderr) => {
-      if (err) resolve(`ERR:${err.message}|${String(stderr).slice(0, 100)}`)
-      else resolve(String(stdout).trim())
+      if (err) {resolve(`ERR:${err.message}|${String(stderr).slice(0, 100)}`)}
+      else {resolve(String(stdout).trim())}
     })
-    if (child.stdin) child.stdin.end()
+    if (child.stdin) {child.stdin.end()}
   })
 }
 
@@ -257,8 +257,8 @@ function runPS(lines: string[], timeout = 15000): Promise<string> {
       { timeout, windowsHide: true },
       (err, stdout, stderr) => {
         try { fs.unlinkSync(ps1) } catch {}
-        if (err) resolve(`ERR:${err.message}|${String(stderr).slice(0, 100)}`)
-        else resolve(String(stdout).trim())
+        if (err) {resolve(`ERR:${err.message}|${String(stderr).slice(0, 100)}`)}
+        else {resolve(String(stdout).trim())}
       })
   })
 }
@@ -312,7 +312,7 @@ export async function cuClick(x: number, y: number, btn: 'left' | 'right', dbl: 
 export async function cuType(text: string): Promise<string> {
   const plat = process.platform
   if (plat === 'win32') {
-    if (!text) return '输入完成'
+    if (!text) {return '输入完成'}
     let backup = ''
     try { backup = clipboard.readText() } catch { /* 忽略 */ }
     try { clipboard.writeText(text) } catch (e: any) { return `输入失败:剪贴板${e?.message || e}` }
@@ -338,7 +338,7 @@ export async function cuType(text: string): Promise<string> {
 export async function cuPressKey(key: string): Promise<string> {
   const plat = process.platform
   const k = (key || '').toLowerCase()
-  if (!k) return '按键失败:空按键'
+  if (!k) {return '按键失败:空按键'}
 
   if (plat === 'win32') {
     const map: Record<string, string> = {
@@ -368,7 +368,7 @@ export async function cuPressKey(key: string): Promise<string> {
 /** 打开应用（按名称或路径） */
 export async function cuOpenApp(app: string): Promise<string> {
   const name = (app || '').trim()
-  if (!name) return '打开应用失败:空名称'
+  if (!name) {return '打开应用失败:空名称'}
   const plat = process.platform
   try {
     if (plat === 'win32') {
@@ -473,24 +473,24 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
     case 'click':
     case 'double_click':
     case 'right_click': {
-      if (!hasNorm(act) && !hasPx(act)) return { ok: false, msg: '❌ 缺少坐标' }
+      if (!hasNorm(act) && !hasPx(act)) {return { ok: false, msg: '❌ 缺少坐标' }}
       const btn = act.action_type === 'right_click' ? 'right' as const : 'left' as const
       const dbl = act.action_type === 'double_click'
       const msg = await cuClick(toPxX(act.nx, act.x), toPxY(act.ny, act.y), btn, dbl)
       return { ok: !msg.startsWith('❌') && !msg.startsWith('点击失败'), msg }
     }
     case 'type': {
-      if (!act.text) return { ok: false, msg: '❌ 缺少输入文本' }
+      if (!act.text) {return { ok: false, msg: '❌ 缺少输入文本' }}
       const deny = destructiveReason(act.text)
-      if (deny) return { ok: false, msg: `🚫 ${deny}`, denied: true }
+      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true }}
       const msg = await cuType(act.text)
       return { ok: !msg.startsWith('❌') && !msg.startsWith('输入失败'), msg }
     }
     case 'keypress':
     case 'key': {
-      if (!act.key) return { ok: false, msg: '❌ 缺少按键' }
+      if (!act.key) {return { ok: false, msg: '❌ 缺少按键' }}
       const deny = destructiveReason(act.key)
-      if (deny) return { ok: false, msg: `🚫 ${deny}`, denied: true }
+      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true }}
       const msg = await cuPressKey(act.key)
       return { ok: !msg.startsWith('❌') && !msg.startsWith('按键失败'), msg }
     }
@@ -501,7 +501,7 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
     case 'drag': {
       const endNorm = typeof act.nx2 === 'number' && typeof act.ny2 === 'number'
       const endPx = typeof act.drag_end_x === 'number' && typeof act.drag_end_y === 'number'
-      if ((!hasNorm(act) && !hasPx(act)) || (!endNorm && !endPx)) return { ok: false, msg: '❌ 缺少拖拽坐标' }
+      if ((!hasNorm(act) && !hasPx(act)) || (!endNorm && !endPx)) {return { ok: false, msg: '❌ 缺少拖拽坐标' }}
       const msg = await cuDrag(
         toPxX(act.nx, act.x), toPxY(act.ny, act.y),
         toPxX(act.nx2, act.drag_end_x), toPxY(act.ny2, act.drag_end_y),
@@ -515,7 +515,7 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
     }
     case 'open_app': {
       const name = (act.app || act.text || '').trim()
-      if (!name) return { ok: false, msg: '❌ 缺少应用名' }
+      if (!name) {return { ok: false, msg: '❌ 缺少应用名' }}
       const msg = await cuOpenApp(name)
       return { ok: !/失败|ERR:/i.test(msg), msg }
     }
@@ -524,7 +524,7 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
       return { ok: !msg.startsWith('❌') && !msg.startsWith('按键失败'), msg }
     }
     case 'clipboard': {
-      if (!act.text) return { ok: false, msg: '❌ 缺少剪贴板文本' }
+      if (!act.text) {return { ok: false, msg: '❌ 缺少剪贴板文本' }}
       const msg = cuSetClipboard(act.text)
       return { ok: !msg.startsWith('写剪贴板失败'), msg }
     }

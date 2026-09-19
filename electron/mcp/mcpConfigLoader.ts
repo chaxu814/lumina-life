@@ -54,18 +54,18 @@ export interface MCPConfigSources {
 function findDataDir(): string {
   // 优先环境变量
   const envDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR
-  if (envDir) return envDir
+  if (envDir) {return envDir}
 
   // 传统 .lumina 目录
   const legacyDir = path.join(os.homedir(), '.lumina')
-  if (fs.existsSync(legacyDir)) return legacyDir
+  if (fs.existsSync(legacyDir)) {return legacyDir}
 
   // QwenPaw 兼容
   const qpDir = path.join(os.homedir(), '.qwenpaw')
-  if (fs.existsSync(qpDir)) return qpDir
+  if (fs.existsSync(qpDir)) {return qpDir}
 
   const cpDir = path.join(os.homedir(), '.copaw')
-  if (fs.existsSync(cpDir)) return cpDir
+  if (fs.existsSync(cpDir)) {return cpDir}
 
   // 默认
   return legacyDir

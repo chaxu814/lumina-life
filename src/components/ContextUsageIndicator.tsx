@@ -13,16 +13,16 @@ import { useStore } from '../stores/appStore'
 
 /** 格式化 token 数为易读字符串 */
 function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  if (n >= 1_000_000) {return `${(n / 1_000_000).toFixed(1)}M`}
+  if (n >= 1_000) {return `${(n / 1_000).toFixed(1)}K`}
   return String(n)
 }
 
 /** 根据用量百分比返回颜色 */
 function getColor(pct: number): { bar: string; text: string; bg: string } {
-  if (pct >= 90) return { bar: '#ef4444', text: '#ef4444', bg: 'rgba(239,68,68,0.12)' }
-  if (pct >= 70) return { bar: '#f59e0b', text: '#d97706', bg: 'rgba(245,158,11,0.12)' }
-  if (pct >= 40) return { bar: '#6366f1', text: '#6366f1', bg: 'rgba(99,102,241,0.10)' }
+  if (pct >= 90) {return { bar: '#ef4444', text: '#ef4444', bg: 'rgba(239,68,68,0.12)' }}
+  if (pct >= 70) {return { bar: '#f59e0b', text: '#d97706', bg: 'rgba(245,158,11,0.12)' }}
+  if (pct >= 40) {return { bar: '#6366f1', text: '#6366f1', bg: 'rgba(99,102,241,0.10)' }}
   return { bar: '#10b981', text: '#059669', bg: 'rgba(16,185,129,0.10)' }
 }
 
@@ -35,7 +35,7 @@ const ContextUsageIndicator: React.FC = () => {
     // 优先使用运行时检测到的窗口，其次用设置中的值
     let window = contextUsage.contextWindow || llmConfig.contextWindow || 0
     // 如果都为 0，用保守默认 128K（仅用于显示，不影响实际逻辑）
-    if (!window) window = 131_072
+    if (!window) {window = 131_072}
     const pct = Math.min(100, (used / window) * 100)
     return {
       promptTokens: used,
@@ -48,7 +48,7 @@ const ContextUsageIndicator: React.FC = () => {
   }, [contextUsage, llmConfig.contextWindow])
 
   // 没有用量数据时不显示（首次对话前）
-  if (!visible) return null
+  if (!visible) {return null}
 
   return (
     <div

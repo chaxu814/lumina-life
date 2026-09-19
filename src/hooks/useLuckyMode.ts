@@ -57,7 +57,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
 
   // 初始加载
   useEffect(() => {
-    if (loadedRef.current) return
+    if (loadedRef.current) {return}
     loadedRef.current = true
 
     const load = async () => {
@@ -65,7 +65,7 @@ export function useLuckyMode(): UseLuckyModeReturn {
         const savedConfig = await (window as any).luminaAPI?.luckyModeGetConfig?.()
         if (savedConfig) {
           // 🐛 v3.7.2: 如果用户已经手动切换过预设，忽略异步加载结果避免覆盖
-          if (userChangedRef.current) return
+          if (userChangedRef.current) {return}
 
           setSettingsState(savedConfig)
           setPresetState(savedConfig.preset)
@@ -85,16 +85,16 @@ export function useLuckyMode(): UseLuckyModeReturn {
   useEffect(() => {
     const handler = (e: CustomEvent) => {
       userChangedRef.current = true
-      if (e.detail?.preset) setPresetState(e.detail.preset)
-      if (e.detail?.runtime) setRuntime(e.detail.runtime)
+      if (e.detail?.preset) {setPresetState(e.detail.preset)}
+      if (e.detail?.runtime) {setRuntime(e.detail.runtime)}
     }
     window.addEventListener('lucky-mode:sync' as any, handler as any)
     return () => window.removeEventListener('lucky-mode:sync' as any, handler as any)
   }, [])
 
   const getMaxIteration = (cfg: LuckySettingsConfig): number => {
-    if (cfg.preset === 'goal') return cfg.goal.maxIterations
-    if (cfg.preset === 'mission') return cfg.goal.bypassIterationLimit ? cfg.maxIterations * 2 : cfg.maxIterations
+    if (cfg.preset === 'goal') {return cfg.goal.maxIterations}
+    if (cfg.preset === 'mission') {return cfg.goal.bypassIterationLimit ? cfg.maxIterations * 2 : cfg.maxIterations}
     return cfg.maxIterations
   }
 

@@ -151,7 +151,7 @@ export class TaskBoard {
    */
   setProjectPhase(id: string, phase: string): void {
     const project = this.projects.get(id)
-    if (!project) return
+    if (!project) {return}
     project.currentPhase = phase
   }
 
@@ -160,7 +160,7 @@ export class TaskBoard {
    */
   setProjectStatus(id: string, status: TaskProject['status']): void {
     const project = this.projects.get(id)
-    if (!project) return
+    if (!project) {return}
     project.status = status
     if (status === 'done' || status === 'failed') {
       project.completedAt = new Date().toISOString()
@@ -172,7 +172,7 @@ export class TaskBoard {
    */
   setFinalResult(id: string, result: string): void {
     const project = this.projects.get(id)
-    if (!project) return
+    if (!project) {return}
     project.finalResult = result
     project.status = 'done'
     project.completedAt = new Date().toISOString()
@@ -197,7 +197,7 @@ export class TaskBoard {
     },
   ): TaskNode | null {
     const project = this.projects.get(projectId)
-    if (!project) return null
+    if (!project) {return null}
 
     const id = `${projectId}-task-${project.tasks.length + 1}`
     const task: TaskNode = {
@@ -262,7 +262,7 @@ export class TaskBoard {
   getTask(taskId: string): TaskNode | undefined {
     for (const project of this.projects.values()) {
       const task = project.tasks.find(t => t.id === taskId)
-      if (task) return task
+      if (task) {return task}
     }
     return undefined
   }
@@ -276,7 +276,7 @@ export class TaskBoard {
     elapsedMs?: number
   }): void {
     const task = this.getTask(taskId)
-    if (!task) return
+    if (!task) {return}
 
     task.status = status
 
@@ -286,9 +286,9 @@ export class TaskBoard {
 
     if (status === 'done' || status === 'failed') {
       task.completedAt = new Date().toISOString()
-      if (meta?.result) task.result = meta.result
-      if (meta?.error) task.error = meta.error
-      if (meta?.elapsedMs !== undefined) task.elapsedMs = meta.elapsedMs
+      if (meta?.result) {task.result = meta.result}
+      if (meta?.error) {task.error = meta.error}
+      if (meta?.elapsedMs !== undefined) {task.elapsedMs = meta.elapsedMs}
     }
 
     // 更新阻塞检测
@@ -300,7 +300,7 @@ export class TaskBoard {
    */
   incrementRetry(taskId: string): void {
     const task = this.getTask(taskId)
-    if (task) task.retryCount++
+    if (task) {task.retryCount++}
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -312,7 +312,7 @@ export class TaskBoard {
    */
   assignIntern(taskId: string, internId: string): boolean {
     const task = this.getTask(taskId)
-    if (!task) return false
+    if (!task) {return false}
     task.assignIntern = internId
     return true
   }
@@ -323,7 +323,7 @@ export class TaskBoard {
   assignInterns(assignments: Array<{ taskId: string; internId: string }>): number {
     let count = 0
     for (const { taskId, internId } of assignments) {
-      if (this.assignIntern(taskId, internId)) count++
+      if (this.assignIntern(taskId, internId)) {count++}
     }
     return count
   }
@@ -333,7 +333,7 @@ export class TaskBoard {
    */
   enableParallelMode(projectId: string, hiredInterns: string[]): void {
     const project = this.projects.get(projectId)
-    if (!project) return
+    if (!project) {return}
     project.parallelMode = true
     project.hiredInterns = hiredInterns
   }
@@ -344,18 +344,18 @@ export class TaskBoard {
    */
   autoAssignInterns(projectId: string): void {
     const project = this.projects.get(projectId)
-    if (!project) return
+    if (!project) {return}
 
     const interns = project.hiredInterns
-    if (interns.length === 0) return
+    if (interns.length === 0) {return}
 
     // 按阶段分组
     const phases = new Map<number, TaskNode[]>()
     for (const task of project.tasks) {
-      if (task.status !== 'pending') continue
-      if (task.assignIntern) continue // 已分配
+      if (task.status !== 'pending') {continue}
+      if (task.assignIntern) {continue} // 已分配
       const phase = task.parallelPhase || 1
-      if (!phases.has(phase)) phases.set(phase, [])
+      if (!phases.has(phase)) {phases.set(phase, [])}
       phases.get(phase)!.push(task)
     }
 
@@ -396,10 +396,10 @@ export class TaskBoard {
    */
   getReadyTasks(projectId: string): TaskNode[] {
     const project = this.projects.get(projectId)
-    if (!project) return []
+    if (!project) {return []}
 
     return project.tasks.filter(task => {
-      if (task.status !== 'pending') return false
+      if (task.status !== 'pending') {return false}
       // 检查所有依赖是否都已完成
       return task.dependsOn.every(depId => {
         const depTask = this.getTask(depId)
@@ -414,11 +414,11 @@ export class TaskBoard {
    */
   getParallelGroups(projectId: string): TaskNode[][] {
     const project = this.projects.get(projectId)
-    if (!project) return []
+    if (!project) {return []}
 
     // 构建 DAG
     const pending = project.tasks.filter(t => t.status === 'pending')
-    if (pending.length === 0) return []
+    if (pending.length === 0) {return []}
 
     const groups: TaskNode[][] = []
     let remaining = [...pending]
@@ -430,7 +430,7 @@ export class TaskBoard {
           return !dep || dep.status === 'done'
         })
       )
-      if (ready.length === 0) break // 死锁
+      if (ready.length === 0) {break} // 死锁
       groups.push(ready)
       remaining = remaining.filter(t => !ready.includes(t))
     }
@@ -444,13 +444,13 @@ export class TaskBoard {
    */
   getParallelPhaseGroups(projectId: string): TaskNode[][] {
     const project = this.projects.get(projectId)
-    if (!project) return []
+    if (!project) {return []}
 
     const phaseMap = new Map<number, TaskNode[]>()
     for (const task of project.tasks) {
-      if (task.status !== 'pending' && task.status !== 'running') continue
+      if (task.status !== 'pending' && task.status !== 'running') {continue}
       const phase = task.parallelPhase || 0
-      if (!phaseMap.has(phase)) phaseMap.set(phase, [])
+      if (!phaseMap.has(phase)) {phaseMap.set(phase, [])}
       phaseMap.get(phase)!.push(task)
     }
 
@@ -480,7 +480,7 @@ export class TaskBoard {
    */
   getYakBoardView(projectId: string): string {
     const project = this.projects.get(projectId)
-    if (!project) return '项目不存在'
+    if (!project) {return '项目不存在'}
 
     const lines: string[] = [
       `📋 ${project.name}（${project.status}）`,
@@ -526,7 +526,7 @@ export class TaskBoard {
     percent: number
   } | null {
     const project = this.projects.get(projectId)
-    if (!project) return null
+    if (!project) {return null}
 
     const tasks = project.tasks
     const total = tasks.length
@@ -552,7 +552,7 @@ export class TaskBoard {
    */
   detectDeadlocks(projectId: string): string[][] {
     const project = this.projects.get(projectId)
-    if (!project) return []
+    if (!project) {return []}
 
     const deadlocks: string[][] = []
     const visited = new Set<string>()
@@ -567,7 +567,7 @@ export class TaskBoard {
         }
         return
       }
-      if (visited.has(taskId)) return
+      if (visited.has(taskId)) {return}
 
       visited.add(taskId)
       recursionStack.add(taskId)
@@ -596,7 +596,7 @@ export class TaskBoard {
    */
   detectBlockedChains(projectId: string): string[] {
     const project = this.projects.get(projectId)
-    if (!project) return []
+    if (!project) {return []}
 
     const blockedTasks: string[] = []
 
@@ -621,7 +621,7 @@ export class TaskBoard {
    */
   getTasksByAssignee(projectId: string, assignee: TaskNode['assignTo']): TaskNode[] {
     const project = this.projects.get(projectId)
-    if (!project) return []
+    if (!project) {return []}
     return project.tasks.filter(
       t => t.assignTo === assignee && (t.status === 'pending' || t.status === 'running'),
     )
@@ -638,7 +638,7 @@ export class TaskBoard {
 
   private _updateBlockedTasks(projectId: string): void {
     const project = this.projects.get(projectId)
-    if (!project) return
+    if (!project) {return}
 
     // 检查依赖是否完成
     for (const task of project.tasks) {
@@ -662,7 +662,7 @@ export class TaskBoard {
 let _instance: TaskBoard | null = null
 
 export function getTaskBoard(): TaskBoard {
-  if (!_instance) _instance = new TaskBoard()
+  if (!_instance) {_instance = new TaskBoard()}
   return _instance
 }
 

@@ -101,11 +101,11 @@ function collectConversationStats(days: number): string {
   try {
     // 从 localStorage 读取 store 状态（最简方式）
     const raw = localStorage.getItem('lumina-life-storage')
-    if (!raw) return '（暂无对话数据）'
+    if (!raw) {return '（暂无对话数据）'}
 
     const parsed = JSON.parse(raw)
     const state = parsed?.state
-    if (!state?.conversations) return '（暂无对话数据）'
+    if (!state?.conversations) {return '（暂无对话数据）'}
 
     const conversations = state.conversations || []
     const cutoff = Date.now() - days * 86400000
@@ -118,8 +118,8 @@ function collectConversationStats(days: number): string {
       for (const msg of msgs) {
         if (msg.timestamp >= cutoff) {
           totalMsgs++
-          if (msg.role === 'user') userMsgs++
-          else if (msg.role === 'assistant') assistantMsgs++
+          if (msg.role === 'user') {userMsgs++}
+          else if (msg.role === 'assistant') {assistantMsgs++}
         }
       }
     }

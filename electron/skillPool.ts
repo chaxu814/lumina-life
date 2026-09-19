@@ -95,7 +95,7 @@ export interface SyncResult {
 //   否则 fallback 到 app.getPath('userData')
 function findWorkspacesRoot(): string {
   const envDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR
-  if (envDir) return path.join(envDir, 'workspaces')
+  if (envDir) {return path.join(envDir, 'workspaces')}
 
   // 兼容 ~/.qwenpaw / ~/.copaw
   const home = os.homedir()
@@ -104,7 +104,7 @@ function findWorkspacesRoot(): string {
     path.join(home, '.copaw', 'workspaces'),
   ]
   for (const c of candidates) {
-    if (fs.existsSync(c)) return c
+    if (fs.existsSync(c)) {return c}
   }
 
   // fallback: 旧版 Electron userData
@@ -115,23 +115,23 @@ function getSkillPoolDir(): string {
   const envDir = process.env.QWENPAW_WORKING_DIR || process.env.COPAW_WORKING_DIR
   if (envDir) {
     const dir = path.join(envDir, 'skill_pool')
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     return dir
   }
   const dir = path.join(app.getPath('userData'), 'skill_pool')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
   return dir
 }
 
 function getWorkspacesDir(): string {
   const root = findWorkspacesRoot()
-  if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true })
+  if (!fs.existsSync(root)) {fs.mkdirSync(root, { recursive: true })}
   return root
 }
 
 function getWorkspaceSkillsDir(workspaceId: string): string {
   const dir = path.join(getWorkspacesDir(), workspaceId, 'skills')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
   return dir
 }
 
@@ -205,8 +205,8 @@ export class SkillPoolService {
 
       if (fs.existsSync(skillMdPath)) {
         const meta = this.parseSkillMeta(fs.readFileSync(skillMdPath, 'utf-8'))
-        if (meta.description) description = meta.description
-        if (meta.emoji) emoji = meta.emoji
+        if (meta.description) {description = meta.description}
+        if (meta.emoji) {emoji = meta.emoji}
       }
 
       const tools: string[] = []
@@ -280,7 +280,7 @@ export class SkillPoolService {
 
     // 冲突检测
     const manifest = this.readPoolManifest()
-    let skillName = meta.name
+    const skillName = meta.name
     if (manifest.skills[skillName]) {
       warnings.push(`Skill "${skillName}" 已存在，将覆盖安装`)
     }
@@ -380,7 +380,7 @@ export class SkillPoolService {
     const result: SyncResult = { success: true, synced: 0, failed: 0, details: [] }
 
     for (const [skillName, wsEntry] of Object.entries(wsManifest.skills)) {
-      if (wsEntry.local) continue  // 跳过本地 skills
+      if (wsEntry.local) {continue}  // 跳过本地 skills
 
       const poolEntry = poolManifest.skills[skillName]
       if (!poolEntry) {
@@ -418,7 +418,7 @@ export class SkillPoolService {
       }
     }
 
-    if (result.failed > 0) result.success = false
+    if (result.failed > 0) {result.success = false}
     this.writeWorkspaceManifest(workspaceId, wsManifest)
     return result
   }
@@ -470,11 +470,11 @@ export class SkillPoolService {
     const wsSkillsDir = getWorkspaceSkillsDir(workspaceId)
     const skills: SkillInfo[] = []
 
-    if (!fs.existsSync(wsSkillsDir)) return skills
+    if (!fs.existsSync(wsSkillsDir)) {return skills}
 
     const entries = fs.readdirSync(wsSkillsDir, { withFileTypes: true })
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory()) {continue}
       const skillPath = path.join(wsSkillsDir, entry.name)
       const skillMdPath = path.join(skillPath, 'SKILL.md')
 
@@ -484,9 +484,9 @@ export class SkillPoolService {
 
       if (fs.existsSync(skillMdPath)) {
         const meta = this.parseSkillMeta(fs.readFileSync(skillMdPath, 'utf-8'))
-        if (meta.description) description = meta.description
-        if (meta.emoji) emoji = meta.emoji
-        if (meta.version) version = meta.version
+        if (meta.description) {description = meta.description}
+        if (meta.emoji) {emoji = meta.emoji}
+        if (meta.version) {version = meta.version}
       }
 
       const tools: string[] = []
@@ -527,7 +527,7 @@ export class SkillPoolService {
     const updates: Array<{ name: string; currentVersion: string; latestVersion: string }> = []
 
     for (const [skillName, wsEntry] of Object.entries(wsManifest.skills)) {
-      if (wsEntry.local) continue
+      if (wsEntry.local) {continue}
       const poolEntry = poolManifest.skills[skillName]
       if (poolEntry && poolEntry.version !== wsEntry.poolVersion) {
         updates.push({
@@ -556,10 +556,10 @@ export class SkillPoolService {
       const verMatch = fm.match(/version:\s*(.+)/)
       const emojiMatch = fm.match(/emoji:\s*(.+)/)
 
-      if (nameMatch) result.name = nameMatch[1].trim()
-      if (descMatch) result.description = descMatch[1].trim()
-      if (verMatch) result.version = verMatch[1].trim()
-      if (emojiMatch) result.emoji = emojiMatch[1].trim()
+      if (nameMatch) {result.name = nameMatch[1].trim()}
+      if (descMatch) {result.description = descMatch[1].trim()}
+      if (verMatch) {result.version = verMatch[1].trim()}
+      if (emojiMatch) {result.emoji = emojiMatch[1].trim()}
     } else {
       // 从第一个 # 标题提取名称
       const titleMatch = content.match(/^#\s+(.+)/m)
@@ -590,8 +590,8 @@ export class SkillPoolService {
 
   /** 递归复制目录 */
   private copyDir(src: string, dest: string): void {
-    if (!fs.existsSync(src)) return
-    if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true })
+    if (!fs.existsSync(src)) {return}
+    if (!fs.existsSync(dest)) {fs.mkdirSync(dest, { recursive: true })}
 
     const entries = fs.readdirSync(src, { withFileTypes: true })
     for (const entry of entries) {

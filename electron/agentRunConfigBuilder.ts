@@ -63,10 +63,10 @@ export function isToolAllowed(toolName: string, profile: AgentProfile): boolean 
   const { whitelist, blacklist } = profile.tools
   
   // 黑名单优先
-  if (blacklist.includes(toolName)) return false
+  if (blacklist.includes(toolName)) {return false}
   
   // 如果白名单为空，则允许所有（除黑名单外）
-  if (whitelist.length === 0) return true
+  if (whitelist.length === 0) {return true}
   
   // 白名单模式
   return whitelist.includes(toolName)

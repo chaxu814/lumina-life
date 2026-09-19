@@ -64,8 +64,8 @@ export function astSearch(
   }
 
   function addResult(name: string, kind: string, node: ts.Node, detail?: string) {
-    if (results.length >= maxResults) return
-    if (options.nameFilter && !matchFilter(name, options.nameFilter)) return
+    if (results.length >= maxResults) {return}
+    if (options.nameFilter && !matchFilter(name, options.nameFilter)) {return}
 
     const { line, column } = getLineCol(node)
     results.push({
@@ -155,14 +155,14 @@ export function astSearch(
 
 /** 通配符匹配 */
 function matchFilter(name: string, filter: string): boolean {
-  if (!filter || filter === '*') return true
+  if (!filter || filter === '*') {return true}
   const regex = new RegExp('^' + filter.replace(/\*/g, '.*') + '$', 'i')
   return regex.test(name)
 }
 
 /** 格式化为可读输出 */
 export function formatASTResults(results: ASTSymbol[]): string {
-  if (results.length === 0) return '未找到匹配的符号。'
+  if (results.length === 0) {return '未找到匹配的符号。'}
 
   const byKind: Record<string, ASTSymbol[]> = {}
   for (const r of results) {

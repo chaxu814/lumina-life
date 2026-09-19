@@ -15,7 +15,7 @@ import type { AgentMessage } from '../tools/types'
 
 /** 将 AgentMessage content 安全转为字符串 */
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -214,7 +214,7 @@ export class CodingModeInjector {
    */
   getCodingModePrompt(userInput: string): string | null {
     const scenario = this.detectScenario(userInput)
-    if (!scenario) return null
+    if (!scenario) {return null}
 
     this.activeScenario = scenario
     return SCENARIO_PROMPTS[scenario]
@@ -226,14 +226,14 @@ export class CodingModeInjector {
    */
   inject(messages: AgentMessage[], userInput: string): AgentMessage[] | null {
     const prompt = this.getCodingModePrompt(userInput)
-    if (!prompt || this.injected) return null
+    if (!prompt || this.injected) {return null}
 
     this.injected = true
 
     // 检查是否已包含 CodingMode
     const systemMsg = messages[0]
     if (systemMsg && systemMsg.role === 'system') {
-      if (toText(systemMsg.content).includes('Coding Mode')) return null
+      if (toText(systemMsg.content).includes('Coding Mode')) {return null}
       systemMsg.content = toText(systemMsg.content) + '\n\n' + prompt
       return messages
     }

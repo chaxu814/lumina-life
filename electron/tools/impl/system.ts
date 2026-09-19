@@ -132,7 +132,7 @@ export const openFileDef: ToolDef = {
 
 export async function openFile(args: Record<string, any>): Promise<ToolResult> {
   const target: string = String(args.target || args.path || '').trim()
-  if (!target) return { callId: '', ok: false, content: '', error: 'open_file 需要 target 参数' }
+  if (!target) {return { callId: '', ok: false, content: '', error: 'open_file 需要 target 参数' }}
   // 委托给增强版 openFileV2（Start Menu扫描 + 多层路径修复 + where/扫盘/直接运行四层回退）
   return openFileV2(target)
 }

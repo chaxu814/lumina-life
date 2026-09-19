@@ -28,7 +28,7 @@ import https from 'https'
 /** 尝试解析命令的完整路径 */
 function resolveCommand(command: string): string {
   // 如果已经是完整路径，直接返回
-  if (path.isAbsolute(command) && fs.existsSync(command)) return command
+  if (path.isAbsolute(command) && fs.existsSync(command)) {return command}
 
   const isWindows = process.platform === 'win32'
   const cmdExt = isWindows ? '.cmd' : ''
@@ -54,7 +54,7 @@ function resolveCommand(command: string): string {
   const candidates = knownTools[toolName] || []
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) return candidate
+    if (fs.existsSync(candidate)) {return candidate}
   }
 
   // 尝试 which/where
@@ -63,7 +63,7 @@ function resolveCommand(command: string): string {
       isWindows ? `where "${command}"` : `which "${command}"`,
       { encoding: 'utf-8', timeout: 3000 },
     ).trim().split('\n')[0].trim()
-    if (resolved && fs.existsSync(resolved)) return resolved
+    if (resolved && fs.existsSync(resolved)) {return resolved}
   } catch { /* ignore */ }
 
   // 找不到就返回原命令，让 spawn 去报错
@@ -137,7 +137,7 @@ export class MCPClient {
   addServer(config: MCPServerConfig): void {
     this.servers.set(config.id, config)
     this.saveConfig()
-    if (config.autoStart) this.connect(config.id).catch(() => {})
+    if (config.autoStart) {this.connect(config.id).catch(() => {})}
   }
 
   removeServer(id: string): void {
@@ -153,7 +153,7 @@ export class MCPClient {
 
   async connect(id: string): Promise<{ success: boolean; tools?: MCPTool[]; error?: string }> {
     const config = this.servers.get(id)
-    if (!config) return { success: false, error: '服务器未配置' }
+    if (!config) {return { success: false, error: '服务器未配置' }}
 
     try {
       if (config.command) {
@@ -246,7 +246,7 @@ export class MCPClient {
       clientInfo: { name: 'Lumina', version: '3.11.0' },
     })
 
-    if (!response || response.error) return { success: false }
+    if (!response || response.error) {return { success: false }}
 
     const toolsResult = await this.httpJsonRpc(endpoint, 'tools/list', {})
     const tools: MCPTool[] = toolsResult?.tools || []
@@ -269,7 +269,7 @@ export class MCPClient {
 
   async callTool(serverId: string, toolName: string, args: Record<string, any> = {}): Promise<MCPToolResult> {
     const config = this.servers.get(serverId)
-    if (!config) return { content: [{ type: 'text', text: `❌ MCP Server "${serverId}" 未配置` }], isError: true }
+    if (!config) {return { content: [{ type: 'text', text: `❌ MCP Server "${serverId}" 未配置` }], isError: true }}
 
     try {
       let result: any
@@ -368,7 +368,7 @@ export class MCPClient {
 
   generateToolsContext(): string {
     const all = this.getAllToolsSync()
-    if (all.length === 0) return ''
+    if (all.length === 0) {return ''}
 
     return all.map(({ serverId, tools }) => `
 ## MCP Server: ${serverId}
@@ -391,7 +391,7 @@ ${tools.map(t => `- **${t.name}**: ${t.description}
 
   private async sendStdio(serverId: string, method: string, params?: any): Promise<any> {
     const child = this.connections.get(serverId)
-    if (!child) throw new Error(`Server "${serverId}" 未连接`)
+    if (!child) {throw new Error(`Server "${serverId}" 未连接`)}
 
     const request: JSONRPCRequest = {
       jsonrpc: '2.0',
@@ -412,7 +412,7 @@ ${tools.map(t => `- **${t.name}**: ${t.description}
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
         for (const line of lines) {
-          if (!line.trim()) continue
+          if (!line.trim()) {continue}
           try {
             const response: JSONRPCResponse = JSON.parse(line)
             if (response.id === request.id) {
@@ -487,7 +487,7 @@ ${tools.map(t => `- **${t.name}**: ${t.description}
 
   private saveConfig(): void {
     const dir = path.dirname(this.configPath)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     fs.writeFileSync(this.configPath, JSON.stringify({
       servers: Array.from(this.servers.values()),
       updatedAt: new Date().toISOString(),
@@ -507,6 +507,6 @@ export function initMCPClient(configDir?: string): MCPClient {
 }
 
 export function getMCPClient(): MCPClient {
-  if (!_instance) _instance = new MCPClient()
+  if (!_instance) {_instance = new MCPClient()}
   return _instance
 }

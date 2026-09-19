@@ -61,7 +61,7 @@ export class TTSEngineService {
   unlock(): void {
     try {
       const ctx = new AudioContext()
-      if (ctx.state === 'suspended') ctx.resume()
+      if (ctx.state === 'suspended') {ctx.resume()}
       setTimeout(() => ctx.close(), 500)
     } catch {}
   }
@@ -87,7 +87,7 @@ export class TTSEngineService {
       const res = await fetch(`http://localhost:${port}/health`, {
         signal: AbortSignal.timeout(2000),
       })
-      if (res.ok) return { ok: true, detail: `服务运行中 (port ${port})` }
+      if (res.ok) {return { ok: true, detail: `服务运行中 (port ${port})` }}
       return { ok: false, detail: `服务返回异常: ${res.status}` }
     } catch (err: any) {
       return { ok: false, detail: `服务未运行: ${err.message}` }
@@ -240,7 +240,7 @@ export class TTSEngineService {
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.ready) return { ok: true, detail: 'IndexTTS-2.5 就绪' }
+        if (data.ready) {return { ok: true, detail: 'IndexTTS-2.5 就绪' }}
         return { ok: false, detail: data.error || '模型加载中…' }
       }
       return { ok: false, detail: `服务返回: ${res.status}` }
@@ -259,7 +259,7 @@ export class TTSEngineService {
       ref_audio: cfg.refAudioPath || '',
       duration_factor: cfg.durationFactor ?? (options.speed ?? this.config.speed ?? 1.0),
     }
-    if (cfg.emotion) body.emotion = cfg.emotion
+    if (cfg.emotion) {body.emotion = cfg.emotion}
 
     try {
       const ctrl = new AbortController()
@@ -278,10 +278,10 @@ export class TTSEngineService {
       }
 
       const data = await res.json()
-      if (data.error) return { error: data.error, engine: 'indextts' }
+      if (data.error) {return { error: data.error, engine: 'indextts' }}
 
       const hexStr = typeof data.audio === 'string' ? data.audio : ''
-      if (!hexStr) return { error: 'IndexTTS 未返回音频数据', engine: 'indextts' }
+      if (!hexStr) {return { error: 'IndexTTS 未返回音频数据', engine: 'indextts' }}
 
       // hex → ArrayBuffer → Blob (WAV)
       const wavBytes = new Uint8Array(hexStr.length / 2)
@@ -322,7 +322,7 @@ export class TTSEngineService {
     const audioPath = data.audio_path || data.audio
     if (audioPath) {
       const api = (window as any).luminaAPI
-      if (api?.playAudio) await api.playAudio(audioPath)
+      if (api?.playAudio) {await api.playAudio(audioPath)}
     }
     return { engine: 'gpt-sovits', duration: data.duration }
   }

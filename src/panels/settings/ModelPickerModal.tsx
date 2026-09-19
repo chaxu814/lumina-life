@@ -27,7 +27,7 @@ export default function ModelPickerModal({
   baseUrl, apiKey: _apiKey, error,
   onTestConnection, onTestMultimodal,
 }: Props) {
-  if (!show) return null
+  if (!show) {return null}
 
   return (
     <div

@@ -46,19 +46,19 @@ export function resolveNativeKind(baseUrl: string, explicit?: string): NativeKin
     return explicit
   }
   const u = (baseUrl || '').toLowerCase()
-  if (u.includes('anthropic') || u.includes('claude') || u.includes('/v1/messages')) return 'anthropic'
+  if (u.includes('anthropic') || u.includes('claude') || u.includes('/v1/messages')) {return 'anthropic'}
   if (u.includes('generativelanguage.googleapis') || u.includes('gemini') ||
-      u.includes('aistudio.google') || u.includes('vertexai') || u.includes('/v1beta')) return 'gemini'
+      u.includes('aistudio.google') || u.includes('vertexai') || u.includes('/v1beta')) {return 'gemini'}
   if (u.includes('openai.azure.com') || u.includes('azure.com/openai') ||
       u.includes('cognitiveservices') || u.includes('services.ai') ||
-      u.includes('/openai/deployments') || u.includes('azure')) return 'azure'
+      u.includes('/openai/deployments') || u.includes('azure')) {return 'azure'}
   return 'openai'
 }
 
 function trimTrailing(baseUrl: string, ...suffixes: string[]): string {
   let u = baseUrl.replace(/\/+$/, '')
   for (const s of suffixes) {
-    if (u.toLowerCase().endsWith(s.toLowerCase())) u = u.slice(0, u.length - s.length)
+    if (u.toLowerCase().endsWith(s.toLowerCase())) {u = u.slice(0, u.length - s.length)}
     u = u.replace(/\/+$/, '')
   }
   return u
@@ -70,12 +70,12 @@ function trimTrailing(baseUrl: string, ...suffixes: string[]): string {
 
 function parseDataUri(uri: string): { mediaType: string; data: string } | null {
   const m = /^data:([\w.+-]+\/[\w.+-]+)?(;base64)?,(.*)$/s.exec(uri || '')
-  if (!m) return null
+  if (!m) {return null}
   return { mediaType: m[1] || 'image/png', data: m[3] }
 }
 
 function textOfContent(content: any): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content
       .filter((p: any) => p && p.type === 'text')
@@ -86,8 +86,8 @@ function textOfContent(content: any): string {
 }
 
 function asOpenAiTextParts(content: any): any[] {
-  if (typeof content === 'string') return [{ type: 'text', text: content }]
-  if (Array.isArray(content)) return content
+  if (typeof content === 'string') {return [{ type: 'text', text: content }]}
+  if (Array.isArray(content)) {return content}
   return [{ type: 'text', text: String(content ?? '') }]
 }
 
@@ -114,13 +114,13 @@ function toAnthropic(body: OpenAiBody): Record<string, any> {
     if (role === 'assistant') {
       const blocks: any[] = []
       const text = textOfContent(m.content)
-      if (text) blocks.push({ type: 'text', text })
+      if (text) {blocks.push({ type: 'text', text })}
       for (const tc of m.tool_calls || []) {
         let input: any = {}
         try { input = tc.function?.arguments ? JSON.parse(tc.function.arguments) : {} } catch { input = {} }
         blocks.push({ type: 'tool_use', id: tc.id || `toolu_${Math.random().toString(36).slice(2, 10)}`, name: tc.function?.name, input })
       }
-      if (blocks.length === 0) blocks.push({ type: 'text', text: '' })
+      if (blocks.length === 0) {blocks.push({ type: 'text', text: '' })}
       messages.push({ role, content: blocks })
       continue
     }
@@ -151,7 +151,7 @@ function toAnthropic(body: OpenAiBody): Record<string, any> {
         }
       }
     }
-    if (blocks.length === 0) blocks.push({ type: 'text', text: '' })
+    if (blocks.length === 0) {blocks.push({ type: 'text', text: '' })}
     messages.push({ role, content: blocks })
   }
 
@@ -160,9 +160,9 @@ function toAnthropic(body: OpenAiBody): Record<string, any> {
     max_tokens: body.max_tokens ?? 4096,
     messages,
   }
-  if (systemText) out.system = systemText
-  if (typeof body.temperature === 'number') out.temperature = body.temperature
-  if (body.stream) out.stream = true
+  if (systemText) {out.system = systemText}
+  if (typeof body.temperature === 'number') {out.temperature = body.temperature}
+  if (body.stream) {out.stream = true}
   if (body.tools && body.tools.length) {
     out.tools = body.tools.map((t: any) => {
       const f = t.function || t
@@ -173,8 +173,8 @@ function toAnthropic(body: OpenAiBody): Record<string, any> {
       }
     })
     const tc = body.tool_choice
-    if (tc === 'auto' || tc === undefined) out.tool_choice = { type: 'auto' }
-    else if (tc === 'required') out.tool_choice = { type: 'any' }
+    if (tc === 'auto' || tc === undefined) {out.tool_choice = { type: 'auto' }}
+    else if (tc === 'required') {out.tool_choice = { type: 'any' }}
     else if (tc && typeof tc === 'object' && tc.function?.name) {
       out.tool_choice = { type: 'tool', name: tc.function.name }
     }
@@ -190,12 +190,12 @@ function toAnthropic(body: OpenAiBody): Record<string, any> {
 function geminiPartsFromContent(content: any): any[] {
   const parts: any[] = []
   for (const p of asOpenAiTextParts(content)) {
-    if (p.type === 'text' && p.text) parts.push({ text: p.text })
+    if (p.type === 'text' && p.text) {parts.push({ text: p.text })}
     else if (p.type === 'image_url') {
       const url: string = p.image_url?.url || ''
       const d = parseDataUri(url)
-      if (d) parts.push({ inlineData: { mimeType: d.mediaType, data: d.data } })
-      else if (url) parts.push({ fileData: { fileUri: url } })
+      if (d) {parts.push({ inlineData: { mimeType: d.mediaType, data: d.data } })}
+      else if (url) {parts.push({ fileData: { fileUri: url } })}
     }
   }
   return parts
@@ -231,7 +231,7 @@ function toGemini(body: OpenAiBody, stream: boolean): Record<string, any> {
       temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
     },
   }
-  if (systemText) out.systemInstruction = { parts: [{ text: systemText }] }
+  if (systemText) {out.systemInstruction = { parts: [{ text: systemText }] }}
   if (body.tools && body.tools.length) {
     out.tools = [{
       functionDeclarations: body.tools.map((t: any) => {
@@ -240,9 +240,9 @@ function toGemini(body: OpenAiBody, stream: boolean): Record<string, any> {
       }),
     }]
     const tc = body.tool_choice
-    if (tc === 'none') out.toolConfig = { functionCallingConfig: { mode: 'NONE' } }
-    else if (tc === 'required') out.toolConfig = { functionCallingConfig: { mode: 'ANY' } }
-    else out.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
+    if (tc === 'none') {out.toolConfig = { functionCallingConfig: { mode: 'NONE' } }}
+    else if (tc === 'required') {out.toolConfig = { functionCallingConfig: { mode: 'ANY' } }}
+    else {out.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }}
   }
   return out
 }
@@ -267,8 +267,8 @@ export function buildTransportPlan(
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
     }
-    if (apiKey) headers['x-api-key'] = apiKey
-    if (stream) headers['accept'] = 'text/event-stream'
+    if (apiKey) {headers['x-api-key'] = apiKey}
+    if (stream) {headers['accept'] = 'text/event-stream'}
     return {
       kind,
       url: `${base}/v1/messages`,
@@ -281,7 +281,7 @@ export function buildTransportPlan(
     const base = trimTrailing(root, '/v1beta')
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     // 优先用 x-goog-api-key 头（避免 key 出现在 URL / 日志）；无 key 时假设走免密网关
-    if (apiKey) headers['x-goog-api-key'] = apiKey
+    if (apiKey) {headers['x-goog-api-key'] = apiKey}
     const action = stream ? 'streamGenerateContent' : 'generateContent'
     const qs = stream ? '?alt=sse' : ''
     return {
@@ -302,13 +302,13 @@ export function buildTransportPlan(
       'Content-Type': 'application/json',
       'api-key': apiKey,
     }
-    if (stream) headers['accept'] = 'text/event-stream'
+    if (stream) {headers['accept'] = 'text/event-stream'}
     return { kind, url, headers, body: { ...openaiBody } }
   }
 
   // openai 兼容
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  if (apiKey) {headers['Authorization'] = `Bearer ${apiKey}`}
   return { kind: 'openai', url: `${root}/chat/completions`, headers, body: { ...openaiBody } }
 }
 
@@ -317,8 +317,8 @@ export function buildTransportPlan(
 // ────────────────────────────────────────────────────────────
 
 export function parseNativeCompletion(kind: NativeKind, data: any): any {
-  if (kind === 'anthropic') return anthropicCompletion(data)
-  if (kind === 'gemini') return geminiCompletion(data)
+  if (kind === 'anthropic') {return anthropicCompletion(data)}
+  if (kind === 'gemini') {return geminiCompletion(data)}
   return data // openai / azure 原样
 }
 
@@ -327,7 +327,7 @@ function anthropicCompletion(data: any): any {
   let content = ''
   const toolCalls: any[] = []
   for (const b of blocks) {
-    if (b.type === 'text') content += b.text || ''
+    if (b.type === 'text') {content += b.text || ''}
     else if (b.type === 'tool_use') {
       toolCalls.push({
         id: b.id,
@@ -341,7 +341,7 @@ function anthropicCompletion(data: any): any {
     : data.stop_reason === 'stop_sequence' ? 'stop'
     : 'stop'
   const message: any = { role: 'assistant', content: content || (toolCalls.length ? '' : '') }
-  if (toolCalls.length) message.tool_calls = toolCalls
+  if (toolCalls.length) {message.tool_calls = toolCalls}
   return {
     id: data.id || 'msg_anthropic',
     object: 'chat.completion',
@@ -361,7 +361,7 @@ function geminiCompletion(data: any): any {
   let content = ''
   const toolCalls: any[] = []
   for (const p of parts) {
-    if (typeof p.text === 'string') content += p.text
+    if (typeof p.text === 'string') {content += p.text}
     if (p.functionCall) {
       toolCalls.push({
         id: `call_${toolCalls.length}`,
@@ -375,7 +375,7 @@ function geminiCompletion(data: any): any {
     : fr === 'SAFETY' || fr === 'RECITATION' ? 'content_filter'
     : toolCalls.length ? 'tool_calls' : 'stop'
   const message: any = { role: 'assistant', content: content || '' }
-  if (toolCalls.length) message.tool_calls = toolCalls
+  if (toolCalls.length) {message.tool_calls = toolCalls}
   const um = data.usageMetadata || {}
   return {
     id: 'gemini_' + (Date.now()),
@@ -403,8 +403,8 @@ export interface NativeStreamParser {
 }
 
 export function createNativeStreamParser(kind: NativeKind): NativeStreamParser {
-  if (kind === 'anthropic') return createAnthropicStreamParser()
-  if (kind === 'gemini') return createGeminiStreamParser()
+  if (kind === 'anthropic') {return createAnthropicStreamParser()}
+  if (kind === 'gemini') {return createGeminiStreamParser()}
   // openai/azure：主链路直接解析，parser 透传
   return {
     feed(_e: string, dataStr: string) {
@@ -427,7 +427,7 @@ function createAnthropicStreamParser(): NativeStreamParser {
       const out: any[] = []
       let d: any
       try { d = JSON.parse(dataStr) } catch { return [] }
-      if (!eventName) eventName = d.type || ''
+      if (!eventName) {eventName = d.type || ''}
       model = d.model || model
 
       if (!started && (eventName === 'message_start' || d.type === 'message_start')) {
@@ -490,7 +490,7 @@ function createGeminiStreamParser(): NativeStreamParser {
       try { d = JSON.parse(dataStr) } catch { return [] }
       model = d.modelVersion || model
       const cand = d.candidates?.[0]
-      if (!cand) return out
+      if (!cand) {return out}
       const parts: any[] = cand.content?.parts || []
       let toolIndex = 0
       for (const p of parts) {
@@ -516,7 +516,7 @@ function createGeminiStreamParser(): NativeStreamParser {
           : fr === 'SAFETY' || fr === 'RECITATION' ? 'content_filter'
           : 'stop'
         const um = d.usageMetadata
-        if (um) c.usage = { prompt_tokens: um.promptTokenCount, completion_tokens: um.candidatesTokenCount, total_tokens: um.totalTokenCount }
+        if (um) {c.usage = { prompt_tokens: um.promptTokenCount, completion_tokens: um.candidatesTokenCount, total_tokens: um.totalTokenCount }}
         out.push(c)
       }
       return out

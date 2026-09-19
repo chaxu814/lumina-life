@@ -51,7 +51,7 @@ let agentIpcHandlersRegistered = false  // 🔧 v6.4: 防止 IPC handler 重复�
  * 且不会让整个 agent:chat 调用崩溃。
  */
 function normalizeAgentText(text: unknown): string {
-  if (typeof text === 'string') return text
+  if (typeof text === 'string') {return text}
   if (Array.isArray(text)) {
     const parts: string[] = []
     let imgCount = 0
@@ -65,11 +65,11 @@ function normalizeAgentText(text: unknown): string {
         }
       }
     }
-    if (imgCount > 0) parts.push(`[用户上传了 ${imgCount} 张图片附件，当前会话暂不支持直接查看图片]`)
+    if (imgCount > 0) {parts.push(`[用户上传了 ${imgCount} 张图片附件，当前会话暂不支持直接查看图片]`)}
     const merged = parts.join('\n').trim()
     return merged || '[用户发送了附件消息]'
   }
-  if (text == null) return ''
+  if (text == null) {return ''}
   return String(text)
 }
 
@@ -77,7 +77,7 @@ function normalizeAgentText(text: unknown): string {
  * 注册 Agent 相关 IPC handler（只注册一次）
  */
 function registerAgentIpcHandlers(): void {
-  if (agentIpcHandlersRegistered) return
+  if (agentIpcHandlersRegistered) {return}
   agentIpcHandlersRegistered = true
 
   // ─── v6.1: .env 供应商检测桥接 ────────────────────
@@ -348,7 +348,7 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('agent:clear', async () => { activeAgent?.clearHistory(); return { success: true } })
 
   ipcMain.handle('agent:setMode', async (_event, mode: string) => {
-    if (activeAgent) activeAgent.setMode(mode as 'chat' | 'agent' | 'developer')
+    if (activeAgent) {activeAgent.setMode(mode as 'chat' | 'agent' | 'developer')}
     return { success: true }
   })
 
@@ -532,7 +532,7 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
       filters: [{ name: 'Skill 压缩包', extensions: ['zip'] }, { name: '所有文件', extensions: ['*'] }],
       properties: ['openFile'],
     })
-    if (result.canceled || result.filePaths.length === 0) return { cancelled: true }
+    if (result.canceled || result.filePaths.length === 0) {return { cancelled: true }}
     const zipPath = result.filePaths[0]
     return { cancelled: false, zipPath, ...(await installSkillFromZip(zipPath)) }
   })

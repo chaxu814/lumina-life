@@ -123,7 +123,7 @@ class PluginManager {
       if (plugin.onMessage) {
         try {
           const result = await plugin.onMessage(text)
-          if (result) return result
+          if (result) {return result}
         } catch (err) {
           console.error(`[Plugin] ${plugin.id} onMessage 错误:`, err)
         }
@@ -138,7 +138,7 @@ class PluginManager {
       if (plugin.onResponse) {
         try {
           const result = await plugin.onResponse(text)
-          if (result) return result
+          if (result) {return result}
         } catch (err) {
           console.error(`[Plugin] ${plugin.id} onResponse 错误:`, err)
         }

@@ -59,7 +59,7 @@ export async function keyboardPress(args: Record<string, any>): Promise<ToolResu
           `[System.Windows.Forms.SendKeys]::SendWait('${keys.replace(/'/g, "''")}');`,
         ].join('\n')
         psExec(script, 5000)
-        if (i < count - 1) await sleep(delay_ms)
+        if (i < count - 1) {await sleep(delay_ms)}
       }
     } else {
       // macOS/Linux 使用 osascript/xdotool
@@ -69,7 +69,7 @@ export async function keyboardPress(args: Record<string, any>): Promise<ToolResu
         } else {
           execFileSync('xdotool', ['key', keys], { timeout: 3000 })
         }
-        if (i < count - 1) await sleep(delay_ms)
+        if (i < count - 1) {await sleep(delay_ms)}
       }
     }
 

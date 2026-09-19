@@ -68,19 +68,19 @@ export default function MailPanel() {
 
   const handleDelete = async (mailId: string) => {
     // v2.8: 删除=软删除（进归档），加确认防误触
-    if (!window.confirm('确定删除这封邮件吗？可随时从「归档」中恢复。')) return
+    if (!window.confirm('确定删除这封邮件吗？可随时从「归档」中恢复。')) {return}
     await window.luminaAPI.mailDelete(mailId)
-    if (expandedId === mailId) setExpandedId(null)
+    if (expandedId === mailId) {setExpandedId(null)}
     refresh()
   }
 
   const handleDeleteAllRead = async () => {
     const readMails = mails.filter(m => m.read)
-    if (readMails.length === 0) return
+    if (readMails.length === 0) {return}
     const ok = window.confirm(
       `确定删除 ${readMails.length} 封已读邮件吗？\n\n删除的邮件会移入「归档」，可随时恢复。`
     )
-    if (!ok) return
+    if (!ok) {return}
     for (const m of readMails) {
       await window.luminaAPI.mailDelete(m.id)
     }
@@ -93,7 +93,7 @@ export default function MailPanel() {
   }
 
   const handlePurgeArchived = async (mailId: string) => {
-    if (!window.confirm('确定永久删除这封归档邮件吗？此操作不可恢复。')) return
+    if (!window.confirm('确定永久删除这封归档邮件吗？此操作不可恢复。')) {return}
     await window.luminaAPI.mailPurgeArchived(mailId)
     refresh()
   }
@@ -107,8 +107,8 @@ export default function MailPanel() {
   }
 
   const filteredMails = mails.filter(m => {
-    if (filter === 'unread') return !m.read
-    if (filter === 'important') return m.priority === 'important'
+    if (filter === 'unread') {return !m.read}
+    if (filter === 'important') {return m.priority === 'important'}
     return true
   })
 
@@ -121,8 +121,8 @@ export default function MailPanel() {
     const diffMs = now.getTime() - d.getTime()
     const diffMin = Math.floor(diffMs / 60000)
 
-    if (diffMin < 1) return '刚刚'
-    if (diffMin < 60) return `${diffMin} 分钟前`
+    if (diffMin < 1) {return '刚刚'}
+    if (diffMin < 60) {return `${diffMin} 分钟前`}
     if (d.toDateString() === now.toDateString()) {
       return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     }

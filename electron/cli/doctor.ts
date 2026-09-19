@@ -86,13 +86,13 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
       if (process.platform === 'win32') {
         const freeMatch = execSync(`fsutil volume diskfree "${drive}" 2>nul`, { timeout: 3000 })
           .toString().match(/([\d]+)\s*免费.*字节/i)
-        if (freeMatch) freeBytes = parseInt(freeMatch[1].replace(/,/g, ''), 10)
+        if (freeMatch) {freeBytes = parseInt(freeMatch[1].replace(/,/g, ''), 10)}
       } else {
         const dfOut = execSync(`df -k "${drive}" 2>/dev/null | tail -1`, { timeout: 3000 })
           .toString().trim()
         if (dfOut) {
           const parts = dfOut.split(/\s+/)
-          if (parts.length >= 4) freeBytes = parseInt(parts[3], 10) * 1024
+          if (parts.length >= 4) {freeBytes = parseInt(parts[3], 10) * 1024}
         }
       }
     }

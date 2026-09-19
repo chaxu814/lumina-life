@@ -19,7 +19,7 @@ export interface LevelFrame {
 /** 计算一帧 PCM 采样（-1~1）的电平特征 */
 export function analyzeFrame(samples: ArrayLike<number>): LevelFrame {
   const n = samples.length
-  if (n === 0) return { rms: 0, peak: 0, zcr: 0 }
+  if (n === 0) {return { rms: 0, peak: 0, zcr: 0 }}
   let sumSq = 0
   let peak = 0
   let crossings = 0
@@ -29,8 +29,8 @@ export function analyzeFrame(samples: ArrayLike<number>): LevelFrame {
     const x = s > 1 ? 1 : s < -1 ? -1 : s
     sumSq += x * x
     const ax = x < 0 ? -x : x
-    if (ax > peak) peak = ax
-    if (i > 0 && ((prev >= 0 && x < 0) || (prev < 0 && x >= 0))) crossings++
+    if (ax > peak) {peak = ax}
+    if (i > 0 && ((prev >= 0 && x < 0) || (prev < 0 && x >= 0))) {crossings++}
     prev = x
   }
   return { rms: Math.sqrt(sumSq / n), peak, zcr: crossings / (n - 1 || 1) }
@@ -84,14 +84,14 @@ export class NoiseGate {
     } else if (!isVoicedHint) {
       // 非语音但比地板响：缓慢上抬以适应持续背景噪声
       const target = level * 0.6
-      if (target > this.floor) this.floor += (target - this.floor) * this.upRate
+      if (target > this.floor) {this.floor += (target - this.floor) * this.upRate}
     }
   }
 
   /** 该帧是否判定为有声（语音） */
   isVoiced(frame: LevelFrame): boolean {
-    if (frame.rms < this.threshold) return false
-    if (this.zcrMax > 0 && frame.zcr > this.zcrMax && frame.peak < 0.25) return false
+    if (frame.rms < this.threshold) {return false}
+    if (this.zcrMax > 0 && frame.zcr > this.zcrMax && frame.peak < 0.25) {return false}
     return true
   }
 }

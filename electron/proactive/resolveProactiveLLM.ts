@@ -72,7 +72,7 @@ export function resolveProactiveLLM(): ProactiveLLMConfig | null {
 
 /** 连通性检测：本地端点宽容（不做 HEAD 探测，交给 60s 超时兜底），云端 2s 快速探测 */
 async function probeReachable(cfg: ProactiveLLMConfig): Promise<boolean> {
-  if (cfg.isLocal) return true // 本地模型未加载会在请求阶段返回 500，静默跳过即可
+  if (cfg.isLocal) {return true} // 本地模型未加载会在请求阶段返回 500，静默跳过即可
   try {
     const url = new URL(cfg.baseUrl.replace(/\/+$/, ''))
     const isHttps = url.protocol === 'https:'
@@ -112,7 +112,7 @@ export interface ChatCompleteOptions {
  */
 export async function chatComplete(opts: ChatCompleteOptions): Promise<string> {
   const cfg = resolveProactiveLLM()
-  if (!cfg) return ''
+  if (!cfg) {return ''}
 
   if (!(await probeReachable(cfg))) {
     if (!_connectWarned) {

@@ -67,7 +67,7 @@ export class ReMeLight {
 
   /** 初始化 ReMe 记忆系统 */
   init(): void {
-    if (this.initialized) return
+    if (this.initialized) {return}
     
     this.scrollContext.init()
     this.initialized = true
@@ -348,7 +348,7 @@ export class ReMeLight {
 
   private scoreResult(content: string, query: string, metadata: any): number {
     let score = 0
-    if (!query.trim()) return score
+    if (!query.trim()) {return score}
     
     const lowerContent = content.toLowerCase()
     const lowerQuery = query.toLowerCase()
@@ -380,10 +380,10 @@ export class ReMeLight {
   }
 
   private buildSnippet(content: string, query: string): string {
-    if (!query.trim()) return content.slice(0, 120)
+    if (!query.trim()) {return content.slice(0, 120)}
     const lower = content.toLowerCase()
     const idx = lower.indexOf(query.toLowerCase())
-    if (idx === -1) return content.slice(0, 120)
+    if (idx === -1) {return content.slice(0, 120)}
     const start = Math.max(0, idx - 40)
     const end = Math.min(content.length, idx + query.length + 80)
     return (start > 0 ? '...' : '') + content.slice(start, end) + (end < content.length ? '...' : '')

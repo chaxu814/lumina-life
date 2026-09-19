@@ -91,8 +91,8 @@ describe('OpenClawAdapter 渠道适配器', () => {
 
   it('网关可达：init=true、health=true、send 委托成功', async () => {
     globalThis.fetch = (async (url: string) => {
-      if (url.endsWith('/health')) return { ok: true, status: 200, text: async () => JSON.stringify({ status: 'ok' }), json: async () => ({ status: 'ok' }) }
-      if (url.endsWith('/a2a/message/send')) return { ok: true, status: 200, text: async () => JSON.stringify({ text: 'ok' }), json: async () => ({ text: 'ok' }) }
+      if (url.endsWith('/health')) {return { ok: true, status: 200, text: async () => JSON.stringify({ status: 'ok' }), json: async () => ({ status: 'ok' }) }}
+      if (url.endsWith('/a2a/message/send')) {return { ok: true, status: 200, text: async () => JSON.stringify({ text: 'ok' }), json: async () => ({ text: 'ok' }) }}
       return { ok: false, status: 404, text: async () => '', json: async () => ({}) }
     }) as any
     const { OpenClawAdapter } = await import('../electron/channels/adapters/openclaw')

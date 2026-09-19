@@ -33,14 +33,14 @@ export class SentenceSplitter {
 
   /** 推入增量文本，返回本次可取出的完整句子（可能 0~N 句） */
   push(text: string): string[] {
-    if (!text) return []
+    if (!text) {return []}
     this.buf += text
     const out: string[] = []
     let start = 0
 
     const emit = (endExclusive: number) => {
       const s = this.buf.slice(start, endExclusive).trim()
-      if (s) out.push(s)
+      if (s) {out.push(s)}
       start = endExclusive
     }
 
@@ -49,10 +49,10 @@ export class SentenceSplitter {
       if (STRONG_END.has(ch)) {
         // 英文句点：保护缩写与小数
         if (ch === '.' || ch === '!') {
-          if (ch === '.' && this.isProtectedDot(i)) continue
+          if (ch === '.' && this.isProtectedDot(i)) {continue}
         }
         let j = i + 1
-        while (j < this.buf.length && CLOSING_AFTER_END.has(this.buf[j])) j++
+        while (j < this.buf.length && CLOSING_AFTER_END.has(this.buf[j])) {j++}
         emit(j)
         i = j - 1
         continue
@@ -79,12 +79,12 @@ export class SentenceSplitter {
     // 小数点：前后都是数字
     const prev = this.buf[i - 1] ?? ''
     const next = this.buf[i + 1] ?? ''
-    if (/\d/.test(prev) && /\d/.test(next)) return true
+    if (/\d/.test(prev) && /\d/.test(next)) {return true}
     // 缩写：向前找最近的单词起点
     let k = i - 1
     let word = ''
     while (k >= 0 && /[a-zA-Z]/.test(this.buf[k])) { word = this.buf[k] + word; k-- }
-    if (word && ABBREV.has(word.toLowerCase())) return true
+    if (word && ABBREV.has(word.toLowerCase())) {return true}
     return false
   }
 }

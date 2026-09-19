@@ -256,7 +256,7 @@ class AchievementManager {
     const newlyUnlocked: Achievement[] = []
 
     for (const achievement of ACHIEVEMENTS) {
-      if (unlocked.has(achievement.id)) continue
+      if (unlocked.has(achievement.id)) {continue}
       if (achievement.condition(this._stats)) {
         unlocked.add(achievement.id)
         this._stats.unlockedAchievements.push(achievement.id)

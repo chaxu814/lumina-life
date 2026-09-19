@@ -16,7 +16,7 @@ function encode(key: string, value: string): string {
 /** 解码 key::value */
 function decode(content: string): { key: string; value: string } | null {
   const idx = content.indexOf('::')
-  if (idx === -1) return null
+  if (idx === -1) {return null}
   return { key: content.slice(0, idx), value: content.slice(idx + 2) }
 }
 
@@ -40,7 +40,7 @@ export async function memorySave(args: Record<string, any>): Promise<ToolResult>
   const key: string = args.key
   const value: string = args.value
   const store = getStore()
-  if (!store) return { callId: '', ok: false, content: '', error: '记忆存储不可用' }
+  if (!store) {return { callId: '', ok: false, content: '', error: '记忆存储不可用' }}
 
   // 先删旧值，再存新值（同 key 覆盖）
   const existing = store.getFacts(AGENT_MEMORY_CATEGORY, 50)
@@ -73,7 +73,7 @@ export const memoryGetDef: ToolDef = {
 export async function memoryGet(args: Record<string, any>): Promise<ToolResult> {
   const key: string = args.key
   const store = getStore()
-  if (!store) return { callId: '', ok: false, content: '', error: '记忆存储不可用' }
+  if (!store) {return { callId: '', ok: false, content: '', error: '记忆存储不可用' }}
 
   const facts = store.getFacts(AGENT_MEMORY_CATEGORY, 50)
   for (const f of facts) {
@@ -95,10 +95,10 @@ export const memoryAllDef: ToolDef = {
 
 export async function memoryAll(): Promise<ToolResult> {
   const store = getStore()
-  if (!store) return { callId: '', ok: true, content: '(记忆存储不可用)' }
+  if (!store) {return { callId: '', ok: true, content: '(记忆存储不可用)' }}
 
   const facts = store.getFacts(AGENT_MEMORY_CATEGORY, 50)
-  if (facts.length === 0) return { callId: '', ok: true, content: '(暂无记忆)' }
+  if (facts.length === 0) {return { callId: '', ok: true, content: '(暂无记忆)' }}
 
   const items = facts.map(f => {
     const d = decode(f.content)

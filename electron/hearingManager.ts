@@ -120,7 +120,7 @@ export class HearingManager extends EventEmitter {
   // ── 模式控制 ─────────────────────────────────────────
 
   async start(mode: HearingMode = 'passive', source: AudioSource = 'mic'): Promise<string> {
-    if (this.active) this.stop()
+    if (this.active) {this.stop()}
 
     this.mode = mode
     this.source = source
@@ -142,7 +142,7 @@ export class HearingManager extends EventEmitter {
   }
 
   stop(): void {
-    if (!this.active) return
+    if (!this.active) {return}
 
     // summary 模式: 停止前输出全文
     if (this.mode === 'summary' && this.buffer.hasContent()) {

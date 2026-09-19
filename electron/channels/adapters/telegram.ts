@@ -48,7 +48,7 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async send(request: ChannelSendRequest): Promise<boolean> {
-    if (!this.botToken) return false
+    if (!this.botToken) {return false}
 
     // Telegram 用 chat_id 统一标识用户/群组
     const params: Record<string, any> = {
@@ -74,7 +74,7 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    if (!this.botToken) return false
+    if (!this.botToken) {return false}
     try {
       const data = await this.telegramGet('getMe')
       return data.ok === true
@@ -90,7 +90,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
   /** 处理 Telegram Webhook 回调 */
   handleWebhook(body: any): { status: number; body: string } {
-    if (!this.messageHandler) return { status: 200, body: 'OK' }
+    if (!this.messageHandler) {return { status: 200, body: 'OK' }}
 
     const msg = this.parseUpdate(body)
     if (msg) {
@@ -125,10 +125,10 @@ export class TelegramAdapter implements ChannelAdapter {
   /** 解析 Telegram Update 为统一消息格式 */
   private parseUpdate(update: any): ChannelMessage | null {
     const message = update?.message || update?.edited_message
-    if (!message) return null
+    if (!message) {return null}
 
     // 忽略 bot 自身消息
-    if (message.from?.is_bot) return null
+    if (message.from?.is_bot) {return null}
 
     const chat = message.chat || {}
     const isGroup = chat.type === 'group' || chat.type === 'supergroup'

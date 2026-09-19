@@ -116,7 +116,7 @@ export function registerTeamIpc(): void {
 
   ipcMain.handle('team:triggerSocial', async () => {
     const social = getSocialEngine()
-    if (!social) return null
+    if (!social) {return null}
     const triggered = await social.trySpontaneousConversation()
     return triggered ? { ok: true } : null
   })
@@ -125,9 +125,9 @@ export function registerTeamIpc(): void {
 
   ipcMain.handle('team:getActiveDiscussion', () => {
     const social = getSocialEngine()
-    if (!social) return null
+    if (!social) {return null}
     const ctx = social.getActiveConversation()
-    if (!ctx) return null
+    if (!ctx) {return null}
     return {
       topic: ctx.topic,
       mode: ctx.mode,

@@ -63,7 +63,7 @@ describe('driftToBaseline', () => {
     const s = fuseEmotionStep({ ...BASELINE }, '超开心 🎉', { alpha: 1, maxStepV: 2, maxStepA: 2 })
     expect(s.v).toBeGreaterThan(0.8)
     let cur = s
-    for (let i = 0; i < 60; i++) cur = driftToBaseline(cur)
+    for (let i = 0; i < 60; i++) {cur = driftToBaseline(cur)}
     expect(cur.v).toBeCloseTo(BASELINE.v, 1)
   })
 })
@@ -81,7 +81,7 @@ describe('PetEmotionFusion 有状态封装', () => {
     const f = new PetEmotionFusion()
     f.next('兴奋 🤩')
     const before = f.get().v
-    for (let i = 0; i < 40; i++) f.idle()
+    for (let i = 0; i < 40; i++) {f.idle()}
     expect(f.get().v).toBeLessThan(before)
   })
 })

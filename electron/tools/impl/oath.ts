@@ -60,10 +60,10 @@ export async function oathList(args: Record<string, any>): Promise<ToolResult> {
   const allOaths = config?.lessons || []
   const oathEntries = allOaths.filter(line => {
     const hasBracket = line.startsWith('[promise]') || line.startsWith('[reminder]') || line.startsWith('[goal]') || line.startsWith('[habit]')
-    if (!hasBracket) return false
-    if (category && !line.startsWith(`[${category}]`)) return false
-    if (status === 'active') return line.includes('状态:进行中')
-    if (status === 'fulfilled') return line.includes('状态:已完成')
+    if (!hasBracket) {return false}
+    if (category && !line.startsWith(`[${category}]`)) {return false}
+    if (status === 'active') {return line.includes('状态:进行中')}
+    if (status === 'fulfilled') {return line.includes('状态:已完成')}
     return true
   })
 
@@ -227,15 +227,15 @@ function parseTimeToMs(input: string): number | null {
 
   // "30min" / "30m" / "30分钟"
   const minMatch = s.match(/^(\d+)\s*(min|m|分钟)$/)
-  if (minMatch) return parseInt(minMatch[1]) * 60 * 1000
+  if (minMatch) {return parseInt(minMatch[1]) * 60 * 1000}
 
   // "2h" / "2小时" / "2hour"
   const hourMatch = s.match(/^(\d+)\s*(h|hour|小时)$/)
-  if (hourMatch) return parseInt(hourMatch[1]) * 3600 * 1000
+  if (hourMatch) {return parseInt(hourMatch[1]) * 3600 * 1000}
 
   // "10s" / "10秒"
   const secMatch = s.match(/^(\d+)\s*(s|sec|秒)$/)
-  if (secMatch) return parseInt(secMatch[1]) * 1000
+  if (secMatch) {return parseInt(secMatch[1]) * 1000}
 
   // "tomorrow 09:00" / "tomorrow 9:00"
   const tomorrowMatch = s.match(/^tomorrow\s+(\d{1,2}):(\d{2})$/)
@@ -250,7 +250,7 @@ function parseTimeToMs(input: string): number | null {
   const absMatch = s.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})$/)
   if (absMatch) {
     const target = new Date(`${absMatch[1]}T${absMatch[2].padStart(2, '0')}:${absMatch[3]}:00`)
-    if (isNaN(target.getTime())) return null
+    if (isNaN(target.getTime())) {return null}
     return target.getTime() - Date.now()
   }
 

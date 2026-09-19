@@ -182,7 +182,7 @@ export class AsyncTaskManager extends EventEmitter {
    */
   getProgress(id: string): { progress: string; percent: number } | null {
     const task = this.tasks.get(id)
-    if (!task) return null
+    if (!task) {return null}
     return { progress: task.progress, percent: task.progressPercent }
   }
 
@@ -191,7 +191,7 @@ export class AsyncTaskManager extends EventEmitter {
    */
   updateProgress(id: string, progress: string, percent: number): void {
     const task = this.tasks.get(id)
-    if (!task) return
+    if (!task) {return}
     this._notify(task, progress, percent)
     this._persist()
   }
@@ -288,7 +288,7 @@ export class AsyncTaskManager extends EventEmitter {
 
   private _notify(task: AsyncTask, progress: string, percent?: number): void {
     task.progress = progress
-    if (percent !== undefined) task.progressPercent = percent
+    if (percent !== undefined) {task.progressPercent = percent}
     task.updatedAt = Date.now()
     this.emit('task:progress', {
       taskId: task.id,
@@ -305,7 +305,7 @@ export class AsyncTaskManager extends EventEmitter {
     while (this.running.size < MAX_CONCURRENT && this.queue.length > 0) {
       const id = this.queue.shift()!
       const task = this.tasks.get(id)
-      if (!task || task.status === 'cancelled') continue
+      if (!task || task.status === 'cancelled') {continue}
 
       this.running.add(id)
       task.status = 'running'
@@ -375,7 +375,7 @@ export class AsyncTaskManager extends EventEmitter {
    * 保留工作区（失败时）
    */
   private _preserveWorkspace(task: AsyncTask): void {
-    if (!task.preservedWorkspace) return
+    if (!task.preservedWorkspace) {return}
 
     try {
       const preservedDir = path.join(task.preservedWorkspace, `.preserved-${task.id}`)

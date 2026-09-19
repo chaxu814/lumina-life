@@ -129,7 +129,7 @@ export class PhaseGate {
     const start = Date.now()
 
     for (const phase of phases) {
-      if (this._aborted) break
+      if (this._aborted) {break}
 
       const phaseDef = PHASES[phase]
       const project = getTaskBoard().getProject(options.projectId)

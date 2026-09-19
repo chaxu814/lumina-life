@@ -67,7 +67,7 @@ function CropModal({ src, onDone, onCancel }: {
   const initCrop = useCallback(() => {
     const img = imgRef.current
     const container = containerRef.current
-    if (!img || !container) return
+    if (!img || !container) {return}
     const displayW = img.offsetWidth
     const displayH = img.offsetHeight
     const minDim = Math.min(displayW, displayH)
@@ -82,7 +82,7 @@ function CropModal({ src, onDone, onCancel }: {
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
+    if (!rect) {return}
     setDragging(true)
     setCrop(prev => ({
       ...prev,
@@ -92,9 +92,9 @@ function CropModal({ src, onDone, onCancel }: {
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragging) return
+    if (!dragging) {return}
     const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
+    if (!rect) {return}
     setCrop(prev => ({
       ...prev,
       x: Math.max(0, Math.min(e.clientX - rect.left - prev.size / 2, rect.width - prev.size)),
@@ -106,7 +106,7 @@ function CropModal({ src, onDone, onCancel }: {
 
   const handleDone = async () => {
     const img = imgRef.current
-    if (!img) return
+    if (!img) {return}
     // 从显示坐标映射到原图坐标
     const scaleX = img.naturalWidth / img.offsetWidth
     const scaleY = img.naturalHeight / img.offsetHeight
@@ -198,7 +198,7 @@ export default function ProfilePanel() {
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !file.type.startsWith('image/')) return
+    if (!file || !file.type.startsWith('image/')) {return}
     const reader = new FileReader()
     reader.onload = () => setCropSrc(reader.result as string)
     reader.readAsDataURL(file)
@@ -223,7 +223,7 @@ export default function ProfilePanel() {
 
   const addTag = () => {
     const t = tagInput.trim()
-    if (!t || profile.tags.includes(t) || profile.tags.length >= 10) return
+    if (!t || profile.tags.includes(t) || profile.tags.length >= 10) {return}
     setProfile({ tags: [...profile.tags, t] })
     setTagInput('')
   }

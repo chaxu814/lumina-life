@@ -23,7 +23,7 @@ let cachedDir: string | null = null
 
 /** 应用数据目录（Electron userData 优先；否则按平台标准） */
 export function appDataDir(): string {
-  if (cachedDir) return cachedDir
+  if (cachedDir) {return cachedDir}
 
   // 1) 显式覆盖（测试 / headless / Docker 可挂载的数据卷）
   if (process.env.LUMINA_DATA_DIR && process.env.LUMINA_DATA_DIR.trim()) {
@@ -33,7 +33,7 @@ export function appDataDir(): string {
 
   // 2) Electron 主进程 userData（与桌宠其它数据同目录）
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const electron = require('electron')
     const app = electron?.app
     if (app && typeof app.getPath === 'function') {
@@ -81,13 +81,13 @@ export function ensureAppDataDir(dir?: string): string {
 export function getMemoryDbPath(): string {
   const newPath = path.join(appDataDir(), 'lumina-memory.db')
   try {
-    if (fs.existsSync(newPath)) return newPath
+    if (fs.existsSync(newPath)) {return newPath}
   } catch { /* ignore */ }
 
   if (process.platform === 'win32' && process.env.APPDATA) {
     const legacy = path.join(process.env.APPDATA, 'lumina-memory.db')
     try {
-      if (fs.existsSync(legacy)) return legacy
+      if (fs.existsSync(legacy)) {return legacy}
     } catch { /* ignore */ }
   }
   return newPath

@@ -20,7 +20,7 @@ export class HookManager {
   private static _instance: HookManager | null = null
 
   static getInstance(): HookManager {
-    if (!this._instance) this._instance = new HookManager()
+    if (!this._instance) {this._instance = new HookManager()}
     return this._instance
   }
 
@@ -62,8 +62,8 @@ export class HookManager {
   /** 获取指定 persona 的活跃 Hook */
   getActiveHooks(persona?: string, phase: keyof HookRegistration = 'beforeReasoning'): HookRegistration[] {
     return this.hooks.filter(h => {
-      if (!h.enabled) return false
-      if (h.personas && h.personas.length > 0 && persona && !h.personas.includes(persona)) return false
+      if (!h.enabled) {return false}
+      if (h.personas && h.personas.length > 0 && persona && !h.personas.includes(persona)) {return false}
       return typeof (h as any)[phase] === 'function'
     })
   }
@@ -76,10 +76,10 @@ export class HookManager {
     const active = this.getActiveHooks(input.ctx.config.personaId, 'beforeReasoning')
     let result = input
     for (const hook of active) {
-      if (!hook.beforeReasoning) continue
+      if (!hook.beforeReasoning) {continue}
       try {
         const modified = await hook.beforeReasoning(result)
-        if (modified) result = modified
+        if (modified) {result = modified}
       } catch (err: any) {
         console.error(`[HookManager] beforeReasoning Hook "${hook.id}" 异常:`, err.message)
       }
@@ -90,7 +90,7 @@ export class HookManager {
   async runAfterReasoning(input: AfterReasoningInput): Promise<void> {
     const active = this.getActiveHooks(input.ctx.config.personaId, 'afterReasoning')
     for (const hook of active) {
-      if (!hook.afterReasoning) continue
+      if (!hook.afterReasoning) {continue}
       try {
         await hook.afterReasoning(input)
       } catch (err: any) {
@@ -103,7 +103,7 @@ export class HookManager {
   async runBeforeToolCall(input: BeforeToolCallInput): Promise<{ vetoed: boolean; reason?: string; approval?: string }> {
     const active = this.getActiveHooks(input.ctx.config.personaId, 'beforeToolCall')
     for (const hook of active) {
-      if (!hook.beforeToolCall) continue
+      if (!hook.beforeToolCall) {continue}
       try {
         const result = await hook.beforeToolCall(input)
         if (result) {
@@ -125,7 +125,7 @@ export class HookManager {
   async runAfterToolCall(input: AfterToolCallInput): Promise<void> {
     const active = this.getActiveHooks(input.ctx.config.personaId, 'afterToolCall')
     for (const hook of active) {
-      if (!hook.afterToolCall) continue
+      if (!hook.afterToolCall) {continue}
       try {
         await hook.afterToolCall(input)
       } catch (err: any) {
@@ -137,7 +137,7 @@ export class HookManager {
   async runOnError(input: OnErrorInput): Promise<void> {
     const active = this.getActiveHooks(input.ctx.config.personaId, 'onError')
     for (const hook of active) {
-      if (!hook.onError) continue
+      if (!hook.onError) {continue}
       try {
         await hook.onError(input)
       } catch (err: any) {
@@ -149,7 +149,7 @@ export class HookManager {
   async runOnCompaction(input: OnCompactionInput): Promise<void> {
     const active = this.getActiveHooks(input.ctx.config.personaId, 'onCompaction')
     for (const hook of active) {
-      if (!hook.onCompaction) continue
+      if (!hook.onCompaction) {continue}
       try {
         await hook.onCompaction(input)
       } catch (err: any) {
@@ -180,18 +180,18 @@ export class HookManager {
 export function getHooksSummary(): string {
   const manager = HookManager.getInstance()
   const hooks = manager['hooks'] as HookRegistration[]
-  if (hooks.length === 0) return '📋 没有注册的 Hook'
+  if (hooks.length === 0) {return '📋 没有注册的 Hook'}
 
   const lines = ['**已注册 Hook** (' + hooks.length + ')\n']
   for (const h of hooks) {
     const status = h.enabled ? '✅' : '⏸️'
     const types: string[] = []
-    if (h.beforeReasoning) types.push('beforeReasoning')
-    if (h.afterReasoning) types.push('afterReasoning')
-    if (h.beforeToolCall) types.push('beforeToolCall')
-    if (h.afterToolCall) types.push('afterToolCall')
-    if (h.onError) types.push('onError')
-    if (h.onCompaction) types.push('onCompaction')
+    if (h.beforeReasoning) {types.push('beforeReasoning')}
+    if (h.afterReasoning) {types.push('afterReasoning')}
+    if (h.beforeToolCall) {types.push('beforeToolCall')}
+    if (h.afterToolCall) {types.push('afterToolCall')}
+    if (h.onError) {types.push('onError')}
+    if (h.onCompaction) {types.push('onCompaction')}
 
     lines.push(`${status} **${h.id}** (\`${h.priority}\`) — ${h.description}`)
     lines.push(`  类型: ${types.join(', ')}`)

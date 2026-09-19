@@ -15,10 +15,10 @@ import { httpGet } from '../utils/httpClient'
 async function bingRssSearch(query: string, count = 5): Promise<string> {
   const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${count}&format=rss`
   const res = await httpGet(url, {}, 10000)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
   const items = res.text.match(/<item>([\s\S]*?)<\/item>/g)
-  if (!items || items.length === 0) return `搜索 "${query}" 未找到结果。`
+  if (!items || items.length === 0) {return `搜索 "${query}" 未找到结果。`}
 
   const results: string[] = []
   for (let i = 0; i < Math.min(items.length, count); i++) {
@@ -37,7 +37,7 @@ async function bingRssSearch(query: string, count = 5): Promise<string> {
 async function ddgLiteSearch(query: string, count = 5): Promise<string> {
   const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`
   const res = await httpGet(url, {}, 8000)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
   const results: string[] = []
   const linkRegex = /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*class="result-link"[^>]*>([\s\S]*?)<\/a>/gi
@@ -51,7 +51,7 @@ async function ddgLiteSearch(query: string, count = 5): Promise<string> {
     try {
       const u = new URL(rawUrl)
       const uddg = u.searchParams.get('uddg')
-      if (uddg) realUrl = decodeURIComponent(uddg)
+      if (uddg) {realUrl = decodeURIComponent(uddg)}
     } catch { /* keep original */ }
     links.push({ url: realUrl, title: match[2].replace(/<[^>]+>/g, '').trim() })
   }
@@ -76,7 +76,7 @@ async function ddgLiteSearch(query: string, count = 5): Promise<string> {
 async function ddgHtmlSearch(query: string, count = 5): Promise<string> {
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
   const res = await httpGet(url, {}, 8000)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
   const results: string[] = []
   const blockRegex = /<div[^>]*class="result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?=<div[^>]*class="result|$)/gi
@@ -104,7 +104,7 @@ export async function webSearch(query: string, count = 5): Promise<string> {
   // Level 1: Bing RSS (国内首?
   try {
     const result = await bingRssSearch(query, count)
-    if (!result.includes('未找到结果')) return result
+    if (!result.includes('未找到结果')) {return result}
   } catch (err: any) {
     console.log('[webSearch] Bing RSS 失败:', err.message)
   }
@@ -112,7 +112,7 @@ export async function webSearch(query: string, count = 5): Promise<string> {
   // Level 2: DDG Lite
   try {
     const result = await ddgLiteSearch(query, count)
-    if (!result.includes('未找到结果')) return result
+    if (!result.includes('未找到结果')) {return result}
   } catch (err: any) {
     console.log('[webSearch] DDG Lite 失败:', err.message)
   }
@@ -120,7 +120,7 @@ export async function webSearch(query: string, count = 5): Promise<string> {
   // Level 3: DDG HTML
   try {
     const result = await ddgHtmlSearch(query, count)
-    if (!result.includes('未找到结果')) return result
+    if (!result.includes('未找到结果')) {return result}
   } catch (err: any) {
     console.log('[webSearch] DDG HTML 失败:', err.message)
   }
@@ -140,7 +140,7 @@ export async function webSearch(query: string, count = 5): Promise<string> {
 // ══════════════════════════════════════════════════════════?
 export async function fetchWebContent(url: string): Promise<string> {
   const res = await httpGet(url, {}, 15000)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
   let html = res.text
   html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -177,7 +177,7 @@ export async function fetchWebContent(url: string): Promise<string> {
   const header = [title, description].filter(Boolean).join(' ?')
   let result = header ? `📄 ${header}\n\n${text}` : text
 
-  if (result.length > 5000) result = result.slice(0, 5000) + '\n...(已截?'
+  if (result.length > 5000) {result = result.slice(0, 5000) + '\n...(已截?'}
 
   return result || '(页面无有效文?'
 }

@@ -67,7 +67,7 @@ class RelationshipStore {
   }
 
   private load(): void {
-    if (this.loaded) return
+    if (this.loaded) {return}
     this.loaded = true
     this.storePath = this.resolvePath()
 
@@ -82,14 +82,14 @@ class RelationshipStore {
       })
     }
 
-    if (!this.storePath) return
+    if (!this.storePath) {return}
     try {
-      if (!fs.existsSync(this.storePath)) return
+      if (!fs.existsSync(this.storePath)) {return}
       const raw = fs.readFileSync(this.storePath, 'utf-8')
       const data = JSON.parse(raw) as { pairs?: AgentRelationship[] }
       if (Array.isArray(data.pairs)) {
         for (const p of data.pairs) {
-          if (!p || !p.agentA || !p.agentB) continue
+          if (!p || !p.agentA || !p.agentB) {continue}
           const key = pairKeyOf(p.agentA, p.agentB)
           this.rels.set(key, { ...p, pairKey: key })
         }
@@ -101,8 +101,8 @@ class RelationshipStore {
 
   /** 防抖落盘，避免一次群聊/流水线高频写盘 */
   private scheduleSave(): void {
-    if (!this.storePath) return
-    if (this.saveTimer) clearTimeout(this.saveTimer)
+    if (!this.storePath) {return}
+    if (this.saveTimer) {clearTimeout(this.saveTimer)}
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null
       this.saveNow()
@@ -110,7 +110,7 @@ class RelationshipStore {
   }
 
   private saveNow(): void {
-    if (!this.storePath) return
+    if (!this.storePath) {return}
     try {
       const pairs = this.getAll()
       fs.writeFileSync(this.storePath, JSON.stringify({ version: 1, pairs }, null, 2), 'utf-8')
@@ -149,7 +149,7 @@ class RelationshipStore {
    * @param taskType 可选，委托任务类型（用于识别"建设性唱反调"）
    */
   recordInteraction(a: string, b: string, kind: InteractionKind, taskType?: string): void {
-    if (!a || !b || a === b) return
+    if (!a || !b || a === b) {return}
     const rel = this.ensure(a, b)
     const now = new Date().toISOString()
     rel.lastInteraction = now
@@ -191,7 +191,7 @@ class RelationshipStore {
     if (note) {
       const stamp = new Date().toLocaleString('zh-CN', { hour12: false })
       rel.evolutionLog.push(`[${stamp}] ${a} ↔ ${b}：${note}`)
-      if (rel.evolutionLog.length > MAX_LOG) rel.evolutionLog.splice(0, rel.evolutionLog.length - MAX_LOG)
+      if (rel.evolutionLog.length > MAX_LOG) {rel.evolutionLog.splice(0, rel.evolutionLog.length - MAX_LOG)}
     }
 
     this.scheduleSave()
@@ -220,6 +220,6 @@ class RelationshipStore {
 let _instance: RelationshipStore | null = null
 
 export function getRelationshipStore(): RelationshipStore {
-  if (!_instance) _instance = new RelationshipStore()
+  if (!_instance) {_instance = new RelationshipStore()}
   return _instance
 }

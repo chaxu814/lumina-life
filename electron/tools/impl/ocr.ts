@@ -130,7 +130,7 @@ async function tryUwpOCR(imagePath: string, _lang: string): Promise<string> {
   ].join(' ')
 
   const { ok, stdout, error } = await runPowerShell(psScript, 30000)
-  if (!ok) throw new Error(error || 'UWP OCR 失败')
+  if (!ok) {throw new Error(error || 'UWP OCR 失败')}
   return stdout.trim() || '(未识别到文字)'
 }
 
@@ -268,11 +268,11 @@ export async function desktopKey(args: Record<string, any>): Promise<ToolResult>
 
   for (const p of parts) {
     const trimmed = p.trim()
-    if (trimmed === 'ctrl' || trimmed === 'control') modifiers.push('^')
-    else if (trimmed === 'alt') modifiers.push('%')
-    else if (trimmed === 'shift') modifiers.push('+')
-    else if (trimmed === 'win' || trimmed === 'windows') modifiers.push('^{ESC}')
-    else mainKey = trimmed
+    if (trimmed === 'ctrl' || trimmed === 'control') {modifiers.push('^')}
+    else if (trimmed === 'alt') {modifiers.push('%')}
+    else if (trimmed === 'shift') {modifiers.push('+')}
+    else if (trimmed === 'win' || trimmed === 'windows') {modifiers.push('^{ESC}')}
+    else {mainKey = trimmed}
   }
 
   if (modifiers.includes('^{ESC}') && mainKey) {

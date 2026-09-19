@@ -88,7 +88,7 @@ export async function browserHandler(args: Record<string, any>): Promise<ToolRes
         let urlMatch: RegExpExecArray | null
         while ((urlMatch = urlRegex.exec(searchResult)) !== null) {
           const u = urlMatch[1].trim()
-          if (u.startsWith('http') && !allUrls.includes(u)) allUrls.push(u)
+          if (u.startsWith('http') && !allUrls.includes(u)) {allUrls.push(u)}
         }
 
         if (allUrls.length === 0) {

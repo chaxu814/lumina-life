@@ -116,7 +116,7 @@ describe('FullDuplexController 代际作废', () => {
     const env = makeBridge({
       callLlm: async () => {
         n++
-        if (n === 1) return p1
+        if (n === 1) {return p1}
         return '好的。'
       },
     })

@@ -183,7 +183,7 @@ export class DingTalkAdapter implements ChannelAdapter {
     try {
       // @ts-ignore — @dingtalk/stream 是可选依赖，安装后才可用
       const { Client, SubscriptionType } = await import('@dingtalk/stream')
-      if (!Client || !SubscriptionType) return false
+      if (!Client || !SubscriptionType) {return false}
 
       const client = new Client({
         clientId: this.config.credentials.clientId || '',
@@ -223,10 +223,10 @@ export class DingTalkAdapter implements ChannelAdapter {
     }
 
     const poll = async () => {
-      if (!this.keepAlive) return
+      if (!this.keepAlive) {return}
       try {
         await this.ensureToken()
-        if (!this.token) return
+        if (!this.token) {return}
         const data = await this.httpRequest(
           'POST', 'api.dingtalk.com', '/v1.0/robot/message/poll',
           { robotCode, maxResults: 10 },
@@ -235,11 +235,11 @@ export class DingTalkAdapter implements ChannelAdapter {
         if (data?.messages) {
           for (const m of data.messages) {
             const parsed = this.parseDingTalkMessage(m)
-            if (parsed && this.messageHandler) this.messageHandler(parsed)
+            if (parsed && this.messageHandler) {this.messageHandler(parsed)}
           }
         }
       } catch { /* silent */ }
-      if (this.keepAlive) setTimeout(poll, 3000)
+      if (this.keepAlive) {setTimeout(poll, 3000)}
     }
     poll()
     console.log('[DingTalk] 📡 HTTP 轮询已启动 (3s)')
@@ -247,7 +247,7 @@ export class DingTalkAdapter implements ChannelAdapter {
 
   /** 处理接收到的钉钉消息（由 webhook 调用） */
   async handleIncoming(rawBody: any): Promise<void> {
-    if (!this.messageHandler) return
+    if (!this.messageHandler) {return}
 
     // 钉钉回调格式解析
     const msg = this.parseDingTalkMessage(rawBody)
@@ -269,7 +269,7 @@ export class DingTalkAdapter implements ChannelAdapter {
       const content = data?.text?.content || data?.content || ''
       const msgId = headers?.messageId || data?.messageId || `dt_${Date.now()}`
 
-      if (!senderId || !content) return null
+      if (!senderId || !content) {return null}
 
       return {
         id: msgId,
@@ -302,7 +302,7 @@ export class DingTalkAdapter implements ChannelAdapter {
         'Content-Type': 'application/json',
         ...headers,
       }
-      if (postData) reqHeaders['Content-Length'] = Buffer.byteLength(postData).toString()
+      if (postData) {reqHeaders['Content-Length'] = Buffer.byteLength(postData).toString()}
 
       const options = {
         hostname,
@@ -327,7 +327,7 @@ export class DingTalkAdapter implements ChannelAdapter {
       req.on('error', reject)
       req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
 
-      if (postData) req.write(postData)
+      if (postData) {req.write(postData)}
       req.end()
     })
   }

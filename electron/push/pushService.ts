@@ -64,7 +64,7 @@ export function getPushConfig(): PushConfig {
  * 文档: https://sct.ftqq.com/document
  */
 async function sendServerChan(title: string, content: string): Promise<boolean> {
-  if (!currentConfig.serverChanKey) return false
+  if (!currentConfig.serverChanKey) {return false}
   try {
     const url = `https://sctapi.ftqq.com/${currentConfig.serverChanKey}.send`
     const resp = await fetch(url, {
@@ -90,7 +90,7 @@ async function sendServerChan(title: string, content: string): Promise<boolean> 
  * 文档: https://open.dingtalk.com/document/robots/custom-robot-access
  */
 async function sendDingTalk(title: string, content: string): Promise<boolean> {
-  if (!currentConfig.dingTalkWebhook) return false
+  if (!currentConfig.dingTalkWebhook) {return false}
   try {
     let url = currentConfig.dingTalkWebhook
     // 如果配置了加签密钥

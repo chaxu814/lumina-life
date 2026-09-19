@@ -152,7 +152,7 @@ export class AgentChatsManager {
   /** 获取当前会话 */
   getCurrentSession(agentId: string): ChatSession | null {
     const store = this.get(agentId)
-    if (!store.currentSessionId) return null
+    if (!store.currentSessionId) {return null}
     return store.sessions[store.currentSessionId] || null
   }
 

@@ -106,9 +106,9 @@ function formatTime(ts: number): string {
 }
 
 function formatIdle(seconds: number): string {
-  if (seconds < 60) return `${seconds}秒`
+  if (seconds < 60) {return `${seconds}秒`}
   const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}分钟`
+  if (mins < 60) {return `${mins}分钟`}
   const hours = Math.floor(mins / 60)
   const remainMins = mins % 60
   return `${hours}小时${remainMins > 0 ? remainMins + '分' : ''}`
@@ -129,7 +129,7 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
 
   // ── 拉取引擎状态（带超时，防止 IPC 挂死） ──────
   const fetchStatus = async () => {
-    if (pauseRef.current) return
+    if (pauseRef.current) {return}
     try {
       const s = await Promise.race([
         window.luminaAPI.proactiveStatus(),
@@ -145,18 +145,18 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
   }
 
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {return}
     setStatusReady(false)
     fetchStatus()
     pollRef.current = setInterval(fetchStatus, 15000)  // 15s 轮询（不频繁不卡顿）
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+    return () => { if (pollRef.current) {clearInterval(pollRef.current)} }
   }, [visible])
 
   // ── 开关触发器（乐观更新：先改 UI，后台同步） ──
   const toggleTrigger = async (id: string, enabled: boolean) => {
     // 乐观更新：立刻刷新本地状态
     setStatus(prev => {
-      if (!prev) return prev
+      if (!prev) {return prev}
       return {
         ...prev,
         triggers: prev.triggers.map(t => t.id === id ? { ...t, enabled } : t),
@@ -165,13 +165,13 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
     // 同步更新前端 proactiveChat 触发器
     const frontTriggers = proactiveChat.getTriggers()
     const ft = frontTriggers.find(t => t.id === id)
-    if (ft) proactiveChat.updateTrigger(id, { enabled })
+    if (ft) {proactiveChat.updateTrigger(id, { enabled })}
     // 后台 IPC 同步（不 await，不阻塞 UI）
     window.luminaAPI.proactiveUpdateTrigger(id, { enabled }).catch((e: any) => {
       console.warn('[ProactiveSidebar] 后端更新失败:', e)
       // 失败时回滚
       setStatus(prev => {
-        if (!prev) return prev
+        if (!prev) {return prev}
         return {
           ...prev,
           triggers: prev.triggers.map(t => t.id === id ? { ...t, enabled: !enabled } : t),
@@ -203,7 +203,7 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
   const updateEngineConfig = async (partial: Record<string, any>) => {
     // 乐观更新 UI
     setStatus(prev => {
-      if (!prev) return prev
+      if (!prev) {return prev}
       return { ...prev, config: { ...prev.config, ...partial } }
     })
     // 后台同步（不阻塞 UI）
@@ -222,28 +222,28 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
 
   // ── 格式化时间 ────────────────────────────────
   const formatTime = (ts?: number) => {
-    if (!ts) return '从未'
+    if (!ts) {return '从未'}
     const d = new Date(ts)
     const now = new Date()
     const diffMin = Math.floor((now.getTime() - ts) / 60000)
-    if (diffMin < 1) return '刚刚'
-    if (diffMin < 60) return `${diffMin} 分钟前`
+    if (diffMin < 1) {return '刚刚'}
+    if (diffMin < 60) {return `${diffMin} 分钟前`}
     return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
   }
 
   // ── 冷却进度 ──────────────────────────────────
   const cooldownPercent = (trigger: ProactiveTriggerState) => {
-    if (!trigger.lastTriggered) return 100
+    if (!trigger.lastTriggered) {return 100}
     const elapsed = Date.now() - trigger.lastTriggered
     return Math.min(100, Math.round((elapsed / (trigger.cooldown * 1000)) * 100))
   }
 
-  if (!visible) return null
+  if (!visible) {return null}
 
   // 按类型分组触发器
   const grouped = (status?.triggers || []).reduce((acc, t) => {
     const type = t.type
-    if (!acc[type]) acc[type] = []
+    if (!acc[type]) {acc[type] = []}
     acc[type].push(t)
     return acc
   }, {} as Record<string, ProactiveTriggerState[]>)
@@ -365,7 +365,7 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
         {/* ── 按类别折叠的触发器列表 ── */}
         {Object.keys(TYPE_META).map(typeKey => {
           const triggers = grouped[typeKey]
-          if (!triggers || triggers.length === 0) return null
+          if (!triggers || triggers.length === 0) {return null}
           const meta = TYPE_META[typeKey]
           const isExpanded = expandedType.includes(typeKey)
           const typeEnabled = triggers.some(t => t.enabled)

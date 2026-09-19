@@ -108,7 +108,7 @@ export class LLMProvider {
   // ═══════════════════════════════════════════════════════
 
   async healthCheck(): Promise<{ ok: boolean; modelFound: boolean; loadedModels: string[] }> {
-    if (this.healthChecked) return { ok: true, modelFound: true, loadedModels: [] }
+    if (this.healthChecked) {return { ok: true, modelFound: true, loadedModels: [] }}
 
     try {
       let res = await fetch(`${this.config.baseUrl}/models`, {
@@ -160,7 +160,7 @@ export class LLMProvider {
 
     // 构建请求体
     const messages = opts.messages.map((m) => {
-      if (!m.images || !m.images.length) return m
+      if (!m.images || !m.images.length) {return m}
       const content: any[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : [...(m.content || [])]
       for (const img of m.images) {
         content.push({ type: 'image_url', image_url: { url: img } })
@@ -224,7 +224,7 @@ export class LLMProvider {
     let firstTokenReceived = false
 
     const resetWatchdog = () => {
-      if (watchdogTimer) clearTimeout(watchdogTimer)
+      if (watchdogTimer) {clearTimeout(watchdogTimer)}
       const timeout = firstTokenReceived ? STREAM_IDLE_TIMEOUT : FIRST_TOKEN_TIMEOUT
       watchdogTimer = setTimeout(() => {
         if (!streamSuccess && !masterSignal.aborted) {
@@ -266,14 +266,14 @@ export class LLMProvider {
         // 能力不匹配（tools / vision / stream_options / max_tokens）→ 去字段降级，非流式重试一次
         if (kind !== 'unknown' && kind !== 'context' && kind !== 'auth') {
           try {
-            if (kind === 'tools') getModelCapabilityCache().markNoToolSupport(this.config.model)
-            else if (kind === 'vision') getModelCapabilityCache().update(this.config.model, { supportsVision: false })
+            if (kind === 'tools') {getModelCapabilityCache().markNoToolSupport(this.config.model)}
+            else if (kind === 'vision') {getModelCapabilityCache().update(this.config.model, { supportsVision: false })}
           } catch { /* 缓存不可用忽略 */ }
           const note = describeLimitation(kind, this.config.model)
-          if (note) console.warn(`[LLMProvider] 🔧 ${response.status} ${kind} → 降级：${note}`)
+          if (note) {console.warn(`[LLMProvider] 🔧 ${response.status} ${kind} → 降级：${note}`)}
           const degraded = degradeForKind(requestBody, kind)
           const fallback = await this.callNonStreaming(opts, emit, degraded).catch(() => null)
-          if (fallback && !fallback.error) return fallback
+          if (fallback && !fallback.error) {return fallback}
         }
         const errMsg = `LLM 返回 ${response.status}: ${errText.slice(0, 300)}`
         return { error: errMsg }
@@ -300,7 +300,7 @@ export class LLMProvider {
               this.reasoningStarted = true
               this.reasoningAccum = ''
               emit?.onThinkingStream?.('', true, false)
-              if (!firstTokenReceived) firstTokenReceived = true
+              if (!firstTokenReceived) {firstTokenReceived = true}
             }
             this.reasoningAccum += reasoningText
             // 推理内容只通过 onThinkingStream 发思考面板，不混入最终回复文本
@@ -327,11 +327,11 @@ export class LLMProvider {
         if (delta?.tool_calls) {
           for (const tc of delta.tool_calls) {
             const idx = tc.index ?? 0
-            if (!toolCallAccum.has(idx)) toolCallAccum.set(idx, { id: '', name: '', args: '' })
+            if (!toolCallAccum.has(idx)) {toolCallAccum.set(idx, { id: '', name: '', args: '' })}
             const acc = toolCallAccum.get(idx)!
-            if (tc.id) acc.id = tc.id
-            if (tc.function?.name) acc.name = tc.function.name
-            if (tc.function?.arguments) acc.args += tc.function.arguments
+            if (tc.id) {acc.id = tc.id}
+            if (tc.function?.name) {acc.name = tc.function.name}
+            if (tc.function?.arguments) {acc.args += tc.function.arguments}
           }
         }
 
@@ -349,7 +349,7 @@ export class LLMProvider {
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {break}
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
@@ -357,7 +357,7 @@ export class LLMProvider {
 
         for (const line of lines) {
           const trimmed = line.trim()
-          if (!trimmed) continue
+          if (!trimmed) {continue}
 
           // Anthropic SSE：每个 data 前有一行 `event: xxx`，记录下来供 parser 使用
           if (trimmed.startsWith('event:')) {
@@ -366,16 +366,16 @@ export class LLMProvider {
           }
 
           const dm = /^data:\s?(.*)$/.exec(trimmed)
-          if (!dm) continue
+          if (!dm) {continue}
           const dataStr = dm[1].trim()
-          if (!dataStr || dataStr === '[DONE]') continue
+          if (!dataStr || dataStr === '[DONE]') {continue}
 
           resetWatchdog()
 
           try {
             if (nativeParser) {
               const chunks = nativeParser.feed(sseEvent, dataStr)
-              for (const ck of chunks) processChunk(ck)
+              for (const ck of chunks) {processChunk(ck)}
             } else {
               processChunk(JSON.parse(dataStr))
             }
@@ -412,7 +412,7 @@ export class LLMProvider {
       }
     } catch (err: any) {
       clearTimeout(maxTimeout)
-      if (watchdogTimer) clearTimeout(watchdogTimer)
+      if (watchdogTimer) {clearTimeout(watchdogTimer)}
 
       if (err.name === 'AbortError' || String(err.message).includes('abort')) {
         if (masterSignal.aborted && opts.signal?.aborted) {
@@ -446,7 +446,7 @@ export class LLMProvider {
       return { error: err.message || String(err) }
     } finally {
       clearTimeout(maxTimeout)
-      if (watchdogTimer) clearTimeout(watchdogTimer)
+      if (watchdogTimer) {clearTimeout(watchdogTimer)}
     }
 
     // ── 成功返回 ──
@@ -476,9 +476,9 @@ export class LLMProvider {
 
     // 图片转 image_url（与流式路径保持一致）
     const messages = (opts.messages || []).map((m) => {
-      if (!m.images || !m.images.length) return m
+      if (!m.images || !m.images.length) {return m}
       const content: any[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : [...(m.content || [])]
-      for (const img of m.images) content.push({ type: 'image_url', image_url: { url: img } })
+      for (const img of m.images) {content.push({ type: 'image_url', image_url: { url: img } })}
       const { images, ...rest } = m
       return { ...rest, content }
     })
@@ -508,7 +508,7 @@ export class LLMProvider {
       const isLocal = isLocalEndpoint(this.config.baseUrl)
       const reqHeaders = (withAuth: boolean): Record<string, string> => {
         const h: Record<string, string> = { ...plan.headers }
-        if (!withAuth) delete h.Authorization
+        if (!withAuth) {delete h.Authorization}
         return h
       }
       let res = await fetch(url, { method: 'POST', headers: reqHeaders(true), body: bodyStr, signal: AbortSignal.timeout(timeout) })
@@ -526,11 +526,11 @@ export class LLMProvider {
           const kind = classifyModelError(res.status, errText)
           if (kind !== 'unknown' && kind !== 'context' && kind !== 'auth') {
             try {
-              if (kind === 'tools') getModelCapabilityCache().markNoToolSupport(this.config.model)
-              else if (kind === 'vision') getModelCapabilityCache().update(this.config.model, { supportsVision: false })
+              if (kind === 'tools') {getModelCapabilityCache().markNoToolSupport(this.config.model)}
+              else if (kind === 'vision') {getModelCapabilityCache().update(this.config.model, { supportsVision: false })}
             } catch { /* 缓存不可用忽略 */ }
             const note = describeLimitation(kind, this.config.model)
-            if (note) console.warn(`[LLMProvider] 🔧 非流式 ${res.status} ${kind} → 降级：${note}`)
+            if (note) {console.warn(`[LLMProvider] 🔧 非流式 ${res.status} ${kind} → 降级：${note}`)}
             return await this.callNonStreaming(opts, emit, degradeForKind(requestBody, kind))
           }
         }
@@ -541,7 +541,7 @@ export class LLMProvider {
       // 原生协议（anthropic/gemini）响应归一为 OpenAI completion；azure/openai 原样
       const json = parseNativeCompletion(this.kind, rawJson)
       const choice = json.choices?.[0]
-      if (!choice) return { error: '非流式响应无 choices' }
+      if (!choice) {return { error: '非流式响应无 choices' }}
 
       return {
         text: (choice.message?.reasoning_content || choice.message?.content || '').trimStart(),

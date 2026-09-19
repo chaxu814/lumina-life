@@ -36,19 +36,19 @@ type View = { kind: 'full' } | { kind: 'zoom'; crop: NormRect }
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 const num = (v: any): number | null => {
-  if (v === undefined || v === null || v === '') return null
+  if (v === undefined || v === null || v === '') {return null}
   const n = Number(v)
   return Number.isFinite(n) ? n : null
 }
 
 function parseAction(raw: string): VLMAction | null {
-  if (!raw) return null
+  if (!raw) {return null}
   let j: string = raw.trim().replace(/```json\s*/gi, '').replace(/```/g, '').trim()
   const s = j.indexOf('{'), e = j.lastIndexOf('}')
-  if (s >= 0 && e > s) j = j.slice(s, e + 1)
+  if (s >= 0 && e > s) {j = j.slice(s, e + 1)}
   try {
     const o = JSON.parse(j)
-    if (!o || !o.action_type) return null
+    if (!o || !o.action_type) {return null}
     return { ...o } as VLMAction
   } catch { return null }
 }
@@ -189,27 +189,27 @@ function resolvePoint(a: any, grid: GridInfo, view: View): { nx: number; ny: num
     p = cellToNorm(a.cell, grid.cols, grid.rows)
   } else {
     const nx = num(a.nx), ny = num(a.ny)
-    if (nx !== null && ny !== null) p = { nx, ny }
+    if (nx !== null && ny !== null) {p = { nx, ny }}
   }
-  if (!p) return null
-  if (view.kind === 'zoom') p = localToGlobal(p.nx, p.ny, view.crop)
+  if (!p) {return null}
+  if (view.kind === 'zoom') {p = localToGlobal(p.nx, p.ny, view.crop)}
   return p
 }
 
 /** 解析点击/拖拽坐标（含 zoom 换算），就地写回全局 nx/ny；坐标缺失返回 false */
 function preparePoint(a: any, grid: GridInfo, view: View): boolean {
   const t = a.action_type
-  if (t !== 'click' && t !== 'double_click' && t !== 'right_click' && t !== 'drag') return true
+  if (t !== 'click' && t !== 'double_click' && t !== 'right_click' && t !== 'drag') {return true}
   const start = resolvePoint(a, grid, view)
-  if (!start) return false
+  if (!start) {return false}
   a.nx = start.nx; a.ny = start.ny
   delete a.cell
   if (t === 'drag') {
     let end: { nx: number; ny: number } | null = null
-    if (typeof a.cell2 === 'number') end = cellToNorm(a.cell2, grid.cols, grid.rows)
-    else { const x2 = num(a.nx2), y2 = num(a.ny2); if (x2 !== null && y2 !== null) end = { nx: x2, ny: y2 } }
-    if (!end) return false
-    if (view.kind === 'zoom') end = localToGlobal(end.nx, end.ny, view.crop)
+    if (typeof a.cell2 === 'number') {end = cellToNorm(a.cell2, grid.cols, grid.rows)}
+    else { const x2 = num(a.nx2), y2 = num(a.ny2); if (x2 !== null && y2 !== null) {end = { nx: x2, ny: y2 }} }
+    if (!end) {return false}
+    if (view.kind === 'zoom') {end = localToGlobal(end.nx, end.ny, view.crop)}
     a.nx2 = end.nx; a.ny2 = end.ny
     delete a.cell2
   }
@@ -218,7 +218,7 @@ function preparePoint(a: any, grid: GridInfo, view: View): boolean {
 
 export async function desktopAct(args: Record<string, any>): Promise<ToolResult> {
   const instruction = (args.instruction as string) || ''
-  if (!instruction) return { callId: '', ok: false, content: '', error: '请提供 instruction 参数（要执行的任务描述）' }
+  if (!instruction) {return { callId: '', ok: false, content: '', error: '请提供 instruction 参数（要执行的任务描述）' }}
 
   const maxSteps = Math.min(Math.max(1, (args.max_steps as number) || 8), 16)
   const steps: string[] = []
@@ -289,7 +289,7 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
       }
       view = { kind: 'full' }
       steps.push(`📦 批量: ${msgs.join('；')}`)
-      if (denied) break
+      if (denied) {break}
       await sleep(450)
       continue
     }
@@ -306,10 +306,10 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
     view = { kind: 'full' }
     if (result.denied) { steps.push('⛔ 命中高危硬拦截，终止本次操控'); break }
     if (!result.ok) { steps.push('⚠️ 操作失败，结束以避免连环误动作'); break }
-    if (act.action_type !== 'wait') await sleep(700)
+    if (act.action_type !== 'wait') {await sleep(700)}
   }
 
-  if (isCuAborted() && !steps.some(s => s.includes('急停'))) steps.push('🛑 已急停')
+  if (isCuAborted() && !steps.some(s => s.includes('急停'))) {steps.push('🛑 已急停')}
   const aborted = isCuAborted()
   return {
     callId: '',

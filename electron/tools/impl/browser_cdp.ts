@@ -143,7 +143,7 @@ class CDPBrowserManager {
    */
   async navigate(url: string, sessionId?: string): Promise<ToolResult> {
     const session = this.getSession(sessionId)
-    if (!session) return { callId: '', ok: false, content: '', error: 'No active browser session' }
+    if (!session) {return { callId: '', ok: false, content: '', error: 'No active browser session' }}
 
     try {
       await session.webContents.loadURL(url)
@@ -159,7 +159,7 @@ class CDPBrowserManager {
    */
   async click(selector: string, sessionId?: string): Promise<ToolResult> {
     const session = this.getSession(sessionId)
-    if (!session) return { callId: '', ok: false, content: '', error: 'No active browser session' }
+    if (!session) {return { callId: '', ok: false, content: '', error: 'No active browser session' }}
 
     try {
       await session.webContents.executeJavaScript(`
@@ -182,7 +182,7 @@ class CDPBrowserManager {
    */
   async type(selector: string, text: string, sessionId?: string): Promise<ToolResult> {
     const session = this.getSession(sessionId)
-    if (!session) return { callId: '', ok: false, content: '', error: 'No active browser session' }
+    if (!session) {return { callId: '', ok: false, content: '', error: 'No active browser session' }}
 
     try {
       await session.webContents.executeJavaScript(`
@@ -207,7 +207,7 @@ class CDPBrowserManager {
    */
   async evaluate(code: string, sessionId?: string): Promise<ToolResult> {
     const session = this.getSession(sessionId)
-    if (!session) return { callId: '', ok: false, content: '', error: 'No active browser session' }
+    if (!session) {return { callId: '', ok: false, content: '', error: 'No active browser session' }}
 
     try {
       const result = await session.webContents.executeJavaScript(code)
@@ -223,7 +223,7 @@ class CDPBrowserManager {
    */
   async screenshot(sessionId?: string): Promise<ToolResult> {
     const session = this.getSession(sessionId)
-    if (!session) return { callId: '', ok: false, content: '', error: 'No active browser session' }
+    if (!session) {return { callId: '', ok: false, content: '', error: 'No active browser session' }}
 
     try {
       const image = await session.webContents.capturePage()
@@ -247,7 +247,7 @@ class CDPBrowserManager {
    */
   async getContent(sessionId?: string): Promise<ToolResult> {
     const session = this.getSession(sessionId)
-    if (!session) return { callId: '', ok: false, content: '', error: 'No active browser session' }
+    if (!session) {return { callId: '', ok: false, content: '', error: 'No active browser session' }}
 
     try {
       const html = await session.webContents.executeJavaScript('document.documentElement.outerHTML')
@@ -263,10 +263,10 @@ class CDPBrowserManager {
    */
   async stop(sessionId?: string): Promise<ToolResult> {
     const targetId = sessionId || this.activeSessionId
-    if (!targetId) return { callId: '', ok: true, content: 'No active browser session' }
+    if (!targetId) {return { callId: '', ok: true, content: 'No active browser session' }}
 
     const session = this.sessions.get(targetId)
-    if (!session) return { callId: '', ok: true, content: `Session not found: ${targetId}` }
+    if (!session) {return { callId: '', ok: true, content: `Session not found: ${targetId}` }}
 
     try {
       const debuggerApi = session.webContents as any
@@ -309,7 +309,7 @@ class CDPBrowserManager {
 
   private getSession(sessionId?: string): CDPSession | undefined {
     const id = sessionId || this.activeSessionId
-    if (!id) return undefined
+    if (!id) {return undefined}
     return this.sessions.get(id)
   }
 

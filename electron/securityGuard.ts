@@ -408,7 +408,7 @@ export class SecurityGuard {
 
     // 仅检查 PROMPT_INJECTION 类型的规则（无工具限制的）
     for (const rule of GUARD_RULES) {
-      if (rule.tools && rule.tools.length > 0) continue
+      if (rule.tools && rule.tools.length > 0) {continue}
 
       if (rule.pattern.test(text)) {
         findings.push({
@@ -448,7 +448,7 @@ export class SecurityGuard {
 
     for (const rule of GUARD_RULES) {
       // 工具过滤
-      if (rule.tools && rule.tools.length > 0 && !rule.tools.includes(toolName)) continue
+      if (rule.tools && rule.tools.length > 0 && !rule.tools.includes(toolName)) {continue}
 
       // 检查参数
       const paramsToCheck = rule.params && rule.params.length > 0
@@ -457,7 +457,7 @@ export class SecurityGuard {
 
       for (const paramName of paramsToCheck) {
         const paramValue = args[paramName]
-        if (typeof paramValue !== 'string') continue
+        if (typeof paramValue !== 'string') {continue}
 
         if (rule.pattern.test(paramValue)) {
           findings.push({
@@ -549,7 +549,7 @@ export class SecurityGuard {
     const byCategory = new Map<string, GuardFinding[]>()
     for (const f of findings) {
       const key = f.category
-      if (!byCategory.has(key)) byCategory.set(key, [])
+      if (!byCategory.has(key)) {byCategory.set(key, [])}
       byCategory.get(key)!.push(f)
     }
 
@@ -580,7 +580,7 @@ export class SecurityGuard {
   // ── 获取审计日志 ───────────────────────────────────
 
   getAuditLog(limit?: number): GuardFinding[] {
-    if (limit) return this.auditLog.slice(-limit)
+    if (limit) {return this.auditLog.slice(-limit)}
     return [...this.auditLog]
   }
 

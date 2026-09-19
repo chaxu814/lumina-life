@@ -34,11 +34,11 @@ import { generateReport } from './services/reportGenerator'
 // ═══════ 桌宠聊天框内"朋友圈/剧场/日报"数据组装（取自主界面同一 store / localStorage，实时互通）═══════
 type PetLifeItem = { icon?: string; title: string; body?: string; meta?: string }
 function fmtLifeTime(ts?: number): string {
-  if (!ts) return ''
+  if (!ts) {return ''}
   const diff = Date.now() - ts
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前'
+  if (diff < 60000) {return '刚刚'}
+  if (diff < 3600000) {return Math.floor(diff / 60000) + ' 分钟前'}
+  if (diff < 86400000) {return Math.floor(diff / 3600000) + ' 小时前'}
   const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()}`
 }
 function buildMomentsItems(): PetLifeItem[] {
@@ -54,11 +54,11 @@ function buildTheaterItems(): PetLifeItem[] {
   const st = useStore.getState() as any
   const items: PetLifeItem[] = []
   const convs = [...(st.conversations || [])].sort((a: any, b: any) => (a.createdAt || 0) - (b.createdAt || 0))
-  if (convs[0]) items.push({ icon: '🌟', title: '一切的开始', meta: fmtLifeTime(convs[0].createdAt), body: `第一次对话"${convs[0].name || '未命名'}"，三个 Agent 从这里开始了解你。` })
+  if (convs[0]) {items.push({ icon: '🌟', title: '一切的开始', meta: fmtLifeTime(convs[0].createdAt), body: `第一次对话"${convs[0].name || '未命名'}"，三个 Agent 从这里开始了解你。` })}
   const total = (st.conversations || []).reduce((n: number, c: any) => n + (c.messages?.length || 0), 0)
-  if (total >= 5) items.push({ icon: '💬', title: `已交流 ${total} 条消息`, meta: '里程碑', body: '每一条消息都在让 Lumina 更懂你。' })
+  if (total >= 5) {items.push({ icon: '💬', title: `已交流 ${total} 条消息`, meta: '里程碑', body: '每一条消息都在让 Lumina 更懂你。' })}
   const lessons = st.structuredMemory?.memory?.lessons
-  if (Array.isArray(lessons)) lessons.slice(0, 6).forEach((l: string) => items.push({ icon: '💡', title: '学到的经验', meta: '发现', body: String(l).slice(0, 180) }))
+  if (Array.isArray(lessons)) {lessons.slice(0, 6).forEach((l: string) => items.push({ icon: '💡', title: '学到的经验', meta: '发现', body: String(l).slice(0, 180) }))}
   return items.slice(0, 14)
 }
 async function buildDailyItems(): Promise<PetLifeItem[]> {
@@ -70,7 +70,7 @@ async function buildDailyItems(): Promise<PetLifeItem[]> {
       const have = new Set(reports.map((x: any) => x.date))
       r.reports.forEach((rp: any) => {
         const d = rp.date || rp.period
-        if (d && !have.has(d)) reports.push({ date: d, content: rp.summary || rp.content || '', generated: true })
+        if (d && !have.has(d)) {reports.push({ date: d, content: rp.summary || rp.content || '', generated: true })}
       })
     }
   } catch { /* localStorage 兜底即可 */ }
@@ -80,9 +80,9 @@ async function buildDailyItems(): Promise<PetLifeItem[]> {
 }
 async function buildPetLifeData(target: string): Promise<PetLifeItem[]> {
   try {
-    if (target === 'moments') return buildMomentsItems()
-    if (target === 'theater') return buildTheaterItems()
-    if (target === 'daily') return await buildDailyItems()
+    if (target === 'moments') {return buildMomentsItems()}
+    if (target === 'theater') {return buildTheaterItems()}
+    if (target === 'daily') {return await buildDailyItems()}
   } catch (e) { console.warn('[pet-life] 组装失败', e) }
   return []
 }
@@ -164,7 +164,7 @@ export default function App() {
       })
     })
     return () => {
-      if (typeof cleanup === 'function') cleanup()
+      if (typeof cleanup === 'function') {cleanup()}
     }
   }, [])
 
@@ -256,7 +256,7 @@ export default function App() {
       setActivePanel('chat')
       const store = useStore.getState()
       const conv = store.conversations.find((c: any) => c.id === convId)
-      if (conv) store.switchConversation(convId)
+      if (conv) {store.switchConversation(convId)}
     }))
     // 🌸 桌宠"生活"入口：唤起主窗口的 朋友圈 / 剧场 / 日报（均在团队群聊对应 tab）
     cleanups.push(window.luminaAPI?.onMenuEvent('life:open', (data: { target: 'moments' | 'theater' | 'daily' | 'news' }) => {
@@ -264,7 +264,7 @@ export default function App() {
       setActivePanel('chat')
       const store = useStore.getState()
       const team = store.conversations.find((c: any) => c.id === '__team_group_chat__')
-      if (team) store.switchConversation(team.id)
+      if (team) {store.switchConversation(team.id)}
       const tab = data?.target === 'theater' ? 'theater' : data?.target === 'daily' ? 'daily' : 'moments'
       setTimeout(() => window.dispatchEvent(new CustomEvent('lumina:team-tab', { detail: { tab } })), 160)
     }))
@@ -301,7 +301,7 @@ export default function App() {
   // 启动时同步 cron 任务到主进程
   const cronTasksForSync = useStore((s) => s.cronTasks)
   useEffect(() => {
-    if (!window.luminaAPI?.cronSyncAll) return
+    if (!window.luminaAPI?.cronSyncAll) {return}
     const entries = cronTasksForSync.filter(t => t.enabled).map(t => ({
       name: t.name,
       schedule: t.schedule,
@@ -309,7 +309,7 @@ export default function App() {
       enabled: t.enabled,
     }))
     window.luminaAPI.cronSyncAll(entries).then(r => {
-      if (r.ok) console.log(`[Cron] 已同步 ${r.count} 个任务到主进程`)
+      if (r.ok) {console.log(`[Cron] 已同步 ${r.count} 个任务到主进程`)}
     }).catch((e: any) => console.warn('[Cron] 同步失败:', e.message))
   }, []) // 只在启动时执行一次
 
@@ -329,12 +329,12 @@ export default function App() {
   // 🆕 全局 XP 获得提示（任何面板都可见）
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api?.onXpGained) return
+    if (!api?.onXpGained) {return}
     const unsub = api.onXpGained((data: any) => {
       const mult = data.multiplier || 1
       let msg = `✨ +${data.amount} XP`
-      if (mult > 1) msg += ` ×${mult.toFixed(1)} 心情加成 🎉`
-      else if (mult < 1) msg += ` 😔 心情低落 ×${mult.toFixed(1)}`
+      if (mult > 1) {msg += ` ×${mult.toFixed(1)} 心情加成 🎉`}
+      else if (mult < 1) {msg += ` 😔 心情低落 ×${mult.toFixed(1)}`}
       showToast(msg, 'info')
     })
     return unsub

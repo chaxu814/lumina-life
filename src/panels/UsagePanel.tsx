@@ -24,7 +24,7 @@ export default function UsagePanel({ embedded }: { embedded?: boolean } = {}) {
   }
   const saveLimit = () => {
     const val = parseInt(limitInput, 10)
-    if (!isNaN(val) && val >= 0) setTokenLimit(val)
+    if (!isNaN(val) && val >= 0) {setTokenLimit(val)}
     setEditingLimit(false)
   }
   const cancelEditLimit = () => setEditingLimit(false)
@@ -37,7 +37,7 @@ export default function UsagePanel({ embedded }: { embedded?: boolean } = {}) {
     for (const h of tokenUsage.history) {
       const day = h.date.slice(0, 10)
       const short = day.slice(5)
-      if (!map.has(day)) map.set(day, { date: short, fullDate: day, tokens: 0, requests: 0 })
+      if (!map.has(day)) {map.set(day, { date: short, fullDate: day, tokens: 0, requests: 0 })}
       const s = map.get(day)!
       s.tokens += h.tokens
       s.requests += 1
@@ -125,7 +125,7 @@ export default function UsagePanel({ embedded }: { embedded?: boolean } = {}) {
               type="number"
               value={limitInput}
               onChange={(e) => setLimitInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') saveLimit(); if (e.key === 'Escape') cancelEditLimit() }}
+              onKeyDown={(e) => { if (e.key === 'Enter') {saveLimit();} if (e.key === 'Escape') {cancelEditLimit()} }}
               autoFocus
               style={{
                 width: 120, padding: '4px 8px', borderRadius: 6,
@@ -379,6 +379,6 @@ export default function UsagePanel({ embedded }: { embedded?: boolean } = {}) {
     </div>
   )
 
-  if (embedded) return renderContent()
+  if (embedded) {return renderContent()}
   return <div className="panel">{renderContent()}</div>
 }

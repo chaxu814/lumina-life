@@ -58,13 +58,13 @@ export const AVATAR_RENDERERS: Record<AvatarKind, AvatarRendererInfo> = {
 
 /** 某形态当前是否真正可渲染 */
 export function isRenderable(kind: AvatarKind | undefined): boolean {
-  if (!kind) return true // 未指定视为 live2d（向后兼容）
+  if (!kind) {return true} // 未指定视为 live2d（向后兼容）
   return AVATAR_RENDERERS[kind]?.status === 'ready'
 }
 
 /** 选中不可渲染形态时给用户的提示；可渲染时返回 null */
 export function unsupportedReason(kind: AvatarKind | undefined): string | null {
-  if (!kind || isRenderable(kind)) return null
+  if (!kind || isRenderable(kind)) {return null}
   return AVATAR_RENDERERS[kind].roadmapNote ?? '该形态暂未支持。'
 }
 

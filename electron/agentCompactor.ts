@@ -18,7 +18,7 @@ import type { AgentMessage } from './tools/types'
 
 // 辅助：将 content 安全转为字符串
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -53,9 +53,9 @@ export const COMPACTOR_TRIGGER_RATIO = 0.65
  *   - 大窗口（≥512K）：用窗口的 50%（1M 窗口时 50 万 token 才压缩，充分利用长上下文）
  */
 export function getCompactorBudget(contextWindow?: number): number {
-  if (!contextWindow || contextWindow <= 0) return COMPACTOR_TOKEN_BUDGET
-  if (contextWindow <= 131_072) return Math.floor(contextWindow * COMPACTOR_TRIGGER_RATIO)
-  if (contextWindow <= 524_288) return Math.floor(contextWindow * 0.60)
+  if (!contextWindow || contextWindow <= 0) {return COMPACTOR_TOKEN_BUDGET}
+  if (contextWindow <= 131_072) {return Math.floor(contextWindow * COMPACTOR_TRIGGER_RATIO)}
+  if (contextWindow <= 524_288) {return Math.floor(contextWindow * 0.60)}
   return Math.floor(contextWindow * 0.50)
 }
 
@@ -119,7 +119,7 @@ export function buildStructuredSummary(
       const winPaths = content.match(/[A-Z]:\\[^\s,;)]+/g) || []
       const unixPaths = content.match(/\/[^\s,;)]+/g) || []
       const paths = [...winPaths, ...unixPaths]
-      if (paths.length > 0) filePaths.push(...paths)
+      if (paths.length > 0) {filePaths.push(...paths)}
     }
   }
 
@@ -303,7 +303,7 @@ export function compactMessages(
     systemEndIndex,
     messages.length - COMPACTOR_RECENT_PAIRS,
   )
-  if (midMsgs.length < 3 && !effectiveExistingSummary) return null
+  if (midMsgs.length < 3 && !effectiveExistingSummary) {return null}
 
   // 生成结构化摘要
   const summaryText = buildStructuredSummary(systemMsgs, midMsgs, effectiveExistingSummary)

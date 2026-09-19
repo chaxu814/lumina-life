@@ -62,7 +62,7 @@ class TeamRegistry {
 
   private static _instance: TeamRegistry
   static getInstance(): TeamRegistry {
-    if (!this._instance) this._instance = new TeamRegistry()
+    if (!this._instance) {this._instance = new TeamRegistry()}
     return this._instance
   }
 
@@ -79,8 +79,8 @@ class TeamRegistry {
    * @returns 注册成功返回 true；ID 已存在返回 false
    */
   register(reg: DynamicMemberRegistration): boolean {
-    if (this._dynamicMembers.has(reg.id)) return false
-    if (this.isBuiltIn(reg.id)) return false
+    if (this._dynamicMembers.has(reg.id)) {return false}
+    if (this.isBuiltIn(reg.id)) {return false}
 
     this._dynamicMembers.set(reg.id, {
       ...reg,
@@ -102,8 +102,8 @@ class TeamRegistry {
    * @returns 移除成功返回 true；成员不存在或为内置成员返回 false
    */
   unregister(id: DynamicMemberId): boolean {
-    if (this.isBuiltIn(id)) return false
-    if (!this._dynamicMembers.has(id)) return false
+    if (this.isBuiltIn(id)) {return false}
+    if (!this._dynamicMembers.has(id)) {return false}
 
     this._dynamicMembers.delete(id)
 
@@ -131,7 +131,7 @@ class TeamRegistry {
 
   /** 查询单个成员（内置或动态） */
   getMember(id: string): TeamMember | DynamicMemberRegistration | undefined {
-    if (this.isBuiltIn(id)) return (TEAM_MEMBERS as Record<string, TeamMember>)[id]
+    if (this.isBuiltIn(id)) {return (TEAM_MEMBERS as Record<string, TeamMember>)[id]}
     return this._dynamicMembers.get(id)
   }
 
@@ -149,7 +149,7 @@ class TeamRegistry {
   suggestMember(input: string): DynamicMemberRegistration | undefined {
     const lower = input.toLowerCase()
     for (const [, member] of this._dynamicMembers) {
-      if (!member.triggers || member.triggers.length === 0) continue
+      if (!member.triggers || member.triggers.length === 0) {continue}
       if (member.triggers.some(t => lower.includes(t.toLowerCase()))) {
         return member
       }

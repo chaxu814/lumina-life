@@ -147,7 +147,7 @@ const SENSITIVE_ENV_KEYS = [
 /** 检查命令是否匹配危险模式 */
 function isDangerousCommand(command: string): boolean {
   for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(command)) return true
+    if (pattern.test(command)) {return true}
   }
   return false
 }
@@ -156,10 +156,10 @@ function isDangerousCommand(command: string): boolean {
 function needsShell(command: string): boolean {
   const trimmed = command.trim()
   for (const prefix of NEEDS_SHELL_PREFIXES) {
-    if (trimmed.startsWith(prefix)) return true
+    if (trimmed.startsWith(prefix)) {return true}
   }
   // 需要管道、重定向、变量展开等
-  if (trimmed.includes('|') || trimmed.includes('>') || trimmed.includes('$')) return true
+  if (trimmed.includes('|') || trimmed.includes('>') || trimmed.includes('$')) {return true}
   return false
 }
 
@@ -184,12 +184,12 @@ function createCleanEnv(): NodeJS.ProcessEnv {
 
 /** 验证并解析 cwd */
 function resolveSafeCwd(userCwd: string | undefined): string {
-  if (!userCwd) return process.cwd()
+  if (!userCwd) {return process.cwd()}
   const resolved = path.resolve(userCwd)
 
   // 检查是否在允许范围内
   for (const base of ALLOWED_CWD_BASES) {
-    if (!base) continue
+    if (!base) {continue}
     try {
       if (resolved.startsWith(base) || resolved.startsWith(path.resolve(base))) {
         return resolved
@@ -214,15 +214,15 @@ function resolveSafeCwd(userCwd: string | undefined): string {
 
 function parseExplorerCommand(command: string): { action: 'redirect' | 'reject'; target?: string } {
   const rest = command.replace(/^\s*explorer\s*/i, '').trim()
-  if (!rest) return { action: 'reject' }
+  if (!rest) {return { action: 'reject' }}
   const fixed = rest
     .replace(/shel[：:]\s*\{/i, 'shell:{')
     .replace(/shel\{/i, 'shell:{')
     .replace(/shell\{/i, 'shell:{')
     .replace(/\)\s*$/, '}')
     .replace(/[：;]\s*\{/, ':{')
-  if (/^shell:\{/i.test(fixed)) return { action: 'reject' }
-  if (/^https?:\/\//i.test(fixed)) return { action: 'redirect', target: fixed }
+  if (/^shell:\{/i.test(fixed)) {return { action: 'reject' }}
+  if (/^https?:\/\//i.test(fixed)) {return { action: 'redirect', target: fixed }}
   if (/^[A-Za-z]:/i.test(fixed) || fixed.startsWith('\\\\') || fixed.startsWith('//')) {
     return { action: 'redirect', target: fixed }
   }
@@ -231,7 +231,7 @@ function parseExplorerCommand(command: string): { action: 'redirect' | 'reject';
 
 function parseStartCommand(command: string): string | null {
   const m = command.match(/^start\s+(?:"[^"]*"\s+)?("(?:[^"]|"")+"|https?:\/\/\S+|[^\s]+(?:\s+\S+)*)/i)
-  if (!m) return null
+  if (!m) {return null}
   let target = m[1].replace(/^"|"$/g, '')
   target = target
     .replace(/^([A-Za-z])(Program\s*Files)\b/i, '$1:\\$2')
@@ -509,7 +509,7 @@ export async function shellExec(args: Record<string, any>): Promise<ToolResult> 
           return { callId: '', ok: true, content: `✅ 已打开: ${target}\n💡 下次用 open_file 工具` }
         }
         const errorMsg = await shell.openPath(target)
-        if (errorMsg) return { callId: '', ok: false, content: '', error: `打开失败: ${errorMsg}` }
+        if (errorMsg) {return { callId: '', ok: false, content: '', error: `打开失败: ${errorMsg}` }}
         return { callId: '', ok: true, content: `✅ 已打开: ${target}\n💡 下次用 open_file 工具` }
       } catch (e: any) {
         return { callId: '', ok: false, content: '', error: `打开失败: ${e.message}` }

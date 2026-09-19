@@ -287,10 +287,10 @@ export class UnifiedMessageQueue extends EventEmitter {
       const parsed = UnifiedMessageQueue.parseKey(key)
       if (parsed.channel === channel && parsed.sessionId === sessionId) {
         state.queue.length = 0
-        if (!state.consumerActive) toRemove.push(key)
+        if (!state.consumerActive) {toRemove.push(key)}
       }
     }
-    for (const key of toRemove) this.queues.delete(key)
+    for (const key of toRemove) {this.queues.delete(key)}
   }
 }
 

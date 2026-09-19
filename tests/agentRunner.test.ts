@@ -9,7 +9,7 @@ beforeAll(() => {
   vi.mock('electron', () => ({
     app: {
       getPath: (name: string) => {
-        if (name === 'userData') return process.cwd()
+        if (name === 'userData') {return process.cwd()}
         return process.cwd()
       },
     },

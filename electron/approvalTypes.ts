@@ -29,10 +29,10 @@ export const EXECUTION_LEVEL_ORDER: ToolExecutionLevel[] = [
 ]
 
 export function parseExecutionLevel(value: string | null | undefined): ToolExecutionLevel {
-  if (!value) return ToolExecutionLevel.AUTO
+  if (!value) {return ToolExecutionLevel.AUTO}
   const v = value.toLowerCase().trim()
   for (const level of Object.values(ToolExecutionLevel)) {
-    if (v === level) return level
+    if (v === level) {return level}
   }
   return ToolExecutionLevel.AUTO
 }

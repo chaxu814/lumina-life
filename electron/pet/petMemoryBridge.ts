@@ -70,7 +70,7 @@ export function buildPetMemoryContext(src: PetMemorySource | null | undefined, o
   const maxLineLen = opts.maxLineLen ?? 60
   const includePersona = opts.includePersona ?? true
   const empty: PetMemoryContext = { userName: null, lines: [], snippet: '', factCount: 0 }
-  if (!src) return empty
+  if (!src) {return empty}
 
   const lines: string[] = []
   const seen = new Set<string>()
@@ -81,8 +81,8 @@ export function buildPetMemoryContext(src: PetMemorySource | null | undefined, o
   let userName: string | null = null
   if (profile) {
     if (profile.name) { userName = profile.name; push(`用户叫 ${profile.name}`) }
-    for (const p of (profile.preferences ?? []).slice(0, 3)) push(`喜欢 ${p}`)
-    for (const h of (profile.habits ?? []).slice(0, 2)) push(`习惯 ${h}`)
+    for (const p of (profile.preferences ?? []).slice(0, 3)) {push(`喜欢 ${p}`)}
+    for (const h of (profile.habits ?? []).slice(0, 2)) {push(`习惯 ${h}`)}
   }
 
   // 事实（按置信度优先，聚焦用户/偏好/事件/环境）
@@ -91,16 +91,16 @@ export function buildPetMemoryContext(src: PetMemorySource | null | undefined, o
     .filter(f => f && typeof f.content === 'string' && (!f.category || FACT_CATEGORIES.has(f.category)))
     .sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))
     .slice(0, maxFacts)
-  for (const f of picked) push(f.content)
+  for (const f of picked) {push(f.content)}
 
   // 近期对话摘要（让它知道最近发生过什么）
   const summaries = safe(() => src.getRecentSummaries?.(maxSummaries) ?? [], [])
-  for (const s of summaries.slice(0, maxSummaries)) push(`最近：${s}`)
+  for (const s of summaries.slice(0, maxSummaries)) {push(`最近：${s}`)}
 
   // 自我人格（轻量一句）
   if (includePersona) {
     const persona = safe(() => src.getPersona?.() ?? null, null)
-    if (persona?.traits?.length) push(`你的性格：${persona.traits.slice(0, 3).join('、')}`)
+    if (persona?.traits?.length) {push(`你的性格：${persona.traits.slice(0, 3).join('、')}`)}
   }
 
   const snippet = lines.length
@@ -112,7 +112,7 @@ export function buildPetMemoryContext(src: PetMemorySource | null | undefined, o
 /** 把一次「看到/经历」的情节写入记忆（视觉情节记忆闭环） */
 export function recordObservedEpisode(src: PetMemorySource | null | undefined, text: string, confidence = 0.6): boolean {
   const content = clip(text ?? '', 120)
-  if (!src?.addFact || !content) return false
+  if (!src?.addFact || !content) {return false}
   return safe(() => {
     src.addFact!({ category: 'event', content: `看到：${content}`, confidence, source: 'observed' })
     return true
@@ -122,7 +122,7 @@ export function recordObservedEpisode(src: PetMemorySource | null | undefined, t
 /** 记住一条关于用户的事实（用户亲口说的，置信度高） */
 export function rememberUserFact(src: PetMemorySource | null | undefined, content: string, confidence = 0.85): boolean {
   const c = clip(content ?? '', 120)
-  if (!src?.addFact || !c) return false
+  if (!src?.addFact || !c) {return false}
   return safe(() => {
     src.addFact!({ category: 'user', content: c, confidence, source: 'user_said' })
     return true

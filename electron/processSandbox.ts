@@ -41,7 +41,7 @@ import { execSync } from 'child_process'
  * @returns true 表示成功杀灭（或进程已不存在），false 表示失败
  */
 export async function killProcessTree(pid: number): Promise<boolean> {
-  if (!pid || pid <= 0) return false
+  if (!pid || pid <= 0) {return false}
 
   try {
     if (process.platform === 'win32') {
@@ -91,7 +91,7 @@ export async function killProcessTree(pid: number): Promise<boolean> {
  * 同步版：递归杀死进程树（用于紧急清理）
  */
 export function killProcessTreeSync(pid: number): boolean {
-  if (!pid || pid <= 0) return false
+  if (!pid || pid <= 0) {return false}
 
   try {
     if (process.platform === 'win32') {
@@ -164,7 +164,7 @@ export class ProcessGroupManager {
   /** 按 ID 杀灭进程树 */
   async kill(id: string): Promise<boolean> {
     const entry = this.processes.get(id)
-    if (!entry) return false
+    if (!entry) {return false}
     const ok = await killProcessTree(entry.pid)
     this.processes.delete(id)
     console.log(`[ProcessSandbox] 💀 已杀灭进程 #${entry.pid} 整棵树: ${ok ? '✅' : '⚠️ 可能未完全清理'}`)
@@ -176,7 +176,7 @@ export class ProcessGroupManager {
     let count = 0
     for (const [id] of this.processes) {
       const ok = await this.kill(id)
-      if (ok) count++
+      if (ok) {count++}
     }
     return count
   }
@@ -194,7 +194,7 @@ export class ProcessGroupManager {
   /** 根据 PID 查找进程 ID */
   findIdByPid(pid: number): string | undefined {
     for (const [id, entry] of this.processes) {
-      if (entry.pid === pid) return id
+      if (entry.pid === pid) {return id}
     }
     return undefined
   }
@@ -202,7 +202,7 @@ export class ProcessGroupManager {
   /** 清除已结束的进程记录（不杀，只是清理列表） */
   cleanStale(): void {
     // 保留最近 10 条，清除更早的记录
-    if (this.processes.size <= 10) return
+    if (this.processes.size <= 10) {return}
     const entries = [...this.processes.entries()]
       .sort((a, b) => b[1].startTime - a[1].startTime)
     const toRemove = entries.slice(10)

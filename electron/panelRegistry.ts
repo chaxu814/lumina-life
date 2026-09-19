@@ -84,7 +84,7 @@ class PanelRegistry {
 
   private static _instance: PanelRegistry
   static getInstance(): PanelRegistry {
-    if (!this._instance) this._instance = new PanelRegistry()
+    if (!this._instance) {this._instance = new PanelRegistry()}
     return this._instance
   }
 
@@ -92,10 +92,10 @@ class PanelRegistry {
 
   load(): void {
     try {
-      if (!fs.existsSync(this.dataDir)) fs.mkdirSync(this.dataDir, { recursive: true })
+      if (!fs.existsSync(this.dataDir)) {fs.mkdirSync(this.dataDir, { recursive: true })}
       if (fs.existsSync(this.configPath)) {
         const data = JSON.parse(fs.readFileSync(this.configPath, 'utf-8'))
-        if (data.userDisabled) this._userDisabled = new Set(data.userDisabled)
+        if (data.userDisabled) {this._userDisabled = new Set(data.userDisabled)}
         if (data.panels) {
           for (const p of data.panels) {
             if (p.source !== 'plugin') {
@@ -112,7 +112,7 @@ class PanelRegistry {
 
   private save(): void {
     try {
-      if (!fs.existsSync(this.dataDir)) fs.mkdirSync(this.dataDir, { recursive: true })
+      if (!fs.existsSync(this.dataDir)) {fs.mkdirSync(this.dataDir, { recursive: true })}
       const userPanels = Array.from(this._panels.values()).filter(p => p.source !== 'plugin')
       fs.writeFileSync(this.configPath, JSON.stringify({
         panels: userPanels,
@@ -160,7 +160,7 @@ class PanelRegistry {
 
   /** 取消注册 */
   unregister(id: string): boolean {
-    if (!this._panels.has(id)) return false
+    if (!this._panels.has(id)) {return false}
     this._panels.delete(id)
     this._userDisabled.delete(id)
     globalEventBus.emit('panel:unregistered' as any, {
@@ -175,10 +175,10 @@ class PanelRegistry {
   /** 启用/禁用面板 */
   setEnabled(id: string, enabled: boolean): boolean {
     const panel = this._panels.get(id)
-    if (!panel) return false
+    if (!panel) {return false}
     panel.enabled = enabled
-    if (enabled) this._userDisabled.delete(id)
-    else this._userDisabled.add(id)
+    if (enabled) {this._userDisabled.delete(id)}
+    else {this._userDisabled.add(id)}
     this.save()
     return true
   }
@@ -189,7 +189,7 @@ class PanelRegistry {
   getEnabledPanels(placement?: 'sidebar' | 'settings' | 'floating'): PanelRegistration[] {
     const list = Array.from(this._panels.values())
       .filter(p => p.enabled)
-    if (placement) return list.filter(p => p.placement.includes(placement))
+    if (placement) {return list.filter(p => p.placement.includes(placement))}
     return list.sort((a, b) => a.name.localeCompare(b.name))
   }
 

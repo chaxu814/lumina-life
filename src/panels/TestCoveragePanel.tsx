@@ -32,7 +32,7 @@ export default function TestCoveragePanel() {
   const loadSummary = useCallback(async () => {
     try {
       const s = await window.luminaAPI?.testSummary?.()
-      if (s) setSummary((s as any)?.summary ?? s as any)
+      if (s) {setSummary((s as any)?.summary ?? s as any)}
     } catch {}
   }, [])
 
@@ -54,8 +54,8 @@ export default function TestCoveragePanel() {
   }
 
   const coverageColor = (pct: number) => {
-    if (pct >= 80) return '#10b981'
-    if (pct >= 50) return '#f59e0b'
+    if (pct >= 80) {return '#10b981'}
+    if (pct >= 50) {return '#f59e0b'}
     return '#ef4444'
   }
 

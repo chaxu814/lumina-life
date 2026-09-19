@@ -36,7 +36,7 @@ export default function SkillDevPanel() {
   }
 
   const handleExport = async () => {
-    if (!generated) return
+    if (!generated) {return}
     setExportMsg('')
     try {
       const ok = await window.luminaAPI?.skillSDKExport?.(skillName || 'my_skill', generated)

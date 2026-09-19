@@ -62,7 +62,7 @@ export class STTService {
   }
 
   async start(): Promise<void> {
-    if (this.listening && !this.paused) return
+    if (this.listening && !this.paused) {return}
 
     // 重置状态
     this.retryCount = 0
@@ -109,7 +109,7 @@ export class STTService {
   }
 
   pause(): void {
-    if (!this.listening) return
+    if (!this.listening) {return}
     this.paused = true
     this.clearAutoStop()
     if (this.recognition) {
@@ -119,7 +119,7 @@ export class STTService {
   }
 
   resume(): void {
-    if (!this.paused) return
+    if (!this.paused) {return}
     this.paused = false
     this.start()
   }
@@ -161,7 +161,7 @@ export class STTService {
       this.resetAutoStop()
       let final = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) final += event.results[i][0].transcript
+        if (event.results[i].isFinal) {final += event.results[i][0].transcript}
       }
       if (final) {
         this.retryCount = 0 // 成功后重置重试计数

@@ -72,12 +72,12 @@ export default function TeamPanel() {
       // 🔧 P2: 加载情绪数据
       try {
         const emotionData = await api.teamEmotions?.()
-        if (emotionData?.emotions) setEmotions(emotionData.emotions)
+        if (emotionData?.emotions) {setEmotions(emotionData.emotions)}
       } catch {}
       // 加载 ACP 成员
       // 加载 ACP 成员
       const acpResult = await api.acpList?.()
-      if (acpResult?.ok) setAcpMembers(acpResult.dynamic || [])
+      if (acpResult?.ok) {setAcpMembers(acpResult.dynamic || [])}
     } catch {}
   }
 
@@ -85,30 +85,30 @@ export default function TeamPanel() {
 
   const getActivity = (agentId: string): { activity: AgentActivity; desc: string } => {
     if (agentId === 'luna') {
-      if (hour < 7) return { activity: 'sleeping', desc: '💤 蜷在窝里睡觉' }
-      if (hour < 9) return { activity: 'waking', desc: '🥱 伸懒腰等主人起床' }
-      if (hour < 12) return { activity: 'caring', desc: '💬 陪主人聊天' }
-      if (hour < 13) return { activity: 'social', desc: '🍱 和热茶、Yak聊午饭' }
-      if (hour < 18) return { activity: 'working', desc: '📝 帮忙处理日常事务' }
-      if (hour < 22) return { activity: 'social', desc: '🌙 晚间陪伴时光' }
+      if (hour < 7) {return { activity: 'sleeping', desc: '💤 蜷在窝里睡觉' }}
+      if (hour < 9) {return { activity: 'waking', desc: '🥱 伸懒腰等主人起床' }}
+      if (hour < 12) {return { activity: 'caring', desc: '💬 陪主人聊天' }}
+      if (hour < 13) {return { activity: 'social', desc: '🍱 和热茶、Yak聊午饭' }}
+      if (hour < 18) {return { activity: 'working', desc: '📝 帮忙处理日常事务' }}
+      if (hour < 22) {return { activity: 'social', desc: '🌙 晚间陪伴时光' }}
       return { activity: 'sleeping', desc: '💤 蜷在窝里睡觉' }
     }
     if (agentId === 'ray') {
-      if (hour < 5) return { activity: 'sleeping', desc: '😴 终于睡了（熬夜写代码）' }
-      if (hour < 10) return { activity: 'sleeping', desc: '😴 补觉中' }
-      if (hour < 18) return { activity: 'coding', desc: '💻 写代码 / 修Bug' }
+      if (hour < 5) {return { activity: 'sleeping', desc: '😴 终于睡了（熬夜写代码）' }}
+      if (hour < 10) {return { activity: 'sleeping', desc: '😴 补觉中' }}
+      if (hour < 18) {return { activity: 'coding', desc: '💻 写代码 / 修Bug' }}
       return { activity: 'coding', desc: '🌙 深夜写代码（灵感来了）' }
     }
     // sora / yak
-    if (hour < 6) return { activity: 'sleeping', desc: '💤 准时睡觉' }
-    if (hour < 8) return { activity: 'waking', desc: '☕ 早间数据扫描' }
-    if (hour < 18) return { activity: 'analyzing', desc: '📊 数据分析中' }
+    if (hour < 6) {return { activity: 'sleeping', desc: '💤 准时睡觉' }}
+    if (hour < 8) {return { activity: 'waking', desc: '☕ 早间数据扫描' }}
+    if (hour < 18) {return { activity: 'analyzing', desc: '📊 数据分析中' }}
     return { activity: 'resting', desc: '📖 晚间阅读研究报告' }
   }
 
   // 注册新成员
   const handleRegister = async () => {
-    if (!formData.id || !formData.name) return
+    if (!formData.id || !formData.name) {return}
     const api = (window as any).luminaAPI
     const result = await api.teamRegisterMember?.({
       id: formData.id,
@@ -140,7 +140,7 @@ export default function TeamPanel() {
 
   // 注册 ACP 成员
   const handleRegisterAcp = async () => {
-    if (!acpFormData.name || !acpFormData.url) return
+    if (!acpFormData.name || !acpFormData.url) {return}
     const api = (window as any).luminaAPI
     const result = await api.acpRegister?.({
       ...acpFormData,
@@ -161,8 +161,8 @@ export default function TeamPanel() {
   const handleRemoveAcp = async (id: string) => {
     const api = (window as any).luminaAPI
     const result = await api.acpUnregister?.(id)
-    if (result?.ok) await loadDynamic()
-    else alert(result?.error || '移除失败')
+    if (result?.ok) {await loadDynamic()}
+    else {alert(result?.error || '移除失败')}
   }
 
   
@@ -173,18 +173,18 @@ export default function TeamPanel() {
 
   // 🔧 P2: 获取情绪颜色
   const getEmotionColor = (mood: number) => {
-    if (mood > 0.6) return '#10b981' // 绿色 - 开心
-    if (mood > 0.2) return '#3b82f6' // 蓝色 - 不错
-    if (mood > -0.3) return '#f59e0b' // 黄色 - 一般
+    if (mood > 0.6) {return '#10b981'} // 绿色 - 开心
+    if (mood > 0.2) {return '#3b82f6'} // 蓝色 - 不错
+    if (mood > -0.3) {return '#f59e0b'} // 黄色 - 一般
     return '#ef4444' // 红色 - 低落
   }
 
   // 🔧 P2: 获取情绪 emoji
   const getEmotionEmoji = (mood: number) => {
-    if (mood > 0.6) return '😄'
-    if (mood > 0.2) return '😊'
-    if (mood > -0.3) return '😐'
-    if (mood > -0.6) return '😔'
+    if (mood > 0.6) {return '😄'}
+    if (mood > 0.2) {return '😊'}
+    if (mood > -0.3) {return '😐'}
+    if (mood > -0.6) {return '😔'}
     return '😢'
   }
 

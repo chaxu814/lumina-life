@@ -170,7 +170,7 @@ export class InternPool {
    */
   fire(internId: string): boolean {
     const intern = this.interns.get(internId)
-    if (!intern) return false
+    if (!intern) {return false}
 
     this.interns.delete(internId)
 
@@ -229,7 +229,7 @@ export class InternPool {
    */
   complete(internId: string, result: string): void {
     const intern = this.interns.get(internId)
-    if (!intern) return
+    if (!intern) {return}
 
     intern.status = 'done'
     intern.result = result
@@ -244,7 +244,7 @@ export class InternPool {
    */
   fail(internId: string, error: string): void {
     const intern = this.interns.get(internId)
-    if (!intern) return
+    if (!intern) {return}
 
     intern.status = 'failed'
     intern.error = error
@@ -258,7 +258,7 @@ export class InternPool {
    */
   reset(internId: string): boolean {
     const intern = this.interns.get(internId)
-    if (!intern) return false
+    if (!intern) {return false}
 
     intern.status = 'idle'
     intern.currentTask = null
@@ -345,7 +345,7 @@ export class InternPool {
 let _instance: InternPool | null = null
 
 export function getInternPool(): InternPool {
-  if (!_instance) _instance = new InternPool()
+  if (!_instance) {_instance = new InternPool()}
   return _instance
 }
 

@@ -73,7 +73,7 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   async send(request: ChannelSendRequest): Promise<boolean> {
-    if (!this.botToken) return false
+    if (!this.botToken) {return false}
 
     // Discord 用 channel_id 发送消息
     const channelId = request.targetId
@@ -102,7 +102,7 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    if (!this.botToken) return false
+    if (!this.botToken) {return false}
     try {
       const data = await this.discordGet('/users/@me')
       return !!data.id
@@ -128,7 +128,7 @@ export class DiscordAdapter implements ChannelAdapter {
   // ── WebSocket Gateway 连接 ────────────────────────────
 
   private connectGateway(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return
+    if (this.ws?.readyState === WebSocket.OPEN) {return}
 
     // 获取 Gateway URL
     this.discordGet('/gateway').then((data: any) => {
@@ -248,7 +248,7 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   private sendIdentify(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {return}
 
     const identify = {
       op: 2,
@@ -268,7 +268,7 @@ export class DiscordAdapter implements ChannelAdapter {
 
   private handleMessageCreate(data: any): void {
     // 忽略 Bot 自身消息
-    if (data.author?.bot) return
+    if (data.author?.bot) {return}
 
     const channelId = data.channel_id
     const guildId = data.guild_id

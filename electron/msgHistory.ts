@@ -28,8 +28,8 @@ export interface MultimodalContentItem {
  * 检测消息是否包含多模态内容（图片、视频、音频）
  */
 export function isMultimodalMessage(msg: AgentMessage): boolean {
-  if (typeof msg.content === 'string') return false
-  if (!Array.isArray(msg.content)) return false
+  if (typeof msg.content === 'string') {return false}
+  if (!Array.isArray(msg.content)) {return false}
   return msg.content.some((item: any) => item.type === 'image_url' || item.type === 'video' || item.type === 'audio')
 }
 
@@ -37,7 +37,7 @@ export function isMultimodalMessage(msg: AgentMessage): boolean {
  * 从多模态消息中提取文本描述（用于压缩）
  */
 export function extractMultimodalText(msg: AgentMessage): string {
-  if (typeof msg.content === 'string') return msg.content
+  if (typeof msg.content === 'string') {return msg.content}
   
   const parts: string[] = []
   for (const item of (msg.content as any[]) || []) {
@@ -59,7 +59,7 @@ export function extractMultimodalText(msg: AgentMessage): string {
  * 压缩多模态消息：将图片/视频/音频替换为文本描述
  */
 export function compressMultimodalMessage(msg: AgentMessage): AgentMessage {
-  if (!isMultimodalMessage(msg)) return msg
+  if (!isMultimodalMessage(msg)) {return msg}
   
   const text = extractMultimodalText(msg)
   return {
@@ -339,7 +339,7 @@ export function compactMessages(
   const recentMsgs = messages.slice(-keepRecent)
   const midMsgs = messages.slice(systemMsgs.length, messages.length - keepRecent)
 
-  if (midMsgs.length < 3) return messages
+  if (midMsgs.length < 3) {return messages}
 
   const summaryText = midMsgs
     .filter(m => m.role === 'user' || m.role === 'assistant')

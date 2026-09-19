@@ -144,10 +144,10 @@ export function matchDomainPattern(hostname: string, pattern: string): boolean {
   const h = hostname.toLowerCase()
   const p = pattern.toLowerCase()
 
-  if (p === h) return true
-  if (p.startsWith('*.') && h.endsWith(p.slice(1))) return true
+  if (p === h) {return true}
+  if (p.startsWith('*.') && h.endsWith(p.slice(1))) {return true}
   // 处理 "*.github.com" 也匹配 "github.com" 本身
-  if (p.startsWith('*.') && h === p.slice(2)) return true
+  if (p.startsWith('*.') && h === p.slice(2)) {return true}
   return false
 }
 
@@ -156,17 +156,17 @@ export function matchDomainPattern(hostname: string, pattern: string): boolean {
  */
 export function isDomainAllowed(hostname: string, whitelist: string[]): boolean {
   const clean = hostname.replace(/:\d+$/, '').toLowerCase()
-  if (!clean) return false
+  if (!clean) {return false}
 
   // localhost / 内网地址始终放行（避免打断内部通信）
-  if (clean === 'localhost' || clean === '127.0.0.1' || clean === '::1' || clean === '0.0.0.0') return true
+  if (clean === 'localhost' || clean === '127.0.0.1' || clean === '::1' || clean === '0.0.0.0') {return true}
   // 10.x.x.x / 172.16-31.x.x / 192.168.x.x 内网地址放行
-  if (/^(10\.\d+\.\d+\.\d+)$/.test(clean)) return true
-  if (/^(172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(clean)) return true
-  if (/^(192\.168\.\d+\.\d+)$/.test(clean)) return true
+  if (/^(10\.\d+\.\d+\.\d+)$/.test(clean)) {return true}
+  if (/^(172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(clean)) {return true}
+  if (/^(192\.168\.\d+\.\d+)$/.test(clean)) {return true}
 
   for (const pattern of whitelist) {
-    if (matchDomainPattern(clean, pattern)) return true
+    if (matchDomainPattern(clean, pattern)) {return true}
   }
   return false
 }
@@ -190,8 +190,8 @@ export class NetCageProxy {
 
   /** 启动代理服务器（自动分配端口），返回监听端口号 */
   async start(): Promise<number> {
-    if (this.started) return this.port
-    if (this.startPromise) return this.startPromise  // 已有启动中的请求，复用
+    if (this.started) {return this.port}
+    if (this.startPromise) {return this.startPromise}  // 已有启动中的请求，复用
 
     this.startPromise = new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => this.onHttpRequest(req, res))
@@ -346,7 +346,7 @@ export class NetCageProxy {
     const targetSocket = net.createConnection(port, hostname, () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
       // 如果有初始数据（head），发送过去
-      if (head.length > 0) targetSocket.write(head)
+      if (head.length > 0) {targetSocket.write(head)}
       // 双向管道：两边数据互相转发
       targetSocket.pipe(clientSocket, { end: true })
       clientSocket.pipe(targetSocket, { end: true })

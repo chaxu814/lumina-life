@@ -130,7 +130,7 @@ describe('工具执行', () => {
   })
 
   it('executeToolWithRetry 成功时只调用一次', async () => {
-    let callCount = 0
+    const callCount = 0
     // 直接在 before 的 mock 工具上测——executeTool 已证明注册正常
     // executeToolWithRetry 内部调用 executeTool，这里验证执行路径
     const result = await executeToolWithRetry('mock_read', { path: '/test' }, { maxRetries: 1 })

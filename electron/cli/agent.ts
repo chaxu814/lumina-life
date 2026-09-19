@@ -24,7 +24,7 @@ export async function handleAgent(args: string[]): Promise<{ ok: boolean; data?:
     const config = getAgentConfig()
     const allStatus = config.getAllStatus()
     const status = allStatus.find(s => s.id === agentId)
-    if (!status) return { ok: false, error: `Agent "${agentId}" 不存在` }
+    if (!status) {return { ok: false, error: `Agent "${agentId}" 不存在` }}
     return {
       ok: true,
       data: `${status.icon || '🤖'} ${status.name} (${status.id})

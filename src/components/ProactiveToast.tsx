@@ -25,11 +25,11 @@ export default function ProactiveToast() {
   // 监听来自主进程的 proactive:popup IPC
   useEffect(() => {
     const cleanup = window.luminaAPI?.onProactivePopup?.((payload: ProactivePopupItem) => {
-      if (dismissed.has(payload.id)) return
+      if (dismissed.has(payload.id)) {return}
 
       setPopups(prev => {
         const next = [...prev, { ...payload, closing: false }]
-        if (next.length > MAX_VISIBLE) next.shift()
+        if (next.length > MAX_VISIBLE) {next.shift()}
         return next
       })
 
@@ -51,7 +51,7 @@ export default function ProactiveToast() {
     setPopups(prev => prev.filter(p => p.id !== id))
   }, [])
 
-  if (popups.length === 0) return null
+  if (popups.length === 0) {return null}
 
   // 类型图标映射
   const typeIcons: Record<string, string> = {

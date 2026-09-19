@@ -83,7 +83,7 @@ const EmotionPicker: React.FC<{
 }> = ({ agentId, current, isManual, onSelect, onReset, onClose }) => {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.emotion-picker')) onClose()
+      if (!(e.target as HTMLElement).closest('.emotion-picker')) {onClose()}
     }
     setTimeout(() => document.addEventListener('click', handler), 0)
     return () => document.removeEventListener('click', handler)
@@ -142,10 +142,10 @@ const EmotionPicker: React.FC<{
                 fontFamily: 'inherit',
               }}
               onMouseEnter={ev => {
-                if (!isActive) (ev.currentTarget as HTMLElement).style.background = '#f9fafb'
+                if (!isActive) {(ev.currentTarget as HTMLElement).style.background = '#f9fafb'}
               }}
               onMouseLeave={ev => {
-                if (!isActive) (ev.currentTarget as HTMLElement).style.background = 'transparent'
+                if (!isActive) {(ev.currentTarget as HTMLElement).style.background = 'transparent'}
               }}
             >
               <span style={{ fontSize: 24 }}>{e.icon}</span>
@@ -175,7 +175,7 @@ const StatusPicker: React.FC<{
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.status-picker')) onClose()
+      if (!(e.target as HTMLElement).closest('.status-picker')) {onClose()}
     }
     setTimeout(() => document.addEventListener('click', handler), 0)
     return () => document.removeEventListener('click', handler)
@@ -222,10 +222,10 @@ const StatusPicker: React.FC<{
                   fontFamily: 'inherit',
                 }}
                 onMouseEnter={ev => {
-                  if (!isActive) (ev.currentTarget as HTMLElement).style.background = '#f3f4f6'
+                  if (!isActive) {(ev.currentTarget as HTMLElement).style.background = '#f3f4f6'}
                 }}
                 onMouseLeave={ev => {
-                  if (!isActive) (ev.currentTarget as HTMLElement).style.background = 'transparent'
+                  if (!isActive) {(ev.currentTarget as HTMLElement).style.background = 'transparent'}
                 }}
               >
                 <span style={{
@@ -248,7 +248,7 @@ const StatusPicker: React.FC<{
           <input
             value={customText}
             onChange={e => setCustomText(e.target.value)}
-            onBlur={() => { if (customText.trim()) setCustomStatusText(agentId, customText.trim()) }}
+            onBlur={() => { if (customText.trim()) {setCustomStatusText(agentId, customText.trim())} }}
             onKeyDown={e => { if (e.key === 'Enter') { setCustomStatusText(agentId, customText.trim()); (e.target as HTMLInputElement).blur() } }}
             placeholder="输入自定义状态..."
             style={{
@@ -513,7 +513,7 @@ export default function AgentEmotionBar({
     }
   }, [forceUpdate])
 
-  if (agentIds.length === 0) return null
+  if (agentIds.length === 0) {return null}
 
   return (
     <div style={{
@@ -524,7 +524,7 @@ export default function AgentEmotionBar({
       {compact ? (
         agentIds.map(id => {
           const meta = AGENT_META[id]
-          if (!meta) return null
+          if (!meta) {return null}
           const emotion = getEmotion(id)
           const label = getNamedEmotion(id)
           const status = getAgentStatus(id)
@@ -540,7 +540,7 @@ export default function AgentEmotionBar({
         (() => {
           const id = agentIds[0]
           const meta = AGENT_META[id]
-          if (!meta) return null
+          if (!meta) {return null}
           const emotion = getEmotion(id)
           const label = getNamedEmotion(id)
           const status = getAgentStatus(id)
@@ -560,8 +560,8 @@ export default function AgentEmotionBar({
 }
 
 export function injectEmotionStyles() {
-  if (typeof document === 'undefined') return
-  if (document.getElementById('emotion-bar-styles')) return
+  if (typeof document === 'undefined') {return}
+  if (document.getElementById('emotion-bar-styles')) {return}
   const style = document.createElement('style')
   style.id = 'emotion-bar-styles'
   style.textContent = `

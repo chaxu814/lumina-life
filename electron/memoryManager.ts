@@ -17,7 +17,7 @@ let trimming = false
 
 /** 清理指定会话的 HTTP 缓存（安全、幂等、不影响本地 file:// 资源） */
 export async function trimCaches(targetSession?: Session): Promise<void> {
-  if (trimming) return
+  if (trimming) {return}
   trimming = true
   try {
     const sess = targetSession || session.defaultSession
@@ -61,9 +61,9 @@ export function scheduleMemoryTrims(getMainWindow: () => BrowserWindow | null): 
   periodic.unref?.()
 
   const onHidden = () => {
-    if (hideTimer) clearTimeout(hideTimer)
+    if (hideTimer) {clearTimeout(hideTimer)}
     hideTimer = setTimeout(() => { void trimCaches() }, 60_000)
-    if (hideTimer.unref) hideTimer.unref()
+    if (hideTimer.unref) {hideTimer.unref()}
   }
 
   app.on('browser-window-created', (_e, win) => {
@@ -78,7 +78,7 @@ export function logMemorySnapshot(label = 'mem'): void {
     const m = app.getAppMetrics()
     const totalMB = m.reduce((acc, p) => acc + (p.memory?.workingSetSize || 0) / 1024, 0)
     const byType: Record<string, number> = {}
-    for (const p of m) byType[p.type] = (byType[p.type] || 0) + (p.memory?.workingSetSize || 0) / 1024
+    for (const p of m) {byType[p.type] = (byType[p.type] || 0) + (p.memory?.workingSetSize || 0) / 1024}
     console.log(`[MemoryManager] ${label}: 总常驻 ~${Math.round(totalMB)}MB, 进程 ${m.length}`,
       Object.fromEntries(Object.entries(byType).map(([k, v]) => [k, Math.round(v)])))
   } catch { /* 诊断失败忽略 */ }

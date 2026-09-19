@@ -57,10 +57,10 @@ const SYSTEM_PROMPT = `你是 Lumina 桌宠的灵魂（住在用户桌面上的�
 
 /** 从 LLM 原始输出里抠出 JSON */
 function parseDecisionJson(raw: string): Partial<{ shouldSpeak: boolean; action: string; mood: string; speech: string; reason: string }> | null {
-  if (!raw) return null
+  if (!raw) {return null}
   try {
     const obj = JSON.parse(raw.trim())
-    if (obj && typeof obj === 'object') return obj
+    if (obj && typeof obj === 'object') {return obj}
   } catch { /* 继续 */ }
   const m = raw.match(/\{[\s\S]*?\}/)
   if (m) {
@@ -71,13 +71,13 @@ function parseDecisionJson(raw: string): Partial<{ shouldSpeak: boolean; action:
 
 /** 时段兜底模板（LLM 不可用时保证她还活着） */
 function fallbackSpeech(source: ProactiveEvent['source'], hour: number): { speech: string; action: string; mood: string } {
-  if (hour >= 23 || hour < 6) return { speech: '夜深了…我先眯一会儿喵…', action: 'sleep', mood: '疲惫 😩' }
+  if (hour >= 23 || hour < 6) {return { speech: '夜深了…我先眯一会儿喵…', action: 'sleep', mood: '疲惫 😩' }}
   if (source === 'startup') {
-    if (hour >= 6 && hour < 9) return { speech: '醒啦？早安喵~', action: 'wake', mood: '开心 😊' }
+    if (hour >= 6 && hour < 9) {return { speech: '醒啦？早安喵~', action: 'wake', mood: '开心 😊' }}
     return { speech: '嗨，又见面啦~', action: 'wave', mood: '开心 😊' }
   }
-  if (source === 'drive_hard') return { speech: '理理我嘛喵…', action: 'wave', mood: '开心 😊' }
-  if (source === 'hot_topic') return { speech: '刚才刷到个有意思的事…', action: 'say', mood: '平静 😐' }
+  if (source === 'drive_hard') {return { speech: '理理我嘛喵…', action: 'wave', mood: '开心 😊' }}
+  if (source === 'hot_topic') {return { speech: '刚才刷到个有意思的事…', action: 'say', mood: '平静 😐' }}
   const pool = [
     { speech: '喵~', action: 'blink', mood: '平静 😐' },
     { speech: '在忙什么呀？', action: 'say', mood: '开心 😊' },
@@ -101,14 +101,14 @@ export async function generateProactive(
   const parts: string[] = []
   parts.push(`现在是${timeOfDay} ${hour}点。`)
   parts.push(`事件来源：${event.source}；屏幕场景：${event.scene || '未知'}。`)
-  if (event.screenSummary) parts.push(`屏幕上在：${event.screenSummary}`)
-  if (event.externalTopics?.length) parts.push(`外部话题：${event.externalTopics.slice(0, 3).join('、')}`)
-  if (ctx.gapMinutes !== undefined) parts.push(`距上次互动/离线 ${ctx.gapMinutes} 分钟。`)
-  if (ctx.innerThought) parts.push(`你刚才在心里想：${ctx.innerThought}（据此选语气，但不要直接念出来）`)
-  if (ctx.unfinishedQuestion) parts.push(`【必须接续】你上次问了：「${ctx.unfinishedQuestion}」`)
-  if (ctx.followups.length) parts.push(`可以自然提起的旧事：${ctx.followups.slice(0, 3).join('；')}`)
-  if (ctx.memorySnippet) parts.push(`记忆：${ctx.memorySnippet.slice(0, 300)}`)
-  if (ctx.recentSpeeches.length) parts.push(`最近说过（别重复）：${ctx.recentSpeeches.slice(-6).join(' / ')}`)
+  if (event.screenSummary) {parts.push(`屏幕上在：${event.screenSummary}`)}
+  if (event.externalTopics?.length) {parts.push(`外部话题：${event.externalTopics.slice(0, 3).join('、')}`)}
+  if (ctx.gapMinutes !== undefined) {parts.push(`距上次互动/离线 ${ctx.gapMinutes} 分钟。`)}
+  if (ctx.innerThought) {parts.push(`你刚才在心里想：${ctx.innerThought}（据此选语气，但不要直接念出来）`)}
+  if (ctx.unfinishedQuestion) {parts.push(`【必须接续】你上次问了：「${ctx.unfinishedQuestion}」`)}
+  if (ctx.followups.length) {parts.push(`可以自然提起的旧事：${ctx.followups.slice(0, 3).join('；')}`)}
+  if (ctx.memorySnippet) {parts.push(`记忆：${ctx.memorySnippet.slice(0, 300)}`)}
+  if (ctx.recentSpeeches.length) {parts.push(`最近说过（别重复）：${ctx.recentSpeeches.slice(-6).join(' / ')}`)}
   parts.push(`你的内驱力：精力${ctx.drives.energy.toFixed(2)} 社交${ctx.drives.social.toFixed(2)}。`)
   parts.push('请决定这一句话（或沉默）。')
 

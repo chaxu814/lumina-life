@@ -54,7 +54,7 @@ export class EventBus {
     }
 
     const handlers = this.handlers.get(eventType)
-    if (!handlers?.size) return
+    if (!handlers?.size) {return}
 
     // 并行执行，不阻塞
     const promises = Array.from(handlers).map(async (handler) => {

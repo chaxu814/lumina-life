@@ -421,10 +421,10 @@ export function evaluateGoalCompletion(
   const hasCompletionSignal = completionSignals.some(s => lower.includes(s))
   const hasIncompleteSignal = incompleteSignals.some(s => lower.includes(s))
 
-  if (hasCompletionSignal && !hasIncompleteSignal) score = 0.9
-  else if (hasCompletionSignal && hasIncompleteSignal) score = 0.6  // 矛盾信号
-  else if (hasIncompleteSignal) score = 0.2
-  else if (lastOutput.length > 200) score = 0.7  // 长输出通常意味着做了事
+  if (hasCompletionSignal && !hasIncompleteSignal) {score = 0.9}
+  else if (hasCompletionSignal && hasIncompleteSignal) {score = 0.6}  // 矛盾信号
+  else if (hasIncompleteSignal) {score = 0.2}
+  else if (lastOutput.length > 200) {score = 0.7}  // 长输出通常意味着做了事
 
   // 检查是否包含了关键交付物
   if (criteria) {
@@ -539,7 +539,7 @@ export function saveLuckyConfig(config: LuckyModeConfig): void {
   const configPath = getConfigPath()
   try {
     const dir = path.dirname(configPath)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
   } catch (e) {
     console.error('[LuckyMode] 保存配置失败:', e)
@@ -563,7 +563,7 @@ export function saveLuckyState(state: LuckyModeState): void {
   const statePath = getStatePath()
   try {
     const dir = path.dirname(statePath)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf-8')
   } catch (e) {
     console.error('[LuckyMode] 保存状态失败:', e)

@@ -21,7 +21,7 @@ const TEST_TASK = '请分析以下代码的性能瓶颈：function fib(n) { if (
 
 function readJsonSafe(filePath: string, fallback: any = null): any {
   try {
-    if (!fs.existsSync(filePath)) return fallback
+    if (!fs.existsSync(filePath)) {return fallback}
     return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
   } catch {
     return fallback
@@ -44,7 +44,7 @@ function getLatestJob(agentId: string): any {
   const jobsPath = path.join(AGENTS_ROOT, agentId, 'jobs.json')
   const store = readJsonSafe(jobsPath, { jobs: {} })
   const jobs = Object.values(store.jobs || {})
-  if (jobs.length === 0) return null
+  if (jobs.length === 0) {return null}
   return jobs.sort((a: any, b: any) => b.createdAt - a.createdAt)[0]
 }
 

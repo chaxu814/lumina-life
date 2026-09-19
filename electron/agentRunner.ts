@@ -94,7 +94,7 @@ registerAllTools()
 
 /** 将 AgentMessage content 安全转为字符串 */
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -105,7 +105,7 @@ function toText(content: AgentMessage['content']): string {
 //   QwenPaw 从不黑名单工具：每次请求都带 tools，模型自行处理。
 //   只在当前实例中记录"本次请求因工具失败→下次不带工具"的临时标记。
 //   新 AgentRunner 实例不受影响，旧实例可通过 reset() 清除。
-let _globalToolBlacklistCount = 0  // 仅用于统计日志
+const _globalToolBlacklistCount = 0  // 仅用于统计日志
 
 /** 🆕 v3.9: 向后兼容存根 — 全局黑名单已移除，此函数为空操作 */
 export function clearModelToolBlacklist(_model?: string): void {
@@ -123,7 +123,7 @@ export function clearModelToolBlacklist(_model?: string): void {
 // ═══════════════════════════════════════════════════════════
 
 export function parseXmlToolCalls(text: string): LLMToolCall[] | null {
-  if (!text) return null
+  if (!text) {return null}
 
   const calls: LLMToolCall[] = []
 
@@ -370,7 +370,7 @@ async function preExecuteSearch(text: string, skipAutoSearch = false): Promise<s
 
   for (const pattern of SEARCH_INTENT_PATTERNS) {
     const match = trimmed.match(pattern.regex)
-    if (!match) continue
+    if (!match) {continue}
 
     // 提取搜索查询词
     let query = (match[1] || trimmed)
@@ -379,14 +379,14 @@ async function preExecuteSearch(text: string, skipAutoSearch = false): Promise<s
       .trim()
       .slice(0, 200)
 
-    if (query.length < 2) continue
+    if (query.length < 2) {continue}
 
     // 🔧 2026-07-12: 清理 query 首部的"最近""今天"等时间词（防止搜索引擎把时间词当核心关键词）
     query = query.replace(/^(?:最近|今天|今日|现在|当前|眼下|这会儿|这两天|本周|本月)\s*(?:的|有|是)?\s*/i, '').trim()
 
     // 过滤无意义的查询词
     const noise = /^(一下|一下吗|看看|搜一搜|搜索|查查|查一下|搜一下|帮我|帮我搜|帮我查|这个|那个|这些|那些|它|他|她|我|你|怎么|什么|为什么|谁|多少|几|哪|吗|呢|吧|啊)$/i
-    if (noise.test(query)) continue
+    if (noise.test(query)) {continue}
 
     // ── v12.0 改进：三层时效性判断 ──
     //   Layer 1: 用户消息含时间词 → 必时效
@@ -416,9 +416,9 @@ async function preExecuteSearch(text: string, skipAutoSearch = false): Promise<s
       let protectedQuery = query
       for (const noun of mixedMatches) {
         // 跳过表年份/月份的结构（"2026年"、"7月"等）
-        if (/^(?:\d+年|\d+月|\d+日)$/.test(noun)) continue
+        if (/^(?:\d+年|\d+月|\d+日)$/.test(noun)) {continue}
         // 跳过纯数字或纯汉字的
-        if (/^\d+$/.test(noun) || /^[\u4e00-\u9fff]+$/.test(noun)) continue
+        if (/^\d+$/.test(noun) || /^[\u4e00-\u9fff]+$/.test(noun)) {continue}
         if (noun.length >= 3 && !protectedQuery.includes(`"${noun}"`)) {
           protectedQuery = protectedQuery.replace(noun, `"${noun}"`)
         }
@@ -489,7 +489,7 @@ async function preExecuteCollect(text: string): Promise<string | null> {
   const hasCollectIntent = COLLECT_INTENT_PATTERNS.some(p => p.test(text))
   const urls = extractUrls(text)
 
-  if (urls.length === 0) return null
+  if (urls.length === 0) {return null}
 
   // Step 2: 如果有收集意图或多于 1 个 URL，执行批量收集
   if (hasCollectIntent || urls.length >= 2) {
@@ -833,7 +833,7 @@ private summarizer: ConversationSummarizer | null = null
    */
   private _applyAgentLlmConfig(): void {
     const personaId = this.config.personaId
-    if (!personaId) return
+    if (!personaId) {return}
 
     try {
       const config = getAgentConfig()
@@ -862,10 +862,10 @@ private summarizer: ConversationSummarizer | null = null
       )
 
       // v8.0: 所有 Agent 都应用独立 LLM 配置
-      if (llm.endpoint) this.config.baseUrl = llm.endpoint
-      if (llm.model) this.config.model = llm.model
-      if (llm.apiKey) this.config.apiKey = llm.apiKey
-      if (llm.timeout) (this.config as any).timeout = llm.timeout
+      if (llm.endpoint) {this.config.baseUrl = llm.endpoint}
+      if (llm.model) {this.config.model = llm.model}
+      if (llm.apiKey) {this.config.apiKey = llm.apiKey}
+      if (llm.timeout) {(this.config as any).timeout = llm.timeout}
       if (llm.maxContextTokens) {
         (this.config as any).contextWindow = llm.maxContextTokens
         ;(this.config as any).maxTokens = llm.maxContextTokens
@@ -1053,7 +1053,7 @@ private summarizer: ConversationSummarizer | null = null
 
       // 传统压缩模式
       const result = compactMessages(this.messages, this._compressedSummary)
-      if (!result) return
+      if (!result) {return}
 
       this.messages = result.messages
       this._compressedSummary = result.summary.text
@@ -1106,7 +1106,7 @@ private summarizer: ConversationSummarizer | null = null
     // 从后往前收集，收集到足够 user-assistant 对后停止
     for (let i = history.length - 1; i >= 0 && userPairCount < MAX_MSG_PAIRS; i--) {
       const msg = history[i]
-      if (msg.role === 'user') userPairCount++
+      if (msg.role === 'user') {userPairCount++}
       recentMsgs.unshift(msg)  // 倒序插入保持正序
     }
     for (const msg of recentMsgs) {
@@ -1125,7 +1125,7 @@ private summarizer: ConversationSummarizer | null = null
   private persistConversationHistory(): void {
     try {
       const store = getMemoryStore()
-      if (!store) return
+      if (!store) {return}
       for (let i = this.lastPersistedIndex + 1; i < this.messages.length; i++) {
         const msg = this.messages[i]
         const toolCalls = (msg as any).tool_calls
@@ -1225,7 +1225,7 @@ private summarizer: ConversationSummarizer | null = null
 
   /** 🆕 P0: Scroll 召回 — 从索引中检索历史对话 */
   recallScroll(query: string, limit = 10): string {
-    if (!this._scrollContext) return ''
+    if (!this._scrollContext) {return ''}
     try {
       const agentId = this.config.personaId as string | undefined
       const results = (this._scrollContext as any).recall({
@@ -1234,7 +1234,7 @@ private summarizer: ConversationSummarizer | null = null
         query,
         limit,
       })
-      if (!results || results.length === 0) return ''
+      if (!results || results.length === 0) {return ''}
       return (this._scrollContext as any).formatForContext(results, 3000)
     } catch (e) {
       console.warn('[AgentRunner] Scroll 召回失败:', e)
@@ -1256,7 +1256,7 @@ private summarizer: ConversationSummarizer | null = null
       /写个|写一个|帮我写|帮我修|修一下|改一下|实现一个|封装/i,
     ]
     // 短句且包含代码关键词 → 大概率是代码题
-    if (text.length < 30 && codePatterns[0].test(text)) return true
+    if (text.length < 30 && codePatterns[0].test(text)) {return true}
     // 长句必须有明确代码关键词才路由
     const matchCount = codePatterns.filter(p => p.test(text)).length
     return matchCount >= 2
@@ -1437,7 +1437,7 @@ private summarizer: ConversationSummarizer | null = null
           const path = require('path')
           const root = process.cwd()
           const dir = path.join(root, 'collected')
-          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
           const filePath = path.join(root, filename)
           fs.writeFileSync(filePath, `# 搜索结果 (${dateStr})\n\n查询: ${text.slice(0, 80)}...\n\n---\n\n${searchResult}`, 'utf-8')
         } catch { /* ignore file save errors */ }
@@ -1552,7 +1552,7 @@ private summarizer: ConversationSummarizer | null = null
           const path = require('path')
           const root = process.cwd()
           const dir = path.join(root, 'collected')
-          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
           const filePath = path.join(root, filename)
           fs.writeFileSync(filePath, `# 网页内容收集 (${ts})\n\n查询: ${text.slice(0, 80)}...\n\n---\n\n${collectResult}`, 'utf-8')
           this.messages.push({
@@ -1725,7 +1725,7 @@ private summarizer: ConversationSummarizer | null = null
     const blockedTools = new Map<string, number>()  // 🆕 v14.3: 被安全门临时封禁的工具 → 解封轮次
 
     for (let round = 0; round < maxRounds; round++) {
-      if (this.abortController?.signal.aborted) break
+      if (this.abortController?.signal.aborted) {break}
 
       // ── 🛡️ P1: 两道安全门（精简自原四道） ──
 
@@ -1746,7 +1746,7 @@ private summarizer: ConversationSummarizer | null = null
 
       // 清理已过期的封禁
       for (const name of [...blockedTools.keys()]) {
-        if (round >= blockedTools.get(name)!) blockedTools.delete(name)
+        if (round >= blockedTools.get(name)!) {blockedTools.delete(name)}
       }
 
       // 门 2: 总计工具调用超 30 次 → 强制收敛
@@ -1828,7 +1828,7 @@ private summarizer: ConversationSummarizer | null = null
           const toolNames = response.toolCalls.map(tc => tc.function.name)
           lastToolNames.push(...toolNames)
           // 只保留最近 30 轮的工具名
-          if (lastToolNames.length > 30) lastToolNames.splice(0, lastToolNames.length - 30)
+          if (lastToolNames.length > 30) {lastToolNames.splice(0, lastToolNames.length - 30)}
 
           this._toolsUsedThisRun = true  // 🆕 v3.9: 标记已用过工具
           const assistantMsg: AgentMessage = {
@@ -2032,7 +2032,7 @@ private summarizer: ConversationSummarizer | null = null
               }
               allowedCalls.push(tc)
             }
-            if (allowedCalls.length === 0) continue
+            if (allowedCalls.length === 0) {continue}
 
             const batches = groupParallelBatches(allowedCalls)
             for (const batch of batches) {
@@ -2299,7 +2299,7 @@ private summarizer: ConversationSummarizer | null = null
         .map(m => toText(m.content).trim())
         .filter(t => {
           const key = _normalizeDedupeKey(t)
-          if (!key || seen.has(key)) return false
+          if (!key || seen.has(key)) {return false}
           seen.add(key)
           return true
         })
@@ -2408,7 +2408,7 @@ private summarizer: ConversationSummarizer | null = null
 
     // 已缓存
     const cached = _detectedContextCache.get(cacheKey)
-    if (cached != null) return cached
+    if (cached != null) {return cached}
 
     // ── Step 1: 查询 API /models 端点 ──
     try {
@@ -2422,7 +2422,7 @@ private summarizer: ConversationSummarizer | null = null
         const models: any[] = data.data || []
 
         // vLLM 可能返回 max_model_len
-        let match = models.find((m: any) => m.id === model)
+        const match = models.find((m: any) => m.id === model)
         if (match) {
           const limit = match.max_context_length
             || match.context_length
@@ -2469,10 +2469,10 @@ private summarizer: ConversationSummarizer | null = null
     if (sizeMatch) {
       const size = parseInt(sizeMatch[1])
       let limit = 262_144  // 默认 256K（现代模型普遍支持大上下文）
-      if (size >= 70) limit = 1_048_576      // 70B+ 普遍支持 1M
-      else if (size >= 30) limit = 524_288   // 30-70B 普遍支持 512K
-      else if (size >= 13) limit = 262_144   // 13-30B 普遍支持 256K
-      else if (size >= 7) limit = 131_072    // 7-13B 普遍支持 128K
+      if (size >= 70) {limit = 1_048_576}      // 70B+ 普遍支持 1M
+      else if (size >= 30) {limit = 524_288}   // 30-70B 普遍支持 512K
+      else if (size >= 13) {limit = 262_144}   // 13-30B 普遍支持 256K
+      else if (size >= 7) {limit = 131_072}    // 7-13B 普遍支持 128K
       console.log(`[AgentRunner] 🔮 参数推测: ${size}B → ${TokenEstimator.format(limit)} tokens`)
       _detectedContextCache.set(cacheKey, limit)
       return limit
@@ -2511,7 +2511,7 @@ private summarizer: ConversationSummarizer | null = null
     let usedTokens = 0
     for (let i = otherMsgs.length - 1; i >= 0; i--) {
       const est = estimator.estimate(toText(otherMsgs[i].content))
-      if (usedTokens + est > historyBudget * 0.9 && kept.length >= 2) break
+      if (usedTokens + est > historyBudget * 0.9 && kept.length >= 2) {break}
       kept.unshift(otherMsgs[i])
       usedTokens += est
     }
@@ -2537,7 +2537,7 @@ private summarizer: ConversationSummarizer | null = null
   }> {
     // 从 API 动态检测上下文窗口（替代硬编码推测）
     const contextLimit = await this.detectContextLimit()
-    let messages = this.trimContext([...this.messages], contextLimit)
+    const messages = this.trimContext([...this.messages], contextLimit)
 
     // 合并连续同角色消息 — 某些 API (LM Studio, deepseek, 等) 要求 user/assistant 严格交替
     const mergedMessages: AgentMessage[] = []
@@ -2756,14 +2756,14 @@ private summarizer: ConversationSummarizer | null = null
             body: JSON.stringify({ ...requestBody, stream: false }),
             signal: fetchSignal,
           })
-          if (!nonStreamRes.ok) return { error: `LLM 错误 (${nonStreamRes.status}): ${(await nonStreamRes.text().catch(() => '')).slice(0, 200)}` }
+          if (!nonStreamRes.ok) {return { error: `LLM 错误 (${nonStreamRes.status}): ${(await nonStreamRes.text().catch(() => '')).slice(0, 200)}` }}
           const data = await nonStreamRes.json()
           const choice = data.choices?.[0]
-          if (!choice) return { error: 'LLM 返回为空' }
+          if (!choice) {return { error: 'LLM 返回为空' }}
           const msg = choice.message
-          if (msg.content) streamText = msg.content
+          if (msg.content) {streamText = msg.content}
           if (msg.tool_calls?.length) {
-            if (streamText) this.messages.push({ role: 'assistant', content: streamText })
+            if (streamText) {this.messages.push({ role: 'assistant', content: streamText })}
             return { toolCalls: msg.tool_calls, text: streamText || undefined, usage: data.usage }
           }
           streamUsage = data.usage
@@ -2776,11 +2776,11 @@ private summarizer: ConversationSummarizer | null = null
           if (degraded) {
             const { data, kind } = degraded
             const choice = data.choices?.[0]
-            if (!choice) return { error: 'LLM 返回为空' }
+            if (!choice) {return { error: 'LLM 返回为空' }}
             const msg = choice.message
-            if (msg?.content) streamText = msg.content
+            if (msg?.content) {streamText = msg.content}
             if (msg?.tool_calls?.length) {
-              if (streamText) this.messages.push({ role: 'assistant', content: streamText })
+              if (streamText) {this.messages.push({ role: 'assistant', content: streamText })}
               return { toolCalls: msg.tool_calls, text: streamText || undefined, usage: data.usage }
             }
             streamUsage = data.usage
@@ -2795,7 +2795,7 @@ private summarizer: ConversationSummarizer | null = null
       } else {
         // ── 流式读取 ──
         const reader = streamRes.body?.getReader()
-        if (!reader) throw new Error('无响应体')
+        if (!reader) {throw new Error('无响应体')}
 
         const decoder = new TextDecoder()
         const toolCallAccum = new Map<number, { id?: string; name?: string; args: string }>()
@@ -2803,7 +2803,7 @@ private summarizer: ConversationSummarizer | null = null
 
         // 增量流式 — 完整工具检测与执行
         const completedToolCalls: LLMToolCall[] = []
-        let earlyExecutionStarted = false
+        const earlyExecutionStarted = false
         /** 🆕 v8.1: 只读工具名列表（可安全预执行，无副作用） */
         const READONLY_EARLY_TOOLS = new Set([
           'web_search', 'web_fetch', 'web_search_multi',
@@ -2818,7 +2818,7 @@ private summarizer: ConversationSummarizer | null = null
 
         while (true) {
           const { done, value } = await reader.read()
-          if (done) break
+          if (done) {break}
 
           buffer += decoder.decode(value, { stream: true })
 
@@ -2826,14 +2826,14 @@ private summarizer: ConversationSummarizer | null = null
           buffer = lines.pop() || ''
 
           for (const line of lines) {
-            if (!line.startsWith('data: ')) continue
+            if (!line.startsWith('data: ')) {continue}
             const data = line.slice(6).trim()
-            if (data === '[DONE]') continue
+            if (data === '[DONE]') {continue}
 
             try {
               const chunk = JSON.parse(data)
               const delta = chunk.choices?.[0]?.delta
-              if (!delta) continue
+              if (!delta) {continue}
 
               if (delta.reasoning_content) {
                 const isFirst = !this._reasoningStarted
@@ -2858,18 +2858,18 @@ private summarizer: ConversationSummarizer | null = null
               if (delta.tool_calls) {
                 for (const tc of delta.tool_calls) {
                   const idx = tc.index ?? 0
-                  if (!toolCallAccum.has(idx)) toolCallAccum.set(idx, { args: '' })
+                  if (!toolCallAccum.has(idx)) {toolCallAccum.set(idx, { args: '' })}
                   const acc = toolCallAccum.get(idx)!
-                  if (tc.id) acc.id = tc.id
-                  if (tc.function?.name) acc.name = tc.function.name
-                  if (tc.function?.arguments) acc.args += tc.function.arguments
+                  if (tc.id) {acc.id = tc.id}
+                  if (tc.function?.name) {acc.name = tc.function.name}
+                  if (tc.function?.arguments) {acc.args += tc.function.arguments}
                 }
 
                 // 检测完整的工具调用 — 有 id + name + 可解析的参数
                 for (const [idx, acc] of toolCallAccum) {
-                  if (!acc.id || !acc.name) continue
+                  if (!acc.id || !acc.name) {continue}
                   // 检查是否已经标记为完成
-                  if (completedToolCalls.some(c => c.id === acc.id)) continue
+                  if (completedToolCalls.some(c => c.id === acc.id)) {continue}
                   // 尝试解析参数 — 解析成功才算完整
                   try {
                     JSON.parse(acc.args)
@@ -2900,7 +2900,7 @@ private summarizer: ConversationSummarizer | null = null
                 }
               }
 
-              if (chunk.usage) streamUsage = chunk.usage
+              if (chunk.usage) {streamUsage = chunk.usage}
             } catch { /* skip malformed chunk */ }
           }
         }
@@ -2963,7 +2963,7 @@ private summarizer: ConversationSummarizer | null = null
     }
 
     if (streamToolCalls?.length) {
-      if (streamText) this.messages.push({ role: 'assistant', content: streamText })
+      if (streamText) {this.messages.push({ role: 'assistant', content: streamText })}
       return { toolCalls: streamToolCalls, text: streamText || undefined, usage: streamUsage, earlyResults: earlyResultsObj }
     }
     const parsedXml = parseXmlToolCalls(streamText)
@@ -3000,7 +3000,7 @@ private summarizer: ConversationSummarizer | null = null
 
     const headersFor = (withAuth: boolean): Record<string, string> => {
       const h: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (withAuth && this.config.apiKey) h.Authorization = `Bearer ${this.config.apiKey}`
+      if (withAuth && this.config.apiKey) {h.Authorization = `Bearer ${this.config.apiKey}`}
       return h
     }
 
@@ -3012,12 +3012,12 @@ private summarizer: ConversationSummarizer | null = null
       tried.add(kind)
 
       try {
-        if (kind === 'tools') getModelCapabilityCache().markNoToolSupport(this.config.model)
-        else if (kind === 'vision') getModelCapabilityCache().update(this.config.model, { supportsVision: false })
+        if (kind === 'tools') {getModelCapabilityCache().markNoToolSupport(this.config.model)}
+        else if (kind === 'vision') {getModelCapabilityCache().update(this.config.model, { supportsVision: false })}
       } catch { /* 缓存不可用忽略 */ }
 
       const note = describeLimitation(kind, this.config.model)
-      if (note) console.warn(`[AgentRunner] 🔧 ${status} ${kind} → 自动降级：${note}`)
+      if (note) {console.warn(`[AgentRunner] 🔧 ${status} ${kind} → 自动降级：${note}`)}
       cur = degradeForKind(cur, kind)
 
       let res = await fetch(`${this.config.baseUrl}/chat/completions`, {
@@ -3040,7 +3040,7 @@ private summarizer: ConversationSummarizer | null = null
 
       if (res.ok) {
         const data = await res.json().catch(() => null)
-        if (data?.choices?.[0]) return { data, kind }
+        if (data?.choices?.[0]) {return { data, kind }}
         return null
       }
       lastErr = await res.text().catch(() => '')

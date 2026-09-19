@@ -70,19 +70,19 @@ export async function deepResearch(args: Record<string, any>): Promise<ToolResul
       // 结构化为可读文本
       const obj = rawReport as any
       report = ''
-      if (obj.title) report += `# ${obj.title}\n\n`
-      if (obj.summary) report += `## 摘要\n${obj.summary}\n\n`
+      if (obj.title) {report += `# ${obj.title}\n\n`}
+      if (obj.summary) {report += `## 摘要\n${obj.summary}\n\n`}
       if (obj.findings && Array.isArray(obj.findings)) {
         report += `## 发现 (${obj.findings.length}项)\n\n`
         for (const f of obj.findings) {
           report += `### ${f.claim || f.title || '发现'}\n`
           report += `${f.evidence || f.content || ''}\n`
           report += `置信度: ${f.confidence ?? f.credibility ?? 'N/A'}\n`
-          if (f.sources) report += `来源: ${Array.isArray(f.sources) ? f.sources.join(', ') : f.sources}\n`
+          if (f.sources) {report += `来源: ${Array.isArray(f.sources) ? f.sources.join(', ') : f.sources}\n`}
           report += '\n'
         }
       }
-      if (obj.conclusion) report += `## 结论\n${obj.conclusion}\n\n`
+      if (obj.conclusion) {report += `## 结论\n${obj.conclusion}\n\n`}
       if (obj.sources && Array.isArray(obj.sources)) {
         report += `## 来源 (${obj.sources.length}项)\n`
         for (const s of obj.sources) {

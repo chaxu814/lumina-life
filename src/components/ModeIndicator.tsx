@@ -46,7 +46,7 @@ export default function ModeIndicator() {
         setShowMenu(false)
       }
     }
-    if (showMenu) document.addEventListener('mousedown', handler)
+    if (showMenu) {document.addEventListener('mousedown', handler)}
     return () => document.removeEventListener('mousedown', handler)
   }, [showMenu])
 
@@ -58,7 +58,7 @@ export default function ModeIndicator() {
   }, [current])
 
   const handleSwitchMode = async (mode: LuminaMode) => {
-    if (mode === current) return
+    if (mode === current) {return}
     try {
       await (window as any).luminaAPI?.modeSet(mode)
     } catch {
@@ -144,10 +144,10 @@ export default function ModeIndicator() {
                   transition: 'background 0.15s',
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'var(--hover-bg)'
+                  if (!isActive) {e.currentTarget.style.background = 'var(--hover-bg)'}
                 }}
                 onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent'
+                  if (!isActive) {e.currentTarget.style.background = 'transparent'}
                 }}
               >
                 <span style={{ fontSize: 15 }}>{m.emoji}</span>

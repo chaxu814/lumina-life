@@ -80,24 +80,24 @@ export function calculateSpark(params: {
   // ── 情绪修正 ──
   const firstEmotion = emotionContext(firstAgentId)
   // 发言者情绪低迷 → 队友更可能接话
-  if (firstEmotion.includes('心情低落')) probability += 0.12
-  if (firstEmotion.includes('精力不足')) probability += 0.08
+  if (firstEmotion.includes('心情低落')) {probability += 0.12}
+  if (firstEmotion.includes('精力不足')) {probability += 0.08}
 
   // ── 上下文修正 ──
   // 用户问得长/复杂 → 更可能需要多人讨论
-  if (userText.length > 80) probability += 0.08
-  if (userText.length > 200) probability += 0.05
+  if (userText.length > 80) {probability += 0.08}
+  if (userText.length > 200) {probability += 0.05}
 
   // 回复较短 → 有更多补充空间
-  if (firstReply.length < 60) probability += 0.10
+  if (firstReply.length < 60) {probability += 0.10}
 
   // 连续单 Agent 太久了 → 打破单调
-  if (recentTurnCount >= 3) probability += 0.12
-  if (recentTurnCount >= 5) probability += 0.08
+  if (recentTurnCount >= 3) {probability += 0.12}
+  if (recentTurnCount >= 5) {probability += 0.08}
 
   // 回复中提到其他 Agent → 高概率触发
   const mentionMatch = firstReply.match(/(热茶|Yak|Lumina)/gi)
-  if (mentionMatch && mentionMatch.length > 0) probability += 0.20
+  if (mentionMatch && mentionMatch.length > 0) {probability += 0.20}
 
   // 带了问号 → 可能是问另一个 Agent
   if (firstReply.includes('?') || firstReply.includes('?') || firstReply.includes('?') || firstReply.includes('？')) {
@@ -109,7 +109,7 @@ export function calculateSpark(params: {
 
   // ── 掷骰子 ──
   const roll = Math.random()
-  if (roll > probability) return null
+  if (roll > probability) {return null}
 
   // ── 火花触发！选类型 + 选 Agent ──
   const otherAgents = AGENTS.filter(a => a.id !== firstAgentId)
@@ -179,17 +179,17 @@ export function calculateChainSpark(params: {
   const { lastSpeakerId, lastReply, alreadySpokenIds } = params
   const chainIndex = alreadySpokenIds.length - 1  // -1 去掉第一个发言者
   const baseProb = CHAIN_PROBABILITIES[chainIndex] ?? 0
-  if (baseProb <= 0) return null
+  if (baseProb <= 0) {return null}
 
   let probability = baseProb
 
   // ── 修正因子 ──
   // 前一个人话很短 → 更容易接
-  if (lastReply.length < 50) probability += 0.08
+  if (lastReply.length < 50) {probability += 0.08}
   // 带问号 → 更可能是抛话题
-  if (/[?？？]/.test(lastReply)) probability += 0.10
+  if (/[?？？]/.test(lastReply)) {probability += 0.10}
   // 提到队友名字 → 点名概率直接翻倍
-  if (/(热茶|Yak|Lumina)/gi.test(lastReply)) probability += 0.25
+  if (/(热茶|Yak|Lumina)/gi.test(lastReply)) {probability += 0.25}
   // Yak 冷幽默 → 热茶可能想吐槽回来
   if (lastSpeakerId === 'yak' && /据.*统计|数据.*显示|概率|r=|p-value/i.test(lastReply)) {
     probability += 0.12  // Yak 甩数据 → 热茶可能怼回来
@@ -202,11 +202,11 @@ export function calculateChainSpark(params: {
   probability = Math.min(probability, 0.70)  // 链式上限更低，避免太吵
 
   const roll = Math.random()
-  if (roll > probability) return null
+  if (roll > probability) {return null}
 
   // ── 选还没说过话的 Agent ──
   const available = AGENTS.filter(a => !alreadySpokenIds.includes(a.id) && a.id !== lastSpeakerId)
-  if (available.length === 0) return null
+  if (available.length === 0) {return null}
   const speaker = available[Math.floor(Math.random() * available.length)]
 
   const weights = SPARK_WEIGHTS[speaker.id]

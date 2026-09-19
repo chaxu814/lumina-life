@@ -26,7 +26,7 @@ export class TokenEstimator {
 
   /** 估算单段文本的 token 数 */
   estimate(text: string): number {
-    if (!text) return 0
+    if (!text) {return 0}
     const chars = text.length
     // 统计中文字符比例
     const cjkCount = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length
@@ -79,8 +79,8 @@ export class TokenEstimator {
 
   /** 获取压缩紧迫度 (0-1) */
   compactionUrgency(): number {
-    if (this.totalTokens >= this.compressionThreshold) return 1.0
-    if (this.totalTokens <= this.warningThreshold * 0.5) return 0
+    if (this.totalTokens >= this.compressionThreshold) {return 1.0}
+    if (this.totalTokens <= this.warningThreshold * 0.5) {return 0}
     return (this.totalTokens - this.warningThreshold * 0.5) /
            (this.compressionThreshold - this.warningThreshold * 0.5)
   }

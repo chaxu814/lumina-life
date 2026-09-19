@@ -206,7 +206,7 @@ export class ScrollContext {
    * 将检索结果整理成可注入上下文的文本块。
    */
   formatForContext(results: ScrollRecallResult[], maxChars = 4000): string {
-    if (!results.length) return ''
+    if (!results.length) {return ''}
 
     const lines: string[] = ['📚 【Scroll 召回索引】']
     for (const r of results) {
@@ -226,7 +226,7 @@ export class ScrollContext {
   // ── 工具方法 ───────────────────────────────────────────
 
   private extractKeywords(text: string): string[] {
-    if (!text) return []
+    if (!text) {return []}
     const words = text
       .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ')
       .split(/\s+/)
@@ -238,15 +238,15 @@ export class ScrollContext {
     const content = typeof msg.content === 'string'
       ? (msg.content || '').slice(0, 120)
       : JSON.stringify(msg.content).slice(0, 120)
-    if (!content) return ''
+    if (!content) {return ''}
     return `${msg.role}: ${content}`
   }
 
   private buildSnippet(content: string, query: string): string {
-    if (!query.trim()) return content.slice(0, 120)
+    if (!query.trim()) {return content.slice(0, 120)}
     const lower = content.toLowerCase()
     const idx = lower.indexOf(query.toLowerCase())
-    if (idx === -1) return content.slice(0, 120)
+    if (idx === -1) {return content.slice(0, 120)}
     const start = Math.max(0, idx - 40)
     const end = Math.min(content.length, idx + query.length + 80)
     return (start > 0 ? '...' : '') + content.slice(start, end) + (end < content.length ? '...' : '')
@@ -254,9 +254,9 @@ export class ScrollContext {
 
   private scoreResult(row: any, query: string): number {
     let score = 0
-    if (row.role === 'user') score += 1
-    if (query && (row.content as string).toLowerCase().includes(query.toLowerCase())) score += 2
-    if (row.summary && query && (row.summary as string).toLowerCase().includes(query.toLowerCase())) score += 1
+    if (row.role === 'user') {score += 1}
+    if (query && (row.content as string).toLowerCase().includes(query.toLowerCase())) {score += 2}
+    if (row.summary && query && (row.summary as string).toLowerCase().includes(query.toLowerCase())) {score += 1}
     return score
   }
 }

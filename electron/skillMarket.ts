@@ -130,7 +130,7 @@ export class SkillMarket {
 
   toggleSkill(id: string, enabled: boolean): boolean {
     const skill = this.installed.get(id)
-    if (!skill) return false
+    if (!skill) {return false}
     skill.enabled = enabled
     this.saveInstalled()
     return true
@@ -138,7 +138,7 @@ export class SkillMarket {
 
   uninstallSkill(id: string): boolean {
     const skill = this.installed.get(id)
-    if (!skill) return false
+    if (!skill) {return false}
     try {
       fs.rmSync(skill.path, { recursive: true, force: true })
     } catch { /* 忽略删除失败 */ }
@@ -149,7 +149,7 @@ export class SkillMarket {
 
   getAggregatedSystemPrompt(): string {
     const enabled = this.getInstalled().filter(s => s.enabled)
-    if (enabled.length === 0) return ''
+    if (enabled.length === 0) {return ''}
 
     return enabled.map(s => `
 <!-- SKILL: ${s.meta.name} v${s.meta.version} -->
@@ -236,7 +236,7 @@ ${s.systemPrompt}
 
   async exportToZip(id: string, outputPath: string): Promise<{ success: boolean; error?: string }> {
     const skill = this.installed.get(id)
-    if (!skill) return { success: false, error: 'Skill 未安装' }
+    if (!skill) {return { success: false, error: 'Skill 未安装' }}
 
     try {
       const zipPath = outputPath.endsWith('.lumskill') ? outputPath : outputPath + '.lumskill'
@@ -330,7 +330,7 @@ ${s.systemPrompt}
       try {
         const index = await this.fetchJson(repoUrl)
         const skill = (index.skills || []).find((s: any) => s.id === skillId)
-        if (skill) return skill as SkillMeta
+        if (skill) {return skill as SkillMeta}
       } catch { continue }
     }
     return null
@@ -674,7 +674,7 @@ ${skillMeta.category}
         PageNumber: '1',
         SortBy: 'GmtModified',
       })
-      if (query) params.set('Search', query)
+      if (query) {params.set('Search', query)}
 
       const url = `${this.MODELSCOPE_API}?${params.toString()}`
       const data = await this.fetchJsonWithHeaders(url, {
@@ -714,7 +714,7 @@ ${skillMeta.category}
           return text.includes(q)
         })
         const toUse = matched.length > 0 ? matched : items
-        if (toUse.length > 0) hasRealData = true
+        if (toUse.length > 0) {hasRealData = true}
         for (const m of toUse.slice(0, 30)) {
           skills.push(this.normalizeModelScopeModel(m))
         }
@@ -758,16 +758,16 @@ ${skillMeta.category}
     const tagStr = Array.isArray(tags) ? tags.join(' ').toLowerCase() : (typeof tags === 'string' ? tags.toLowerCase() : '')
     const taskStr = (task || '').toLowerCase()
 
-    if (/nlp|text|language|翻译|文本|自然语言|分词/.test(tagStr + taskStr)) return 'data'
-    if (/image|vision|cv|图像|视觉|目标检测|ocr|识别/.test(tagStr + taskStr)) return 'data'
-    if (/audio|speech|asr|tts|语音|声音|音乐/.test(tagStr + taskStr)) return 'productivity'
-    if (/video|视频/.test(tagStr + taskStr)) return 'creative'
-    if (/生成|generation|创作|绘画/.test(tagStr + taskStr)) return 'creative'
-    if (/code|代码|编程|编程助手/.test(tagStr + taskStr)) return 'coding'
-    if (/agent|机器人|自动化/.test(tagStr + taskStr)) return 'automation'
-    if (/embedding|向量|检索/.test(tagStr + taskStr)) return 'data'
-    if (/教育|微调|训练|tutorial/.test(tagStr + taskStr)) return 'education'
-    if (/chat|llm|对话|大模型/.test(tagStr + taskStr)) return 'productivity'
+    if (/nlp|text|language|翻译|文本|自然语言|分词/.test(tagStr + taskStr)) {return 'data'}
+    if (/image|vision|cv|图像|视觉|目标检测|ocr|识别/.test(tagStr + taskStr)) {return 'data'}
+    if (/audio|speech|asr|tts|语音|声音|音乐/.test(tagStr + taskStr)) {return 'productivity'}
+    if (/video|视频/.test(tagStr + taskStr)) {return 'creative'}
+    if (/生成|generation|创作|绘画/.test(tagStr + taskStr)) {return 'creative'}
+    if (/code|代码|编程|编程助手/.test(tagStr + taskStr)) {return 'coding'}
+    if (/agent|机器人|自动化/.test(tagStr + taskStr)) {return 'automation'}
+    if (/embedding|向量|检索/.test(tagStr + taskStr)) {return 'data'}
+    if (/教育|微调|训练|tutorial/.test(tagStr + taskStr)) {return 'education'}
+    if (/chat|llm|对话|大模型/.test(tagStr + taskStr)) {return 'productivity'}
 
     return 'other'
   }
@@ -889,7 +889,7 @@ ${skillMeta.category}
 
   updateSkillSystemPrompt(skillId: string, prompt: string): boolean {
     const skill = this.installed.get(skillId)
-    if (!skill) return false
+    if (!skill) {return false}
 
     skill.systemPrompt = prompt
     fs.writeFileSync(path.join(skill.path, 'system.md'), prompt)
@@ -994,7 +994,7 @@ ${skillMeta.category}
 
   private loadInstalled(): void {
     const indexFile = path.join(this.marketDir, 'installed.json')
-    if (!fs.existsSync(indexFile)) return
+    if (!fs.existsSync(indexFile)) {return}
 
     try {
       const raw = JSON.parse(fs.readFileSync(indexFile, 'utf-8'))
@@ -1015,7 +1015,7 @@ ${skillMeta.category}
 
   private loadReviews(): void {
     const reviewFile = path.join(this.marketDir, 'reviews.json')
-    if (!fs.existsSync(reviewFile)) return
+    if (!fs.existsSync(reviewFile)) {return}
 
     try {
       this.reviews = JSON.parse(fs.readFileSync(reviewFile, 'utf-8'))
@@ -1037,7 +1037,7 @@ ${skillMeta.category}
 let _instance: SkillMarket | null = null
 
 export function getSkillMarket(): SkillMarket {
-  if (!_instance) _instance = new SkillMarket()
+  if (!_instance) {_instance = new SkillMarket()}
   return _instance
 }
 

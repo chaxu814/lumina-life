@@ -89,7 +89,7 @@ export default function RealityShowPanel() {
   const handleTrigger = async () => {
     try {
       const evt = await window.luminaAPI?.realityTrigger?.()
-      if (evt) setEvents(prev => [evt as any, ...prev].slice(0, 200))
+      if (evt) {setEvents(prev => [evt as any, ...prev].slice(0, 200))}
     } catch {}
   }
 

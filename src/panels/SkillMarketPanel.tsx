@@ -98,8 +98,8 @@ export default function SkillMarketPanel() {
   useEffect(() => { loadInstalled() }, [])
   useEffect(() => {
     if (tab === 'market') {
-      if (marketSource === 'modelscope') searchModelScope()
-      else searchMarket()
+      if (marketSource === 'modelscope') {searchModelScope()}
+      else {searchMarket()}
     }
   }, [tab, marketSource])
 
@@ -127,7 +127,7 @@ export default function SkillMarketPanel() {
       await (window as any).electron.ipcRenderer.invoke('skill-market:uninstall', skillId)
       showNotif('🗑️ 已卸载')
       loadInstalled()
-      if (selectedSkill?.id === skillId) setSelectedSkill(null)
+      if (selectedSkill?.id === skillId) {setSelectedSkill(null)}
     } catch (err: any) {
       showNotif('❌ ' + err.message)
     }
@@ -145,8 +145,8 @@ export default function SkillMarketPanel() {
   const importLocal = async () => {
     try {
       const result = await (window as any).electron.ipcRenderer.invoke('skill-market:install-local')
-      if (result.success) showNotif('✅ 导入成功！')
-      else if (result.error !== '用户取消') showNotif('❌ ' + (result.error || '导入失败'))
+      if (result.success) {showNotif('✅ 导入成功！')}
+      else if (result.error !== '用户取消') {showNotif('❌ ' + (result.error || '导入失败'))}
       loadInstalled()
     } catch {}
   }
@@ -163,7 +163,7 @@ export default function SkillMarketPanel() {
       const q = searchQuery.toLowerCase()
       return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || s.tags.some(t => t.toLowerCase().includes(q))
     }
-    if (searchCategory) return s.category === searchCategory
+    if (searchCategory) {return s.category === searchCategory}
     return true
   })
 
@@ -204,12 +204,12 @@ export default function SkillMarketPanel() {
           placeholder="搜索技能..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') tab === 'market' ? (marketSource === 'modelscope' ? searchModelScope() : searchMarket()) : null }}
+          onKeyDown={e => { if (e.key === 'Enter') {tab === 'market' ? (marketSource === 'modelscope' ? searchModelScope() : searchMarket()) : null} }}
         />
         <select
           style={styles.categorySelect}
           value={searchCategory}
-          onChange={e => { setSearchCategory(e.target.value as SkillCategory | ''); if (tab === 'market') setTimeout(() => marketSource === 'modelscope' ? searchModelScope() : searchMarket(), 50) }}
+          onChange={e => { setSearchCategory(e.target.value as SkillCategory | ''); if (tab === 'market') {setTimeout(() => marketSource === 'modelscope' ? searchModelScope() : searchMarket(), 50)} }}
         >
           <option value="">全部分类</option>
           {CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>)}

@@ -134,7 +134,7 @@ class NewsDigestScheduler {
   private saveConfig(): void {
     try {
       const dir = path.dirname(this.configPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8')
     } catch (e) {
       console.warn('[NewsDigestScheduler] 配置保存失败:', e)
@@ -158,7 +158,7 @@ class NewsDigestScheduler {
   // ── 调度 ──
 
   start(): void {
-    if (this.timer) return
+    if (this.timer) {return}
     console.log('[NewsDigestScheduler] 📡 新闻推送调度器已启动 (8:00/12:00/18:00/22:00)')
 
     // 每 60 秒检查一次
@@ -181,27 +181,27 @@ class NewsDigestScheduler {
    * 检查当前时间是否在推送窗口内
    */
   private checkAndPush(): void {
-    if (!this.config.enabled) return
+    if (!this.config.enabled) {return}
 
     const now = new Date()
     const hour = now.getHours()
     const minute = now.getMinutes()
 
     // 只在整点后 5 分钟内触发（8:00-8:05、12:00-12:05 等）
-    if (minute > 5) return
+    if (minute > 5) {return}
 
     const slot = hour as PushTimeSlot
-    if (![8, 12, 18, 22].includes(slot)) return
-    if (!this.config.enabledSlots.includes(slot)) return
+    if (![8, 12, 18, 22].includes(slot)) {return}
+    if (!this.config.enabledSlots.includes(slot)) {return}
 
     // 同一分钟不重复推
     const currentMinute = hour * 100 + minute
-    if (currentMinute === this.lastPushMinute) return
+    if (currentMinute === this.lastPushMinute) {return}
     this.lastPushMinute = currentMinute
 
     // 检查冷却：同一时段 23 小时内不重复
     const lastPushed = this.config.lastPushedAt[slot] || 0
-    if (Date.now() - lastPushed < 23 * 3600_000) return
+    if (Date.now() - lastPushed < 23 * 3600_000) {return}
 
     this.doPush(slot)
   }
@@ -321,7 +321,7 @@ class NewsDigestScheduler {
         const grouped: Record<string, FilteredItem[]> = {}
         for (const f of filtered) {
           const cat = f.item.category
-          if (!grouped[cat]) grouped[cat] = []
+          if (!grouped[cat]) {grouped[cat] = []}
           grouped[cat].push(f)
         }
         const balanced: FilteredItem[] = []

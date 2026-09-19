@@ -296,7 +296,7 @@ export function buildAgentPrompt(
   teamToolsPrompt?: string,  // 🆕 v3.1: 传入动态生成的工具提示词
 ): string {
   const soul = AGENT_SOULS.find(s => s.id === agentId)
-  if (!soul) return ''
+  if (!soul) {return ''}
 
   const parts = [
     // ═══ v2.8.3: 身份锚定 — 必须在最前面 ═══
@@ -384,7 +384,7 @@ export function buildAgentPromptLite(
   teamToolsPrompt?: string,  // 🆕 v3.1: 传入动态生成的工具提示词
 ): string {
   const soul = AGENT_SOULS.find(s => s.id === agentId)
-  if (!soul) return ''
+  if (!soul) {return ''}
 
   // 大幅简化提示词 — 借鉴 QwenPaw 风格
   //   之前: 大量互相矛盾的规则（字数限制+展开说+不要画蛇添足+追问时补充...）

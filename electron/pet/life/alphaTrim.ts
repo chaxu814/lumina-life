@@ -38,7 +38,7 @@ export function scanAlphaBounds(
   bh: number,
   opts: ScanAlphaOptions = {},
 ): TrimRatios | null {
-  if (!rgba || bw <= 0 || bh <= 0) return null
+  if (!rgba || bw <= 0 || bh <= 0) {return null}
   const step = Math.max(1, Math.round(opts.step ?? 2))
   const ALPHA = opts.alphaThreshold ?? 28
   const cap = opts.maxSide ?? 0.45
@@ -50,14 +50,14 @@ export function scanAlphaBounds(
     for (let sx = 0; sx < bw; sx += step) {
       const a = rgba[rowBase + sx * 4 + 3]
       if (a > ALPHA) {
-        if (sx < minX) minX = sx
-        if (sx > maxX) maxX = sx
-        if (sy < minY) minY = sy
-        if (sy > maxY) maxY = sy
+        if (sx < minX) {minX = sx}
+        if (sx > maxX) {maxX = sx}
+        if (sy < minY) {minY = sy}
+        if (sy > maxY) {maxY = sy}
       }
     }
   }
-  if (maxX < 0) return null // 全透明：保留上次
+  if (maxX < 0) {return null} // 全透明：保留上次
 
   const l = Math.min(cap, Math.max(0, (minX - step) / bw))
   const r = Math.min(cap, Math.max(0, (bw - 1 - maxX - step) / bw))

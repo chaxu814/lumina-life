@@ -131,7 +131,7 @@ async function scanDesktop(
   maxResults: number,
   allEntries: DesktopEntry[],
 ): Promise<void> {
-  if (allEntries.length >= maxResults) return
+  if (allEntries.length >= maxResults) {return}
 
   let entries: fs.Dirent[]
   try {
@@ -143,11 +143,11 @@ async function scanDesktop(
   const lnkFiles: string[] = []
 
   for (const entry of entries) {
-    if (allEntries.length >= maxResults) break
+    if (allEntries.length >= maxResults) {break}
 
     // 跳过隐藏文件和系统文件
-    if (entry.name.startsWith('.') || entry.name.startsWith('~')) continue
-    if (entry.name === 'desktop.ini') continue
+    if (entry.name.startsWith('.') || entry.name.startsWith('~')) {continue}
+    if (entry.name === 'desktop.ini') {continue}
 
     const fullPath = path.join(desktopDir, entry.name)
 
@@ -202,7 +202,7 @@ async function scanDesktop(
   if (lnkFiles.length > 0 && allEntries.length < maxResults) {
     const targets = await resolveShortcutTargets(lnkFiles)
     for (const lnkPath of lnkFiles) {
-      if (allEntries.length >= maxResults) break
+      if (allEntries.length >= maxResults) {break}
       const baseName = path.basename(lnkPath)
       const target = targets.get(baseName)
       allEntries.push({
@@ -332,7 +332,7 @@ export async function desktopScan(args: Record<string, any>): Promise<ToolResult
 }
 
 function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
+  if (bytes < 1024) {return `${bytes}B`}
+  if (bytes < 1024 * 1024) {return `${(bytes / 1024).toFixed(0)}KB`}
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`
 }

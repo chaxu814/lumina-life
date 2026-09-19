@@ -42,7 +42,7 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
     const loadAsyncTasks = async () => {
       try {
         const api = (window as any).luminaAPI
-        if (!api?.asyncTaskList) return
+        if (!api?.asyncTaskList) {return}
         const tasks = await api.asyncTaskList()
         setAsyncTasks(tasks.tasks || [])
       } catch {}
@@ -101,7 +101,7 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
 
   // P2: 提交异步任务
   const handleSubmitAsync = async () => {
-    if (!form.name.trim() || !form.action.trim()) return
+    if (!form.name.trim() || !form.action.trim()) {return}
     try {
       const api = (window as any).luminaAPI
       const result = await api.asyncTaskSubmit?.({ 
@@ -292,6 +292,6 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
     </div>
   )
 
-  if (embedded) return renderContent()
+  if (embedded) {return renderContent()}
   return <div className="panel">{renderContent()}</div>
 }

@@ -65,9 +65,9 @@ export class BargeInController {
    * 非 speaking 状态、冷却期内都不会触发。
    */
   observe(level: number): boolean {
-    if (this.state !== 'speaking') return false
+    if (this.state !== 'speaking') {return false}
     const t = this.now()
-    if (t - this.lastInterruptAt < this.cooldownMs) return false
+    if (t - this.lastInterruptAt < this.cooldownMs) {return false}
 
     if (level >= this.threshold) {
       this.hitFrames += 1
@@ -77,7 +77,7 @@ export class BargeInController {
       return false
     }
 
-    if (this.hitFrames < this.confirmFrames) return false
+    if (this.hitFrames < this.confirmFrames) {return false}
 
     // 触发打断
     this.state = 'interrupted'

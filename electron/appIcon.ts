@@ -17,7 +17,7 @@ import { nativeImage } from 'electron'
 let cached: string | null = null
 
 export function getAppIconPath(size: 16 | 32 | 256 | 512 = 256): string {
-  if (size === 256 && cached && existsSync(cached)) return cached
+  if (size === 256 && cached && existsSync(cached)) {return cached}
   const name = size === 16 ? 'icon-16.png' : size === 32 ? 'icon-32.png' : 'icon.png'
   const candidates = [
     // 打包后：resourcesPath/resources/icon.png（extraResources from:resources to:resources）
@@ -30,7 +30,7 @@ export function getAppIconPath(size: 16 | 32 | 256 | 512 = 256): string {
   ]
   for (const c of candidates) {
     if (c && existsSync(c)) {
-      if (size === 256) cached = c
+      if (size === 256) {cached = c}
       return c
     }
   }
@@ -40,6 +40,6 @@ export function getAppIconPath(size: 16 | 32 | 256 | 512 = 256): string {
 /** Windows 托盘图标：优先用 16x16 专用图，找不到再从大图缩放 */
 export function getTrayIcon() {
   const small = nativeImage.createFromPath(getAppIconPath(16))
-  if (!small.isEmpty()) return small
+  if (!small.isEmpty()) {return small}
   return nativeImage.createFromPath(getAppIconPath(256)).resize({ width: 16, height: 16 })
 }

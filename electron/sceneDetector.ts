@@ -111,8 +111,8 @@ const SELF_PROCESS_NAMES = [
 function isSelfWindow(title: string, process: string): boolean {
   const t = title.toLowerCase()
   const p = process.toLowerCase()
-  if (SELF_PROCESS_NAMES.some(name => p.includes(name))) return true
-  if (SELF_WINDOW_PATTERNS.some(pat => t.includes(pat))) return true
+  if (SELF_PROCESS_NAMES.some(name => p.includes(name))) {return true}
+  if (SELF_WINDOW_PATTERNS.some(pat => t.includes(pat))) {return true}
   return false
 }
 
@@ -280,8 +280,8 @@ export function classifyScene(
 
   // 合并得分
   const combined: Record<string, number> = {}
-  for (const s of titleScores) combined[s.scene] = (combined[s.scene] || 0) + s.score
-  for (const s of processScores) combined[s.scene] = (combined[s.scene] || 0) + s.score * 0.7
+  for (const s of titleScores) {combined[s.scene] = (combined[s.scene] || 0) + s.score}
+  for (const s of processScores) {combined[s.scene] = (combined[s.scene] || 0) + s.score * 0.7}
 
   // 如果没有匹配任何规则 → 浏览器默认工作，其他默认空闲
   // 🔧 FIX: 未知窗口不再默认"娱乐"，改为"空闲"更合理
@@ -337,10 +337,10 @@ export async function detectScene(): Promise<SceneInfo> {
  * 判断场景是否发生了变化（比较新旧 SceneInfo）
  */
 export function sceneChanged(old: SceneInfo | null, current: SceneInfo): boolean {
-  if (!old) return true
-  if (old.scene !== current.scene) return true
+  if (!old) {return true}
+  if (old.scene !== current.scene) {return true}
   // 置信度跨越阈值时也算变化
-  if (old.confidence < 50 && current.confidence >= 50) return true
-  if (old.confidence >= 50 && current.confidence < 50) return true
+  if (old.confidence < 50 && current.confidence >= 50) {return true}
+  if (old.confidence >= 50 && current.confidence < 50) {return true}
   return false
 }

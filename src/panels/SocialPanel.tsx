@@ -21,7 +21,7 @@ export default function SocialPanel() {
   }, [])
 
   const handleShare = () => {
-    if (!shareText.trim()) return
+    if (!shareText.trim()) {return}
     // 本地模式：将分享内容作为一条新动态加入列表
     const newPost = {
       id: `share_${Date.now()}`,

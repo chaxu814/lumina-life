@@ -64,7 +64,7 @@ const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
     }
     // 延迟绑定避免触发自身的 click 立刻关闭
     const t = setTimeout(() => document.addEventListener('click', handler), 0)
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') {onClose()} }
     document.addEventListener('keydown', k)
     return () => {
       clearTimeout(t)
@@ -73,7 +73,7 @@ const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
     }
   }, [visible, x, y, showDeleteConfirm, onClose])
 
-  if (!visible) return null
+  if (!visible) {return null}
 
   const handleAction = (actionId: string) => {
     switch (actionId) {

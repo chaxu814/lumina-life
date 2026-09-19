@@ -41,7 +41,7 @@ export class ModeManager {
   /** 手动切换模式 */
   setMode(mode: AgentMode, reason: string = 'manual'): void {
     const from = this._currentMode
-    if (from === mode) return
+    if (from === mode) {return}
     this._currentMode = mode
     globalEventBus.emit(BusEvents.AGENT_MODE_CHANGED, { from, to: mode, reason, triggeredBy: 'user' })
     // 触发副人格觉醒
@@ -212,9 +212,9 @@ export function getTeamManager(): ModeManager {
   try {
     const { getOrchestrator } = require('./core/agentOrchestrator')
     const orch = getOrchestrator()
-    if (orch.modeManager) return orch.modeManager
+    if (orch.modeManager) {return orch.modeManager}
   } catch {}
-  if (!_instance) _instance = new ModeManager()
+  if (!_instance) {_instance = new ModeManager()}
   return _instance
 }
 

@@ -22,7 +22,7 @@ export const localStorageBackend: LoopPersistenceBackend = {
   async load() {
     try {
       const raw = localStorage.getItem(LOOP_STORAGE_KEY)
-      if (!raw) return []
+      if (!raw) {return []}
       const data = JSON.parse(raw)
       return Array.isArray(data) ? (data as LoopTask[]) : []
     } catch {
@@ -94,7 +94,7 @@ export function genId(prefix = 'loop'): string {
  */
 export function cronMatches(schedule: string, now: Date): boolean {
   const parts = schedule.trim().split(/\s+/)
-  if (parts.length !== 5) return false
+  if (parts.length !== 5) {return false}
   const [cronMin, cronHour, cronDay, cronMonth, cronWeek] = parts
   const minute = now.getMinutes()
   const hour = now.getHours()
@@ -104,7 +104,7 @@ export function cronMatches(schedule: string, now: Date): boolean {
 
   const matchField = (cron: string, value: number): boolean => {
     const field = cron.trim()
-    if (field === '*' || field === '?') return true
+    if (field === '*' || field === '?') {return true}
     if (field.startsWith('*/')) {
       const step = parseInt(field.slice(2), 10)
       return !Number.isNaN(step) && step > 0 && value % step === 0
@@ -130,7 +130,7 @@ export function cronMatches(schedule: string, now: Date): boolean {
 
 /** 从字符串中鲁棒地抽取 JSON（容错 markdown 代码块 / 前后说明文字） */
 export function extractJson(raw: string): unknown | null {
-  if (!raw) return null
+  if (!raw) {return null}
   // 去掉 ```json ... ``` 围栏
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
   const candidate = fenced ? fenced[1] : raw

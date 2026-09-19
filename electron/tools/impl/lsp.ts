@@ -43,7 +43,7 @@ export async function astSearchHandler(args: Record<string, unknown>): Promise<T
   const maxResults = (args.max_results as number) || 50
   const callId = args._callId as string || 'ast_search'
 
-  if (!filePath) return { callId, ok: false, content: '缺少参数: file (文件路径)' }
+  if (!filePath) {return { callId, ok: false, content: '缺少参数: file (文件路径)' }}
 
   try {
     const results = astSearch(filePath, { pattern, nameFilter, maxResults })
@@ -72,7 +72,7 @@ export async function lspSymbolsHandler(args: Record<string, unknown>): Promise<
   const filePath = args.file as string
   const callId = args._callId as string || 'lsp_symbols'
 
-  if (!filePath) return { callId, ok: false, content: '缺少参数: file (文件路径)' }
+  if (!filePath) {return { callId, ok: false, content: '缺少参数: file (文件路径)' }}
 
   try {
     const results = astSearch(filePath, { pattern: 'all_symbols', maxResults: 200 })
@@ -108,7 +108,7 @@ export async function lspReferencesHandler(args: Record<string, unknown>): Promi
   const maxResults = (args.max_results as number) || 100
   const callId = args._callId as string || 'lsp_references'
 
-  if (!symbol) return { callId, ok: false, content: '缺少参数: symbol (符号名)' }
+  if (!symbol) {return { callId, ok: false, content: '缺少参数: symbol (符号名)' }}
 
   try {
     // 用 grep 搜索符号引用 (LSP 降级方案)
@@ -127,13 +127,13 @@ export async function lspReferencesHandler(args: Record<string, unknown>): Promi
           const content = fs.readFileSync(file, 'utf-8')
           const lines = content.split('\n')
           for (let i = 0; i < lines.length; i++) {
-            if (results.length >= maxResults) break
+            if (results.length >= maxResults) {break}
             if (lines[i].includes(symbol)) {
               results.push(`${file}:${i + 1}: ${lines[i].trim()}`)
             }
           }
         } catch { /* skip binary/non-readable */ }
-        if (results.length >= maxResults) break
+        if (results.length >= maxResults) {break}
       }
       return {
         callId, ok: true,
@@ -171,14 +171,14 @@ function walkDir(dir: string, pattern: string): string[] {
   const ext = pattern.replace('*', '') // "*.ts" → ".ts"
 
   function walk(current: string) {
-    if (results.length >= 500) return
+    if (results.length >= 500) {return}
     try {
       const entries = fs.readdirSync(current, { withFileTypes: true })
       for (const entry of entries) {
-        if (results.length >= 500) return
+        if (results.length >= 500) {return}
         const fullPath = path.join(current, entry.name)
         // Skip node_modules, .git
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') {continue}
         if (entry.isDirectory()) {
           walk(fullPath)
         } else if (entry.isFile()) {

@@ -47,7 +47,7 @@ export default function SkillsPanel({ embedded }: { embedded?: boolean } = {}) {
   const refreshInstalledSkills = async () => {
     try {
       const result = await window.luminaAPI.skillList()
-      if (result?.skills) setInstalledSkills(result.skills)
+      if (result?.skills) {setInstalledSkills(result.skills)}
     } catch (err) {
       console.warn('[SkillsPanel] 无法加载已安装 Skill:', err)
     }
@@ -296,6 +296,6 @@ export default function SkillsPanel({ embedded }: { embedded?: boolean } = {}) {
     </div>
   )
 
-  if (embedded) return renderContent()
+  if (embedded) {return renderContent()}
   return <div className="panel">{renderContent()}</div>
 }

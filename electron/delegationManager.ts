@@ -139,8 +139,8 @@ export class DelegationManager {
   private _notifyEngine(event: 'start' | 'end'): void {
     try {
       const { getOrchestrator } = require('./core/agentOrchestrator')
-      if (event === 'start') getOrchestrator().socialEngine?.onCodingTaskStart?.()
-      else getOrchestrator().socialEngine?.onCodingTaskEnd?.()
+      if (event === 'start') {getOrchestrator().socialEngine?.onCodingTaskStart?.()}
+      else {getOrchestrator().socialEngine?.onCodingTaskEnd?.()}
     } catch { /* ignore */ }
   }
 
@@ -190,13 +190,13 @@ export class DelegationManager {
    * 🆕 Phase 2: 收敛检测 — 连续 N 轮输出相似度超阈值视为收敛
    */
   private _isConverged(ctx: AgentLoopContext): boolean {
-    if (ctx.recentOutputs.length < ctx.config.convergenceWindow) return false
+    if (ctx.recentOutputs.length < ctx.config.convergenceWindow) {return false}
     const window = ctx.recentOutputs.slice(-ctx.config.convergenceWindow)
     // 计算相邻对的相似度
     let similarCount = 0
     for (let i = 1; i < window.length; i++) {
       const sim = this._textSimilarity(window[i - 1], window[i])
-      if (sim >= ctx.config.convergenceThreshold) similarCount++
+      if (sim >= ctx.config.convergenceThreshold) {similarCount++}
     }
     return similarCount >= window.length - 1
   }
@@ -207,10 +207,10 @@ export class DelegationManager {
   private _textSimilarity(a: string, b: string): number {
     const setA = new Set(a.toLowerCase().split(/\s+/).filter(s => s.length > 2).slice(0, 50))
     const setB = new Set(b.toLowerCase().split(/\s+/).filter(s => s.length > 2).slice(0, 50))
-    if (setA.size === 0 || setB.size === 0) return 0
+    if (setA.size === 0 || setB.size === 0) {return 0}
     let intersection = 0
     for (const word of setA) {
-      if (setB.has(word)) intersection++
+      if (setB.has(word)) {intersection++}
     }
     const union = setA.size + setB.size - intersection
     return union === 0 ? 0 : intersection / union
@@ -390,7 +390,7 @@ ${lastError.slice(0, 1000)}
       return cached.result
     }
     for (const [key, entry] of this.runnerResultCache) {
-      if (Date.now() >= entry.expiresAt) this.runnerResultCache.delete(key)
+      if (Date.now() >= entry.expiresAt) {this.runnerResultCache.delete(key)}
     }
 
     // 🆕 Phase 1/2/3: 构建循环上下文
@@ -451,7 +451,7 @@ ${lastError.slice(0, 1000)}
       if (isRetry && lastError) {
         const strategy = this._pickRetryStrategy(attempt, maxAttempts, degradeFaster, mood)
         currentTask = this._buildDegradedTask(task, attempt, lastError, strategy)
-        if (strategy !== 'same') wasDegraded = true
+        if (strategy !== 'same') {wasDegraded = true}
         // 重试前指数退避
         const delay = this._retryDelay(attempt - 1, mood)
         console.log(`[DelegationManager] ⏳ 第 ${attempt} 次重试 (策略: ${strategy})，等待 ${delay}ms...`)
@@ -634,16 +634,16 @@ ${lastError.slice(0, 1000)}
     mood?: string,
   ): 'same' | 'simplify' | 'escalate' {
     // 第 1 次重试：原样重试（可能只是临时问题）
-    if (attempt === 2) return 'same'
+    if (attempt === 2) {return 'same'}
 
     // 情绪感知 — 不耐烦时快速降级
-    if (degradeFaster && attempt >= 2) return 'simplify'
+    if (degradeFaster && attempt >= 2) {return 'simplify'}
 
     // 第 2 次重试（即 attempt=3）：简化
-    if (attempt === 3) return 'simplify'
+    if (attempt === 3) {return 'simplify'}
 
     // 后续重试：升级寻求帮助
-    if (attempt >= 4) return 'escalate'
+    if (attempt >= 4) {return 'escalate'}
 
     return 'same'
   }
@@ -791,7 +791,7 @@ ${lastError.slice(0, 1000)}
     let cleanText = text
     while ((match = regex.exec(text)) !== null) {
       const q = match[1].trim()
-      if (q) questions.push(q)
+      if (q) {questions.push(q)}
     }
     if (questions.length > 0) {
       cleanText = text.replace(/\[QUESTION\][\s\S]*?\[\/QUESTION\]/g, '').trim()
@@ -832,7 +832,7 @@ ${lastError.slice(0, 1000)}
   markNoticeRead(id: string): void {
     const notices = readJson<NoticeEntry[]>(TEAM_NOTICES_PATH, [])
     const notice = notices.find(n => n.id === id)
-    if (notice) notice.read = true
+    if (notice) {notice.read = true}
     writeJson(TEAM_NOTICES_PATH, notices)
   }
 
@@ -1179,10 +1179,10 @@ export function getDelegationManager(): DelegationManager {
   try {
     const { getOrchestrator } = require('./core/agentOrchestrator')
     const orch = getOrchestrator()
-    if (orch.delegation) return orch.delegation
+    if (orch.delegation) {return orch.delegation}
   } catch {}
   // fallback: 本地单例
-  if (!_instance) _instance = new DelegationManager()
+  if (!_instance) {_instance = new DelegationManager()}
   return _instance
 }
 

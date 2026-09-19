@@ -73,7 +73,7 @@ export default function DreamPanel() {
       const ok = await window.luminaAPI?.dreamDelete?.(id)
       if (ok) {
         setDreams(prev => prev.filter(d => d.id !== id))
-        if (selectedDream?.id === id) setSelectedDream(null)
+        if (selectedDream?.id === id) {setSelectedDream(null)}
       }
     } catch (e) {
       console.error('[DreamPanel] 删除失败:', e)

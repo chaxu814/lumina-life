@@ -101,7 +101,7 @@ describe('classifyModelError', () => {
       'Model does not support function calling (tool_choice)',
       'the chat template does not support tools',
     ]
-    for (const m of msgs) expect(classifyModelError(400, m)).toBe('tools')
+    for (const m of msgs) {expect(classifyModelError(400, m)).toBe('tools')}
   })
 
   it('图片不支持 → vision', () => {
@@ -110,7 +110,7 @@ describe('classifyModelError', () => {
       'image_url is not supported, only text inputs are allowed',
       'multimodal content detected but model is text-only',
     ]
-    for (const m of msgs) expect(classifyModelError(400, m)).toBe('vision')
+    for (const m of msgs) {expect(classifyModelError(400, m)).toBe('vision')}
   })
 
   it('stream_options 不识别 → stream_options', () => {
@@ -130,7 +130,7 @@ describe('classifyModelError', () => {
       'max_model_len exceeded',
       'input is too long for the model context window',
     ]
-    for (const m of msgs) expect(classifyModelError(400, m)).toBe('context')
+    for (const m of msgs) {expect(classifyModelError(400, m)).toBe('context')}
   })
 
   it('无法识别 → unknown', () => {

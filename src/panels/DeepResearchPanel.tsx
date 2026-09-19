@@ -12,7 +12,7 @@ export default function DeepResearchPanel() {
   const [markdown, setMarkdown] = useState('')
 
   const startResearch = async () => {
-    if (!question.trim()) return
+    if (!question.trim()) {return}
     setLoading(true)
     setReport(null)
     setMarkdown('')

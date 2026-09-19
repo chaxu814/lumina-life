@@ -10,8 +10,8 @@
  * 处理：### 标题、**加粗**、*斜体*、`代码`、[链接](url)、> 引用、列表符号等。
  */
 export function stripMarkdown(text: string): string {
-  if (!text) return text
-  let result = text
+  if (!text) {return text}
+  const result = text
     // 移除标题标记 (### / ## / #)
     .replace(/^#{1,6}\s+/gm, '')
     // 移除加粗 **text** 或 __text__

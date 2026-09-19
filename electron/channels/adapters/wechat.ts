@@ -55,7 +55,7 @@ export class WeChatAdapter implements ChannelAdapter {
 
     // 否则通过 API
     await this.ensureToken()
-    if (!this.token) return false
+    if (!this.token) {return false}
 
     if (request.isGroup) {
       return this.sendGroupMessage(request.targetId, request.text)
@@ -86,7 +86,7 @@ export class WeChatAdapter implements ChannelAdapter {
 
   /** 处理企业微信回调消息（由 Webhook 路由调用） */
   async handleIncoming(query: any, body: any): Promise<string | null> {
-    if (!this.messageHandler) return null
+    if (!this.messageHandler) {return null}
 
     // 企业微信 URL 回调验证
     if (query?.echostr) {
@@ -292,7 +292,7 @@ export class WeChatAdapter implements ChannelAdapter {
         })
       })
       req.on('error', reject)
-      if (postData) req.write(postData)
+      if (postData) {req.write(postData)}
       req.end()
     })
   }

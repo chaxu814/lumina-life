@@ -90,8 +90,8 @@ export function discoverProfile(cdi3: unknown, modelName = 'Unknown'): ModelProf
   const supported = new Set<string>()
   const groups = new Set<string>()
   for (const p of params) {
-    if (p && typeof p.Id === 'string') supported.add(p.Id)
-    if (p && typeof p.GroupId === 'string') groups.add(p.GroupId)
+    if (p && typeof p.Id === 'string') {supported.add(p.Id)}
+    if (p && typeof p.GroupId === 'string') {groups.add(p.GroupId)}
   }
 
   const channelMap: Partial<Record<StandardChannel, string>> = {}
@@ -101,7 +101,7 @@ export function discoverProfile(cdi3: unknown, modelName = 'Unknown'): ModelProf
     if (exact && supported.has(exact)) { channelMap[ch] = exact; continue }
     // 2) 通用候选
     const cand = genericCandidates(ch).find(id => supported.has(id))
-    if (cand) channelMap[ch] = cand
+    if (cand) {channelMap[ch] = cand}
   }
 
   return { modelName, supported, channelMap, groups: Array.from(groups) }
@@ -130,9 +130,9 @@ export function toParamPatches(
 ): Array<{ id: string; value: number }> {
   const out: Array<{ id: string; value: number }> = []
   for (const ch of STANDARD_CHANNELS) {
-    if (!(ch in pose) || pose[ch] === undefined) continue
+    if (!(ch in pose) || pose[ch] === undefined) {continue}
     const id = resolveParamId(profile, ch)
-    if (!id) continue
+    if (!id) {continue}
     const [lo, hi] = CHANNEL_RANGES[ch]
     const value = Math.max(lo, Math.min(hi, pose[ch] as number))
     out.push({ id, value })

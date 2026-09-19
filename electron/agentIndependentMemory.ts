@@ -182,7 +182,7 @@ export class AgentIndependentMemory {
 
   getMemoryContext(agentId: string, maxEntries = 8): string {
     const top = this.queryMemory(agentId, { minImportance: 3, limit: maxEntries })
-    if (top.length === 0) return ''
+    if (top.length === 0) {return ''}
 
     let ctx = '【你的个人记忆】\n'
     for (const e of top) {
@@ -230,7 +230,7 @@ export class AgentIndependentMemory {
     const now = Date.now()
 
     // 只整理超过 1 小时未整理的
-    if (now - store.lastConsolidatedAt < MEMORY_DECAY.consolidationInterval) return
+    if (now - store.lastConsolidatedAt < MEMORY_DECAY.consolidationInterval) {return}
 
     // 重新计算所有记忆强度
     for (const entry of store.entries) {
@@ -296,16 +296,16 @@ export class AgentIndependentMemory {
 
   private generateSummary(agentId: string): string {
     const top = this.queryMemory(agentId, { minImportance: 5, limit: 15 })
-    if (top.length === 0) return '暂无重要记忆'
+    if (top.length === 0) {return '暂无重要记忆'}
 
     const facts = top.filter(e => e.category === 'fact')
     const social = top.filter(e => e.category === 'social')
     const lessons = top.filter(e => e.category === 'lesson')
 
     let summary = ''
-    if (facts.length > 0) summary += `· 关键认知: ${facts.slice(0, 3).map(e => e.content).join('；')}\n`
-    if (social.length > 0) summary += `· 社交记忆: 与团队成员有 ${social.length} 条值得记住的互动\n`
-    if (lessons.length > 0) summary += `· 经验教训: ${lessons.slice(0, 2).map(e => e.content).join('；')}\n`
+    if (facts.length > 0) {summary += `· 关键认知: ${facts.slice(0, 3).map(e => e.content).join('；')}\n`}
+    if (social.length > 0) {summary += `· 社交记忆: 与团队成员有 ${social.length} 条值得记住的互动\n`}
+    if (lessons.length > 0) {summary += `· 经验教训: ${lessons.slice(0, 2).map(e => e.content).join('；')}\n`}
     return summary || '暂无重要记忆'
   }
 
@@ -317,9 +317,9 @@ export class AgentIndependentMemory {
 
   private formatAge(ts: number): string {
     const seconds = Math.floor((Date.now() - ts) / 1000)
-    if (seconds < 60) return '刚刚'
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`
+    if (seconds < 60) {return '刚刚'}
+    if (seconds < 3600) {return `${Math.floor(seconds / 60)}分钟前`}
+    if (seconds < 86400) {return `${Math.floor(seconds / 3600)}小时前`}
     return `${Math.floor(seconds / 86400)}天前`
   }
 
@@ -366,10 +366,10 @@ export class AgentIndependentMemory {
       timestamp: Date.now(),
     }
 
-    if (!this.memoryStreams.has(agentId)) this.memoryStreams.set(agentId, [])
+    if (!this.memoryStreams.has(agentId)) {this.memoryStreams.set(agentId, [])}
     const stream = this.memoryStreams.get(agentId)!
     stream.push(entry)
-    if (stream.length > 200) stream.splice(0, stream.length - 200)
+    if (stream.length > 200) {stream.splice(0, stream.length - 200)}
     return entry
   }
 
@@ -379,7 +379,7 @@ export class AgentIndependentMemory {
 
   async generateReflection(agentId: string): Promise<AgentMemoryEntry | null> {
     const stream = this.memoryStreams.get(agentId) || []
-    if (stream.length < 5) return null
+    if (stream.length < 5) {return null}
     const reflections: Record<string, string[]> = {
       luna: ['反思：Ray 嘴毒但其实很可靠，我应该多夸夸他 💭', '主人最近压力好像有点大，要多陪陪他。'],
       ray: ['反思：对 Luna 说话太冲了…虽然她确实笨，但下次注意', '代码质量在进步，但注释还是懒得写。'],
@@ -412,6 +412,6 @@ export function initAgentMemory(): AgentIndependentMemory {
 }
 
 export function getAgentMemory(): AgentIndependentMemory {
-  if (!_agentMemory) throw new Error('[AgentMem] 未初始化')
+  if (!_agentMemory) {throw new Error('[AgentMem] 未初始化')}
   return _agentMemory
 }

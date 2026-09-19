@@ -72,7 +72,7 @@ export class AgentPool {
 
   /** 启动池管理（心跳 + 空闲检测 + 事件监听） */
   start(): void {
-    if (this._started) return
+    if (this._started) {return}
     this._started = true
 
     // 心跳保活
@@ -170,7 +170,7 @@ export class AgentPool {
   /** 手动压缩指定 Agent */
   async compress(id: string): Promise<boolean> {
     const runner = getOrchestrator().getRunner(id)
-    if (!runner) return false
+    if (!runner) {return false}
 
     try {
       if (typeof (runner as any).compactContext === 'function') {
@@ -189,11 +189,11 @@ export class AgentPool {
 
   /** 心跳保活 — 遍历池中所有 Runner 维持引用 + 检查状态 */
   private _heartbeat(): void {
-    if (!this._started) return
+    if (!this._started) {return}
     const runners = getOrchestrator().listRunners()
     for (const { id, runner } of runners) {
       // 只保活 persistentAgents 列表中的
-      if (!this.config.persistentAgents.includes(id)) continue
+      if (!this.config.persistentAgents.includes(id)) {continue}
 
       try {
         // 心跳只维持强引用 + 检查 runner 是否可响应
@@ -210,13 +210,13 @@ export class AgentPool {
 
   /** 空闲检测 — 超过超时的 Runner 自动压缩 */
   private _checkIdle(): void {
-    if (!this._started) return
+    if (!this._started) {return}
     const now = Date.now()
     const runners = getOrchestrator().listRunners()
 
     for (const { id } of runners) {
       // 只处理 persistentAgents 列表中的
-      if (!this.config.persistentAgents.includes(id)) continue
+      if (!this.config.persistentAgents.includes(id)) {continue}
 
       const lastUsed = this.lastUsed.get(id) || 0
       const idleMs = now - lastUsed
@@ -246,7 +246,7 @@ export class AgentPool {
     globalEventBus.on(BusEvents.PROACTIVE_TRIGGER, async (data: any) => {
       const message = typeof data === 'string' ? data : data?.message || ''
       const targetId = data?.targetId || 'lumina'
-      if (!message) return
+      if (!message) {return}
 
       const runner = this.getRunner(targetId)
       if (!runner) {
@@ -266,10 +266,10 @@ export class AgentPool {
     globalEventBus.on(BusEvents.PROACTIVE_SEND, async (payload: any) => {
       const targetId = payload?.targetId || 'lumina'
       const text = payload?.text || payload?.message || ''
-      if (!text) return
+      if (!text) {return}
 
       const runner = this.getRunner(targetId)
-      if (!runner) return
+      if (!runner) {return}
 
       try {
         await runner.chat(text, { timeoutMs: 60_000, socialMode: true })
@@ -285,7 +285,7 @@ export class AgentPool {
 let _pool: AgentPool | null = null
 
 export function getAgentPool(): AgentPool {
-  if (!_pool) _pool = new AgentPool()
+  if (!_pool) {_pool = new AgentPool()}
   return _pool
 }
 

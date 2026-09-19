@@ -227,7 +227,7 @@ export class IntentRouter {
 let _router: IntentRouter | null = null
 
 export function getIntentRouter(): IntentRouter {
-  if (!_router) _router = new IntentRouter()
+  if (!_router) {_router = new IntentRouter()}
   return _router
 }
 

@@ -175,9 +175,9 @@ export function incrementIteration() {
 function textSimilarity(a: string, b: string): number {
   const wordsA = new Set(a.toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, ' ').split(/\s+/).filter(Boolean))
   const wordsB = new Set(b.toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, ' ').split(/\s+/).filter(Boolean))
-  if (wordsA.size === 0 || wordsB.size === 0) return 0
+  if (wordsA.size === 0 || wordsB.size === 0) {return 0}
   let intersection = 0
-  for (const w of wordsA) { if (wordsB.has(w)) intersection++ }
+  for (const w of wordsA) { if (wordsB.has(w)) {intersection++} }
   return intersection / (wordsA.size + wordsB.size - intersection)
 }
 
@@ -189,14 +189,14 @@ export function recordReply(text: string) {
   const settings = _state.settings
   const windowSize = settings.doomLoop?.windowSize || 5
   recentReplies.push(text)
-  while (recentReplies.length > windowSize) recentReplies.shift()
+  while (recentReplies.length > windowSize) {recentReplies.shift()}
 }
 
 /** 检测死循环 — 返回 null 表示正常，返回字符串表示检测到循环 */
 export function detectDoomLoop(): string | null {
   const settings = _state.settings
   const doomLoop = settings.doomLoop
-  if (!doomLoop) return null
+  if (!doomLoop) {return null}
 
   const threshold = doomLoop.similarityThreshold || 0.85
   const maxReps = doomLoop.maxRepetitions || 3
@@ -227,7 +227,7 @@ export function resetReplyHistory() {
 /** 检测 Agent 回复是否表示任务已完成 */
 export function detectCompletion(agentReply: string): boolean {
   const settings = _state.settings
-  if (!settings.completionRubric?.enabled) return false
+  if (!settings.completionRubric?.enabled) {return false}
 
   const lower = agentReply.toLowerCase()
   const completionKeywords = [

@@ -103,7 +103,7 @@ function petStatePath(): string {
 function readPersistedPetState(): { config?: Partial<PetConfig>; model?: string; prefs?: Partial<PetPrefs> } {
   try {
     const p = petStatePath()
-    if (!fs.existsSync(p)) return {}
+    if (!fs.existsSync(p)) {return {}}
     return JSON.parse(fs.readFileSync(p, 'utf8'))
   } catch (e) {
     console.warn('[PetWindow] 读取 pet-config.json 失败:', e)
@@ -217,19 +217,19 @@ export function updatePetPrefs(patch: Partial<PetPrefs>): PetPrefs {
   }
   s.prefs = next
   writePersistedPetState(s)
-  if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:prefs-changed', next)
+  if (petWindow && !petWindow.isDestroyed()) {petWindow.webContents.send('pet:prefs-changed', next)}
   return next
 }
 let petConfigLoaded = false
 function ensurePetConfigLoaded(): void {
-  if (petConfigLoaded) return
+  if (petConfigLoaded) {return}
   petConfigLoaded = true
   const saved = readPersistedPetState().config || {}
-  if (typeof saved.clickThrough === 'boolean') config.clickThrough = saved.clickThrough
-  if (typeof saved.opacity === 'number') config.opacity = saved.opacity
-  if (typeof saved.scale === 'number') config.scale = saved.scale
-  if (typeof saved.autoRestart === 'boolean') config.autoRestart = saved.autoRestart
-  if (saved.auto === 'off' || saved.auto === 'light' || saved.auto === 'heavy') config.auto = saved.auto
+  if (typeof saved.clickThrough === 'boolean') {config.clickThrough = saved.clickThrough}
+  if (typeof saved.opacity === 'number') {config.opacity = saved.opacity}
+  if (typeof saved.scale === 'number') {config.scale = saved.scale}
+  if (typeof saved.autoRestart === 'boolean') {config.autoRestart = saved.autoRestart}
+  if (saved.auto === 'off' || saved.auto === 'light' || saved.auto === 'heavy') {config.auto = saved.auto}
 }
 function persistPetConfig(): void {
   const s = readPersistedPetState()
@@ -749,7 +749,7 @@ ipcRenderer.on('pet:command', (_event, command) => {
 
 function getPetHtmlPath(): string {
   const dir = path.join(app.getPath('userData'), 'pet-assets')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
   // 只在 pet.html 不存在或源文件更新时才复制，避免每次都复制
   const petHtmlPath = path.join(dir, 'pet.html')
   const src = findPetSourceDir()
@@ -768,10 +768,10 @@ function getPetHtmlPath(): string {
 function currentModelKind(): 'live2d' | 'vrm' {
   try {
     const libPath = path.join(app.getPath('userData'), 'pet-model-library.json')
-    if (!fs.existsSync(libPath)) return 'live2d'
+    if (!fs.existsSync(libPath)) {return 'live2d'}
     const data = JSON.parse(fs.readFileSync(libPath, 'utf8'))
     const id = data?.currentId
-    if (!id || id === 'Mao') return 'live2d'
+    if (!id || id === 'Mao') {return 'live2d'}
     const entry = Array.isArray(data?.custom) ? data.custom.find((c: any) => c.id === id) : null
     return entry?.kind === 'vrm' ? 'vrm' : 'live2d'
   } catch {
@@ -784,7 +784,7 @@ function getRendererHtmlPath(): string {
   const live2d = getPetHtmlPath() // 同时确保资源已复制
   if (currentModelKind() === 'vrm') {
     const vrm = path.join(path.dirname(live2d), 'pet-vrm.html')
-    if (fs.existsSync(vrm)) return vrm
+    if (fs.existsSync(vrm)) {return vrm}
   }
   return live2d
 }
@@ -806,7 +806,7 @@ function findPetSourceDir(): string | null {
     path.join(process.cwd(), 'electron', 'pet'),
   ]
   for (const c of candidates) {
-    if (c && fs.existsSync(path.join(c, 'pet-live2d.html'))) return c
+    if (c && fs.existsSync(path.join(c, 'pet-live2d.html'))) {return c}
   }
   return null
 }
@@ -849,12 +849,12 @@ function resolvePreloadPath(): string {
     path.join(__dirname, '..', '..', 'preload', 'index.js'),
     path.join(__dirname, 'preload', 'index.js'),
   ]
-  for (const c of candidates) if (fs.existsSync(c)) return c
+  for (const c of candidates) {if (fs.existsSync(c)) {return c}}
   return path.join(__dirname, '..', 'preload', 'index.js')
 }
 
 function setWindowClickThrough(enable: boolean): void {
-  if (!petWindow || petWindow.isDestroyed()) return
+  if (!petWindow || petWindow.isDestroyed()) {return}
   // 全屏舞台始终保持「穿透+转发」：桌面永远可操作；
   // 渲染页通过 pet:set-ignore-mouse 在悬停模型/菜单/聊天时动态接管鼠标。
   // clickThrough 开关只影响唤醒区域宽度（窄=仅模型，宽=模型周围一圈）。
@@ -885,7 +885,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
     return petWindow
   }
 
-  if (mainWin) petMainWindow = mainWin
+  if (mainWin) {petMainWindow = mainWin}
   ensurePetConfigLoaded()
 
   const display = screen.getPrimaryDisplay()
@@ -893,7 +893,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   const { x: workX, y: workY, width: screenWidth, height: screenHeight } = display.bounds
 
   const petCaps = currentPlatformCaps()
-  if (petCaps.note) console.log('[PetWindow] 平台能力：', petCaps.label, '-', petCaps.note)
+  if (petCaps.note) {console.log('[PetWindow] 平台能力：', petCaps.label, '-', petCaps.note)}
   petWindow = new BrowserWindow({
     width: screenWidth,
     height: screenHeight,
@@ -971,7 +971,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   // 窗口移动时保存位置
   let moveTimer: ReturnType<typeof setTimeout> | null = null
   petWindow.on('move', () => {
-    if (moveTimer) clearTimeout(moveTimer)
+    if (moveTimer) {clearTimeout(moveTimer)}
     moveTimer = setTimeout(() => {
       if (petWindow && !petWindow.isDestroyed()) {
         const [x, y] = petWindow.getPosition()
@@ -1016,7 +1016,7 @@ export function togglePet(enable: boolean, mainWin?: BrowserWindow | null): bool
   }
   // 广播状态，侧栏开关即时同步
   for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) w.webContents.send('pet:state', petEnabled)
+    if (!w.isDestroyed()) {w.webContents.send('pet:state', petEnabled)}
   }
   return petEnabled
 }
@@ -1031,7 +1031,7 @@ export function isPetEnabled(): boolean {
 /** 广播启动进度到所有窗口（用于 UI 进度条） */
 function broadcastPetProgress(progress: number, stage: string): void {
   for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) w.webContents.send('pet:startup-progress', { progress, stage })
+    if (!w.isDestroyed()) {w.webContents.send('pet:startup-progress', { progress, stage })}
   }
 }
 
@@ -1105,9 +1105,9 @@ export function registerPetIpc(): void {
   //    区域外窗口不渲染、不参与合成、不接收鼠标。macOS 不支持 setShape，直接忽略。
   ipcMain.on('pet:set-shape', (e, rects: Array<{ x: number; y: number; width: number; height: number }>) => {
     try {
-      if (!currentPlatformCaps().setShape) return // 仅 Windows 支持 setShape；macOS/Linux 不裁剪
+      if (!currentPlatformCaps().setShape) {return} // 仅 Windows 支持 setShape；macOS/Linux 不裁剪
       const win = BrowserWindow.fromWebContents(e.sender)
-      if (!win || win.isDestroyed()) return
+      if (!win || win.isDestroyed()) {return}
       const valid = Array.isArray(rects)
         ? rects.filter(r => r && Number.isFinite(r.x) && Number.isFinite(r.y) && r.width > 0 && r.height > 0)
         : []
@@ -1126,7 +1126,7 @@ export function registerPetIpc(): void {
         const isFull = valid.length === 1 && r0.x === 0 && r0.y === 0 && r0.width >= b0.width * sf0 * 0.98 && r0.height >= b0.height * sf0 * 0.98
         const wasCompact = (win as any).__shapeCompact === true
         ;(win as any).__shapeCompact = !isFull
-        if (!isFull && !wasCompact) console.log('[PetWindow] setShape 已生效：窗口物理裁剪到角色区域，后方视频/图片不再被全屏透明层覆盖')
+        if (!isFull && !wasCompact) {console.log('[PetWindow] setShape 已生效：窗口物理裁剪到角色区域，后方视频/图片不再被全屏透明层覆盖')}
       } catch { /* 日志失败不影响裁剪 */ }
     } catch (err) {
       console.warn('[PetWindow] set-shape failed:', err)
@@ -1141,7 +1141,7 @@ export function registerPetIpc(): void {
       // 模型加载完成，广播运行状态
       setTimeout(() => {
         for (const w of BrowserWindow.getAllWindows()) {
-          if (!w.isDestroyed()) w.webContents.send('pet:state', true)
+          if (!w.isDestroyed()) {w.webContents.send('pet:state', true)}
         }
       }, 300)
     }
@@ -1215,7 +1215,7 @@ export function registerPetIpc(): void {
   ipcMain.on('pet:event', (_e, event: PetEvent) => {
     // 记录互动历史（LLM 自主思考上下文）
     recentEvents.push({ type: event.type, ts: Date.now() })
-    if (recentEvents.length > 12) recentEvents.shift()
+    if (recentEvents.length > 12) {recentEvents.shift()}
     // 转发到主窗口渲染进程
     if (petMainWindow && !petMainWindow.isDestroyed()) {
       petMainWindow.webContents.send('pet:event', event)
@@ -1304,14 +1304,14 @@ export function registerPetIpc(): void {
     try {
       const prefs = getPetPrefs()
       const cp = prefs.catpaw || {}
-      if (prefs.privacyMode) return { ok: true, skipped: true }  // 隐私模式：不截屏
-      if (cp.perception === false) return { ok: true, skipped: true }  // Pet Handling - 屏幕感知关闭
+      if (prefs.privacyMode) {return { ok: true, skipped: true }}  // 隐私模式：不截屏
+      if (cp.perception === false) {return { ok: true, skipped: true }}  // Pet Handling - 屏幕感知关闭
       const wins = BrowserWindow.getAllWindows()
       const target = wins.find(w => !w.isDestroyed() && w !== petWindow) || null
-      if (!target) return { ok: true, skipped: true }
+      if (!target) {return { ok: true, skipped: true }}
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 800, height: 450 } })
       const src = sources[0]
-      if (!src) return { ok: true, skipped: true }
+      if (!src) {return { ok: true, skipped: true }}
       // 🫀 v0.2 屏幕节流：先做纯图像 dHash 帧差判定（零进程开销）。画面稳定直接放行，
       // 不启动 PowerShell、不做 base64 编码（这是周期性小卡顿来源之一）。
       // 先读真实活动窗口（detectScene 内部有 30s 缓存，命中缓存开销极低），再喂给屏幕门控。
@@ -1323,7 +1323,7 @@ export function registerPetIpc(): void {
       let decision: any = null
       if (getPetPrefs().life?.screenGate !== false) {
         decision = decideScreenCapture(src.thumbnail, winTitle, winProc, Date.now())
-        if (!decision.capture) return { ok: true, skipped: true, reason: 'stable', scene: decision.scene, change: decision.change }
+        if (!decision.capture) {return { ok: true, skipped: true, reason: 'stable', scene: decision.scene, change: decision.change }}
       }
       // 画面确实变化、需要问 VLM 时，才做 base64 编码并读一次活动窗口（与场景检测共享 30s 缓存）
       const dataUrl = src.thumbnail.toDataURL()
@@ -1342,11 +1342,11 @@ export function registerPetIpc(): void {
             maxTokens: 120,
           } as any)
           let speech = ''
-          try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') speech = obj.speech } catch {}
+          try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') {speech = obj.speech} } catch {}
           // 视觉失败 → 纯文本：用活动窗口标题做轻量观察，保证开了"屏幕感知"就一定有反应
           if (!speech) {
             let titleLine = ''
-            try { if (sceneInfo?.windowTitle) titleLine = `用户当前活动窗口："${String(sceneInfo.windowTitle).slice(0, 80)}"（进程 ${sceneInfo.processName || '未知'}）。` } catch {}
+            try { if (sceneInfo?.windowTitle) {titleLine = `用户当前活动窗口："${String(sceneInfo.windowTitle).slice(0, 80)}"（进程 ${sceneInfo.processName || '未知'}）。`} } catch {}
             res = await provider.call({
               messages: [
                 { role: 'system', content: '你是桌宠 Lumina。你看不到屏幕截图，只知道用户的活动窗口。用一句 20 字以内、可爱自然的话轻量搭话或关心，只输出 JSON：{"speech":"..."}' },
@@ -1354,11 +1354,11 @@ export function registerPetIpc(): void {
               ],
               temperature: 0.85, maxTokens: 120,
             } as any)
-            try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') speech = obj.speech } catch {}
+            try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') {speech = obj.speech} } catch {}
           }
           if (speech) {
           sendPetCommand({ type: 'say', text: speech })
-          if (decision) rememberScreenEpisode(decision.scene, sceneInfo?.windowTitle || null, speech)
+          if (decision) {rememberScreenEpisode(decision.scene, sceneInfo?.windowTitle || null, speech)}
           return { ok: true, speech }
         }
         }
@@ -1380,8 +1380,8 @@ export function registerPetIpc(): void {
     try {
       const wins = BrowserWindow.getAllWindows()
       const main = wins.find(w => !w.isDestroyed() && w !== petWindow) || wins.find(w => !w.isDestroyed())
-      if (!main) return { ok: false, error: '主窗口未打开' }
-      if (!main.isVisible()) main.show()
+      if (!main) {return { ok: false, error: '主窗口未打开' }}
+      if (!main.isVisible()) {main.show()}
       main.focus()
       main.webContents.send('life:open', { target })
       return { ok: true }
@@ -1392,14 +1392,14 @@ export function registerPetIpc(): void {
   const lifeWaiters = new Map<string, { resolve: (v: any) => void; timer: ReturnType<typeof setTimeout> }>()
   ipcMain.on('life:data-response', (_e, payload: { reqId: string; items?: any[] }) => {
     const w = lifeWaiters.get(payload?.reqId)
-    if (w) w.resolve({ items: Array.isArray(payload?.items) ? payload.items : [] })
+    if (w) {w.resolve({ items: Array.isArray(payload?.items) ? payload.items : [] })}
   })
   ipcMain.handle('pet:life-data', async (_e, target: string) => {
     return await new Promise((resolve) => {
       try {
         const wins = BrowserWindow.getAllWindows()
         const main = wins.find(w => !w.isDestroyed() && w !== petWindow) || wins.find(w => !w.isDestroyed())
-        if (!main) return resolve({ items: [] })
+        if (!main) {return resolve({ items: [] })}
         const reqId = 'life_' + Date.now() + '_' + Math.floor(Math.random() * 1e6)
         const timer = setTimeout(() => { lifeWaiters.delete(reqId); resolve({ items: [] }) }, 3000)
         lifeWaiters.set(reqId, {
@@ -1449,7 +1449,7 @@ export function registerPetIpc(): void {
   })
   ipcMain.handle('pet:set-persona', (_e, params: { persona?: string; skip?: boolean }) => {
     const patch: Partial<PetPrefs> = { onboardingDone: true }
-    if (params?.persona) patch.persona = params.persona
+    if (params?.persona) {patch.persona = params.persona}
     updatePetPrefs(patch)
     return { ok: true }
   })
@@ -1543,7 +1543,7 @@ export function registerPetIpc(): void {
     const fs = await import('fs')
     const pluginsDir = path.join(app.getPath('userData'), 'pet-plugins')
     try {
-      if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true })
+      if (!fs.existsSync(pluginsDir)) {fs.mkdirSync(pluginsDir, { recursive: true })}
     } catch {}
 
     if (params.action === 'open-dir') {
@@ -1608,11 +1608,11 @@ async function runSecretaryTick(opts?: { force?: boolean }): Promise<{ ok: boole
   try {
     const prefs = getPetPrefs()
     const sec = prefs.secretary || {}
-    if (prefs.privacyMode) return { ok: true, skipped: true, reason: 'privacy' }
-    if (sec.enabled === false) return { ok: true, skipped: true, reason: 'disabled' }
+    if (prefs.privacyMode) {return { ok: true, skipped: true, reason: 'privacy' }}
+    if (sec.enabled === false) {return { ok: true, skipped: true, reason: 'disabled' }}
     const minMs = Math.max(10, sec.minIntervalSec || 45) * 1000
-    if (!opts?.force && Date.now() - _lastSecretaryAt < minMs) return { ok: true, skipped: true, reason: 'interval' }
-    if (_secretaryRunning) return { ok: true, skipped: true, reason: 'busy' }
+    if (!opts?.force && Date.now() - _lastSecretaryAt < minMs) {return { ok: true, skipped: true, reason: 'interval' }}
+    if (_secretaryRunning) {return { ok: true, skipped: true, reason: 'busy' }}
     _secretaryRunning = true
 
     const sources = sec.sources || {}
@@ -1630,15 +1630,15 @@ async function runSecretaryTick(opts?: { force?: boolean }): Promise<{ ok: boole
     if (sources.screen !== false) {
       try {
         const srcs = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } })
-        if (srcs[0]) dataUrl = srcs[0].thumbnail.toDataURL()
+        if (srcs[0]) {dataUrl = srcs[0].thumbnail.toDataURL()}
       } catch { /* ignore */ }
     }
     // 3) 触发源提示
     const srcTags: string[] = []
-    if (sources.news) srcTags.push('可结合近期科技/新闻热点')
-    if (sources.video) srcTags.push('若在看视频可一起聊或提醒时长')
-    if (sources.music) srcTags.push('若在听音乐可聊聊音乐')
-    if (sources.personal) srcTags.push('可结合用户个人动态主动关心')
+    if (sources.news) {srcTags.push('可结合近期科技/新闻热点')}
+    if (sources.video) {srcTags.push('若在看视频可一起聊或提醒时长')}
+    if (sources.music) {srcTags.push('若在听音乐可聊聊音乐')}
+    if (sources.personal) {srcTags.push('可结合用户个人动态主动关心')}
 
     const cfg = resolvePetBrainConfig()
     if (!cfg) { _secretaryRunning = false; return { ok: true, skipped: true, reason: 'no-llm' } }
@@ -1675,14 +1675,14 @@ async function runSecretaryTick(opts?: { force?: boolean }): Promise<{ ok: boole
       if (i >= 0 && j > i) { try { parsed = JSON.parse(rawText.slice(i, j + 1)) } catch { parsed = null } }
     }
     const obj = parsed || {}
-    if (typeof obj.speech === 'string') speech = obj.speech.trim().slice(0, 90)
-    if (Array.isArray(obj.options)) options = obj.options
+    if (typeof obj.speech === 'string') {speech = obj.speech.trim().slice(0, 90)}
+    if (Array.isArray(obj.options)) {options = obj.options
       .filter((x: any) => typeof x === 'string' && x.trim())
       .map((x: string) => x.trim().slice(0, 20))
-      .slice(0, 3)
-    if (['observe', 'suggest', 'ask', 'praise'].includes(String(obj.kind))) kind = String(obj.kind)
+      .slice(0, 3)}
+    if (['observe', 'suggest', 'ask', 'praise'].includes(String(obj.kind))) {kind = String(obj.kind)}
     _secretaryRunning = false
-    if (!speech) return { ok: true, skipped: true, reason: 'parse-fail' }
+    if (!speech) {return { ok: true, skipped: true, reason: 'parse-fail' }}
 
     _lastSecretaryAt = Date.now()
     _lastSecretarySpeech = speech
@@ -1730,7 +1730,7 @@ export function openOnboarding(): { ok: boolean } {
     return { ok: true }
   }
   const p = path.join(path.dirname(getPetHtmlPath()), 'onboarding.html')
-  if (!fs.existsSync(p)) return { ok: false }
+  if (!fs.existsSync(p)) {return { ok: false }}
   onboardingWin = new BrowserWindow({
     width: 780,
     height: 640,
@@ -1760,8 +1760,8 @@ export function maybeShowOnboarding(): void {
 
 export async function tryPetOperate(cu: { type?: string; params?: Record<string, any> }): Promise<{ ok: boolean; error?: string }> {
   const cp = getPetPrefs().catpaw || {}
-  if (!cp.master) return { ok: false, error: 'Lumina Pet Handling 未开启' }
-  if (!cp.kbm) return { ok: false, error: '键鼠控制未开启' }
+  if (!cp.master) {return { ok: false, error: 'Lumina Pet Handling 未开启' }}
+  if (!cp.kbm) {return { ok: false, error: '键鼠控制未开启' }}
   const t = cu?.type
   if (!t || !['open_app', 'keypress', 'type', 'wait', 'click', 'screenshot', 'scroll'].includes(t)) {
     return { ok: false, error: '不支持的操作类型' }

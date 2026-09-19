@@ -108,11 +108,11 @@ export class PluginManager {
     const manifests: PluginManifest[] = []
 
     for (const dir of this.pluginDirs) {
-      if (!fs.existsSync(dir)) continue
+      if (!fs.existsSync(dir)) {continue}
 
       const entries = fs.readdirSync(dir, { withFileTypes: true })
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue
+        if (!entry.isDirectory()) {continue}
 
         const manifestPath = path.join(dir, entry.name, 'plugin.json')
         if (fs.existsSync(manifestPath)) {
@@ -359,7 +359,7 @@ module.exports = {
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
       const na = partsA[i] || 0
       const nb = partsB[i] || 0
-      if (na !== nb) return na - nb
+      if (na !== nb) {return na - nb}
     }
     return 0
   }

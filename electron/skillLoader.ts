@@ -60,7 +60,7 @@ function parseSkillFrontmatter(content: string): Partial<SkillDef> {
     const lines = fmText.split('\n')
     for (const line of lines) {
       const colonIdx = line.indexOf(':')
-      if (colonIdx === -1) continue
+      if (colonIdx === -1) {continue}
       const key = line.slice(0, colonIdx).trim()
       const value = line.slice(colonIdx + 1).trim()
 
@@ -221,21 +221,21 @@ export class DynamicSkillLoader {
    * 扫描所有 skills 目录，加载所有 SKILL.md
    */
   loadAll(): SkillDef[] {
-    if (this.loaded) return Array.from(this.skills.values())
+    if (this.loaded) {return Array.from(this.skills.values())}
     this.skills.clear()
 
     for (const skillsDir of this.skillsDirs) {
-      if (!fs.existsSync(skillsDir)) continue
+      if (!fs.existsSync(skillsDir)) {continue}
 
       try {
         const entries = fs.readdirSync(skillsDir, { withFileTypes: true })
         for (const entry of entries) {
-          if (!entry.isDirectory()) continue
+          if (!entry.isDirectory()) {continue}
           // 跳过已经加载的同名 skill
-          if (this.skills.has(entry.name)) continue
+          if (this.skills.has(entry.name)) {continue}
 
           const skillMdPath = path.join(skillsDir, entry.name, 'SKILL.md')
-          if (!fs.existsSync(skillMdPath)) continue
+          if (!fs.existsSync(skillMdPath)) {continue}
 
           const skill = buildSkillDef(skillsDir, skillMdPath, entry.name)
           if (skill) {
@@ -265,7 +265,7 @@ export class DynamicSkillLoader {
    * 获取单个 Skill
    */
   getSkill(id: string): SkillDef | undefined {
-    if (!this.loaded) this.loadAll()
+    if (!this.loaded) {this.loadAll()}
     return this.skills.get(id)
   }
 
@@ -273,7 +273,7 @@ export class DynamicSkillLoader {
    * 获取所有已加载的 Skills
    */
   getAllSkills(): SkillDef[] {
-    if (!this.loaded) this.loadAll()
+    if (!this.loaded) {this.loadAll()}
     return Array.from(this.skills.values())
   }
 
@@ -281,7 +281,7 @@ export class DynamicSkillLoader {
    * 为指定 agent 匹配推荐的 Skills
    */
   getSkillsForAgent(agentId: string): SkillDef[] {
-    if (!this.loaded) this.loadAll()
+    if (!this.loaded) {this.loadAll()}
     return Array.from(this.skills.values()).filter(
       (s) =>
         (s.bestFor.length === 0 || s.bestFor.includes(agentId)) &&
@@ -293,7 +293,7 @@ export class DynamicSkillLoader {
    * 根据任务描述匹配最合适的 Skill
    */
   matchSkill(taskDescription: string): SkillDef | null {
-    if (!this.loaded) this.loadAll()
+    if (!this.loaded) {this.loadAll()}
     const lower = taskDescription.toLowerCase()
     let bestMatch: SkillDef | null = null
     let bestScore = 0
@@ -301,13 +301,13 @@ export class DynamicSkillLoader {
     for (const skill of this.skills.values()) {
       let score = 0
       // 名称匹配权重高
-      if (lower.includes(skill.name.toLowerCase())) score += 3
+      if (lower.includes(skill.name.toLowerCase())) {score += 3}
       // 触发词匹配
       for (const trigger of skill.triggers) {
-        if (lower.includes(trigger.toLowerCase())) score += 1
+        if (lower.includes(trigger.toLowerCase())) {score += 1}
       }
       // 描述匹配
-      if (lower.includes(skill.description.toLowerCase())) score += 1
+      if (lower.includes(skill.description.toLowerCase())) {score += 1}
 
       if (score > bestScore) {
         bestScore = score
@@ -322,7 +322,7 @@ export class DynamicSkillLoader {
    * 列出所有可用 Skill（供 list_skills 工具使用）
    */
   listSkills(): { id: string; name: string; description: string; version?: string }[] {
-    if (!this.loaded) this.loadAll()
+    if (!this.loaded) {this.loadAll()}
     return Array.from(this.skills.values()).map((s) => ({
       id: s.id,
       name: s.name,
@@ -335,9 +335,9 @@ export class DynamicSkillLoader {
    * 构建注入到 system prompt 的 Skill 上下文
    */
   getSkillsContextForPrompt(agentId: string): string {
-    if (!this.loaded) this.loadAll()
+    if (!this.loaded) {this.loadAll()}
     const agentSkills = this.getSkillsForAgent(agentId)
-    if (agentSkills.length === 0) return ''
+    if (agentSkills.length === 0) {return ''}
 
     const lines = ['\n## 可用 Skills\n', '以下 Skills 提供了专业工作流指导。调用 `use_skill(name)` 加载详细内容。\n']
 
@@ -356,7 +356,7 @@ export class DynamicSkillLoader {
    */
   materializeSkill(skillId: string): string {
     const skill = this.getSkill(skillId)
-    if (!skill) return `❌ Skill 不存在: ${skillId}\n\n可用 Skills: ${this.listSkills().map(s => s.id).join(', ')}`
+    if (!skill) {return `❌ Skill 不存在: ${skillId}\n\n可用 Skills: ${this.listSkills().map(s => s.id).join(', ')}`}
 
     return `\n【已加载 Skill：${skill.name}】\n${skill.description}\n\n${skill.workflow}\n\n💡 严格按工作流执行，不要跳过步骤。`
   }
@@ -365,7 +365,7 @@ export class DynamicSkillLoader {
 // 单例
 let _dynamicLoader: DynamicSkillLoader | null = null
 export function getDynamicSkillLoader(): DynamicSkillLoader {
-  if (!_dynamicLoader) _dynamicLoader = new DynamicSkillLoader()
+  if (!_dynamicLoader) {_dynamicLoader = new DynamicSkillLoader()}
   return _dynamicLoader
 }
 

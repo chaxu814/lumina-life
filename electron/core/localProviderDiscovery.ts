@@ -61,12 +61,12 @@ export interface DiscoveredProvider {
 
 /** 从模型列表里按偏好关键词挑一个最适合中文的模型（纯逻辑） */
 export function pickRecommendedModel(models: string[], keywords?: string[]): string {
-  if (!models.length) return ''
+  if (!models.length) {return ''}
   const list = (keywords || []).map(k => k.toLowerCase())
   const lower = models.map(m => m.toLowerCase())
   for (const kw of list) {
     const idx = lower.findIndex(m => m.includes(kw))
-    if (idx >= 0) return models[idx]
+    if (idx >= 0) {return models[idx]}
   }
   // 取列表中第一个（通常本地服务把默认模型排在前面）
   return models[0]
@@ -106,11 +106,11 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
 /** 探测单个候选（网络），失败返回 null */
 export async function probeCandidate(c: LocalCandidate, timeoutMs = 1200): Promise<DiscoveredProvider | null> {
   const res = await fetchWithTimeout(c.baseUrl + c.modelsPath, timeoutMs)
-  if (!res) return null
+  if (!res) {return null}
   let data: any = null
   try { data = await res.json() } catch { return null }
   const models = extractModels(c.format, data)
-  if (!models.length) return null
+  if (!models.length) {return null}
   return {
     id: c.id,
     label: c.label,

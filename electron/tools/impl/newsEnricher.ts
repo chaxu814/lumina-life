@@ -32,16 +32,16 @@ function bgCacheKey(title: string): string {
  */
 function inferCommunitySummary(item: FilteredItem): string | undefined {
   const raw = item.item._commentContent
-  if (!raw) return undefined
+  if (!raw) {return undefined}
 
   // 截取前 3 条评论中较短的表达
   const lines = raw.split('\n').filter(Boolean).slice(0, 3)
-  if (lines.length === 0) return undefined
+  if (lines.length === 0) {return undefined}
 
   // 简单的摘要：提取每条评论的前 80 字
   const snippets = lines.map(l => {
     const match = l.match(/\[([^\]]+)\]:\s*(.+)/)
-    if (match) return `${match[1]}: ${match[2].slice(0, 80)}`
+    if (match) {return `${match[1]}: ${match[2].slice(0, 80)}`}
     return l.slice(0, 100)
   })
 
@@ -68,7 +68,7 @@ async function enrichOne(item: FilteredItem): Promise<void> {
   if (bgCache.has(key)) {
     // 同一批中同名新闻共享结果
     const cached = bgCache.get(key)
-    if (cached) item.background = cached
+    if (cached) {item.background = cached}
     return
   }
 
@@ -130,7 +130,7 @@ async function enrichOne(item: FilteredItem): Promise<void> {
 function extractEnglishKeywords(title: string): string | undefined {
   // 提取标题中所有 >=3 字母的英文词
   const words = title.match(/\b[a-zA-Z]{3,}\b/g)
-  if (!words || words.length === 0) return undefined
+  if (!words || words.length === 0) {return undefined}
   // 去重取前 6 个
   return [...new Set(words.map(w => w.toLowerCase()))].slice(0, 6).join(', ')
 }
@@ -152,7 +152,7 @@ export async function enrichItemsBackground(
   filtered: FilteredItem[],
   interests?: string,
 ): Promise<void> {
-  if (filtered.length === 0) return
+  if (filtered.length === 0) {return}
 
   console.log(`[NewsEnricher] 🔍 开始补充 ${filtered.length} 条新闻背景...`)
 
@@ -172,13 +172,13 @@ export async function enrichItemsBackground(
     // 2. 背景补充
     if (!item.background) {
       await enrichOne(item)
-      if (item.background) enrichedCount++
+      if (item.background) {enrichedCount++}
     }
 
     // 3. 英文关键词（双语模式用）
     if (!item.enKeywords) {
       const ek = extractEnglishKeywords(item.item.title)
-      if (ek) item.enKeywords = ek
+      if (ek) {item.enKeywords = ek}
     }
   }
 

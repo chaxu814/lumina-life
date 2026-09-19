@@ -146,7 +146,7 @@ import {
 let _registered = false
 
 export function registerAllTools(): void {
-  if (_registered) return
+  if (_registered) {return}
   _registered = true
 
   // ── 基础工具 ─────────────────────────────────────────

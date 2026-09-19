@@ -25,7 +25,7 @@ export interface RefinerConfig {
 }
 
 export const AUTO_REFINE_EVERY_N_TURNS = 8
-export let globalTurnCount = 0
+export const globalTurnCount = 0
 
 /**
  * 自动三层精炼 — 从对话摘要中提取事实、反思、更新人格
@@ -35,11 +35,11 @@ export async function autoRefine(
   emit?: ((event: AgentEvent) => void) | null
 ): Promise<void> {
   const store = getMemoryStore()
-  if (!store) return
+  if (!store) {return}
 
   try {
     const summaries = store.getRecentSummaries?.(2) ?? []
-    if (summaries.length === 0) return
+    if (summaries.length === 0) {return}
 
     const combinedSummary = summaries.join('\n')
 
@@ -86,11 +86,11 @@ export async function autoExtractFacts(
       signal: AbortSignal.timeout(10000),
     })
 
-    if (!res.ok) return
+    if (!res.ok) {return}
     const data = await res.json()
     const content = data.choices?.[0]?.message?.content || ''
     const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return
+    if (!jsonMatch) {return}
 
     const parsed = JSON.parse(jsonMatch[0])
     const store = getMemoryStore()
@@ -133,11 +133,11 @@ export async function autoGenerateReflections(
       signal: AbortSignal.timeout(10000),
     })
 
-    if (!res.ok) return
+    if (!res.ok) {return}
     const data = await res.json()
     const content = data.choices?.[0]?.message?.content || ''
     const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return
+    if (!jsonMatch) {return}
 
     const parsed = JSON.parse(jsonMatch[0])
     const store = getMemoryStore()
@@ -179,11 +179,11 @@ export async function autoUpdatePersona(
       signal: AbortSignal.timeout(10000),
     })
 
-    if (!res.ok) return
+    if (!res.ok) {return}
     const data = await res.json()
     const content = data.choices?.[0]?.message?.content || ''
     const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return
+    if (!jsonMatch) {return}
 
     const parsed = JSON.parse(jsonMatch[0])
     if (parsed.traits) {

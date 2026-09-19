@@ -42,7 +42,7 @@ interface MoreSettingsModalProps {
 export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SidebarId>('agent')
 
-  if (!open) return null
+  if (!open) {return null}
 
   return (
     /* ── 背景遮罩 ── */

@@ -53,7 +53,7 @@ function ProviderBtn({ p, active, onClick }: {
 
 /* ── 简单的 notice 提示 ── */
 function NoticeBar({ notice }: { notice: string | null }) {
-  if (!notice) return null
+  if (!notice) {return null}
   return (
     <div style={{
       position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
@@ -128,18 +128,18 @@ export default function SettingsLLM() {
   const [maxTokensDraft, setMaxTokensDraft] = useState<string | null>(null)
   const maxTokensDisplay = maxTokensDraft ?? String(llmConfig.maxTokens ?? 4096)
   const commitMaxTokens = () => {
-    if (maxTokensDraft === null) return
+    if (maxTokensDraft === null) {return}
     const n = parseInt(maxTokensDraft, 10)
-    if (!isNaN(n) && n > 0 && n <= 1048576) setLLMConfig({ maxTokens: n })
+    if (!isNaN(n) && n > 0 && n <= 1048576) {setLLMConfig({ maxTokens: n })}
     setMaxTokensDraft(null)
   }
 
   const [ctxDraft, setCtxDraft] = useState<string | null>(null)
   const ctxDisplay = ctxDraft ?? String(llmConfig.contextWindow ?? 0)
   const commitContextWindow = () => {
-    if (ctxDraft === null) return
+    if (ctxDraft === null) {return}
     const n = parseInt(ctxDraft, 10)
-    if (!isNaN(n) && n >= 0 && n <= 2_097_152) setLLMConfig({ contextWindow: n })
+    if (!isNaN(n) && n >= 0 && n <= 2_097_152) {setLLMConfig({ contextWindow: n })}
     setCtxDraft(null)
   }
 
@@ -157,14 +157,14 @@ export default function SettingsLLM() {
     (async () => {
       try {
         const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
-        if (r?.configs) setAgentLlmConfigs(r.configs)
+        if (r?.configs) {setAgentLlmConfigs(r.configs)}
       } catch (e) { console.error('[SettingsLLM] ❌ 加载 Team Agent LLM 配置失败:', e) }
     })()
   }, [])
 
   // ── 测试连接 ──
   const testLLM = async () => {
-    if (!llmConfig.model || !llmConfig.baseUrl) return
+    if (!llmConfig.model || !llmConfig.baseUrl) {return}
     setLlmStatus('testing')
     setLlmMsg('')
     try {
@@ -188,7 +188,7 @@ export default function SettingsLLM() {
   // ── 保存到后端 ──
   const saveProviderToBackend = async () => {
     const { provider, baseUrl, apiKey, model } = useStore.getState().llmConfig
-    if (!provider) return
+    if (!provider) {return}
     setSavingProvider(true)
     try {
       await window.luminaAPI?.providerSaveConfig?.(provider, {
@@ -199,7 +199,7 @@ export default function SettingsLLM() {
       // 刷新前端缓存，避免界面仍显示旧值
       try {
         const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
-        if (r?.configs) setAgentLlmConfigs(r.configs)
+        if (r?.configs) {setAgentLlmConfigs(r.configs)}
         const all = await window.luminaAPI?.providerGetAll?.()
         if (all?.activeProviderId) {
           const active = all.configs[all.activeProviderId]
@@ -223,7 +223,7 @@ export default function SettingsLLM() {
   // ── 获取模型列表 ──
   const fetchModels = async () => {
     const { provider, baseUrl, apiKey } = useStore.getState().llmConfig
-    if (!baseUrl) return
+    if (!baseUrl) {return}
     setShowModelPicker(true)
     setAvailableModels(null)
     setFetchError(null)
@@ -234,14 +234,14 @@ export default function SettingsLLM() {
       if (window.luminaAPI?.providerFetchModels && provider) {
         const res = await window.luminaAPI.providerFetchModels(provider, { baseUrl, apiKey: apiKey || '' })
         if (res?.models && res.models.length > 0) { setAvailableModels(res.models); setFetchingModels(false); return }
-        if (res?.error) lastError = res.error
+        if (res?.error) {lastError = res.error}
       }
     } catch (e: any) { lastError = e.message || String(e) }
     try {
       // 回退：llm:fetchModels（内置 LM Studio/Ollama 多端点识别）
       const res = await window.luminaAPI?.llmFetchModels?.({ baseUrl, apiKey: apiKey || '' })
       if (res?.models && res.models.length > 0) { setAvailableModels(res.models); setFetchingModels(false); return }
-      if (res?.error) lastError = res.error || lastError
+      if (res?.error) {lastError = res.error || lastError}
     } catch (e: any) { lastError = lastError || e.message || String(e) }
     setFetchError(lastError || '获取模型列表失败，请检查 API 地址和密钥')
     setFetchingModels(false)
@@ -250,7 +250,7 @@ export default function SettingsLLM() {
   // ── Team 模型获取 ──
   const fetchTeamModels = async (agentId: string) => {
     const cfg = agentLlmConfigs[agentId]
-    if (!cfg?.endpoint) return
+    if (!cfg?.endpoint) {return}
     setTeamShowModelPicker(agentId)
     setTeamAvailableModels(prev => ({ ...prev, [agentId]: null as any }))
     setTeamFetchError(prev => ({ ...prev, [agentId]: '' }))
@@ -285,7 +285,7 @@ export default function SettingsLLM() {
       })
       if (res && res.success === false) { setNotice('❌ 保存失败: ' + (res.error || '后端未知错误')); return }
       const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
-      if (r?.configs) setAgentLlmConfigs(r.configs)
+      if (r?.configs) {setAgentLlmConfigs(r.configs)}
       setNotice(`✅ ${AGENT_META.find(a => a.id === agentId)?.name || agentId} 配置已保存`)
     } catch (e: any) { setNotice('❌ 保存失败: ' + (e.message || e)) }
   }
@@ -348,7 +348,7 @@ export default function SettingsLLM() {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.free).map(p => (
                 <ProviderBtn key={p.id} p={p} active={llmConfig.provider === p.id}
-                  onClick={() => { switchLLMProvider(p.id, p.url, p.model); setLlmStatus('idle'); if (p.id === 'opencode-zen') setLLMConfig({ apiKey: 'public' }) }} />
+                  onClick={() => { switchLLMProvider(p.id, p.url, p.model); setLlmStatus('idle'); if (p.id === 'opencode-zen') {setLLMConfig({ apiKey: 'public' })} }} />
               ))}
             </div>
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
@@ -500,14 +500,14 @@ export default function SettingsLLM() {
                   <input style={{ ...inputS }} value={maxTokensDisplay}
                     onChange={e => setMaxTokensDraft(e.target.value)}
                     onBlur={commitMaxTokens}
-                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+                    onKeyDown={e => { if (e.key === 'Enter') {(e.target as HTMLInputElement).blur()} }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>上下文窗口 (0=自动)</label>
                   <input style={{ ...inputS }} value={ctxDisplay}
                     onChange={e => setCtxDraft(e.target.value)}
                     onBlur={commitContextWindow}
-                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+                    onKeyDown={e => { if (e.key === 'Enter') {(e.target as HTMLInputElement).blur()} }} />
                   <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>
                     0=自动检测 · 常用: 131072(128K) / 262144(256K) / 1048576(1M)
                   </div>
@@ -530,7 +530,7 @@ export default function SettingsLLM() {
               </span>
             )}
             <button onClick={async () => {
-              if (!llmConfig.model || !llmConfig.baseUrl) return
+              if (!llmConfig.model || !llmConfig.baseUrl) {return}
               try {
                 for (const a of AGENT_META) {
                   await window.luminaAPI.agentLlmSetConfig?.(a.id, {
@@ -539,7 +539,7 @@ export default function SettingsLLM() {
                   })
                 }
                 const r = await window.luminaAPI.agentLlmGetAllConfigs?.()
-                if (r?.configs) setAgentLlmConfigs(r.configs)
+                if (r?.configs) {setAgentLlmConfigs(r.configs)}
                 setNotice('✅ 已同步到 Team！Lumina、Yak、热茶 都使用了此配置。')
               } catch (e: any) { setNotice('❌ 同步失败: ' + (e.message || e)) }
             }}
@@ -614,7 +614,7 @@ export default function SettingsLLM() {
 
               const handleAgentProvider = (providerId: string, endpoint: string, model: string) => {
                 const next: any = { ...cfg, provider: providerId, endpoint: endpoint || cfg.endpoint, model: model || cfg.model }
-                if (providerId === 'opencode-zen') next.apiKey = 'public'
+                if (providerId === 'opencode-zen') {next.apiKey = 'public'}
                 setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: next }))
               }
 
@@ -713,8 +713,8 @@ export default function SettingsLLM() {
                         onTestConnection={async (modelId) => {
                           try {
                             const res = await window.luminaAPI?.llmTestConnection?.({ baseUrl: cfg.endpoint, apiKey: cfg.apiKey || '', model: modelId })
-                            if (res?.success) setNotice(`🔌 ${agent.name} / ${modelId} 连接成功`)
-                            else setNotice(`❌ ${agent.name} / ${modelId}: ${res?.error || '连接失败'}`)
+                            if (res?.success) {setNotice(`🔌 ${agent.name} / ${modelId} 连接成功`)}
+                            else {setNotice(`❌ ${agent.name} / ${modelId}: ${res?.error || '连接失败'}`)}
                           } catch (e: any) { setNotice(`❌ ${agent.name} / ${modelId}: ${e.message || '未知错误'}`) }
                         }}
                       />

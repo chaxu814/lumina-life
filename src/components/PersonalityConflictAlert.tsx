@@ -60,7 +60,7 @@ export default function PersonalityConflictAlert({ conflict, onDismiss }: Props)
     }
   }, [conflict])
 
-  if (!visible || !conflict) return null
+  if (!visible || !conflict) {return null}
 
   const challenger = MODE_META[conflict.challengerMode] || { name: conflict.challengerMode, icon: '❓', color: '#888' }
   const current = MODE_META[conflict.currentMode] || { name: conflict.currentMode, icon: '❓', color: '#888' }

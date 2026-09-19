@@ -33,7 +33,7 @@ function writeData(data: Record<string, any>): void {
 let registered = false
 
 export function registerLoopIpc(): void {
-  if (registered) return
+  if (registered) {return}
   registered = true
 
   ipcMain.handle('loop:data:read', () => readData())

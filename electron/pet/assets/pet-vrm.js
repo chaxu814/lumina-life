@@ -30624,7 +30624,9 @@ void main() {
     let nextBlink = 2 + Math.random() * 3;
     let blinkTimer = 0;
     function updateBlink(dt, t) {
-      if (!vrm?.expressionManager) return;
+      if (!vrm?.expressionManager) {
+        return;
+      }
       blinkTimer += dt;
       if (blinkTimer > nextBlink) {
         const into = blinkTimer - nextBlink;
@@ -30649,14 +30651,20 @@ void main() {
       camera.top = h / 2;
       camera.bottom = -h / 2;
       camera.updateProjectionMatrix();
-      if (vrm) placeAndReport(w, h, dpr);
+      if (vrm) {
+        placeAndReport(w, h, dpr);
+      }
     }
     function placeAndReport(viewW, viewH, dpr) {
-      if (!vrm) return;
+      if (!vrm) {
+        return;
+      }
       const box = new Box3().setFromObject(vrm.scene);
       const size = new Vector3();
       box.getSize(size);
-      if (!size.y || !size.x) return;
+      if (!size.y || !size.x) {
+        return;
+      }
       const aspect2 = size.x / size.y;
       const px = characterPixelSize(aspect2, viewW, viewH, opts.layout);
       const scale = px.height / size.y;
@@ -30676,19 +30684,25 @@ void main() {
     loader.load(
       opts.url,
       (gltf) => {
-        if (disposed) return;
+        if (disposed) {
+          return;
+        }
         vrm = gltf.userData.vrm;
         if (!vrm) {
           opts.onError?.("文件不是有效的 VRM 模型");
           return;
         }
         VRMUtils.removeUnnecessaryVertices(gltf.scene);
-        if (vrm.meta?.specVersion?.startsWith?.("0")) VRMUtils.rotateVRM0(vrm);
+        if (vrm.meta?.specVersion?.startsWith?.("0")) {
+          VRMUtils.rotateVRM0(vrm);
+        }
         root.add(gltf.scene);
         resize();
       },
       (ev) => {
-        if (ev.total > 0) opts.onProgress?.(Math.round(ev.loaded / ev.total * 100));
+        if (ev.total > 0) {
+          opts.onProgress?.(Math.round(ev.loaded / ev.total * 100));
+        }
       },
       (err) => {
         opts.onError?.(String(err?.message || err || "VRM 加载失败"));
@@ -30697,7 +30711,9 @@ void main() {
     let raf = 0;
     function tick() {
       raf = requestAnimationFrame(tick);
-      if (disposed) return;
+      if (disposed) {
+        return;
+      }
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
       if (vrm) {
@@ -30705,7 +30721,9 @@ void main() {
         const chest = vrm.humanoid?.getNormalizedBoneNode?.("chest");
         const spine = vrm.humanoid?.getNormalizedBoneNode?.("spine");
         const bone = chest || spine;
-        if (bone) bone.scale.set(1 + breath, 1 + breath * 0.4, 1 + breath);
+        if (bone) {
+          bone.scale.set(1 + breath, 1 + breath * 0.4, 1 + breath);
+        }
         root.rotation.z = Math.sin(t * 0.55) * 0.015;
         const head = vrm.humanoid?.getNormalizedBoneNode?.("head");
         if (head) {
@@ -30738,7 +30756,9 @@ void main() {
         cancelAnimationFrame(raf);
         window.removeEventListener("resize", resize);
         vrm?.scene?.traverse((o) => {
-          if (o.geometry) o.geometry.dispose?.();
+          if (o.geometry) {
+            o.geometry.dispose?.();
+          }
           if (o.material) {
             const mats = Array.isArray(o.material) ? o.material : [o.material];
             mats.forEach((m) => m.dispose?.());

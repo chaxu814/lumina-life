@@ -96,13 +96,13 @@ export class PetPerformanceEngine {
    * 元音形状仍按文本，张度改由真实语音能量驱动、停顿自动闭合。
    */
   setSpeechLevel(level: number): void {
-    if (!this.speaking) return
+    if (!this.speaking) {return}
     this.levelMode = true
     this.speechLevel = clamp01(level)
   }
 
   isSpeaking(now: number): boolean {
-    if (!this.speaking) return false
+    if (!this.speaking) {return false}
     const last = this.segs[this.segs.length - 1]
     return now - this.speakStart <= (last?.end ?? 0) + 200
   }
@@ -119,7 +119,7 @@ export class PetPerformanceEngine {
   /** 只有实时音频电平（无文本/音素）时，按能量张合嘴（默认 A 元音） */
   setAudioLevel(level: number, now: number): void {
     this.audioOpen = opennessFromRms(clamp01(level), this.audioOpen)
-    if (this.speaking) return
+    if (this.speaking) {return}
     if (this.audioOpen > 0.05) {
       this.mixer.setLayer('speech', visemePose('A', this.audioOpen), { weight: 1, now })
     } else {
@@ -130,12 +130,12 @@ export class PetPerformanceEngine {
   /** 执行一条高层表演指令；返回需要渲染层补做的事（内置动作/特效/motion） */
   perform(input: unknown, now: number): PerformHints {
     const cmd = safePerformance(input)
-    if (!cmd) return {}
+    if (!cmd) {return {}}
     const hints: PerformHints = {}
 
     if (cmd.expression) {
       const m = normalizeMood(cmd.expression)
-      if (m) this.setMood(m, now)
+      if (m) {this.setMood(m, now)}
     }
 
     if (cmd.gaze) {
@@ -146,7 +146,7 @@ export class PetPerformanceEngine {
 
     // 头侧倾与参数化手势合并到同一个 action 层，避免互相覆盖
     const actionPose: StandardPose = {}
-    if (cmd.headTilt !== undefined) actionPose.headRoll = cmd.headTilt * 12
+    if (cmd.headTilt !== undefined) {actionPose.headRoll = cmd.headTilt * 12}
     if (cmd.gesture && !cmd.gesture.builtin) {
       Object.assign(actionPose, parametricGesture(cmd.gesture.name, cmd.gesture.intensity))
     }
@@ -154,8 +154,8 @@ export class PetPerformanceEngine {
       this.mixer.setLayer('action', actionPose, { weight: 1, ttlMs: cmd.durationMs, now, fadeMs: 200 })
     }
     if (cmd.gesture) { hints.gesture = cmd.gesture.name; hints.builtin = cmd.gesture.builtin }
-    if (cmd.effect) hints.effect = cmd.effect
-    if (cmd.motion) hints.motion = cmd.motion
+    if (cmd.effect) {hints.effect = cmd.effect}
+    if (cmd.motion) {hints.motion = cmd.motion}
     return hints
   }
 
@@ -173,9 +173,9 @@ export class PetPerformanceEngine {
       if (this.blinkStart >= 0) {
         const t = now - this.blinkStart
         let amount = 0
-        if (t < 70) amount = t / 70
-        else if (t < 150) amount = 1
-        else if (t < 220) amount = 1 - (t - 150) / 70
+        if (t < 70) {amount = t / 70}
+        else if (t < 150) {amount = 1}
+        else if (t < 220) {amount = 1 - (t - 150) / 70}
         else { this.blinkStart = -1; amount = 0 }
         this.mixer.setBlink(clamp01(amount))
       }
@@ -200,14 +200,14 @@ export class PetPerformanceEngine {
 }
 
 function gazeTargetX(t?: string): number {
-  if (t === 'left') return -0.8
-  if (t === 'right') return 0.8
-  if (t === 'user') return 0
+  if (t === 'left') {return -0.8}
+  if (t === 'right') {return 0.8}
+  if (t === 'user') {return 0}
   return 0
 }
 function gazeTargetY(t?: string): number {
-  if (t === 'up') return -0.6
-  if (t === 'down') return 0.6
+  if (t === 'up') {return -0.6}
+  if (t === 'down') {return 0.6}
   return 0
 }
 

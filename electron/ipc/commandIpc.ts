@@ -26,10 +26,10 @@ export function registerCommandHandlers(): void {
   // ═══════════════════════════════════════════════════
   router.register('mission', async (parsed) => {
     const desc = parsed.args.join(' ')
-    if (!desc) return { success: false, message: '用法: /mission <任务描述>' }
+    if (!desc) {return { success: false, message: '用法: /mission <任务描述>' }}
 
     const agent = _getActiveAgent?.()
-    if (!agent) return { success: false, message: '请先启动 Agent' }
+    if (!agent) {return { success: false, message: '请先启动 Agent' }}
 
     // 委托给 agentRunner 的特殊模式
     const result = await agent.run(
@@ -108,7 +108,7 @@ export function registerCommandHandlers(): void {
   // ═══════════════════════════════════════════════════
   router.register('context', async (_parsed) => {
     const agent = _getActiveAgent?.()
-    if (!agent) return { success: false, message: '请先启动 Agent' }
+    if (!agent) {return { success: false, message: '请先启动 Agent' }}
 
     const info = (agent as any).getContextInfo?.() || {
       messages: (agent as any).messages?.length || 0,
@@ -133,7 +133,7 @@ export function registerCommandHandlers(): void {
   // ═══════════════════════════════════════════════════
   router.register('retry', async (_parsed) => {
     const agent = _getActiveAgent?.()
-    if (!agent) return { success: false, message: '请先启动 Agent' }
+    if (!agent) {return { success: false, message: '请先启动 Agent' }}
 
     // 用空消息触发重试机制
     const result = await agent.run('请重试上次失败的操作。')

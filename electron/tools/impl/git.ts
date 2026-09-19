@@ -25,7 +25,7 @@ export const gitStatusDef: ToolDef = {
 
 export async function gitStatus(args: Record<string, any>): Promise<ToolResult> {
   const r = await runGit(['status', '--short'], args.cwd)
-  if (r.code !== 0) return { callId: '', ok: false, content: '', error: r.stderr || r.stdout }
+  if (r.code !== 0) {return { callId: '', ok: false, content: '', error: r.stderr || r.stdout }}
   return { callId: '', ok: true, content: r.stdout || '(工作区干净)' }
 }
 
@@ -43,7 +43,7 @@ export const gitCommitDef: ToolDef = {
 export async function gitCommit(args: Record<string, any>): Promise<ToolResult> {
   await runGit(['add', '-A'], args.cwd)
   const r = await runGit(['commit', '-m', args.message], args.cwd)
-  if (r.code !== 0) return { callId: '', ok: false, content: '', error: r.stderr || r.stdout }
+  if (r.code !== 0) {return { callId: '', ok: false, content: '', error: r.stderr || r.stdout }}
   return { callId: '', ok: true, content: r.stdout || '提交成功' }
 }
 
@@ -60,7 +60,7 @@ export const gitLogDef: ToolDef = {
 export async function gitLog(args: Record<string, any>): Promise<ToolResult> {
   const count = args.count || 5
   const r = await runGit(['log', `-${count}`, '--oneline', '--decorate'], args.cwd)
-  if (r.code !== 0) return { callId: '', ok: false, content: '', error: r.stderr }
+  if (r.code !== 0) {return { callId: '', ok: false, content: '', error: r.stderr }}
   return { callId: '', ok: true, content: r.stdout || '(无提交记录)' }
 }
 
@@ -73,6 +73,6 @@ export const gitDiffDef: ToolDef = {
 
 export async function gitDiff(args: Record<string, any>): Promise<ToolResult> {
   const r = await runGit(['diff', '--stat'], args.cwd)
-  if (r.code !== 0) return { callId: '', ok: false, content: '', error: r.stderr }
+  if (r.code !== 0) {return { callId: '', ok: false, content: '', error: r.stderr }}
   return { callId: '', ok: true, content: r.stdout || '(无变更)' }
 }

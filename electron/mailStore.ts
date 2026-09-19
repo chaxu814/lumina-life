@@ -82,7 +82,7 @@ export function resetSmtpConfig(): MailSmtpConfig {
 }
 
 function getStorePath(): string {
-  if (storePath) return storePath
+  if (storePath) {return storePath}
   try {
     const userData = app.getPath('userData')
     storePath = path.join(userData, 'lumina-mailbox.json')
@@ -93,7 +93,7 @@ function getStorePath(): string {
 }
 
 function getArchivePath(): string {
-  if (archivePath) return archivePath
+  if (archivePath) {return archivePath}
   archivePath = getStorePath().replace(/lumina-mailbox\.json$/, 'lumina-mailbox-archive.json')
   return archivePath
 }
@@ -178,7 +178,7 @@ export function onMailChange(fn: () => void): () => void {
 }
 
 async function trySendSmtpMail(subject: string, body: string, htmlBody?: string): Promise<void> {
-  if (!smtpConfig.enabled) return
+  if (!smtpConfig.enabled) {return}
   const {
     from,
     to,
@@ -270,13 +270,13 @@ export function sendMail(subject: string, body: string, priority: 'normal' | 'im
 }
 
 export function getMails(filter?: 'unread' | 'all'): AgentMail[] {
-  if (filter === 'unread') return mails.filter(m => !m.read)
+  if (filter === 'unread') {return mails.filter(m => !m.read)}
   return [...mails]
 }
 
 export function markRead(mailId: string): boolean {
   const mail = mails.find(m => m.id === mailId)
-  if (!mail) return false
+  if (!mail) {return false}
   mail.read = true
   mail.readAt = Date.now()
   save()
@@ -299,7 +299,7 @@ export function markAllRead(): number {
 
 export function deleteMail(mailId: string, permanent = false): boolean {
   const idx = mails.findIndex(m => m.id === mailId)
-  if (idx === -1) return false
+  if (idx === -1) {return false}
   if (permanent) {
     mails.splice(idx, 1)
   } else {
@@ -328,7 +328,7 @@ export function getArchivedMails(): AgentMail[] {
 /** 从归档恢复邮件回收件箱 */
 export function restoreMail(mailId: string): boolean {
   const idx = archived.findIndex(m => m.id === mailId)
-  if (idx === -1) return false
+  if (idx === -1) {return false}
   const [mail] = archived.splice(idx, 1)
   delete mail.deletedAt
   mails.unshift(mail)
@@ -341,7 +341,7 @@ export function restoreMail(mailId: string): boolean {
 /** 永久删除归档邮件（彻底清除，不可恢复） */
 export function purgeArchivedMail(mailId: string): boolean {
   const idx = archived.findIndex(m => m.id === mailId)
-  if (idx === -1) return false
+  if (idx === -1) {return false}
   archived.splice(idx, 1)
   saveArchive()
   return true

@@ -44,14 +44,14 @@ const LEVEL_TITLES: Record<number, string> = {
 }
 
 function getTitle(level: number): string {
-  if (LEVEL_TITLES[level]) return LEVEL_TITLES[level]
+  if (LEVEL_TITLES[level]) {return LEVEL_TITLES[level]}
   const keys = Object.keys(LEVEL_TITLES).map(Number).sort((a,b)=>a-b)
-  let t='冒险者'; for(const k of keys){if(k<=level)t=LEVEL_TITLES[k]} return t
+  let t='冒险者'; for(const k of keys){if(k<=level){t=LEVEL_TITLES[k]}} return t
 }
 
 function xpForLevel(l: number){return Math.floor(100*Math.pow(l,1.5))}
 function xpProgress(tXp:number){
-  let l=1;while(xpForLevel(l+1)<=tXp)l++
+  let l=1;while(xpForLevel(l+1)<=tXp){l++}
   const cur=xpForLevel(l),nxt=xpForLevel(l+1)
   return{level:l,currentXp:tXp-cur,nextLevelXp:nxt-cur,progress:(tXp-cur)/(nxt-cur)}
 }
@@ -77,7 +77,7 @@ function LevelUpCelebration({oldLv,newLv,onDone}:{oldLv:number;newLv:number;onDo
     const t2=setTimeout(()=>{setPhase('done');onDone()},3000)
     return()=>{clearTimeout(t1);clearTimeout(t2)}
   },[])
-  if(phase==='done')return null
+  if(phase==='done'){return null}
   const colors=['#f59e0b','#ef4444','#8b5cf6','#3b82f6','#10b981','#ec4899','#f97316']
   const tier=getTier(newLv)
   return(
@@ -132,14 +132,14 @@ function AchievementCelebration({achievement,onDone}:{achievement:{name:string;i
   const[visible,setVisible]=useState(false)
   const[particles,setParticles]=useState<Array<{id:number;x:number;y:number;color:string;size:number;delay:number}>>([])
   useEffect(()=>{
-    if(!achievement)return
+    if(!achievement){return}
     setVisible(true)
     const colors=['#f59e0b','#ef4444','#8b5cf6','#3b82f6','#10b981','#ec4899','#f97316']
     setParticles(Array.from({length:40},(_,i)=>({id:i,x:Math.random()*100,y:-10-Math.random()*30,color:colors[Math.floor(Math.random()*colors.length)],size:6+Math.random()*8,delay:Math.random()*0.5})))
     const t=setTimeout(()=>{setVisible(false);onDone()},3000)
     return()=>clearTimeout(t)
   },[achievement])
-  if(!visible||!achievement)return null
+  if(!visible||!achievement){return null}
   return(
     <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:99999,pointerEvents:'none',display:'flex',alignItems:'center',justifyContent:'center'}}>
       {particles.map(p=>(
@@ -227,7 +227,7 @@ export default function GamificationPanel() {
   const loadStats = useCallback(async () => {
     try {
       const api = (window as any).luminaAPI
-      if (!api?.gamificationStats) return
+      if (!api?.gamificationStats) {return}
       const res = await api.gamificationStats()
       // 后端返回 { ok, data: {...} }，需解包 .data
       const stats = res?.data ?? res
@@ -245,7 +245,7 @@ export default function GamificationPanel() {
       if (api.gamificationQuests) {
         const qr = await api.gamificationQuests()
         const q = qr?.data ?? qr
-        if (q?.quests) setQuests(q)
+        if (q?.quests) {setQuests(q)}
       }
     } catch (e) {
       console.warn('[GamificationPanel] 加载失败:', e)
@@ -258,7 +258,7 @@ export default function GamificationPanel() {
   // 监听后端事件
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api) return
+    if (!api) {return}
     const unsubs: (()=>void)[] = []
 
     // 成就解锁
@@ -286,8 +286,8 @@ export default function GamificationPanel() {
         const mult = data.multiplier || 1
         const baseXp = data.baseXp || data.amount
         let xpMsg = `✨ +${data.amount} XP (${data.reason})`
-        if (mult > 1) xpMsg += ` ×${mult.toFixed(1)} 心情加成! 🎉`
-        else if (mult < 1) xpMsg += ` 😔 心情低落 ×${mult.toFixed(1)}`
+        if (mult > 1) {xpMsg += ` ×${mult.toFixed(1)} 心情加成! 🎉`}
+        else if (mult < 1) {xpMsg += ` 😔 心情低落 ×${mult.toFixed(1)}`}
         showToast(xpMsg, mult >= 1 ? 'info' : 'warning')
         loadStats()
       }))
@@ -296,7 +296,7 @@ export default function GamificationPanel() {
     // 任务更新
     if (api.onQuestsUpdated) {
       unsubs.push(api.onQuestsUpdated((data:any)=>{
-        if (data?.quests) setQuests(prev => prev ? {...prev, quests: data.quests, completedCount: data.completedCount, allCompleted: data.allCompleted} : prev)
+        if (data?.quests) {setQuests(prev => prev ? {...prev, quests: data.quests, completedCount: data.completedCount, allCompleted: data.allCompleted} : prev)}
         loadStats()
       }))
     }
@@ -319,8 +319,8 @@ export default function GamificationPanel() {
   const grouped:Record<string,string[]>={}
   for(const id of gamification.unlockedAchievements){
     const info=ACHIEVEMENT_DISPLAY[id]
-    if(!info||info.category==='hidden')continue
-    if(!grouped[info.category])grouped[info.category]=[]
+    if(!info||info.category==='hidden'){continue}
+    if(!grouped[info.category]){grouped[info.category]=[]}
     grouped[info.category].push(id)
   }
 
@@ -329,7 +329,7 @@ export default function GamificationPanel() {
   // 领取任务
   const handleClaim = async (questId:string) => {
     const api=(window as any).luminaAPI
-    if(!api?.gamificationQuestsClaim)return
+    if(!api?.gamificationQuestsClaim){return}
     const res=await api.gamificationQuestsClaim(questId)
     if(res.ok){
       showToast('🎁 任务奖励已领取！','success')
@@ -340,9 +340,9 @@ export default function GamificationPanel() {
   // 领取连续签到
   const handleStreak = async () => {
     const api=(window as any).luminaAPI
-    if(!api?.gamificationQuestsClaimStreak)return
+    if(!api?.gamificationQuestsClaimStreak){return}
     const res=await api.gamificationQuestsClaimStreak()
-    if(res.bonus>0)showToast(`🔥 连续签到 +${res.bonus} XP！`,'success')
+    if(res.bonus>0){showToast(`🔥 连续签到 +${res.bonus} XP！`,'success')}
     loadStats()
   }
 
@@ -469,7 +469,7 @@ export default function GamificationPanel() {
               daily_explorer:{id:'daily_explorer',title:'探索达人',description:'完成 3 种不同类型的任务',icon:'🌟',difficulty:'hard',category:'explore',target:3},
             }
             const qdef=defs[qp.questId]
-            if(!qdef)return null
+            if(!qdef){return null}
             return <QuestCard key={qp.questId} quest={qdef} progress={qp} onClaim={handleClaim}/>
           })}
         </div>
@@ -495,7 +495,7 @@ export default function GamificationPanel() {
         {['milestone','skill','social','fun'].map(cat=>{
           const unlocked=grouped[cat]||[]
           const total=Object.entries(ACHIEVEMENT_DISPLAY).filter(([_,v])=>v.category===cat).length
-          if(total===0)return null
+          if(total===0){return null}
           return(
             <div key={cat} style={{marginBottom:12}}>
               <div style={{fontSize:12,fontWeight:600,color:CATEGORY_COLORS[cat]||'var(--text-primary)',marginBottom:6,display:'flex',alignItems:'center',gap:6}}>

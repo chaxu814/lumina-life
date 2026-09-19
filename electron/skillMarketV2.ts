@@ -171,7 +171,7 @@ export class SkillMarketV2 {
     try {
       const market = getSkillMarket()
       const skill = market.getSkill(skillId)
-      if (!skill) return null
+      if (!skill) {return null}
 
       const zipPath = path.join(this.marketDir, 'publish', `${skillId}-${Date.now()}.lumskill`)
       fs.mkdirSync(path.dirname(zipPath), { recursive: true })
@@ -441,7 +441,7 @@ export class SkillMarketV2 {
     const scored = allSkills.map(s => {
       let score = 0
       // 分类匹配
-      if (installedCategories.has(s.category)) score += 2
+      if (installedCategories.has(s.category)) {score += 2}
       // 标签匹配
       const matchingTags = s.tags.filter(t => installedTags.has(t)).length
       score += matchingTags * 3
@@ -462,7 +462,7 @@ export class SkillMarketV2 {
 
   private loadPendingApprovals(): void {
     const file = path.join(this.marketDir, 'pending-approvals.json')
-    if (!fs.existsSync(file)) return
+    if (!fs.existsSync(file)) {return}
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf-8'))
       this.pendingApproval = new Map(Object.entries(raw))
@@ -480,7 +480,7 @@ export class SkillMarketV2 {
 
   private loadAuditLog(): void {
     const file = path.join(this.marketDir, 'audit-log.json')
-    if (!fs.existsSync(file)) return
+    if (!fs.existsSync(file)) {return}
     try {
       this.auditLog = JSON.parse(fs.readFileSync(file, 'utf-8'))
     } catch { /* ignore */ }
@@ -493,7 +493,7 @@ export class SkillMarketV2 {
 
   private loadVersions(): void {
     const file = path.join(this.marketDir, 'versions.json')
-    if (!fs.existsSync(file)) return
+    if (!fs.existsSync(file)) {return}
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf-8'))
       this.versions = new Map(Object.entries(raw))
@@ -517,7 +517,7 @@ export class SkillMarketV2 {
 let _instanceV2: SkillMarketV2 | null = null
 
 export function getSkillMarketV2(): SkillMarketV2 {
-  if (!_instanceV2) _instanceV2 = new SkillMarketV2()
+  if (!_instanceV2) {_instanceV2 = new SkillMarketV2()}
   return _instanceV2
 }
 

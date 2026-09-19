@@ -200,7 +200,7 @@ class ModeManager {
     }
     // 内置模式
     const base = MODE_CONFIGS[m as LuminaMode]
-    if (!base) return MODE_CONFIGS.work // fallback
+    if (!base) {return MODE_CONFIGS.work} // fallback
     const overrides = this.userConfigOverrides[m as LuminaMode]
     return overrides ? { ...base, ...overrides } : base
   }
@@ -268,7 +268,7 @@ class ModeManager {
 
   /** 🆕 v8.1: 删除自定义模式 */
   removeCustomMode(id: string): boolean {
-    if (!this.customModes[id]) return false
+    if (!this.customModes[id]) {return false}
     delete this.customModes[id]
     // 如果当前正在使用该模式，切回 work
     if (this.state.current === id) {
@@ -298,7 +298,7 @@ class ModeManager {
   private persistCustomModes(): void {
     try {
       const dir = path.dirname(this.persistPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       const dataPath = path.join(dir, 'custom-modes.json')
       fs.writeFileSync(dataPath, JSON.stringify(Object.values(this.customModes), null, 2), 'utf-8')
     } catch (e: any) {
@@ -326,7 +326,7 @@ class ModeManager {
   private persistConfig(): void {
     try {
       const dir = path.dirname(this.persistPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       fs.writeFileSync(this.persistPath, JSON.stringify({
         userConfigOverrides: this.userConfigOverrides,
         lastManualMode: this.state.manualOverride && !this.isCustomMode(this.state.current) ? this.state.current : undefined,
@@ -371,7 +371,7 @@ class ModeManager {
 
   /** 🆕 v8.1: 手动切换模式（支持自定义模式名） */
   setMode(mode: AnyMode): void {
-    if (mode === this.state.current && this.state.manualOverride) return
+    if (mode === this.state.current && this.state.manualOverride) {return}
 
     // 校验：必须存在
     const config = this.getModeConfig(mode)
@@ -392,7 +392,7 @@ class ModeManager {
 
   /** 解除手动覆盖（恢复自动检测） */
   releaseOverride(): void {
-    if (!this.state.manualOverride) return
+    if (!this.state.manualOverride) {return}
     this.state.manualOverride = false
     console.log('[ModeManager] 🔓 解除手动覆盖，恢复自动检测')
   }
@@ -451,7 +451,7 @@ class ModeManager {
 
   /** 启动场景检测 — 🆕 v3.0: 空闲模式用更长间隔省电 */
   start(): void {
-    if (this.state.running) return
+    if (this.state.running) {return}
     this.state.running = true
 
     const interval = this.state.current === 'idle' ? this.IDLE_DETECT_INTERVAL : this.DETECT_INTERVAL
@@ -624,7 +624,7 @@ export function initModeManager(mainWindow?: BrowserWindow): ModeManager {
   mgr.loadPersistedConfig()
   // 加载自定义模式
   mgr.loadCustomModes()
-  if (mainWindow) mgr.setMainWindow(mainWindow)
+  if (mainWindow) {mgr.setMainWindow(mainWindow)}
   mgr.start()
   return mgr
 }

@@ -178,7 +178,7 @@ function buildSuggestedPhases(
   triggers: string[],
   task: string,
 ): string[] | undefined {
-  if (level === 'simple') return undefined
+  if (level === 'simple') {return undefined}
 
   const phases: string[] = []
 

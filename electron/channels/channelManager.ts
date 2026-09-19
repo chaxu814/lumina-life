@@ -33,8 +33,8 @@ export class ChannelManager {
 
   /** 初始化：读取配置并启动已启用的渠道 */
   async init(handler?: MessageHandler): Promise<void> {
-    if (this.initialized) return
-    if (handler) this.messageHandler = handler
+    if (this.initialized) {return}
+    if (handler) {this.messageHandler = handler}
 
     // 确保配置目录存在
     fs.mkdirSync(this.configDir, { recursive: true })
@@ -180,7 +180,7 @@ export class ChannelManager {
       return false
     }
 
-    if (!adapter) return false
+    if (!adapter) {return false}
 
     // 设置消息回调
     adapter.onMessage(async (msg: ChannelMessage) => {
@@ -319,7 +319,7 @@ export class ChannelManager {
 let _manager: ChannelManager | null = null
 
 export function getChannelManager(): ChannelManager {
-  if (!_manager) _manager = new ChannelManager()
+  if (!_manager) {_manager = new ChannelManager()}
   return _manager
 }
 

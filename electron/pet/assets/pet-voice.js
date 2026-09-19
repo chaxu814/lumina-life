@@ -25,7 +25,9 @@ var LuminaVoice = (() => {
 
   // electron/pet/lifeSpeech/fullDuplexController.ts
   function cleanSpokenReply(raw) {
-    if (!raw) return "";
+    if (!raw) {
+      return "";
+    }
     let t = String(raw);
     t = t.replace(/```[\s\S]*?```/g, "，");
     t = t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1");
@@ -64,18 +66,24 @@ var LuminaVoice = (() => {
     }
     /** VAD/STT 检测到用户开始说话（AI 在说则打断） */
     async userStarted() {
-      if (!this.enabled) return;
+      if (!this.enabled) {
+        return;
+      }
       const r = await this.sendEvent({ type: "user_start" });
       await this.runActions(r.actions);
     }
     /** 识别到中间结果（仅做 UI 提示，不进状态机） */
     partial(text) {
-      if (!this.enabled) return;
+      if (!this.enabled) {
+        return;
+      }
       this.bridge.onPartial?.(text);
     }
     /** 一句话识别完成 */
     async userUtterance(text) {
-      if (!this.enabled) return;
+      if (!this.enabled) {
+        return;
+      }
       const t = (text || "").trim();
       if (!t) {
         const r2 = await this.sendEvent({ type: "user_utterance", text: "" });
@@ -92,11 +100,15 @@ var LuminaVoice = (() => {
       this.bridge.cancelSpeech();
       const r = await this.sendEvent({ type: "reset" });
       this.latestGen = r.generation;
-      if (this.enabled) this.bridge.onState?.("listening");
+      if (this.enabled) {
+        this.bridge.onState?.("listening");
+      }
     }
     async sendEvent(params) {
       const r = await this.bridge.sendEvent(params);
-      if (typeof r.generation === "number") this.latestGen = r.generation;
+      if (typeof r.generation === "number") {
+        this.latestGen = r.generation;
+      }
       return r;
     }
     /** 该代际是否已被新发言作废 */
@@ -121,12 +133,16 @@ var LuminaVoice = (() => {
         }
         if (a.type === "call_llm") {
           await this.runLlm(a.text, a.generation, seq);
-          if (this.speechSeq !== seq) return;
+          if (this.speechSeq !== seq) {
+            return;
+          }
           continue;
         }
         if (a.type === "enqueue_speak") {
           await this.runSpeak(a.text, a.generation, seq);
-          if (this.speechSeq !== seq) return;
+          if (this.speechSeq !== seq) {
+            return;
+          }
           continue;
         }
       }
@@ -140,26 +156,36 @@ var LuminaVoice = (() => {
         this.bridge.onError?.(e?.message || "对话失败");
         return;
       }
-      if (this.stale(gen) || this.speechSeq !== seq) return;
+      if (this.stale(gen) || this.speechSeq !== seq) {
+        return;
+      }
       reply = cleanSpokenReply(reply);
       if (!reply) {
         this.bridge.onState?.("listening");
         return;
       }
       const r1 = await this.sendEvent({ type: "assistant_chunk", text: reply, generation: gen });
-      if (this.stale(gen) || this.speechSeq !== seq) return;
+      if (this.stale(gen) || this.speechSeq !== seq) {
+        return;
+      }
       const r2 = await this.sendEvent({ type: "assistant_end", generation: gen });
-      if (this.stale(gen) || this.speechSeq !== seq) return;
+      if (this.stale(gen) || this.speechSeq !== seq) {
+        return;
+      }
       await this.runActions([...r1.actions, ...r2.actions]);
     }
     async runSpeak(text, gen, seq) {
-      if (this.stale(gen) || this.speechSeq !== seq) return;
+      if (this.stale(gen) || this.speechSeq !== seq) {
+        return;
+      }
       this.bridge.onState?.("speaking");
       try {
         await this.bridge.speakSentence(text, gen);
       } catch {
       }
-      if (this.stale(gen) || this.speechSeq !== seq) return;
+      if (this.stale(gen) || this.speechSeq !== seq) {
+        return;
+      }
       const r = await this.sendEvent({ type: "sentence_spoken" });
       await this.runActions(r.actions);
     }
@@ -169,7 +195,9 @@ var LuminaVoice = (() => {
   var electron = (typeof __require === "function" ? __require("electron") : window.electron) || {};
   var ipc = electron.ipcRenderer || null;
   function downsampleTo16k(input, inRate) {
-    if (inRate === 16e3) return input;
+    if (inRate === 16e3) {
+      return input;
+    }
     const ratio = inRate / 16e3;
     const newLen = Math.round(input.length / ratio);
     const out = new Float32Array(newLen);
@@ -187,7 +215,9 @@ var LuminaVoice = (() => {
     const buf = new ArrayBuffer(44 + pcm.length * 2);
     const view = new DataView(buf);
     const writeStr = (off2, s) => {
-      for (let i = 0; i < s.length; i++) view.setUint8(off2 + i, s.charCodeAt(i));
+      for (let i = 0; i < s.length; i++) {
+        view.setUint8(off2 + i, s.charCodeAt(i));
+      }
     };
     writeStr(0, "RIFF");
     view.setUint32(4, 36 + pcm.length * 2, true);
@@ -247,16 +277,22 @@ var LuminaVoice = (() => {
     start(opts = {}, hooks = {}) {
       this.opts = { ...this.opts, ...opts };
       this.hooks = hooks;
-      if (this.running) return;
+      if (this.running) {
+        return;
+      }
       this.running = true;
       this.controller = new FullDuplexController({
         sendEvent: async (p) => {
-          if (!ipc) return { actions: [], generation: 0, queueSize: 0 };
+          if (!ipc) {
+            return { actions: [], generation: 0, queueSize: 0 };
+          }
           return ipc.invoke("pet:live-speech:event", p);
         },
         callLlm: async (text) => {
           const r = await ipc.invoke("pet:voice-chat", { text });
-          if (!r || !r.ok) throw new Error(r?.error || "语音对话失败");
+          if (!r || !r.ok) {
+            throw new Error(r?.error || "语音对话失败");
+          }
           return r.text || "";
         },
         speakSentence: (text) => this.speak(text),
@@ -278,7 +314,9 @@ var LuminaVoice = (() => {
       }
     }
     stop() {
-      if (!this.running) return;
+      if (!this.running) {
+        return;
+      }
       this.running = false;
       if (this.webStartTimer) {
         clearTimeout(this.webStartTimer);
@@ -302,7 +340,9 @@ var LuminaVoice = (() => {
     }
     // ── Web Speech 流式识别 ──────────────────────────
     startWebSpeech(SR) {
-      if (!this.running) return;
+      if (!this.running) {
+        return;
+      }
       this.sttMode = "web";
       const rec = new SR();
       this.recognition = rec;
@@ -339,8 +379,11 @@ var LuminaVoice = (() => {
         let finalText = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const r = e.results[i];
-          if (r.isFinal) finalText += r[0].transcript;
-          else interim += r[0].transcript;
+          if (r.isFinal) {
+            finalText += r[0].transcript;
+          } else {
+            interim += r[0].transcript;
+          }
         }
         const final = finalText.trim();
         if (final) {
@@ -363,7 +406,9 @@ var LuminaVoice = (() => {
       };
       rec.onerror = (e) => {
         const err = e?.error || "";
-        if (err === "no-speech" || err === "aborted") return;
+        if (err === "no-speech" || err === "aborted") {
+          return;
+        }
         if (err === "network" || err === "service-not-allowed" || err === "not-allowed" || err === "audio-capture" || err === "language-not-supported") {
           if (this.sttMode === "web") {
             clearWatchdog();
@@ -399,7 +444,9 @@ var LuminaVoice = (() => {
     }
     // ── 本地麦克风：能量 VAD 切句 → Whisper 离线识别 ─────
     startLocalMic() {
-      if (!this.running) return;
+      if (!this.running) {
+        return;
+      }
       this.sttMode = "local";
       const audio = this.opts.micDevice ? { deviceId: { exact: this.opts.micDevice }, echoCancellation: true, noiseSuppression: true, autoGainControl: true } : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
       const constraints = { audio };
@@ -438,7 +485,9 @@ var LuminaVoice = (() => {
           speaking = false;
           speechMs = 0;
           silenceMs = 0;
-          if (total < inRate * 0.3) return;
+          if (total < inRate * 0.3) {
+            return;
+          }
           const pcm = downsampleTo16k(merged, inRate);
           const b64 = encodeWav16k(pcm);
           this.hooks.onStatus?.("本地识别中…", "info");
@@ -456,7 +505,9 @@ var LuminaVoice = (() => {
           });
         };
         node.onaudioprocess = (ev) => {
-          if (!this.running || this.sttMode !== "local") return;
+          if (!this.running || this.sttMode !== "local") {
+            return;
+          }
           const chunk = ev.inputBuffer.getChannelData(0);
           const now = Date.now();
           let sum = 0;
@@ -465,7 +516,9 @@ var LuminaVoice = (() => {
             sum += v * v;
           }
           const rms = Math.sqrt(sum / (chunk.length / 4));
-          if (!speaking) noiseFloor = noiseFloor * 0.98 + Math.min(noiseFloor, rms) * 0.02;
+          if (!speaking) {
+            noiseFloor = noiseFloor * 0.98 + Math.min(noiseFloor, rms) * 0.02;
+          }
           const threshold = Math.max(0.012, noiseFloor * 3.5);
           if (rms > threshold) {
             if (!speaking) {
@@ -481,8 +534,11 @@ var LuminaVoice = (() => {
             silenceMs += FRAME_MS;
             speechMs += FRAME_MS;
             collect.push(chunk.slice(0));
-            if (silenceMs >= 700) finish();
-            else if (speechMs >= 12e3) finish();
+            if (silenceMs >= 700) {
+              finish();
+            } else if (speechMs >= 12e3) {
+              finish();
+            }
           }
           lastT = now;
         };
@@ -534,30 +590,42 @@ var LuminaVoice = (() => {
             if (data.audio) {
               const hex = data.audio;
               const bytes = new Uint8Array(hex.length / 2);
-              for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+              for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+              }
               const blob = new Blob([bytes], { type: "audio/wav" });
               return URL.createObjectURL(blob);
             }
           }
         } catch (e) {
-          if (token !== this.ttsToken) throw new Error("cancelled");
+          if (token !== this.ttsToken) {
+            throw new Error("cancelled");
+          }
         }
       }
       const r = await ipc.invoke("edge-tts:speak", { text });
-      if (token !== this.ttsToken) throw new Error("cancelled");
+      if (token !== this.ttsToken) {
+        throw new Error("cancelled");
+      }
       return r?.audio || "";
     }
     async speak(text) {
-      if (!text) return;
+      if (!text) {
+        return;
+      }
       const token = ++this.ttsToken;
       this.cancelPlaybackOnly();
       try {
         const url = await this.synth(text, token);
-        if (token !== this.ttsToken || !url) return;
+        if (token !== this.ttsToken || !url) {
+          return;
+        }
         const ctx = this.ensureAudioCtx();
         const buf = await (await fetch(url)).arrayBuffer();
         const audio = await ctx.decodeAudioData(buf);
-        if (token !== this.ttsToken) return;
+        if (token !== this.ttsToken) {
+          return;
+        }
         await new Promise((resolve) => {
           const src = ctx.createBufferSource();
           src.buffer = audio;
@@ -580,7 +648,9 @@ var LuminaVoice = (() => {
           }
           let finished = false;
           const finish = () => {
-            if (finished) return;
+            if (finished) {
+              return;
+            }
             finished = true;
             try {
               engine?.stopSpeak?.(performance.now());
@@ -604,9 +674,13 @@ var LuminaVoice = (() => {
       }
     }
     ensureAudioCtx() {
-      if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (this.audioCtx.state === "suspended") this.audioCtx.resume().catch(() => {
-      });
+      if (!this.audioCtx) {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (this.audioCtx.state === "suspended") {
+        this.audioCtx.resume().catch(() => {
+        });
+      }
       return this.audioCtx;
     }
     cancelPlaybackOnly() {
@@ -624,9 +698,11 @@ var LuminaVoice = (() => {
       }
       const resolver = this.playResolver;
       this.playResolver = null;
-      if (resolver) try {
-        resolver();
-      } catch {
+      if (resolver) {
+        try {
+          resolver();
+        } catch {
+        }
       }
       try {
         window.__petLifeEngine?.stopSpeak?.(performance.now());

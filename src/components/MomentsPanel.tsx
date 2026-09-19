@@ -62,21 +62,21 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string }> = {
 // ═══════════════════════════════════════════════════════════
 
 function formatMomentTime(ts: number): string {
-  if (!ts || !isFinite(ts)) return '刚刚'
+  if (!ts || !isFinite(ts)) {return '刚刚'}
   const timestamp = ts < 1e11 ? ts * 1000 : ts
   const now = Date.now()
   const diff = now - timestamp
-  if (diff < 0) return '刚刚'
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}分钟前`
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}小时前`
+  if (diff < 0) {return '刚刚'}
+  if (diff < 60_000) {return '刚刚'}
+  if (diff < 3600_000) {return `${Math.floor(diff / 60_000)}分钟前`}
+  if (diff < 86400_000) {return `${Math.floor(diff / 3600_000)}小时前`}
   const d = new Date(timestamp)
-  if (isNaN(d.getTime())) return '刚刚'
+  if (isNaN(d.getTime())) {return '刚刚'}
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 function EmotionTag({ emotion }: { emotion: string | null }) {
-  if (!emotion) return null
+  if (!emotion) {return null}
   const style: React.CSSProperties = {
     display: 'inline-block',
     fontSize: 11,
@@ -164,8 +164,8 @@ export default function MomentsPanel({ visible, onClose }: Props) {
       const result = await window.luminaAPI.momentsLike(moment.id, 'user')
       setLikedSet(prev => {
         const next = new Set(prev)
-        if (result.liked) next.add(moment.id)
-        else next.delete(moment.id)
+        if (result.liked) {next.add(moment.id)}
+        else {next.delete(moment.id)}
         return next
       })
       setMoments(prev => prev.map(m =>
@@ -193,7 +193,7 @@ export default function MomentsPanel({ visible, onClose }: Props) {
   // ── 发评论 ─────────────────────────────────────
   const submitComment = async (momentId: number) => {
     const text = commentInput[momentId]?.trim()
-    if (!text) return
+    if (!text) {return}
     try {
       await window.luminaAPI.momentsAddComment(momentId, 'user', '我', text)
       setCommentInput(prev => ({ ...prev, [momentId]: '' }))
@@ -207,7 +207,7 @@ export default function MomentsPanel({ visible, onClose }: Props) {
     }
   }
 
-  if (!visible) return null
+  if (!visible) {return null}
 
   return (
     <div style={{

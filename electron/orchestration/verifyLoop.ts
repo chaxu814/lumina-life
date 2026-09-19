@@ -88,10 +88,10 @@ export interface ProjectProfile {
 export function detectProjectRoot(entry: string): string {
   let dir = fs.statSync(entry).isDirectory() ? entry : path.dirname(entry)
   for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
-    if (fs.existsSync(path.join(dir, 'tsconfig.json'))) return dir
+    if (fs.existsSync(path.join(dir, 'package.json'))) {return dir}
+    if (fs.existsSync(path.join(dir, 'tsconfig.json'))) {return dir}
     const parent = path.dirname(dir)
-    if (parent === dir) break
+    if (parent === dir) {break}
     dir = parent
   }
   return entry
@@ -114,9 +114,9 @@ export function detectProjectProfile(cwd: string): ProjectProfile {
   let hasTests = false
 
   if (hasPackageJson) {
-    if (fs.existsSync(path.join(cwd, 'yarn.lock'))) packageManager = 'yarn'
-    else if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) packageManager = 'pnpm'
-    else packageManager = 'npm'
+    if (fs.existsSync(path.join(cwd, 'yarn.lock'))) {packageManager = 'yarn'}
+    else if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) {packageManager = 'pnpm'}
+    else {packageManager = 'npm'}
 
     // 检测是否有 test script
     try {

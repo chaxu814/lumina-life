@@ -12,7 +12,7 @@ let cached: string | null = null
 
 /** 候选顺序：Windows 用 python 优先，类 Unix 用 python3 优先 */
 function candidates(): string[] {
-  if (process.platform === 'win32') return ['python', 'py', 'python3']
+  if (process.platform === 'win32') {return ['python', 'py', 'python3']}
   return ['python3', 'python']
 }
 
@@ -21,7 +21,7 @@ function candidates(): string[] {
  * 让调用方的失败被自己的 try/catch 兜住，而不是直接抛错）。
  */
 export function resolvePython(): string {
-  if (cached) return cached
+  if (cached) {return cached}
   for (const bin of candidates()) {
     try {
       execSync(`${bin} --version`, { stdio: 'pipe', timeout: 3000 })

@@ -8,7 +8,7 @@ import type { AgentMessage, LLMToolCall, ToolCall } from './tools/types'
 
 /** 将 AgentMessage content 安全转为字符串 */
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -196,9 +196,9 @@ export class InjectionGuard {
         report.detections.push(`[${rule.threat.toUpperCase()}] ${rule.description}`)
         report.clean = false
 
-        if (rule.threat === 'high') report.threatLevel = 'high'
-        else if (rule.threat === 'medium' && report.threatLevel !== 'high') report.threatLevel = 'medium'
-        else if (report.threatLevel === 'none') report.threatLevel = 'low'
+        if (rule.threat === 'high') {report.threatLevel = 'high'}
+        else if (rule.threat === 'medium' && report.threatLevel !== 'high') {report.threatLevel = 'medium'}
+        else if (report.threatLevel === 'none') {report.threatLevel = 'low'}
       }
     }
 
@@ -232,7 +232,7 @@ export class InjectionGuard {
   validateToolCall(call: ToolCall): { safe: boolean; warnings: string[] } {
     const warnings: string[] = []
 
-    if (!this.config.enabled) return { safe: true, warnings: [] }
+    if (!this.config.enabled) {return { safe: true, warnings: [] }}
 
     // Shell 命令检查
     if (call.name === 'shell_exec' && call.args.command) {

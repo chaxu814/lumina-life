@@ -18,7 +18,7 @@ export function createLoopDir(workingDir: string, missionName: string): string {
 
 export function listLoopDirs(workingDir: string): string[] {
   const missionsDir = path.join(workingDir, '.missions')
-  if (!fs.existsSync(missionsDir)) return []
+  if (!fs.existsSync(missionsDir)) {return []}
   return fs.readdirSync(missionsDir)
     .filter(d => d.startsWith('mission_'))
     .map(d => path.join(missionsDir, d))
@@ -26,14 +26,14 @@ export function listLoopDirs(workingDir: string): string[] {
 
 export function getActiveLoopDir(workingDir: string): string | null {
   const dirs = listLoopDirs(workingDir)
-  if (dirs.length === 0) return null
+  if (dirs.length === 0) {return null}
   // 返回最新的
   return dirs.sort().reverse()[0]
 }
 
 export function readPRD(loopDir: string): PRD | null {
   const prdPath = path.join(loopDir, 'prd.json')
-  if (!fs.existsSync(prdPath)) return null
+  if (!fs.existsSync(prdPath)) {return null}
   try {
     return JSON.parse(fs.readFileSync(prdPath, 'utf-8'))
   } catch {
@@ -49,11 +49,11 @@ export function writePRD(loopDir: string, prd: PRD): void {
 
 export function updateStoryStatus(loopDir: string, storyId: string, status: UserStory['status']): boolean {
   const prd = readPRD(loopDir)
-  if (!prd) return false
+  if (!prd) {return false}
   const story = prd.stories.find(s => s.id === storyId)
-  if (!story) return false
+  if (!story) {return false}
   story.status = status
-  if (status === 'done') story.completedAt = new Date().toISOString()
+  if (status === 'done') {story.completedAt = new Date().toISOString()}
   writePRD(loopDir, prd)
   return true
 }
@@ -78,7 +78,7 @@ export function appendProgress(loopDir: string, text: string): void {
 
 export function readLoopConfig(loopDir: string): { taskText: string; maxIterations: number } | null {
   const configPath = path.join(loopDir, 'config.json')
-  if (!fs.existsSync(configPath)) return null
+  if (!fs.existsSync(configPath)) {return null}
   try {
     return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
   } catch {
@@ -118,8 +118,8 @@ export function validatePRD(prd: unknown): { valid: boolean; errors: string[] } 
     return { valid: false, errors: ['PRD 不是有效的 JSON 对象'] }
   }
   const p = prd as Record<string, unknown>
-  if (!p.title) errors.push('缺少 title')
-  if (!p.summary) errors.push('缺少 summary')
+  if (!p.title) {errors.push('缺少 title')}
+  if (!p.summary) {errors.push('缺少 summary')}
   if (!Array.isArray(p.stories)) {
     errors.push('stories 必须是数组')
   } else if (p.stories.length === 0) {
@@ -127,20 +127,20 @@ export function validatePRD(prd: unknown): { valid: boolean; errors: string[] } 
   } else {
     for (let i = 0; i < p.stories.length; i++) {
       const s = p.stories[i] as Record<string, unknown>
-      if (!s.id) errors.push(`stories[${i}].id 缺失`)
-      if (!s.title) errors.push(`stories[${i}].title 缺失`)
+      if (!s.id) {errors.push(`stories[${i}].id 缺失`)}
+      if (!s.title) {errors.push(`stories[${i}].title 缺失`)}
       if (!Array.isArray(s.acceptanceCriteria)) {
         errors.push(`stories[${i}].acceptanceCriteria 必须是数组`)
       }
     }
   }
-  if (!Array.isArray(p.verifyCommands)) errors.push('verifyCommands 必须是数组')
+  if (!Array.isArray(p.verifyCommands)) {errors.push('verifyCommands 必须是数组')}
 
   return { valid: errors.length === 0, errors }
 }
 
 export function allStoriesPassed(prd: PRD): boolean {
-  if (!prd.stories || prd.stories.length === 0) return false
+  if (!prd.stories || prd.stories.length === 0) {return false}
   return prd.stories.every(s => s.status === 'done' || s.status === 'skipped')
 }
 

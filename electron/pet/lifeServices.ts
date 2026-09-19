@@ -41,19 +41,19 @@ let director: LiveSpeechDirector | null = null
 let library: ModelLibrary | null = null
 
 export function getScreenGate(): ScreenAwareness {
-  if (!screenGate) screenGate = new ScreenAwareness()
+  if (!screenGate) {screenGate = new ScreenAwareness()}
   return screenGate
 }
 export function getPresence(): PresenceMonitor {
-  if (!presence) presence = new PresenceMonitor({ localOnly: true })
+  if (!presence) {presence = new PresenceMonitor({ localOnly: true })}
   return presence
 }
 export function getWakeGate(): WakeWordGate {
-  if (!wake) wake = new WakeWordGate({ enabled: false })
+  if (!wake) {wake = new WakeWordGate({ enabled: false })}
   return wake
 }
 export function getLiveDirector(): LiveSpeechDirector {
-  if (!director) director = new LiveSpeechDirector()
+  if (!director) {director = new LiveSpeechDirector()}
   return director
 }
 
@@ -69,7 +69,7 @@ function libraryJsonPath(): string {
 }
 
 function loadLibrary(): ModelLibrary {
-  if (library) return library
+  if (library) {return library}
   let data: unknown = null
   try {
     data = JSON.parse(readFileSync(libraryJsonPath(), 'utf8'))
@@ -79,7 +79,7 @@ function loadLibrary(): ModelLibrary {
 }
 
 function saveLibrary(): boolean {
-  if (!library) return false
+  if (!library) {return false}
   try {
     mkdirSync(path.dirname(libraryJsonPath()), { recursive: true })
     writeFileSync(libraryJsonPath(), JSON.stringify(library.serialize(), null, 2), 'utf8')
@@ -102,7 +102,7 @@ const nodeFs: ModelImporterFs = {
 
 /** 模型条目 → 渲染页可直接喂给 Live2DModel.from 的定位符 */
 function modelUrl(e: ModelEntry): string {
-  if (e.builtin) return 'assets/' + e.entryRel.replace(/^\/+/, '')
+  if (e.builtin) {return 'assets/' + e.entryRel.replace(/^\/+/, '')}
   return pathToFileURL(path.join(modelsRoot(), e.entryRel)).href
 }
 function modelDto(e: ModelEntry) {
@@ -150,8 +150,8 @@ export function decideScreenCapture(
 export function rememberScreenEpisode(scene: SceneKind, windowTitle?: string | null, reaction?: string): boolean {
   try {
     const parts: string[] = [`看到用户在${SCENE_CN[scene] || '用电脑'}`]
-    if (windowTitle) parts.push(`活动窗口「${String(windowTitle).slice(0, 60)}」`)
-    if (reaction) parts.push(`Lumina 当时的反应：${String(reaction).slice(0, 60)}`)
+    if (windowTitle) {parts.push(`活动窗口「${String(windowTitle).slice(0, 60)}」`)}
+    if (reaction) {parts.push(`Lumina 当时的反应：${String(reaction).slice(0, 60)}`)}
     return recordObservedEpisode(getMemoryStore(), parts.join('，'), 0.5)
   } catch { return false }
 }
@@ -163,7 +163,7 @@ export function rememberScreenEpisode(scene: SceneKind, windowTitle?: string | n
 let registered = false
 
 export function registerLifeServicesIpc(): void {
-  if (registered) return
+  if (registered) {return}
   registered = true
 
   // ── 📚 模型库 ──────────────────────────────────────────
@@ -182,7 +182,7 @@ export function registerLifeServicesIpc(): void {
   ipcMain.handle('pet:models:select', (_e, params: { id: string }) => {
     try {
       const lib = loadLibrary()
-      if (!lib.select(params?.id)) return { ok: false, error: '模型不存在' }
+      if (!lib.select(params?.id)) {return { ok: false, error: '模型不存在' }}
       saveLibrary()
       return { ok: true, current: modelDto(lib.current()) }
     } catch (e: any) { return { ok: false, error: String(e?.message || e) } }
@@ -192,7 +192,7 @@ export function registerLifeServicesIpc(): void {
     try {
       const lib = loadLibrary()
       const ok = lib.remove(params?.id)
-      if (ok) saveLibrary()
+      if (ok) {saveLibrary()}
       return { ok, models: lib.list().map(modelDto), current: modelDto(lib.current()) }
     } catch (e: any) { return { ok: false, error: String(e?.message || e) } }
   })
@@ -206,10 +206,10 @@ export function registerLifeServicesIpc(): void {
         filters: [{ name: 'Live2D model3', extensions: ['json'] }],
         properties: ['openFile'],
       })
-      if (dlg.canceled || !dlg.filePaths[0]) return { ok: false, canceled: true }
+      if (dlg.canceled || !dlg.filePaths[0]) {return { ok: false, canceled: true }}
 
       const file = dlg.filePaths[0]
-      if (!/\.model3\.json$/i.test(file)) return { ok: false, error: '请选择 *.model3.json 入口文件' }
+      if (!/\.model3\.json$/i.test(file)) {return { ok: false, error: '请选择 *.model3.json 入口文件' }}
       const srcDir = path.dirname(file)
       const entryFile = path.basename(file)
       const suggestedName = path.basename(srcDir)
@@ -220,7 +220,7 @@ export function registerLifeServicesIpc(): void {
       const relEntry = `${plan.modelName}/${plan.entryRel}`.replace(/\\/g, '/')
       const lib = loadLibrary()
       const reg = lib.register({ name: suggestedName, entryRel: relEntry, hasFiveVowel: false }, Date.now())
-      if (!reg.ok) return { ok: false, error: reg.error || '模型注册失败' }
+      if (!reg.ok) {return { ok: false, error: reg.error || '模型注册失败' }}
       saveLibrary()
       return { ok: true, model: modelDto(lib.get(reg.id!)!), fileCount: plan.fileCount }
     } catch (e: any) {
@@ -237,9 +237,9 @@ export function registerLifeServicesIpc(): void {
         filters: [{ name: 'VRM', extensions: ['vrm'] }],
         properties: ['openFile'],
       })
-      if (dlg.canceled || !dlg.filePaths[0]) return { ok: false, canceled: true }
+      if (dlg.canceled || !dlg.filePaths[0]) {return { ok: false, canceled: true }}
       const file = dlg.filePaths[0]
-      if (!/\.vrm$/i.test(file)) return { ok: false, error: '请选择 *.vrm 模型文件' }
+      if (!/\.vrm$/i.test(file)) {return { ok: false, error: '请选择 *.vrm 模型文件' }}
 
       const baseName = path.basename(file).replace(/\.vrm$/i, '')
       // 安全目录名：仅保留字母数字下划线连字符中文
@@ -253,7 +253,7 @@ export function registerLifeServicesIpc(): void {
       const entryRel = (safeName + '/' + baseName + '.vrm').replace(/\\/g, '/')
       const lib = loadLibrary()
       const reg = lib.register({ name: baseName, entryRel, kind: 'vrm' }, Date.now())
-      if (!reg.ok) return { ok: false, error: reg.error || '模型注册失败' }
+      if (!reg.ok) {return { ok: false, error: reg.error || '模型注册失败' }}
       saveLibrary()
       return { ok: true, model: modelDto(lib.get(reg.id!)!) }
     } catch (e: any) {
@@ -285,7 +285,7 @@ export function registerLifeServicesIpc(): void {
     const m = getPresence()
     const now = Date.now()
     const accepted = m.feedDetection(r, now)
-    if (accepted) m.markSampled(now)
+    if (accepted) {m.markSampled(now)}
     return { accepted, present: m.isUserPresent(now), lookingAt: m.isLookingAt(now), expression: m.expression }
   })
 
@@ -299,7 +299,7 @@ export function registerLifeServicesIpc(): void {
   ipcMain.handle('pet:wake:feed', (_e, params: { text: string }) => {
     const g = getWakeGate()
     const text = String(params?.text || '')
-    if (!g.enabled) return { process: true, keyword: null, sessionActive: false }
+    if (!g.enabled) {return { process: true, keyword: null, sessionActive: false }}
     const process = g.shouldProcess(text, Date.now())
     return { process, keyword: g.matchKeyword(text), sessionActive: g.isSessionActive(Date.now()) }
   })
@@ -332,7 +332,7 @@ export function registerLifeServicesIpc(): void {
     let wavPath = ''
     try {
       const b64 = String(params?.audioBase64 || '').replace(/^data:audio\/[\w+.-]+;base64,/, '')
-      if (!b64) return { ok: false, text: '', error: '空音频' }
+      if (!b64) {return { ok: false, text: '', error: '空音频' }}
       const { WhisperTranscriber } = await import('../whisper/transcriber')
       wavPath = path.join(app.getPath('temp'), `lumina-utter-${Date.now()}-${Math.floor(Math.random() * 1e6)}.wav`)
       await fsp.writeFile(wavPath, Buffer.from(b64, 'base64'))
@@ -346,7 +346,7 @@ export function registerLifeServicesIpc(): void {
       const missingDependency = /cannot find package|@xenova|transformers|fetch failed|enotfound|network|下载|model/i.test(msg)
       return { ok: false, text: '', error: msg, missingDependency }
     } finally {
-      if (wavPath) fsp.unlink(wavPath).catch(() => {})
+      if (wavPath) {fsp.unlink(wavPath).catch(() => {})}
     }
   })
 

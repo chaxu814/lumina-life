@@ -77,19 +77,19 @@ const LATIN_RE = /[a-z0-9][a-z0-9'_.\-]*/gi
 
 /** 分词：拉丁词 + 中文 unigram/bigram（bigram 显著提升中文短词召回） */
 export function tokenize(text: string): string[] {
-  if (!text) return []
+  if (!text) {return []}
   const lower = text.toLowerCase()
   const tokens: string[] = []
   // 拉丁/数字
   const latin = lower.match(LATIN_RE)
-  if (latin) tokens.push(...latin)
+  if (latin) {tokens.push(...latin)}
   // 中文：拆出连续 CJK 段，做 unigram + bigram
   const cjkRuns = lower.match(/[\u4e00-\u9fff]+/g)
   if (cjkRuns) {
     for (const run of cjkRuns) {
       const chars = Array.from(run)
-      for (const ch of chars) tokens.push(ch)
-      for (let i = 0; i < chars.length - 1; i++) tokens.push(chars[i] + chars[i + 1])
+      for (const ch of chars) {tokens.push(ch)}
+      for (let i = 0; i < chars.length - 1; i++) {tokens.push(chars[i] + chars[i + 1])}
     }
   }
   return tokens
@@ -98,7 +98,7 @@ export function tokenize(text: string): string[] {
 /** 计算每个词在文档中的词频 */
 function termFreq(tokens: string[]): Map<string, number> {
   const tf = new Map<string, number>()
-  for (const t of tokens) tf.set(t, (tf.get(t) || 0) + 1)
+  for (const t of tokens) {tf.set(t, (tf.get(t) || 0) + 1)}
   return tf
 }
 
@@ -109,7 +109,7 @@ function termFreq(tokens: string[]): Map<string, number> {
 export function bm25Scores(query: string, docs: string[], k1 = 1.5, b = 0.75): number[] {
   const qTokens = Array.from(new Set(tokenize(query)))
   const scores = new Array(docs.length).fill(0)
-  if (!qTokens.length || !docs.length) return scores
+  if (!qTokens.length || !docs.length) {return scores}
 
   const docTokens = docs.map(d => tokenize(d))
   const docLens = docTokens.map(t => t.length)
@@ -119,7 +119,7 @@ export function bm25Scores(query: string, docs: string[], k1 = 1.5, b = 0.75): n
   // 文档频率 df
   const df = new Map<string, number>()
   for (const toks of docTokens) {
-    for (const t of new Set(toks)) df.set(t, (df.get(t) || 0) + 1)
+    for (const t of new Set(toks)) {df.set(t, (df.get(t) || 0) + 1)}
   }
   const idf = (t: string): number => {
     const n = df.get(t) || 0
@@ -132,7 +132,7 @@ export function bm25Scores(query: string, docs: string[], k1 = 1.5, b = 0.75): n
     let s = 0
     for (const qt of qTokens) {
       const f = tf.get(qt) || 0
-      if (!f) continue
+      if (!f) {continue}
       s += idf(qt) * ((f * (k1 + 1)) / (f + k1 * lenNorm))
     }
     scores[i] = s
@@ -146,15 +146,15 @@ function clip(s: string, max: number): string {
 }
 
 function ageHours(ts?: string): number | undefined {
-  if (!ts) return undefined
+  if (!ts) {return undefined}
   const t = Date.parse(ts.replace(' ', 'T'))
-  if (Number.isNaN(t)) return undefined
+  if (Number.isNaN(t)) {return undefined}
   return Math.max(0, (Date.now() - t) / 3_600_000)
 }
 
 /** 指数时间衰减（半衰期 7 天），给近期内容一点加权 */
 function recencyBoost(ageH?: number): number {
-  if (ageH === undefined) return 0
+  if (ageH === undefined) {return 0}
   return Math.exp(-ageH / (24 * 7))
 }
 
@@ -190,7 +190,7 @@ export function buildLayeredRecall(src: LayeredMemorySource | null | undefined, 
     byLayer: { persona: [], facts: [], reflection: [], recent: [], working: [] },
     merged: [], prompt: '', stats: { items: 0, perLayer: { persona: 0, facts: 0, reflection: 0, recent: 0, working: 0 } },
   }
-  if (!src) return empty
+  if (!src) {return empty}
 
   const byLayer: Record<LayerName, LayeredItem[]> = { persona: [], facts: [], reflection: [], recent: [], working: [] }
 
@@ -198,13 +198,13 @@ export function buildLayeredRecall(src: LayeredMemorySource | null | undefined, 
   const personaLines: string[] = []
   const profile = safe(() => src.getUserProfile?.() ?? null, null)
   if (profile) {
-    if (profile.name) personaLines.push(`用户叫 ${profile.name}`)
-    for (const p of (profile.preferences || []).slice(0, 3)) personaLines.push(`喜欢 ${p}`)
-    for (const h of (profile.habits || []).slice(0, 2)) personaLines.push(`习惯 ${h}`)
-    if (profile.communicationStyle) personaLines.push(`沟通风格：${profile.communicationStyle}`)
+    if (profile.name) {personaLines.push(`用户叫 ${profile.name}`)}
+    for (const p of (profile.preferences || []).slice(0, 3)) {personaLines.push(`喜欢 ${p}`)}
+    for (const h of (profile.habits || []).slice(0, 2)) {personaLines.push(`习惯 ${h}`)}
+    if (profile.communicationStyle) {personaLines.push(`沟通风格：${profile.communicationStyle}`)}
   }
   const persona = safe(() => src.getPersona?.() ?? null, null)
-  if (persona?.traits?.length) personaLines.push(`我的性格：${persona.traits.slice(0, 3).join('、')}`)
+  if (persona?.traits?.length) {personaLines.push(`我的性格：${persona.traits.slice(0, 3).join('、')}`)}
   byLayer.persona = [...new Set(personaLines)].slice(0, budget.persona).map(text => ({
     layer: 'persona' as const, text: clip(text, maxLineLen), score: 1,
   }))
@@ -266,12 +266,12 @@ export function buildLayeredRecall(src: LayeredMemorySource | null | undefined, 
 
   // 合并（按注入顺序）
   const merged: LayeredItem[] = []
-  for (const layer of LAYER_ORDER) merged.push(...byLayer[layer])
+  for (const layer of LAYER_ORDER) {merged.push(...byLayer[layer])}
 
   // 去重（同文本只留第一次出现的层）
   const seen = new Set<string>()
   const deduped = merged.filter(it => {
-    if (seen.has(it.text)) return false
+    if (seen.has(it.text)) {return false}
     seen.add(it.text)
     return true
   })
@@ -292,10 +292,10 @@ export function formatLayeredPrompt(recall: LayeredRecall): string {
   const blocks: string[] = []
   for (const layer of LAYER_ORDER) {
     const items = recall.byLayer[layer]
-    if (!items.length) continue
+    if (!items.length) {continue}
     const lines = items.map(i => `- ${i.text}`).join('\n')
     blocks.push(`【${LAYER_TITLE[layer]}】\n${lines}`)
   }
-  if (!blocks.length) return ''
+  if (!blocks.length) {return ''}
   return '【你对用户的记忆，请自然运用，不要逐条念出来】\n' + blocks.join('\n')
 }

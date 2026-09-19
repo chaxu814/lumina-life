@@ -30,7 +30,7 @@ export async function handleMemory(args: string[]): Promise<{ ok: boolean; data?
       const store = getMemoryStore()
       const memories = store.getFacts()
       const sliced = memories.slice(0, limit)
-      if (sliced.length === 0) return { ok: true, data: '暂无记忆。' }
+      if (sliced.length === 0) {return { ok: true, data: '暂无记忆。' }}
       const lines = sliced.map((m: any, i: number) =>
         `  ${i + 1}. [${m.category || '?'}] ${(m.content || '').slice(0, 100)}`
       )
@@ -45,6 +45,6 @@ export async function handleMemory(args: string[]): Promise<{ ok: boolean; data?
 
 function parseArgValue(args: string[], key: string, defaultVal: string): string {
   const idx = args.indexOf(key)
-  if (idx >= 0 && idx + 1 < args.length) return args[idx + 1]
+  if (idx >= 0 && idx + 1 < args.length) {return args[idx + 1]}
   return defaultVal
 }

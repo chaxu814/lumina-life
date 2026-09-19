@@ -152,8 +152,8 @@ export class QQAdapter implements ChannelAdapter {
       (config.options?.intents ?? 0) ||
       QQ_INTENTS.GUILD_MESSAGES | QQ_INTENTS.DIRECT_MESSAGE
     // 如果配置了 C2C/GROUP 选项，追加
-    if (config.options?.enableC2C) this.wsIntents |= QQ_INTENTS.C2C_MESSAGE
-    if (config.options?.enableGroup) this.wsIntents |= QQ_INTENTS.GROUP_MESSAGE
+    if (config.options?.enableC2C) {this.wsIntents |= QQ_INTENTS.C2C_MESSAGE}
+    if (config.options?.enableGroup) {this.wsIntents |= QQ_INTENTS.GROUP_MESSAGE}
 
     if (!this.appId || !this.botToken) {
       console.warn('[QQ] ⚠️ 缺少 AppID 或 BotToken')
@@ -182,7 +182,7 @@ export class QQAdapter implements ChannelAdapter {
   }
 
   async send(request: ChannelSendRequest): Promise<boolean> {
-    if (!this.appId || !this.botToken) return false
+    if (!this.appId || !this.botToken) {return false}
 
     // 根据会话类型选择正确的 API 端点
     const convType = this.convTypes.get(request.targetId)
@@ -209,7 +209,7 @@ export class QQAdapter implements ChannelAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    if (!this.appId || !this.botToken) return false
+    if (!this.appId || !this.botToken) {return false}
     if (this.wsMode) {
       // WebSocket 模式下检查连接状态
       return this.ws !== null && this.ws.readyState === WebSocket.OPEN
@@ -257,7 +257,7 @@ export class QQAdapter implements ChannelAdapter {
     }
 
     // ── 事件分发 ──
-    if (!this.messageHandler) return { status: 200, body: 'OK' }
+    if (!this.messageHandler) {return { status: 200, body: 'OK' }}
 
     const eventType = body?.t || ''
     const eventData = body?.d || {}
@@ -294,7 +294,7 @@ export class QQAdapter implements ChannelAdapter {
     try {
       // 1. 获取 Gateway URL
       this.wsGatewayUrl = await this.getGatewayUrl()
-      if (!this.wsGatewayUrl) return false
+      if (!this.wsGatewayUrl) {return false}
 
       // 2. 连接
       await this.connectWebSocket()
@@ -378,7 +378,7 @@ export class QQAdapter implements ChannelAdapter {
           break
 
         case QQ_OP.DISPATCH: { // 0 — 事件
-          if (s) this.wsLastSeq = s
+          if (s) {this.wsLastSeq = s}
           // 记录 session_id（来自 READY 事件）
           if (t === 'READY') {
             this.wsSessionId = d.session_id || ''
@@ -411,7 +411,7 @@ export class QQAdapter implements ChannelAdapter {
 
   /** 分发 WebSocket 事件到消息处理器 */
   private dispatchWsEvent(eventType: string, d: any): void {
-    if (!this.messageHandler) return
+    if (!this.messageHandler) {return}
 
     const supportedEvents = [
       'AT_MESSAGE_CREATE',
@@ -430,7 +430,7 @@ export class QQAdapter implements ChannelAdapter {
 
   /** 发送 WebSocket 鉴权（Identify） */
   private sendWsIdentify(): void {
-    if (!this.ws) return
+    if (!this.ws) {return}
     // 如果有 session_id 且上次 seq 存在，尝试恢复
     if (this.wsSessionId && this.wsLastSeq !== null) {
       this.ws.send(JSON.stringify({
@@ -477,7 +477,7 @@ export class QQAdapter implements ChannelAdapter {
 
   /** 发送心跳 */
   private sendWsHeartbeat(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {return}
     this.ws.send(JSON.stringify({
       op: QQ_OP.HEARTBEAT,
       d: this.wsLastSeq,
@@ -637,7 +637,7 @@ export class QQAdapter implements ChannelAdapter {
 
       // 跳过纯 mention 的空消息
       const cleanContent = (content || '').replace(/<@!\d+>/g, '').replace(/<@\d+>/g, '').trim()
-      if (!cleanContent) return null
+      if (!cleanContent) {return null}
 
       const userId = author?.id || d?.author?.id || ''
       const userName = author?.username || author?.nick || author?.name || ''
@@ -658,7 +658,7 @@ export class QQAdapter implements ChannelAdapter {
         const groupOpenId = d?.group_openid || d?.group_id || ''
         msg.groupId = groupOpenId
         msg.groupName = 'QQ群'
-        if (groupOpenId) this.convTypes.set(groupOpenId, 'group')
+        if (groupOpenId) {this.convTypes.set(groupOpenId, 'group')}
       } else if (isC2C) {
         // C2C_MESSAGE_CREATE: QQ 消息列表私聊
         this.convTypes.set(userId, 'c2c')
@@ -668,7 +668,7 @@ export class QQAdapter implements ChannelAdapter {
         const guildId = d?.guild_id || ''
         msg.groupId = channelId || guildId
         msg.groupName = d?.guild_name || d?.channel_name || 'QQ频道'
-        if (channelId) this.convTypes.set(channelId, 'channel')
+        if (channelId) {this.convTypes.set(channelId, 'channel')}
       } else {
         // DIRECT_MESSAGE_CREATE（频道私信）
         this.convTypes.set(userId, 'channel_dm')

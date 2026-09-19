@@ -67,7 +67,7 @@ function stripHtml(html: string): string {
 async function fetchItem<T>(id: number): Promise<T | null> {
   try {
     const res = await httpGet(`${HN_API}/item/${id}.json`, {}, 10_000)
-    if (!res.ok) return null
+    if (!res.ok) {return null}
     return JSON.parse(res.text)
   } catch {
     return null
@@ -77,7 +77,7 @@ async function fetchItem<T>(id: number): Promise<T | null> {
 async function fetchTopStoryIds(): Promise<number[]> {
   try {
     const res = await httpGet(`${HN_API}/topstories.json`, {}, 15_000)
-    if (!res.ok) return []
+    if (!res.ok) {return []}
     return JSON.parse(res.text).slice(0, FETCH_TOP_N)
   } catch {
     return []
@@ -97,7 +97,7 @@ async function fetchComments(ids: number[]): Promise<HnComment[]> {
 
 function buildContent(story: HnStory, comments: HnComment[]): string {
   const parts: string[] = []
-  if (story.text) parts.push(stripHtml(story.text))
+  if (story.text) {parts.push(stripHtml(story.text))}
   if (comments.length > 0) {
     parts.push('\n--- 社区评论 (Hacker News) ---')
     for (const c of comments) {
@@ -125,7 +125,7 @@ export async function collectHackerNews(): Promise<NewsItem[]> {
     .map(r => r.value)
     .filter(s => s.score >= MIN_SCORE && s.title)
 
-  if (stories.length === 0) return []
+  if (stories.length === 0) {return []}
 
   const now = new Date().toISOString()
   const items: NewsItem[] = []

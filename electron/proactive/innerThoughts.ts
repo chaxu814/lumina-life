@@ -43,7 +43,7 @@ export async function generateInnerThoughts(ctx: InnerThoughtContext): Promise<s
       maxTokens: 40,
       temperature: 0.9,
     })).trim()
-    if (!raw) return ''
+    if (!raw) {return ''}
     // 清洗：去引号/换行/多余标点，限长
     const cleaned = raw.replace(/[""'「」\n\r]/g, '').trim()
     return cleaned.slice(0, 30)

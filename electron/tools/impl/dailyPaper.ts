@@ -68,7 +68,7 @@ export async function dailyPaperHandler(args: {
       papers = papers.filter(p => {
         // 从 source 中提取分类，如 "arXiv CS.AI" -> "cs.ai"
         const match = p.source.match(/arXiv\s+([\w.]+)/i)
-        if (match) return catSet.has(match[1].toLowerCase())
+        if (match) {return catSet.has(match[1].toLowerCase())}
         return true
       })
     }

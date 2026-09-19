@@ -415,7 +415,7 @@ export function getRecommendedTimeout(baseUrl: string, modelName: string): numbe
  */
 export function getModelMaxContext(baseUrl: string, modelName: string): number {
   const matched = matchProfile(baseUrl, modelName)
-  if (!matched) return 256_000
+  if (!matched) {return 256_000}
   return matched.model.maxContextTokens
 }
 
@@ -424,6 +424,6 @@ export function getModelMaxContext(baseUrl: string, modelName: string): number {
  */
 export function canUseTools(baseUrl: string, modelName: string): boolean {
   const matched = matchProfile(baseUrl, modelName)
-  if (!matched) return true
+  if (!matched) {return true}
   return matched.model.supportsTools
 }

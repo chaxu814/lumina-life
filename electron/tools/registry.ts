@@ -231,11 +231,11 @@ export function resolveToolset(
   /** 🆕 v3.6: 过滤掉 blockedInChild 工具（子Agent 使用） */
   excludeChildBlocked = false,
 ): string[] {
-  if (visited.has(name)) return []
+  if (visited.has(name)) {return []}
   visited.add(name)
 
   const ts = TOOLSETS[name]
-  if (!ts) return []
+  if (!ts) {return []}
 
   const tools = new Set<string>()
   
@@ -295,7 +295,7 @@ export function getToolsetTools(toolsetName: string): ToolDef[] {
 /** 执行工具（基础版） */
 export async function executeTool(name: string, args: Record<string, any>): Promise<ToolResult> {
   const impl = toolImplementations.get(name)
-  if (!impl) return { callId: '', ok: false, content: '', error: `未知工具: ${name}` }
+  if (!impl) {return { callId: '', ok: false, content: '', error: `未知工具: ${name}` }}
   try {
     const start = Date.now()
     const result = await impl(args)
@@ -399,10 +399,10 @@ export async function executeToolWithRetry(
   const fileSearchTools = ['file_search', 'file_read', 'grep_search', 'glob_search', 'read_file']
 
   let timeoutMs = cfg.timeoutMs
-  if (netTools.includes(name)) timeoutMs = cfg.toolTimeouts?.[name] || 15000
-  else if (shellTools.includes(name)) timeoutMs = cfg.toolTimeouts?.[name] || 120000   // 🔧 120s
-  else if (ocrTools.includes(name)) timeoutMs = cfg.toolTimeouts?.[name] || 20000
-  else if (fileSearchTools.includes(name)) timeoutMs = cfg.toolTimeouts?.[name] || 120000  // 🔧 v3.8.1: 大项目搜索需更长时间
+  if (netTools.includes(name)) {timeoutMs = cfg.toolTimeouts?.[name] || 15000}
+  else if (shellTools.includes(name)) {timeoutMs = cfg.toolTimeouts?.[name] || 120000}   // 🔧 120s
+  else if (ocrTools.includes(name)) {timeoutMs = cfg.toolTimeouts?.[name] || 20000}
+  else if (fileSearchTools.includes(name)) {timeoutMs = cfg.toolTimeouts?.[name] || 120000}  // 🔧 v3.8.1: 大项目搜索需更长时间
 
   let lastError: string | undefined
   let lastResult: ToolResult | undefined
@@ -420,7 +420,7 @@ export async function executeToolWithRetry(
         ),
       ])
 
-      if (result.ok) return result // 成功，直接返回
+      if (result.ok) {return result} // 成功，直接返回
 
       // 工具返回了错误但没抛异常
       lastError = result.error
@@ -452,7 +452,7 @@ export async function executeToolWithRetry(
   }
 
   // 所有重试均失败
-  if (lastResult) return lastResult
+  if (lastResult) {return lastResult}
   return { callId: '', ok: false, content: '', error: lastError || '未知错误' }
 }
 
@@ -477,10 +477,10 @@ export function areToolsIndependent(tool1: string, tool2: string): boolean {
     'mcp_list_servers', 'mcp_list_tools']
 
   // 两个都是读操作 → 可并行
-  if (readOnlyOps.includes(tool1) && readOnlyOps.includes(tool2)) return true
+  if (readOnlyOps.includes(tool1) && readOnlyOps.includes(tool2)) {return true}
 
   // 任何一个涉及写操作 → 不能与其他并行（保守策略）
-  if (writeOps.includes(tool1) || writeOps.includes(tool2)) return false
+  if (writeOps.includes(tool1) || writeOps.includes(tool2)) {return false}
 
   // 不同类别的操作默认可并行
   const categories: Record<string, string> = {
@@ -501,7 +501,7 @@ export function areToolsIndependent(tool1: string, tool2: string): boolean {
   const cat2 = categories[tool2] || tool2
 
   // 同类别不能并行（可能有隐藏依赖）
-  if (cat1 === cat2) return false
+  if (cat1 === cat2) {return false}
 
   return true
 }
@@ -510,7 +510,7 @@ export function areToolsIndependent(tool1: string, tool2: string): boolean {
  * 将工具调用分组为可并行执行的批次
  */
 export function groupParallelBatches(toolCalls: LLMToolCall[]): LLMToolCall[][] {
-  if (toolCalls.length <= 1) return [toolCalls]
+  if (toolCalls.length <= 1) {return [toolCalls]}
 
   const batches: LLMToolCall[][] = []
   const remaining = [...toolCalls]
@@ -546,7 +546,7 @@ export async function executeToolsParallel(
   toolCalls: LLMToolCall[],
   retryConfig?: RetryConfig
 ): Promise<Array<{ call: LLMToolCall; result: ToolResult }>> {
-  if (toolCalls.length === 0) return []
+  if (toolCalls.length === 0) {return []}
 
   // 串行执行的情况
   if (toolCalls.length === 1) {
@@ -641,7 +641,7 @@ export function detectToolDependencies(toolCalls: LLMToolCall[]): Map<string, st
 
 export function toOpenAIFunction(def: ToolDef | undefined): any {
   // 防御性检查 — getToolDef 可能返回 undefined（TOOLSETS 引用未注册工具名）
-  if (!def) return null
+  if (!def) {return null}
 
   const properties: Record<string, any> = {}
   const required: string[] = []
@@ -663,8 +663,8 @@ export function toOpenAIFunction(def: ToolDef | undefined): any {
       type: param.type,
       description: param.description,
     }
-    if (param.enum) properties[key].enum = param.enum
-    if (param.required) required.push(key)
+    if (param.enum) {properties[key].enum = param.enum}
+    if (param.required) {required.push(key)}
   }
 
   return {

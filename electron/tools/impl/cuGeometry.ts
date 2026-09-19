@@ -13,7 +13,7 @@
 
 /** 将数值夹在 [min,max]；NaN 视为 min，±Infinity 夹到对应边界 */
 export function clamp(n: number, min: number, max: number): number {
-  if (Number.isNaN(n)) return min
+  if (Number.isNaN(n)) {return min}
   return Math.min(max, Math.max(min, n))
 }
 
@@ -24,7 +24,7 @@ export function clamp(n: number, min: number, max: number): number {
  * n=100 时夹到 dim-1，避免越界 1px。
  */
 export function normToPx(n: number, dim: number): number {
-  if (!Number.isFinite(dim) || dim <= 0) return 0
+  if (!Number.isFinite(dim) || dim <= 0) {return 0}
   const safe = Number.isFinite(n) ? n : 0
   const v = Math.round((clamp(safe, 0, 100) / 100) * dim)
   return Math.max(0, Math.min(dim - 1, v))
@@ -47,14 +47,14 @@ export function mapNormPoint(nx: number, ny: number, w: number, h: number): { x:
  */
 export function pngDimensions(buf: Buffer): { w: number; h: number } | null {
   try {
-    if (!buf || buf.length < 24) return null
+    if (!buf || buf.length < 24) {return null}
     // PNG 签名
-    if (buf[0] !== 0x89 || buf[1] !== 0x50 || buf[2] !== 0x4e || buf[3] !== 0x47) return null
+    if (buf[0] !== 0x89 || buf[1] !== 0x50 || buf[2] !== 0x4e || buf[3] !== 0x47) {return null}
     // IHDR 标识（偏移 12..15）
-    if (!(buf[12] === 0x49 && buf[13] === 0x48 && buf[14] === 0x44 && buf[15] === 0x52)) return null
+    if (!(buf[12] === 0x49 && buf[13] === 0x48 && buf[14] === 0x44 && buf[15] === 0x52)) {return null}
     const w = buf.readUInt32BE(16)
     const h = buf.readUInt32BE(20)
-    if (!w || !h || w > 7680 || h > 4320) return null // 合理性护栏（8K）
+    if (!w || !h || w > 7680 || h > 4320) {return null} // 合理性护栏（8K）
     return { w, h }
   } catch {
     return null
@@ -81,10 +81,10 @@ export function gridDims(imgW: number, imgH: number, cols = 10): GridInfo {
  * 越界返回 null。
  */
 export function cellToNorm(cell: number, cols: number, rows: number): { nx: number; ny: number } | null {
-  if (!Number.isFinite(cell) || cols <= 0 || rows <= 0) return null
+  if (!Number.isFinite(cell) || cols <= 0 || rows <= 0) {return null}
   const count = cols * rows
   const id = Math.floor(cell)
-  if (id < 0 || id >= count) return null
+  if (id < 0 || id >= count) {return null}
   const r = Math.floor(id / cols)
   const c = id % cols
   return {

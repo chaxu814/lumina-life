@@ -61,7 +61,7 @@ export default function RoleConfigPanel({ onClose }: { onClose?: () => void }) {
 
   // ── Step 2: LLM 自动生成 ──────────────────────────
   const generateConfig = useCallback(async () => {
-    if (!cfg.role) return
+    if (!cfg.role) {return}
     const role = cfg.role
 
     // 检查 LLM 是否可用
@@ -111,7 +111,7 @@ export default function RoleConfigPanel({ onClose }: { onClose?: () => void }) {
       })
 
       const raw = res?.content
-      if (!raw) throw new Error('LLM 未返回内容')
+      if (!raw) {throw new Error('LLM 未返回内容')}
 
       // 提取 JSON
       const jsonStr = raw.replace(/```json\s*|\s*```/g, '').trim()
@@ -168,7 +168,7 @@ export default function RoleConfigPanel({ onClose }: { onClose?: () => void }) {
 
   // ── Step 4: 确认创建 ──────────────────────────────
   const confirmCreate = () => {
-    if (!cfg.role) return
+    if (!cfg.role) {return}
 
     const persona = {
       id: 'custom-' + Date.now(),

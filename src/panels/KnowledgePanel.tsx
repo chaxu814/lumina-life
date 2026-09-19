@@ -84,7 +84,7 @@ export default function KnowledgePanel() {
     } catch { /* 知识库可能没有记忆模块 */ }
   }, [api])
 
-  useEffect(() => { if (activeTab === 'memory') loadMemStats() }, [activeTab, loadMemStats])
+  useEffect(() => { if (activeTab === 'memory') {loadMemStats()} }, [activeTab, loadMemStats])
 
   // 搜索
   const doSearch = useCallback(async () => {
@@ -138,7 +138,7 @@ export default function KnowledgePanel() {
 
   // URL 导入
   const handleUrlImport = async () => {
-    if (!importUrl.trim()) return
+    if (!importUrl.trim()) {return}
     setImporting(true)
     try {
       const result = await api.invoke('kb:import-url', importUrl, importUrl, `[从URL导入: ${importUrl}]`)
@@ -156,7 +156,7 @@ export default function KnowledgePanel() {
 
   // 笔记保存
   const saveNote = async () => {
-    if (!noteTitle.trim() || !noteContent.trim()) return
+    if (!noteTitle.trim() || !noteContent.trim()) {return}
     setImporting(true)
     try {
       const result = await api.invoke('kb:create-note', noteTitle, noteContent)
@@ -175,7 +175,7 @@ export default function KnowledgePanel() {
 
   // 删除
   const deleteDoc = async (id: string, title: string) => {
-    if (!confirm(`确定删除「${title}」？`)) return
+    if (!confirm(`确定删除「${title}」？`)) {return}
     try {
       await api.invoke('kb:delete-doc', id)
       showToast('已删除', 'success')
@@ -202,8 +202,8 @@ export default function KnowledgePanel() {
   }
 
   const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes}B`
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)}KB`
+    if (bytes < 1024) {return `${bytes}B`}
+    if (bytes < 1048576) {return `${(bytes / 1024).toFixed(1)}KB`}
     return `${(bytes / 1048576).toFixed(1)}MB`
   }
 
@@ -436,11 +436,11 @@ export default function KnowledgePanel() {
                 {reindexing ? '重建中...' : '🔄 重建向量索引'}
               </button>
               <button onClick={async () => {
-                if (!confirm('确定清空所有事实记忆？此操作不可撤销。')) return
+                if (!confirm('确定清空所有事实记忆？此操作不可撤销。')) {return}
                 try {
                   const result = await api.invoke('memory:clear-category', 'facts')
-                  if (result.ok) showToast('✅ 已清空事实记忆', 'success')
-                  else showToast(result.error || '清空失败', 'error')
+                  if (result.ok) {showToast('✅ 已清空事实记忆', 'success')}
+                  else {showToast(result.error || '清空失败', 'error')}
                 } catch (e: any) { showToast(`清空失败: ${e.message}`, 'error') }
               }}
                 style={{

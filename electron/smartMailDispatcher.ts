@@ -179,7 +179,7 @@ Lumina 已就绪，三位 Agent 正在待命：
         try {
           const { getTokenEstimator } = require('./tokenEstimator')
           const estimator = getTokenEstimator?.()
-          if (!estimator) return false
+          if (!estimator) {return false}
           const usage = estimator.getUsage?.()
           return usage ? usage.today > usage.limit * 0.8 : false
         } catch {
@@ -208,7 +208,7 @@ Lumina 已就绪，三位 Agent 正在待命：
   private setupEventListeners() {
     // ── 安全事件 → 邮件告警 ──
     globalEventBus.on(BusEvents.SECURITY_ALERT, async (payload: any) => {
-      if (!payload) return
+      if (!payload) {return}
       sendMail(
         `🚨 安全告警: ${payload.type || '未知'}`,
         `检测到安全事件:\n\n类型: ${payload.type || '未知'}\n详情: ${payload.detail || payload.message || '无详情'}\n时间: ${new Date().toLocaleString('zh-CN')}`,
@@ -225,8 +225,8 @@ Lumina 已就绪，三位 Agent 正在待命：
     for (const rule of this.rules) {
       const timer = setInterval(async () => {
         try {
-          if (!rule.condition()) return
-          if (Date.now() - rule.lastTriggered < rule.cooldown) return
+          if (!rule.condition()) {return}
+          if (Date.now() - rule.lastTriggered < rule.cooldown) {return}
           rule.lastTriggered = Date.now()
           const { subject, body, priority } = await rule.generateContent()
           sendMail(subject, body, priority)

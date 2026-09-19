@@ -189,7 +189,7 @@ export class ManualSystem {
         try {
           const content = fs.readFileSync(path.join(manualDir, file), 'utf-8')
           const entry = this.parseManualFile(content, file)
-          if (entry) this.manuals.push(entry)
+          if (entry) {this.manuals.push(entry)}
         } catch (err) {
           console.warn(`[ManualSystem] 解析说明书失败: ${file}`, err)
         }
@@ -229,7 +229,7 @@ priority: 1
   /** 解析说明书文件 (YAML front matter + Markdown) */
   private parseManualFile(content: string, filename: string): ManualEntry | null {
     const frontMatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
-    if (!frontMatterMatch) return null
+    if (!frontMatterMatch) {return null}
 
     const frontMatter = frontMatterMatch[1]
     const body = frontMatterMatch[2]
@@ -241,7 +241,7 @@ priority: 1
     }
     const extractList = (key: string): string[] => {
       const match = frontMatter.match(new RegExp(`${key}:\\s*\\[(.+?)\\]`))
-      if (!match) return []
+      if (!match) {return []}
       return match[1].split(',').map(s => s.trim())
     }
 
@@ -274,7 +274,7 @@ priority: 1
           }
         }
         // 标题部分匹配额外加分
-        if (lowerTask.includes(m.title.toLowerCase())) score += 20
+        if (lowerTask.includes(m.title.toLowerCase())) {score += 20}
         score += m.priority
         return { manual: m, score }
       })
@@ -282,7 +282,7 @@ priority: 1
       .sort((a, b) => b.score - a.score)
       .slice(0, maxManuals)
 
-    if (scored.length === 0) return ''
+    if (scored.length === 0) {return ''}
 
     return scored
       .map(s => `【${s.manual.title}】\n${s.manual.content}`)
@@ -293,10 +293,10 @@ priority: 1
    * 生成注入到 System Prompt 的知识上下文
    */
   getKnowledgeContext(taskDescription?: string): string {
-    if (!taskDescription) return ''
+    if (!taskDescription) {return ''}
 
     const relevant = this.searchRelevant(taskDescription)
-    if (!relevant) return ''
+    if (!relevant) {return ''}
 
     return `\n【操作知识库】\n以下是你掌握的标准化操作流程，请参考执行：\n\n${relevant}\n`
   }

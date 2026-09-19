@@ -98,7 +98,7 @@ export async function memoryChatSearch(args: Record<string, any>): Promise<ToolR
     // 1. 搜索事实记忆
     const facts = store.getFacts('all', 50)
     const relevantFacts = facts.filter(f => {
-      if (sinceTime && new Date(f.timestamp).getTime() < sinceTime) return false
+      if (sinceTime && new Date(f.timestamp).getTime() < sinceTime) {return false}
       const content = f.content.toLowerCase()
       const q = query.toLowerCase()
       return content.includes(q) || q.split(' ').some((word: string) => content.includes(word))
@@ -112,7 +112,7 @@ export async function memoryChatSearch(args: Record<string, any>): Promise<ToolR
     try {
       const reflections = (store as any).getReflections?.() || []
       for (const r of reflections) {
-        if (sinceTime && new Date(r.timestamp).getTime() < sinceTime) continue
+        if (sinceTime && new Date(r.timestamp).getTime() < sinceTime) {continue}
         const insightText = `${r.topic}: ${r.insight}`.toLowerCase()
         if (insightText.includes(query.toLowerCase())) {
           results.push(`💭 [反思] ${r.topic}: ${r.insight} (${new Date(r.timestamp).toLocaleDateString('zh-CN')})`)

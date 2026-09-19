@@ -33,7 +33,7 @@ export function configurePublisher(cfg: Partial<GHConfig>): void {
 }
 
 function getConfig(): GHConfig {
-  if (config) return config
+  if (config) {return config}
   const userDataPath = app?.getPath?.('userData') || process.cwd()
   const repoDir = path.join(userDataPath, 'lumina-news-site')
   config = {
@@ -54,7 +54,7 @@ export async function publishToGitHubPages(source: string = 'latest', dateStr?: 
     // 1. 生成日报 HTML
     const { generateBilingualDigest } = await import('./bilingualDigest')
     const digest = await generateBilingualDigest(30, true)
-    if (!digest.ok) return { ok: false, error: digest.error || '日报生成失败' }
+    if (!digest.ok) {return { ok: false, error: digest.error || '日报生成失败' }}
 
     // 2. 克隆/更新仓库
     if (!fs.existsSync(cfg.repoDir)) {
@@ -69,7 +69,7 @@ export async function publishToGitHubPages(source: string = 'latest', dateStr?: 
 
     // 3. 写入 HTML
     const htmlDir = path.join(cfg.repoDir, 'daily')
-    if (!fs.existsSync(htmlDir)) fs.mkdirSync(htmlDir, { recursive: true })
+    if (!fs.existsSync(htmlDir)) {fs.mkdirSync(htmlDir, { recursive: true })}
 
     const htmlFile = path.join(htmlDir, `${date}.html`)
     const cnHtml = digest.html.replace('</body>',
@@ -82,7 +82,7 @@ export async function publishToGitHubPages(source: string = 'latest', dateStr?: 
     if (fs.existsSync(indexPath)) {
       const existingHtml = fs.readFileSync(indexPath, 'utf-8')
       const match = existingHtml.match(/<!-- ENTRIES -->([\s\S]*)<!-- \/ENTRIES -->/)
-      if (match) existingEntries = match[1].split('\n').filter(l => l.trim())
+      if (match) {existingEntries = match[1].split('\n').filter(l => l.trim())}
     }
 
     const entry = `<div class="entry"><a href="daily/${date}.html">${date}</a><span class="badge">+${digest.items.length}</span></div>`

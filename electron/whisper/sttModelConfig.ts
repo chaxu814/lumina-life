@@ -30,7 +30,7 @@ export interface ModelResolveOptions {
  * 任何带 zh 的语言都绝不允许回落到 tiny.en（它只识英文）。
  */
 export function resolveSttModel(opts: ModelResolveOptions = {}): string {
-  if (opts.model && opts.model.trim()) return opts.model.trim()
+  if (opts.model && opts.model.trim()) {return opts.model.trim()}
   // 默认产品面向中文：统一用多语种 base（可识别中文/英文）；
   // tiny.en 仅英文，任何中文链路都绝不能回落到它。
   return DEFAULT_WHISPER_MODEL
@@ -61,7 +61,7 @@ export function configureTransformersEnv(): any | null {
   } catch {
     return null
   }
-  if (!env) return null
+  if (!env) {return null}
   try {
     const dir = sttCacheDir()
     fs.mkdirSync(dir, { recursive: true })

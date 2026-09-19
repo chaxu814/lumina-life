@@ -157,14 +157,14 @@ export async function preExecuteSearch(text: string): Promise<string | null> {
   ]
 
   const shouldSearch = searchPatterns.some(p => p && p.test(text.trim()))
-  if (!shouldSearch) return null
+  if (!shouldSearch) {return null}
 
   const query = text.trim()
     .replace(/^(搜|搜索|查|查找|找|百度|谷歌|bing|查一下|搜索一下|帮我搜|帮我查)\s*/i, '')
     .replace(/^(search|find|look up|google|bing|what is|who is|how to|tell me about)\s*/i, '')
     .trim()
 
-  if (!query || query.length < 2) return null
+  if (!query || query.length < 2) {return null}
 
   const searchCount = 5
   const result: any = await webSearch({ query, engine: 'bing', count: searchCount })
@@ -177,10 +177,10 @@ export async function preExecuteSearch(text: string): Promise<string | null> {
  */
 export async function preExecuteCollect(text: string): Promise<string | null> {
   const urls = extractUrls(text)
-  if (urls.length === 0) return null
+  if (urls.length === 0) {return null}
 
   const result: any = await collectUrls(urls, 5000, 40000)
-  if (!result) return null
+  if (!result) {return null}
 
   try {
     return await saveCollected(result)

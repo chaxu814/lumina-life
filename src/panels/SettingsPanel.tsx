@@ -115,7 +115,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   // Plan C: 组件挂载时自动检测 Python Node TTS 状态
   // Python Node 随 Lumina 自动启动，TTS 就绪后前端自动显示「运行中」
   useEffect(() => {
-    if (ttsEngine !== 'edge') return
+    if (ttsEngine !== 'edge') {return}
     let cancelled = false
     const check = async () => {
       try {
@@ -163,7 +163,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
 
   // 最大输出提交：校验并落盘
   const commitMaxTokens = () => {
-    if (maxTokensDraft === null) return
+    if (maxTokensDraft === null) {return}
     const n = parseInt(maxTokensDraft, 10)
     if (!isNaN(n) && n > 0 && n <= 1048576) {
       setLLMConfig({ maxTokens: n })
@@ -173,7 +173,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
 
   // 上下文窗口提交：校验并落盘
   const commitContextWindow = () => {
-    if (ctxDraft === null) return
+    if (ctxDraft === null) {return}
     const n = parseInt(ctxDraft, 10)
     if (!isNaN(n) && n >= 0 && n <= 1048576) {
       setLLMConfig({ contextWindow: n })
@@ -213,7 +213,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   }
 
   const testServerChan = async () => {
-    if (!pushConfig.serverChanKey) return
+    if (!pushConfig.serverChanKey) {return}
     setTestingChan(true)
     setTestChanResult(null)
     try {
@@ -224,7 +224,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   }
 
   const testDingTalk = async () => {
-    if (!pushConfig.dingTalkWebhook) return
+    if (!pushConfig.dingTalkWebhook) {return}
     setTestingDing(true)
     setTestDingResult(null)
     try {
@@ -253,7 +253,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     const next = !petRunning
     try {
       const res = await window.luminaAPI?.petToggle?.(next)
-      if (res?.ok) setPetRunning(next)
+      if (res?.ok) {setPetRunning(next)}
     } catch {
       console.error('[SettingsPanel] 桌宠切换失败')
     }
@@ -263,7 +263,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     const next = !petClickThrough
     try {
       const res = await window.luminaAPI?.petUpdateConfig?.({ clickThrough: next })
-      if (res?.ok) setPetClickThrough(next)
+      if (res?.ok) {setPetClickThrough(next)}
     } catch {}
   }
 
@@ -271,7 +271,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     const next = !petAutoRestart
     try {
       const res = await window.luminaAPI?.petUpdateConfig?.({ autoRestart: next })
-      if (res?.ok) setPetAutoRestart(next)
+      if (res?.ok) {setPetAutoRestart(next)}
     } catch {}
   }
 
@@ -333,7 +333,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     onTestConnection?: (modelId: string) => void;
     onTestMultimodal?: (modelId: string) => void;
   }) => {
-    if (!show) return null;
+    if (!show) {return null;}
 
     return (
       <div
@@ -680,7 +680,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
 
   // ── LLM 连接测试 ─────────────────────────────────
   const testLLM = async () => {
-    if (!llmConfig.model || !llmConfig.baseUrl) return
+    if (!llmConfig.model || !llmConfig.baseUrl) {return}
     setLlmStatus('testing')
     setLlmMsg('')
     try {
@@ -707,7 +707,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   // ── v10.0: 保存配置到后端 ProviderManager ──────────
   const saveProviderToBackend = async () => {
     const { provider, baseUrl, apiKey, model } = useStore.getState().llmConfig
-    if (!provider) return
+    if (!provider) {return}
     setSavingProvider(true)
     try {
       // 1) 保存配置
@@ -720,7 +720,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
       // 刷新前端缓存，避免界面仍显示旧值
       try {
         const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
-        if (r?.configs) setAgentLlmConfigs(r.configs)
+        if (r?.configs) {setAgentLlmConfigs(r.configs)}
         const all = await window.luminaAPI?.providerGetAll?.()
         if (all?.activeProviderId) {
           const active = all.configs[all.activeProviderId]
@@ -749,7 +749,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   const fetchModels = async () => {
     // 🔧 直接从 store 读取最新配置，避免闭包陈旧值
     const { provider, baseUrl, apiKey } = useStore.getState().llmConfig
-    if (!baseUrl) return
+    if (!baseUrl) {return}
     setShowModelPicker(true)
     setAvailableModels(null)
     setFetchingModels(true)
@@ -765,7 +765,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
           setFetchingModels(false)
           return
         }
-        if (res?.error) lastError = res.error
+        if (res?.error) {lastError = res.error}
       }
     } catch {}
 
@@ -777,7 +777,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
         setFetchingModels(false)
         return
       }
-      if (res?.error) lastError = res.error || lastError
+      if (res?.error) {lastError = res.error || lastError}
     } catch {}
     setAvailableModels(null)
     console.warn('[SettingsPanel] 获取模型列表失败:', lastError || '未知原因')
@@ -787,7 +787,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   // ── Team Agent 模型获取 ────────────────────────────
   const fetchTeamModels = async (agentId: string) => {
     const cfg = agentLlmConfigs[agentId]
-    if (!cfg?.endpoint) return
+    if (!cfg?.endpoint) {return}
     setTeamShowModelPicker(agentId)   // ← 立即打开弹窗，显示加载中
     setTeamAvailableModels(prev => ({ ...prev, [agentId]: null as any }))  // ← 清空旧模型
     setTeamFetchingModel(agentId)
@@ -802,7 +802,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
 
   // ── TTS 试听 ─────────────────────────────────────
   const testTTS = async () => {
-    if (!edgeRunning) return
+    if (!edgeRunning) {return}
     setTtsStatus('testing')
     setTtsMsg('')
     try {
@@ -834,7 +834,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
   const startEdge = async () => {
     try {
       const res = await window.luminaAPI?.edgeTtsStart?.()
-      if (res?.ok) setEdgeRunning(true)
+      if (res?.ok) {setEdgeRunning(true)}
     } catch {}
   }
   const stopEdge = async () => {
@@ -1116,7 +1116,7 @@ function ChannelSettings() {
 
   const handleEdit = (key: string) => {
     const cfg = configs[key]
-    if (!cfg) return
+    if (!cfg) {return}
     setEditing(key)
     setEditName(cfg.name || '')
     setEditForm({ ...cfg.credentials || {} })
@@ -1145,7 +1145,7 @@ function ChannelSettings() {
 
   const handleAdd = async (typeId: string) => {
     const template = CHANNEL_TYPES.find(t => t.id === typeId)
-    if (!template) return
+    if (!template) {return}
     const emptyCredentials: Record<string, string> = {}
     template.fields.forEach(f => { emptyCredentials[f.key] = '' })
 
@@ -1406,13 +1406,13 @@ function AgentPoolSettings() {
   const handleToggleKeepalive = async () => {
     const newVal = !config.keepaliveEnabled
     const r = await window.luminaAPI.agentPoolUpdateConfig({ keepaliveEnabled: newVal })
-    if (r.ok) loadData()
+    if (r.ok) {loadData()}
   }
 
   const handleIdleTimeoutChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = parseInt(e.target.value, 10)
     const r = await window.luminaAPI.agentPoolUpdateConfig({ idleTimeoutMs: val * 60 * 1000 })
-    if (r.ok) loadData()
+    if (r.ok) {loadData()}
   }
 
   const handleCompress = async (id: string) => {
@@ -1602,7 +1602,7 @@ function IntentRouterSettings() {
   }
 
   const handleToggleAutoRoute = async () => {
-    if (!config) return
+    if (!config) {return}
     const newVal = !config.autoRoute
     await window.luminaAPI.routerUpdateConfig({ autoRoute: newVal })
     loadData()
@@ -1615,7 +1615,7 @@ function IntentRouterSettings() {
   }
 
   const handleTest = async () => {
-    if (!testMsg.trim()) return
+    if (!testMsg.trim()) {return}
     const result = await window.luminaAPI.routerClassify(testMsg.trim())
     setTestResult(result)
   }
@@ -1801,7 +1801,7 @@ function AccessControlSettings() {
   }
 
   const saveEdit = async () => {
-    if (!editingAgent || !editForm) return
+    if (!editingAgent || !editForm) {return}
     await window.luminaAPI.accessUpdatePermissions(editingAgent, {
       allowedReadPaths: editForm.allowedReadPaths,
       allowedWritePaths: editForm.allowedWritePaths,
@@ -1822,7 +1822,7 @@ function AccessControlSettings() {
   }
 
   const resetPerm = async (agentId: string) => {
-    if (!confirm(`重置 ${agentId} 的权限为默认值？`)) return
+    if (!confirm(`重置 ${agentId} 的权限为默认值？`)) {return}
     await window.luminaAPI.accessResetPermissions(agentId)
     loadData()
   }

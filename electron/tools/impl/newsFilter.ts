@@ -79,7 +79,7 @@ const CATEGORY_QUOTA_RATIO: Record<string, number> = {
  *   2. 第二轮：未填满的配额释放，从剩余条目中按全局高分补齐
  */
 function balanceByCategory(items: FilteredItem[], maxItems: number): FilteredItem[] {
-  if (items.length <= maxItems) return items
+  if (items.length <= maxItems) {return items}
 
   // 计算每个分类的配额（至少 1 条，如果该分类有条目）
   const quota: Record<string, number> = {}
@@ -92,7 +92,7 @@ function balanceByCategory(items: FilteredItem[], maxItems: number): FilteredIte
   const byCategory = new Map<string, FilteredItem[]>()
   for (const item of items) {
     const cat = item.item.category
-    if (!byCategory.has(cat)) byCategory.set(cat, [])
+    if (!byCategory.has(cat)) {byCategory.set(cat, [])}
     byCategory.get(cat)!.push(item)
   }
 
@@ -119,7 +119,7 @@ function balanceByCategory(items: FilteredItem[], maxItems: number): FilteredIte
   if (result.length < maxItems) {
     const remaining = items.filter(i => !usedIds.has(i.item.id))
     for (const item of remaining) {
-      if (result.length >= maxItems) break
+      if (result.length >= maxItems) {break}
       result.push(item)
     }
   }
@@ -212,15 +212,15 @@ ${itemsText}`
 
 function parseLLMJson(raw: string): any[] {
   // 去掉可能的 markdown 代码块标记
-  let cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
+  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
 
   // 尝试直接解析
   try {
     const parsed = JSON.parse(cleaned)
-    if (Array.isArray(parsed)) return parsed
+    if (Array.isArray(parsed)) {return parsed}
     // 可能包裹在对象中
-    if (parsed.items && Array.isArray(parsed.items)) return parsed.items
-    if (parsed.results && Array.isArray(parsed.results)) return parsed.results
+    if (parsed.items && Array.isArray(parsed.items)) {return parsed.items}
+    if (parsed.results && Array.isArray(parsed.results)) {return parsed.results}
     return []
   } catch {
     // 尝试提取 JSON 数组部分
@@ -258,14 +258,14 @@ export async function filterWithLLM(
     minScore = 50,
   } = options || {}
 
-  if (items.length === 0) return []
+  if (items.length === 0) {return []}
 
   // 预筛选：按分类均衡取样，避免单一来源（如百度热搜）霸占 LLM 筛选池
   // 每个分类最多取 12 条，总共最多 60 条，确保 AI/科技/财经/开源都有代表
   const byCategory = new Map<string, NewsItem[]>()
   for (const item of items) {
     const cat = item.category
-    if (!byCategory.has(cat)) byCategory.set(cat, [])
+    if (!byCategory.has(cat)) {byCategory.set(cat, [])}
     byCategory.get(cat)!.push(item)
   }
   const toFilter: NewsItem[] = []
@@ -279,8 +279,8 @@ export async function filterWithLLM(
     const existing = new Set(toFilter.map(i => i.id))
     const sorted = [...items].sort((a, b) => b.hotScore - a.hotScore)
     for (const item of sorted) {
-      if (toFilter.length >= 60) break
-      if (!existing.has(item.id)) toFilter.push(item)
+      if (toFilter.length >= 60) {break}
+      if (!existing.has(item.id)) {toFilter.push(item)}
     }
   }
 
@@ -300,8 +300,8 @@ export async function filterWithLLM(
 
     for (const r of results) {
       const idx = r.index - 1
-      if (idx < 0 || idx >= toFilter.length) continue
-      if ((r.relevanceScore ?? 0) < minScore) continue
+      if (idx < 0 || idx >= toFilter.length) {continue}
+      if ((r.relevanceScore ?? 0) < minScore) {continue}
 
       filtered.push({
         item: toFilter[idx],
@@ -498,7 +498,7 @@ ${itemsText}
   try {
     const response = await llmCall(systemPrompt, userPrompt)
     // 解析 JSON 数组
-    let cleaned = response.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
+    const cleaned = response.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim()
     let indices: number[]
     try {
       indices = JSON.parse(cleaned)

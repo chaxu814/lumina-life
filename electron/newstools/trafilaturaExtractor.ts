@@ -29,7 +29,7 @@ export async function extractFullText(url: string): Promise<FullTextResult> {
     const script = path.join(__dirname, 'scripts', 'extract_article.py')
     if (fs.existsSync(script)) {
       const result = await _runPythonScript(script, url)
-      if (result.ok) return result
+      if (result.ok) {return result}
     }
   } catch {}
 

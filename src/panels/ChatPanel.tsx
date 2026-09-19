@@ -198,7 +198,7 @@ export default function ChatPanel() {
   const narrowRef = useRef(false)
   useEffect(() => {
     const api = (window as any).luminaAPI
-    if (!api?.onDevToolsChanged) return
+    if (!api?.onDevToolsChanged) {return}
     const unsub = api.onDevToolsChanged((opened: boolean) => {
       setDevtoolsOpen(opened)
       if (opened !== narrowRef.current) {
@@ -275,7 +275,7 @@ export default function ChatPanel() {
       const roleConvs = curState.conversations.filter(c => c.roleId === roleForMode)
       if (roleConvs.length > 0) {
         const lastUsed = roleConvs.sort((a, b) => b.createdAt - a.createdAt)[0]
-        if (curState.activeConversationId !== lastUsed.id) switchConversation(lastUsed.id)
+        if (curState.activeConversationId !== lastUsed.id) {switchConversation(lastUsed.id)}
       } else {
         createConversation(undefined, roleForMode)
       }
@@ -300,7 +300,7 @@ export default function ChatPanel() {
 
   // ── v2.7: 审批流事件监听 ──────────────────────
   useEffect(() => {
-    if (!window.luminaAPI) return
+    if (!window.luminaAPI) {return}
     const unsub1 = window.luminaAPI.onApprovalRequested((req: any) => {
       setApprovalRequests(prev => [...prev, req])
     })
@@ -312,7 +312,7 @@ export default function ChatPanel() {
 
   // 副人格冲突事件监听
   useEffect(() => {
-    if (!window.luminaAPI?.onPersonalityConflict) return
+    if (!window.luminaAPI?.onPersonalityConflict) {return}
     const unsub = window.luminaAPI.onPersonalityConflict((conflict: any) => {
       setPersonalityConflict(conflict)
     })
@@ -355,7 +355,7 @@ export default function ChatPanel() {
   }, [])
 
   const handleDeleteConfirm = useCallback(() => {
-    if (!deletingTarget) return
+    if (!deletingTarget) {return}
     deleteMessageFromStore(activeConversationId, deletingTarget.msgId)
     setDeletingTarget(null)
     showToast('已删除', 'success')
@@ -369,7 +369,7 @@ export default function ChatPanel() {
     sttService.setCallbacks(
       (text) => {
         setInput(text)
-        if (text.trim()) setTimeout(() => handleSendRef.current?.(text), 300)
+        if (text.trim()) {setTimeout(() => handleSendRef.current?.(text), 300)}
       },
       (status) => {
         setSttStatus(status)
@@ -379,7 +379,7 @@ export default function ChatPanel() {
 
     proactiveChat.onProactiveTrigger((trigger, message) => {
       const { activeConversationId, isProcessing } = latestRef.current
-      if (!activeConversationId || isProcessing) return
+      if (!activeConversationId || isProcessing) {return}
       // @ts-expect-error
       addAuditLog('system', 'proactive', trigger.type)
       playTTS(message)
@@ -397,7 +397,7 @@ export default function ChatPanel() {
     setTtsSpeaking(ttsEngine.isSpeaking)
     ttsEngine.onStateChange((speaking) => {
       setTtsSpeaking(speaking)
-      if (!speaking) setTtsError(null) // 播放结束清除错误
+      if (!speaking) {setTtsError(null)} // 播放结束清除错误
     })
     ttsEngine.onError((err) => {
       console.warn('[ChatPanel] TTS 错误:', err)
@@ -406,7 +406,7 @@ export default function ChatPanel() {
     })
     // 启动时检?TTS 服务健康状?
     ttsEngine.healthCheck().then((r) => {
-      if (!r.ok) console.warn('[ChatPanel] TTS 健康检?', r.detail)
+      if (!r.ok) {console.warn('[ChatPanel] TTS 健康检?', r.detail)}
     })
   }, [])
 
@@ -432,8 +432,8 @@ export default function ChatPanel() {
   // ═════════════════════════════════════════════════════
 
   const playTTS = async (text: string) => {
-    if (useStore.getState().ttsMuted) return
-    if (useStore.getState().ttsConfig.enabled === false) return
+    if (useStore.getState().ttsMuted) {return}
+    if (useStore.getState().ttsConfig.enabled === false) {return}
     const clean = cleanTtsText(text)
     if (!clean || clean.length < 2) {
       console.warn('[TTS] 清洗后文本太短，跳过:', JSON.stringify(clean))
@@ -472,7 +472,7 @@ export default function ChatPanel() {
 
   /** v2.4.1: 打字机流式输出动画 */
   const startTypingAnimation = useCallback((fullText: string, _convId: string, onDone: () => void) => {
-    if (typingRef.current) clearInterval(typingRef.current)
+    if (typingRef.current) {clearInterval(typingRef.current)}
 
     setStreamingText('')
     setIsStreaming(true)
@@ -524,19 +524,19 @@ export default function ChatPanel() {
       }
       newAttachments.push(attachment)
     }
-    if (newAttachments.length > 0) setAttachments(prev => [...prev, ...newAttachments])
+    if (newAttachments.length > 0) {setAttachments(prev => [...prev, ...newAttachments])}
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return
+    if (!e.target.files || e.target.files.length === 0) {return}
     await processMainFiles(e.target.files)
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (fileInputRef.current) {fileInputRef.current.value = ''}
   }
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation()
     setDragOver(false)
-    if (e.dataTransfer.files.length > 0) await processMainFiles(e.dataTransfer.files)
+    if (e.dataTransfer.files.length > 0) {await processMainFiles(e.dataTransfer.files)}
   }
 
   const removeAttachment = (index: number) => {
@@ -546,7 +546,7 @@ export default function ChatPanel() {
   const clearAttachments = () => setAttachments([])
 
   const handleSendWithText = useCallback(async (text: string) => {
-    if (!text.trim() || isProcessing || !activeConversationId) return
+    if (!text.trim() || isProcessing || !activeConversationId) {return}
 
     // ── v2.7: 命令拦截 ──────────────────────────
     if (text.startsWith('/')) {
@@ -598,7 +598,7 @@ export default function ChatPanel() {
       const fileDescs = currentAttachments.map((a, i) => {
         const sizeStr = a.size > 1024 * 1024 ? `${(a.size / (1024 * 1024)).toFixed(1)}MB` : `${(a.size / 1024).toFixed(1)}KB`
         let desc = `[附件${i + 1}: ${a.name} (${sizeStr})]`
-        if (a.text) desc += `\n内容:\n${a.text}`
+        if (a.text) {desc += `\n内容:\n${a.text}`}
         return desc
       }).join('\n')
       userMessage = `${text}\n\n--- 上传文件 ---\n${fileDescs}`
@@ -658,9 +658,9 @@ export default function ChatPanel() {
     const eventLog: any[] = []
     let agentText = ''
     /** 🆕 v6.1: 当前消息的思维步骤追踪器 */
-    let stepIds = new Set<string>()
-    let stepStartTimes = new Map<string, number>()
-    let thinkingAccum: ThinkingStep[] = []
+    const stepIds = new Set<string>()
+    const stepStartTimes = new Map<string, number>()
+    const thinkingAccum: ThinkingStep[] = []
 
     /** 🆕 v6.1: upsert 思维步骤 — 同 key 更新而非新增 (借鉴团队群聊) */
     const upsertThinkingStep = (s: ThinkingStep, stableKey?: string) => {
@@ -681,7 +681,7 @@ export default function ChatPanel() {
     }
 
     const unsub = window.luminaAPI.onAgentEvent((ev) => {
-      if (abortRef.current) return
+      if (abortRef.current) {return}
 
       // 推理流 — 不再吞掉！推入 ThinkingStep 显示推理内容
       if (ev.type === 'thinking_stream') {
@@ -821,7 +821,7 @@ export default function ChatPanel() {
       if (result.contextWindow) {
         const lastEvt = eventLog.reverse().find(e => e.type === 'token_update')
         const pt = (lastEvt as any)?.promptTokens || 0
-        if (pt > 0) useAgentRuntime.getState().setContextUsage(pt, result.contextWindow)
+        if (pt > 0) {useAgentRuntime.getState().setContextUsage(pt, result.contextWindow)}
       }
       unsub()
       // 保存结构化思考步骤供面板展示
@@ -1014,7 +1014,7 @@ export default function ChatPanel() {
                 className={'mode-sidebar-item' + (mode !== 'group' ? ' active' : '')}
                 onClick={() => {
                   setMode('agent')
-                  if (!agentConfig.lastRole) setRolePickerOpen(true)
+                  if (!agentConfig.lastRole) {setRolePickerOpen(true)}
                   window.luminaAPI?.agentSetMode('agent')
                 }}
               >
@@ -1061,8 +1061,8 @@ export default function ChatPanel() {
                   )}
                   {[...filteredConversations]
                     .sort((a, b) => {
-                      if (a.pinned && !b.pinned) return -1
-                      if (!a.pinned && b.pinned) return 1
+                      if (a.pinned && !b.pinned) {return -1}
+                      if (!a.pinned && b.pinned) {return 1}
                       return b.createdAt - a.createdAt
                     })
                     .map(conv => {
@@ -1076,13 +1076,13 @@ export default function ChatPanel() {
                     setEditingNameId(conv.id)
                   }
                   const commitRename = () => {
-                    if (editName.trim()) renameConversation(conv.id, editName.trim())
+                    if (editName.trim()) {renameConversation(conv.id, editName.trim())}
                     setEditingNameId(null)
                   }
 
                   return (
                     <div key={conv.id}
-                      onClick={() => { if (!isEditing) switchConversation(conv.id) }}
+                      onClick={() => { if (!isEditing) {switchConversation(conv.id)} }}
                       style={{
                         padding: '8px 10px', margin: '1px 6px',
                         borderRadius: 6, cursor: 'pointer',
@@ -1109,8 +1109,8 @@ export default function ChatPanel() {
                               onChange={e => setEditName(e.target.value)}
                               onBlur={commitRename}
                               onKeyDown={e => {
-                                if (e.key === 'Enter') commitRename()
-                                if (e.key === 'Escape') setEditingNameId(null)
+                                if (e.key === 'Enter') {commitRename()}
+                                if (e.key === 'Escape') {setEditingNameId(null)}
                               }}
                               autoFocus
                               onClick={e => e.stopPropagation()}
@@ -1165,7 +1165,7 @@ export default function ChatPanel() {
                             <button
                               onClick={e => {
                                 e.stopPropagation()
-                                if (conversations.length <= 1) return
+                                if (conversations.length <= 1) {return}
                                 deleteConversation(conv.id)
                               }}
                               title="删除对话"
@@ -1178,7 +1178,7 @@ export default function ChatPanel() {
                               }}
                               onMouseEnter={e => {
                                 if (conversations.length > 1)
-                                  (e.currentTarget as HTMLElement).style.color = '#ef4444'
+                                  {(e.currentTarget as HTMLElement).style.color = '#ef4444'}
                               }}
                               onMouseLeave={e => {
                                 (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'
@@ -1271,7 +1271,7 @@ export default function ChatPanel() {
               padding: '2px 6px', borderRadius: 8,
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => { if (mode !== 'group') e.currentTarget.style.background = `${getAgentRole(selectedRole).color}10` }}
+            onMouseEnter={e => { if (mode !== 'group') {e.currentTarget.style.background = `${getAgentRole(selectedRole).color}10`} }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
           >
             {mode === 'group' ? '👥 团队群聊' : (
@@ -1350,8 +1350,8 @@ export default function ChatPanel() {
                         animation: `voiceItemIn 0.2s ease ${i * 30}ms both`,
                         transition: 'background 0.15s, border-color 0.15s',
                       }}
-                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--surface-50)' }}
-                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                      onMouseEnter={e => { if (!isActive) {e.currentTarget.style.background = 'var(--surface-50)'} }}
+                      onMouseLeave={e => { if (!isActive) {e.currentTarget.style.background = 'transparent'} }}
                     >
                       <span style={{ fontSize: 16 }}>{v.icon}</span>
                       <div>
@@ -1378,13 +1378,13 @@ export default function ChatPanel() {
                   // 正在朗读 ?停止 + 触发取消动画
                   ttsEngine.stop()
                   setTtsJustStopped(true)
-                  if (ttsStoppedTimer.current) clearTimeout(ttsStoppedTimer.current)
+                  if (ttsStoppedTimer.current) {clearTimeout(ttsStoppedTimer.current)}
                   ttsStoppedTimer.current = setTimeout(() => setTtsJustStopped(false), 600)
                 } else {
                   // 未朗??切换静音 + 触发翻转动画
                   ttsToggle()
                   setTtsToggling(true)
-                  if (ttsToggleTimer.current) clearTimeout(ttsToggleTimer.current)
+                  if (ttsToggleTimer.current) {clearTimeout(ttsToggleTimer.current)}
                   ttsToggleTimer.current = setTimeout(() => setTtsToggling(false), 500)
                 }
               }}

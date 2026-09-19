@@ -62,7 +62,7 @@ export function registerSkillMarketIpc(): void {
   // ─── 从本地 .lumskill 安装 ────────────────────────
   ipcMain.handle('skill-market:install-local', async () => {
     const win = BrowserWindow.getFocusedWindow()
-    if (!win) return { success: false, error: '无活动窗口' }
+    if (!win) {return { success: false, error: '无活动窗口' }}
 
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
       title: '选择技能包 (.lumskill)',
@@ -80,7 +80,7 @@ export function registerSkillMarketIpc(): void {
   // ─── 导出 .lumskill ───────────────────────────────
   ipcMain.handle('skill-market:export', async (_event, skillId: string) => {
     const win = BrowserWindow.getFocusedWindow()
-    if (!win) return { success: false, error: '无活动窗口' }
+    if (!win) {return { success: false, error: '无活动窗口' }}
 
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
       title: '导出技能包',

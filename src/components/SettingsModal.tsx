@@ -33,10 +33,10 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
 
   // 当 initialTab 变化时同步
   React.useEffect(() => {
-    if (initialTab) setActiveSection(initialTab as SidebarId)
+    if (initialTab) {setActiveSection(initialTab as SidebarId)}
   }, [initialTab])
 
-  if (!open) return null
+  if (!open) {return null}
 
   return (
     /* ── 背景遮罩 ── */

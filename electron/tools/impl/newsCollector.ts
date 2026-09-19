@@ -265,11 +265,11 @@ function isRelevantBaiduHot(title: string): boolean {
   const lower = title.toLowerCase()
   // 先查黑名单
   for (const kw of BAIDU_BLACKLIST) {
-    if (title.includes(kw) || lower.includes(kw.toLowerCase())) return false
+    if (title.includes(kw) || lower.includes(kw.toLowerCase())) {return false}
   }
   // 再查白名单
   for (const kw of BAIDU_WHITELIST) {
-    if (title.includes(kw) || lower.includes(kw.toLowerCase())) return true
+    if (title.includes(kw) || lower.includes(kw.toLowerCase())) {return true}
   }
   return false
 }
@@ -282,7 +282,7 @@ async function collectBaiduHot(): Promise<NewsItem[]> {
       'Accept-Language': 'zh-CN,zh;q=0.9',
     }, 15000)
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
     const html = res.text
     const items: NewsItem[] = []
@@ -321,7 +321,7 @@ async function collectBaiduHot(): Promise<NewsItem[]> {
     for (let i = 0; i < titleMatches.length; i++) {
       const { url, title } = titleMatches[i]
       // 只保留 AI/科技/财经相关的热搜，过滤社会/娱乐/灾难
-      if (!isRelevantBaiduHot(title)) continue
+      if (!isRelevantBaiduHot(title)) {continue}
       const hotNum = hotValues[i] || 0
       const fullUrl = url.startsWith('http') ? url : `https://top.baidu.com${url}`
       // 百度热搜降为辅助参考分（40-65），不再压过专业源
@@ -386,7 +386,7 @@ async function collectGithubTrending(): Promise<NewsItem[]> {
       'Accept-Language': 'en-US,en;q=0.9',
     }, 15000)
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
 
     const html = res.text
     const items: NewsItem[] = []
@@ -400,7 +400,7 @@ async function collectGithubTrending(): Promise<NewsItem[]> {
 
       // 提取仓库名和链接
       const repoMatch = block.match(/<h2[^>]*>\s*<a\s+href="([^"]+)"/i)
-      if (!repoMatch) continue
+      if (!repoMatch) {continue}
       const repoPath = repoMatch[1].trim()
       const repoName = repoPath.replace(/^\//, '').replace(/\s+/g, '')
       const fullUrl = `https://github.com${repoPath}`
@@ -466,7 +466,7 @@ async function collectFinanceNews(): Promise<NewsItem[]> {
       const list = data?.data?.list || []
       for (const item of list) {
         const title = String(item.title || item.content || '').replace(/<[^>]+>/g, '').trim()
-        if (!title || title.length < 5) continue
+        if (!title || title.length < 5) {continue}
         const url = item.url || item.share_url || `https://so.eastmoney.com/news/s?keyword=${encodeURIComponent(title.slice(0, 20))}`
         const pubTime = item.showtime || item.display_time || ''
         items.push({
@@ -504,7 +504,7 @@ async function collectFinanceNews(): Promise<NewsItem[]> {
       const list = data?.data || []
       for (const item of list) {
         const content = String(item.data?.content || item.content || '').replace(/<[^>]+>/g, '').trim()
-        if (!content || content.length < 8) continue
+        if (!content || content.length < 8) {continue}
         // 只保留财经相关（金十本身就是财经源，但过滤广告/无关内容）
         const title = content.length > 60 ? content.slice(0, 60) + '...' : content
         const url = `https://www.jin10.com/flash_detail/${item.id || ''}`
@@ -601,11 +601,11 @@ export async function collectAll(options?: CollectOptions): Promise<NewsItem[]> 
     // 无自定义 RSS 且 rss 开关未关闭时使用默认源
     tasks.push(collectFromRSS(DEFAULT_RSS_SOURCES, timeout))
   }
-  if (opts.baidu) tasks.push(collectBaiduHot())
-  if (opts.arxiv) tasks.push(collectArxivPapers())
-  if (opts.github) tasks.push(collectGithubTrending())
-  if (opts.finance) tasks.push(collectFinanceNews())
-  if (opts.hn) tasks.push(collectHackerNews())
+  if (opts.baidu) {tasks.push(collectBaiduHot())}
+  if (opts.arxiv) {tasks.push(collectArxivPapers())}
+  if (opts.github) {tasks.push(collectGithubTrending())}
+  if (opts.finance) {tasks.push(collectFinanceNews())}
+  if (opts.hn) {tasks.push(collectHackerNews())}
 
   const results = await Promise.allSettled(tasks)
   const allItems: NewsItem[] = []

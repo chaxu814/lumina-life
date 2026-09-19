@@ -10,7 +10,7 @@ import { getMemoryStore } from '../memory/memoryStore'
 
 /** 将 AgentMessage content 安全转为字符串 */
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -30,7 +30,7 @@ export function detectContextLimit(
   contextWindow: number,
   tokenEstimator: { estimateTokens: (msgs: AgentMessage[]) => number },
 ): number {
-  if (!contextWindow || contextWindow <= 0) return 0
+  if (!contextWindow || contextWindow <= 0) {return 0}
   const estimated = tokenEstimator.estimateTokens(messages)
   const ratio = estimated / contextWindow
   return ratio > 0.85 ? ratio : 0
@@ -50,7 +50,7 @@ export function trimContext(
   tokenEstimator: { estimateTokens: (msgs: AgentMessage[]) => number },
 ): AgentMessage[] {
   const safeLimit = Math.floor(contextLimit * 0.85)
-  if (messages.length <= 3) return messages
+  if (messages.length <= 3) {return messages}
 
   // 保留 system prompt
   const systemIdx = messages.findIndex(m => m.role === 'system')
@@ -120,7 +120,7 @@ export function persistConversationHistory(
 ): number {
   try {
     const store = getMemoryStore()
-    if (!store) return lastPersistedIndex
+    if (!store) {return lastPersistedIndex}
     let newIndex = lastPersistedIndex
     for (let i = lastPersistedIndex + 1; i < messages.length; i++) {
       const msg = messages[i]

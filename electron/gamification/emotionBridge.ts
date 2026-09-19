@@ -28,24 +28,24 @@ export const EMOTION_XP_MULTIPLIERS: Record<string, number> = {
 
 export function getEmotionXpMultiplier(): number {
   const m = _currentEmotion.mood
-  if (m <= -0.6) return 0.5
-  if (m <= -0.2) return 0.8
-  if (m <= 0.2) return 1.0
-  if (m <= 0.6) return 1.5
+  if (m <= -0.6) {return 0.5}
+  if (m <= -0.2) {return 0.8}
+  if (m <= 0.2) {return 1.0}
+  if (m <= 0.6) {return 1.5}
   return 2.0
 }
 
 export function getEmotionLabel(): string {
   const m = _currentEmotion.mood
   const e = _currentEmotion.energy
-  if (m <= -0.6 && e < 0.3) return '低落 😔'
-  if (m <= -0.6) return '难过 😢'
-  if (m <= -0.2 && e < 0.3) return '疲惫 😩'
-  if (m <= -0.2) return '闷闷不乐 😕'
-  if (m <= 0.2) return '平静 😐'
-  if (m <= 0.6 && e > 0.7) return '兴奋 🤩'
-  if (m <= 0.6) return '开心 😊'
-  if (e > 0.7) return '超开心 🎉'
+  if (m <= -0.6 && e < 0.3) {return '低落 😔'}
+  if (m <= -0.6) {return '难过 😢'}
+  if (m <= -0.2 && e < 0.3) {return '疲惫 😩'}
+  if (m <= -0.2) {return '闷闷不乐 😕'}
+  if (m <= 0.2) {return '平静 😐'}
+  if (m <= 0.6 && e > 0.7) {return '兴奋 🤩'}
+  if (m <= 0.6) {return '开心 😊'}
+  if (e > 0.7) {return '超开心 🎉'}
   return '幸福 💖'
 }
 

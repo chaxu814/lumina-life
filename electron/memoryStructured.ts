@@ -119,7 +119,7 @@ export class StructuredMemoryManager {
    */
   queryByCategory(category: MemoryCategory, layer?: MemoryLayer): StructuredMemory[] {
     let results = this.memories.filter((m) => m.category === category)
-    if (layer) results = results.filter((m) => m.layer === layer)
+    if (layer) {results = results.filter((m) => m.layer === layer)}
     return this.sortByRelevance(results)
   }
 
@@ -140,13 +140,13 @@ export class StructuredMemoryManager {
     const scored = this.memories.map((m) => {
       let score = 0
       // 内容匹配
-      if (m.content.toLowerCase().includes(lower)) score += 3
+      if (m.content.toLowerCase().includes(lower)) {score += 3}
       // 标签匹配
       for (const tag of m.tags) {
-        if (lower.includes(tag) || tag.includes(lower)) score += 2
+        if (lower.includes(tag) || tag.includes(lower)) {score += 2}
       }
       // 类别匹配
-      if (m.category.toLowerCase().includes(lower)) score += 1
+      if (m.category.toLowerCase().includes(lower)) {score += 1}
       // 重要性加权
       score *= m.importance * m.decayWeight
       return { memory: m, score }
@@ -186,7 +186,7 @@ export class StructuredMemoryManager {
    */
   buildAgentContextInjection(agentId: string): string {
     const memories = this.getContextForAgent(agentId, 5)
-    if (memories.length === 0) return ''
+    if (memories.length === 0) {return ''}
 
     const personal = memories.filter((m) => m.layer === 'personal')
     const team = memories.filter((m) => m.layer === 'team')
@@ -305,7 +305,7 @@ export class StructuredMemoryManager {
    */
   reinforce(memoryId: string): boolean {
     const memory = this.memories.find((m) => m.id === memoryId)
-    if (!memory) return false
+    if (!memory) {return false}
     memory.decayWeight = Math.min(1, memory.decayWeight + 0.1)
     memory.lastAccessedAt = Date.now()
     memory.accessCount++
@@ -344,7 +344,7 @@ export class StructuredMemoryManager {
 let _structuredMemory: StructuredMemoryManager | null = null
 
 export function getStructuredMemory(): StructuredMemoryManager {
-  if (!_structuredMemory) _structuredMemory = new StructuredMemoryManager()
+  if (!_structuredMemory) {_structuredMemory = new StructuredMemoryManager()}
   return _structuredMemory
 }
 

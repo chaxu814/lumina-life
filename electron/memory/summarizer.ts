@@ -220,7 +220,7 @@ export class ConversationSummarizer {
    * 将压缩上下文生成为可注入 System Prompt 的文本
    */
   formatCompactedForSystemPrompt(): string {
-    if (!this.compacted) return ''
+    if (!this.compacted) {return ''}
 
     const c = this.compacted
     const parts: string[] = ['# 之前对话的摘要\n以下是你与用户之前对话的结构化摘要：']
@@ -374,8 +374,8 @@ export class GlobalMemoryRefiner {
     memory?: { lessons?: string[]; systemInfo?: string[]; projectConventions?: string[]; toolExperience?: string[] }
   }): void {
     try {
-      if (result.user) getMemoryStore().saveUserProfile(result.user)
-      if (result.memory) getMemoryStore().saveMemoryConfig(result.memory)
+      if (result.user) {getMemoryStore().saveUserProfile(result.user)}
+      if (result.memory) {getMemoryStore().saveMemoryConfig(result.memory)}
     } catch { /* ignore */ }
   }
 
@@ -423,9 +423,9 @@ export class GlobalMemoryRefiner {
     bigFive?: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; playfulness: number }
   }): void {
     try {
-      if (persona.bigFive) getMemoryStore().savePersonaTraits(persona.bigFive)
-      if (persona.traits) getMemoryStore().addPersonaTraits(persona.traits)
-      if (persona.traitChange) getMemoryStore().addEvolutionLog(persona.traitChange)
+      if (persona.bigFive) {getMemoryStore().savePersonaTraits(persona.bigFive)}
+      if (persona.traits) {getMemoryStore().addPersonaTraits(persona.traits)}
+      if (persona.traitChange) {getMemoryStore().addEvolutionLog(persona.traitChange)}
     } catch { /* ignore */ }
   }
 }

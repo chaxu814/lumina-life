@@ -24,10 +24,10 @@ const PATTERNS: Array<[RegExp, string]> = [
 ]
 
 export function destructiveReason(text: string | undefined | null): string | null {
-  if (!text) return null
+  if (!text) {return null}
   const s = String(text)
   for (const [re, label] of PATTERNS) {
-    if (re.test(s)) return `检测到高危/不可逆操作（${label}），已硬拦截`
+    if (re.test(s)) {return `检测到高危/不可逆操作（${label}），已硬拦截`}
   }
   return null
 }

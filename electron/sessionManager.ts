@@ -24,7 +24,7 @@ import type { AgentMessage } from './tools/types'
 
 /** 将 AgentMessage content 安全转为字符串 */
 function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') return content
+  if (typeof content === 'string') {return content}
   if (Array.isArray(content)) {
     return content.map(part => part.text || '').join('')
   }
@@ -139,11 +139,11 @@ export class SessionManager {
   loadSession(sessionId: string): SessionData | null {
     // 先从内存
     const active = this.activeSessions.get(sessionId)
-    if (active) return active
+    if (active) {return active}
 
     // 从磁盘
     const filePath = this.getSessionPath(sessionId)
-    if (!fs.existsSync(filePath)) return null
+    if (!fs.existsSync(filePath)) {return null}
 
     try {
       const data: SessionData = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
@@ -161,7 +161,7 @@ export class SessionManager {
 
   addMessage(sessionId: string, message: AgentMessage): void {
     const data = this.activeSessions.get(sessionId)
-    if (!data) return
+    if (!data) {return}
 
     data.messages.push(message)
     data.meta.messageCount = data.messages.length
@@ -181,7 +181,7 @@ export class SessionManager {
 
   addTokens(sessionId: string, tokens: number): void {
     const data = this.activeSessions.get(sessionId)
-    if (!data) return
+    if (!data) {return}
 
     data.meta.totalTokens += tokens
     this.updateMeta(sessionId, { totalTokens: data.meta.totalTokens })
@@ -191,7 +191,7 @@ export class SessionManager {
 
   saveCompactedContext(sessionId: string, context: string): void {
     const data = this.activeSessions.get(sessionId)
-    if (!data) return
+    if (!data) {return}
 
     data.compactedContext = context
     data.meta.summary = context.slice(0, 200)
@@ -204,10 +204,10 @@ export class SessionManager {
 
   getCompactedContext(sessionId: string): string | null {
     const data = this.activeSessions.get(sessionId)
-    if (data?.compactedContext) return data.compactedContext
+    if (data?.compactedContext) {return data.compactedContext}
     // 从磁盘加载
     const filePath = this.getSessionPath(sessionId)
-    if (!fs.existsSync(filePath)) return null
+    if (!fs.existsSync(filePath)) {return null}
     try {
       const data: SessionData = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
       return data.compactedContext || null
@@ -230,7 +230,7 @@ export class SessionManager {
 
   getCompactedContextForInjection(sessionId: string): string | null {
     const data = this.activeSessions.get(sessionId)
-    if (data?.compactedContext) return data.compactedContext
+    if (data?.compactedContext) {return data.compactedContext}
     return null
   }
 
@@ -261,7 +261,7 @@ export class SessionManager {
 
   completeSession(sessionId: string): void {
     const data = this.activeSessions.get(sessionId)
-    if (!data) return
+    if (!data) {return}
 
     data.meta.completed = true
     this.updateMeta(sessionId, { completed: true })
@@ -387,7 +387,7 @@ export class SessionManager {
 
   exportSession(sessionId: string, format: 'json' | 'markdown' = 'json'): string | null {
     const data = this.loadSession(sessionId)
-    if (!data) return null
+    if (!data) {return null}
 
     if (format === 'markdown') {
       const lines: string[] = [

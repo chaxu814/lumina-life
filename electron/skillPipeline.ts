@@ -27,14 +27,14 @@ export class SkillPipeline {
   }
 
   async discover(): Promise<SkillDefinition[]> {
-    if (!fs.existsSync(this.skillsDir)) return []
+    if (!fs.existsSync(this.skillsDir)) {return []}
     const entries = fs.readdirSync(this.skillsDir, { withFileTypes: true })
     const discovered: SkillDefinition[] = []
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory()) {continue}
       const skillDir = path.join(this.skillsDir, entry.name)
       const skillMdPath = path.join(skillDir, 'SKILL.md')
-      if (!fs.existsSync(skillMdPath)) continue
+      if (!fs.existsSync(skillMdPath)) {continue}
       try {
         const skill = this._parseSkill(skillDir, skillMdPath, entry.name)
         if (skill) { this.skills.set(skill.id, skill); discovered.push(skill) }
@@ -45,9 +45,9 @@ export class SkillPipeline {
     return discovered
   }
 
-  enable(id: string): boolean { if (!this.skills.has(id)) return false; this.activeSkillIds.add(id); return true }
+  enable(id: string): boolean { if (!this.skills.has(id)) {return false;} this.activeSkillIds.add(id); return true }
   disable(id: string): boolean { return this.activeSkillIds.delete(id) }
-  enableAll(ids: string[]): void { ids.forEach(id => { if (this.skills.has(id)) this.activeSkillIds.add(id) }) }
+  enableAll(ids: string[]): void { ids.forEach(id => { if (this.skills.has(id)) {this.activeSkillIds.add(id)} }) }
 
   matchSkills(userInput: string): SkillDefinition[] {
     const lower = userInput.toLowerCase()
@@ -61,15 +61,15 @@ export class SkillPipeline {
   }
 
   getSkillPrompt(userInput?: string): string {
-    if (this.activeSkillIds.size === 0) return ''
+    if (this.activeSkillIds.size === 0) {return ''}
     const relevant = userInput ? this.matchSkills(userInput) : this.getEnabledSkills()
-    if (relevant.length === 0) return ''
+    if (relevant.length === 0) {return ''}
     const parts: string[] = ['## Agent Skills']
     parts.push('Each skill has a SKILL.md file. If you want to use a skill, read its SKILL.md first.')
     for (const s of relevant) {
       parts.push(`### ${s.name}`)
       parts.push(s.description)
-      if (s.workflowGuidance) parts.push(s.workflowGuidance)
+      if (s.workflowGuidance) {parts.push(s.workflowGuidance)}
       parts.push(`Check "${s.sourcePath}/SKILL.md" for details.`)
     }
     return parts.join('\n')
@@ -83,7 +83,7 @@ export class SkillPipeline {
   getEnabledTools(): string[] {
     const tools: string[] = []
     for (const id of this.activeSkillIds) {
-      const s = this.skills.get(id); if (s) tools.push(...s.tools)
+      const s = this.skills.get(id); if (s) {tools.push(...s.tools)}
     }
     return [...new Set(tools)]
   }
@@ -98,7 +98,7 @@ export class SkillPipeline {
         for (const line of fm.split('\n')) {
           const ci = line.indexOf(':')
           if (ci > 0) { const k = line.slice(0, ci).trim(), v = line.slice(ci + 1).trim()
-            if (k === 'description') desc = v; if (k === 'version') version = v }
+            if (k === 'description') {desc = v;} if (k === 'version') {version = v} }
         }
       }
     }
@@ -112,10 +112,10 @@ export class SkillPipeline {
   private _extractTriggers(content: string, dirName: string): string[] {
     const triggers = [dirName.toLowerCase()]
     const m = content.match(/(?:Triggers|触发(?:词|场景))[：:]\s*\n((?:\s*[-*]\s*.+\n?)+)/i)
-    if (m) for (const line of m[1].split('\n')) {
+    if (m) {for (const line of m[1].split('\n')) {
       const c = line.replace(/^\s*[-*]\s*/, '').trim()
-      if (c && !c.startsWith('//')) triggers.push(c.toLowerCase())
-    }
+      if (c && !c.startsWith('//')) {triggers.push(c.toLowerCase())}
+    }}
     return [...new Set(triggers)]
   }
 
@@ -123,7 +123,7 @@ export class SkillPipeline {
     const tools: string[] = []
     const regex = /`([a-z_]+)`/g; let match: RegExpExecArray | null
     while ((match = regex.exec(content)) !== null) {
-      if (match[1].length > 3 && !/^[A-Z]+$/.test(match[1])) tools.push(match[1])
+      if (match[1].length > 3 && !/^[A-Z]+$/.test(match[1])) {tools.push(match[1])}
     }
     return [...new Set(tools)].slice(0, 20)
   }
@@ -131,7 +131,7 @@ export class SkillPipeline {
 
 let _pipeline: SkillPipeline | null = null
 export function getSkillPipeline(skillsDir?: string): SkillPipeline {
-  if (!_pipeline) _pipeline = new SkillPipeline(skillsDir || path.join(process.cwd(), 'skills'))
+  if (!_pipeline) {_pipeline = new SkillPipeline(skillsDir || path.join(process.cwd(), 'skills'))}
   return _pipeline
 }
 export function resetSkillPipeline(): void { _pipeline = null }

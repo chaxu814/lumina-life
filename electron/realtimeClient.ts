@@ -121,7 +121,7 @@ export class RealtimeClient extends EventEmitter {
           clearTimeout(timeout)
           console.error('[RealtimeClient] 连接错误:', err)
           this.emit('realtime', { type: 'error', data: err } as RealtimeEvent)
-          if (!this.connected) reject(err)
+          if (!this.connected) {reject(err)}
         })
 
         this.ws.on('close', (code) => {
@@ -137,7 +137,7 @@ export class RealtimeClient extends EventEmitter {
   }
 
   disconnect(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    if (this.reconnectTimer) {clearTimeout(this.reconnectTimer)}
     this.reconnectAttempts = this.maxReconnectAttempts // 阻止重连
     if (this.ws) {
       this.ws.close()
@@ -147,14 +147,14 @@ export class RealtimeClient extends EventEmitter {
   }
 
   private tryReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts || !this.config) return
+    if (this.reconnectAttempts >= this.maxReconnectAttempts || !this.config) {return}
 
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000)
     this.reconnectAttempts++
 
     console.log(`[RealtimeClient] ${delay / 1000}s 后重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
     this.reconnectTimer = setTimeout(() => {
-      if (this.config) this.connect(this.config).catch(() => {})
+      if (this.config) {this.connect(this.config).catch(() => {})}
     }, delay)
   }
 

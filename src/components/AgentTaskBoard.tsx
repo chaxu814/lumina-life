@@ -23,11 +23,11 @@ export default function AgentTaskBoard() {
     const now = Date.now()
     const safeTime = (ts: unknown): number => {
       if (typeof ts === 'number' && !isNaN(ts) && ts > 0) {
-        if (ts < 1e11) return ts * 1000  // 秒级时间戳
+        if (ts < 1e11) {return ts * 1000}  // 秒级时间戳
         return ts
       }
-      if (ts instanceof Date) { const t = ts.getTime(); if (!isNaN(t) && t > 0) return t }
-      if (typeof ts === 'string') { const t = new Date(ts).getTime(); if (!isNaN(t) && t > 0) return t }
+      if (ts instanceof Date) { const t = ts.getTime(); if (!isNaN(t) && t > 0) {return t} }
+      if (typeof ts === 'string') { const t = new Date(ts).getTime(); if (!isNaN(t) && t > 0) {return t} }
       return now
     }
     const fmtTime = (ts: number) => {
@@ -152,7 +152,7 @@ export default function AgentTaskBoard() {
   const allTasks = useMemo(() => {
     const combined = [...realTasks]
     for (const t of llmTasks) {
-      if (!combined.find(x => x.id === t.id)) combined.push(t)
+      if (!combined.find(x => x.id === t.id)) {combined.push(t)}
     }
     return combined
   }, [realTasks, llmTasks])
@@ -170,23 +170,23 @@ export default function AgentTaskBoard() {
   /** 计算下次执行的可读文本 */
   const nextRunText = (loop: typeof loopTasks[0]): string => {
     const status = loop.status
-    if (status === 'paused') return '⏸ 已暂停'
-    if (status === 'done') return '⏹ 已停止'
-    if (status === 'configuring' || status === 'reviewing') return '⏳ 待确认'
+    if (status === 'paused') {return '⏸ 已暂停'}
+    if (status === 'done') {return '⏹ 已停止'}
+    if (status === 'configuring' || status === 'reviewing') {return '⏳ 待确认'}
     // running — 找第一个 enabled 触发器估算
     const trg = loop.triggers.find(t => t.enabled)
-    if (!trg) return '—'
-    if (trg.type === 'message') return '💬 由消息触发'
-    if (trg.type === 'api_event') return '📡 由事件触发'
+    if (!trg) {return '—'}
+    if (trg.type === 'message') {return '💬 由消息触发'}
+    if (trg.type === 'api_event') {return '📡 由事件触发'}
     const intervalMs = trg.type === 'interval' ? (trg.config?.intervalMs || 0) : 0
     const schedule = trg.type === 'cron' ? String(trg.config?.schedule || '') : ''
     const lastRun = loop.lastRunAt || loop.createdAt
     if (intervalMs > 0 && lastRun) {
       const next = new Date(lastRun + intervalMs)
       const diffMs = next.getTime() - Date.now()
-      if (diffMs <= 0) return '🟢 立即可触发'
+      if (diffMs <= 0) {return '🟢 立即可触发'}
       const mins = Math.round(diffMs / 60000)
-      if (mins < 60) return `${mins}分钟后`
+      if (mins < 60) {return `${mins}分钟后`}
       return `${(mins / 60).toFixed(1)}小时后`
     }
     if (schedule) {
@@ -197,7 +197,7 @@ export default function AgentTaskBoard() {
         if (cronMatches(schedule, t)) {
           const diffMs = t.getTime() - Date.now()
           const mins = Math.round(diffMs / 60000)
-          if (mins < 60) return `${mins}分钟后`
+          if (mins < 60) {return `${mins}分钟后`}
           return `${(mins / 60).toFixed(1)}小时后`
         }
       }
@@ -207,7 +207,7 @@ export default function AgentTaskBoard() {
   }
 
   const fmtLoopTime = (ts?: number) => {
-    if (!ts) return '—'
+    if (!ts) {return '—'}
     return new Date(ts).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 

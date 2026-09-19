@@ -81,9 +81,9 @@ const SKIP_PREFIXES = [
 
 function isSkippableDir(dirPath: string): boolean {
   const normalized = path.normalize(dirPath).toUpperCase()
-  if (SKIP_DIRS.has(normalized)) return true
+  if (SKIP_DIRS.has(normalized)) {return true}
   for (const prefix of SKIP_PREFIXES) {
-    if (normalized.startsWith(prefix.toUpperCase())) return true
+    if (normalized.startsWith(prefix.toUpperCase())) {return true}
   }
   return false
 }
@@ -108,8 +108,8 @@ function execAsync(cmd: string, opts: child_process.ExecOptions = {}): Promise<s
       maxBuffer: 10 * 1024 * 1024,
       ...opts,
     }, (error, stdout) => {
-      if (error) reject(error)
-      else resolve(stdout as string)
+      if (error) {reject(error)}
+      else {resolve(stdout as string)}
     })
   })
 }
@@ -146,7 +146,7 @@ async function searchWithPowerShell(
     )
 
     const lines = output.split('\n').filter(l => l.trim())
-    if (lines.length < 2) return results // 只有 header 或空
+    if (lines.length < 2) {return results} // 只有 header 或空
 
     const header = lines[0]
     const headerCols = header.split(',')
@@ -160,15 +160,15 @@ async function searchWithPowerShell(
     for (let i = 1; i < lines.length && results.length < maxResults; i++) {
       const cols = lines[i].split(',')
       const fullPath = cols[fullNameIdx]?.replace(/^"|"$/g, '')
-      if (!fullPath) continue
+      if (!fullPath) {continue}
 
       const normalizedPath = path.normalize(fullPath)
 
       // 跳过系统保护目录
-      if (isSkippableDir(normalizedPath)) continue
+      if (isSkippableDir(normalizedPath)) {continue}
 
       // 跳过隐藏目录（node_modules, .git 等）
-      if (!includeHidden && isNodeInternal(normalizedPath)) continue
+      if (!includeHidden && isNodeInternal(normalizedPath)) {continue}
 
       const isDir = cols[containerIdx]?.includes('True') || false
       const size = parseInt(cols[lengthIdx]?.replace(/^"|"$/g, '') || '0') || 0
@@ -190,7 +190,7 @@ async function searchWithPowerShell(
 function isNodeInternal(filePath: string): boolean {
   const parts = filePath.split(path.sep)
   for (const p of parts) {
-    if (p === 'node_modules' || p === '.git' || p === '__pycache__' || p === '.venv') return true
+    if (p === 'node_modules' || p === '.git' || p === '__pycache__' || p === '.venv') {return true}
   }
   return false
 }
@@ -216,8 +216,8 @@ async function searchWithNodeJs(
   }
 
   async function walk(dir: string, depth: number) {
-    if (results.length >= maxResults || depth > maxDepth) return
-    if (isSkippableDir(dir)) return
+    if (results.length >= maxResults || depth > maxDepth) {return}
+    if (isSkippableDir(dir)) {return}
 
     let entries: fs.Dirent[]
     try {
@@ -227,15 +227,15 @@ async function searchWithNodeJs(
     }
 
     for (const entry of entries) {
-      if (results.length >= maxResults) break
+      if (results.length >= maxResults) {break}
 
       // 隐藏文件过滤
-      if (!includeHidden && entry.name.startsWith('.')) continue
+      if (!includeHidden && entry.name.startsWith('.')) {continue}
 
       const fullPath = path.join(dir, entry.name)
 
       if (entry.isDirectory()) {
-        if (!includeHidden && isNodeInternal(fullPath)) continue
+        if (!includeHidden && isNodeInternal(fullPath)) {continue}
 
         if (searchType === 'all' || searchType === 'dir') {
           if (matchesPattern(entry.name)) {
@@ -298,7 +298,7 @@ async function getAllDriveRoots(): Promise<string[]> {
       const root = `${String.fromCharCode(code)}:\\`
       try {
         const st = await fs.promises.stat(root)
-        if (st.isDirectory()) roots.push(root)
+        if (st.isDirectory()) {roots.push(root)}
       } catch {}
     }
   }
@@ -339,7 +339,7 @@ export async function fileSearch(args: Record<string, any>): Promise<ToolResult>
 
     // 逐个盘搜索
     for (const root of searchRoots) {
-      if (allResults.length >= maxResults) break
+      if (allResults.length >= maxResults) {break}
 
       const rootStart = Date.now()
       let rootResults: SearchResult[]
@@ -385,7 +385,7 @@ export async function fileSearch(args: Record<string, any>): Promise<ToolResult>
     const grouped = new Map<string, SearchResult[]>()
     for (const r of allResults) {
       const drive = r.fullPath.substring(0, 2)
-      if (!grouped.has(drive)) grouped.set(drive, [])
+      if (!grouped.has(drive)) {grouped.set(drive, [])}
       grouped.get(drive)!.push(r)
     }
 
@@ -418,8 +418,8 @@ export async function fileSearch(args: Record<string, any>): Promise<ToolResult>
 }
 
 function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+  if (bytes < 1024) {return `${bytes}B`}
+  if (bytes < 1024 * 1024) {return `${(bytes / 1024).toFixed(1)}KB`}
+  if (bytes < 1024 * 1024 * 1024) {return `${(bytes / 1024 / 1024).toFixed(1)}MB`}
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}GB`
 }

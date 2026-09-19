@@ -50,17 +50,17 @@ class DiagnosticsStore {
 
   addToken(ev: TokenEvent): void {
     this.tokenEvents.push(ev)
-    if (this.tokenEvents.length > this.maxEvents) this.tokenEvents.shift()
+    if (this.tokenEvents.length > this.maxEvents) {this.tokenEvents.shift()}
   }
 
   addToolCall(ev: ToolCallEvent): void {
     this.toolCallEvents.push(ev)
-    if (this.toolCallEvents.length > this.maxEvents) this.toolCallEvents.shift()
+    if (this.toolCallEvents.length > this.maxEvents) {this.toolCallEvents.shift()}
   }
 
   addError(ev: LLMErrorEvent): void {
     this.errorEvents.push(ev)
-    if (this.errorEvents.length > this.maxEvents) this.errorEvents.shift()
+    if (this.errorEvents.length > this.maxEvents) {this.errorEvents.shift()}
   }
 
   getSummary(): DiagnosticsSummary {
@@ -187,12 +187,12 @@ export function registerDiagnosticsIpc(mainWindow: BrowserWindow): void {
     const buckets = new Map<string, { count: number; totalMs: number; maxMs: number }>()
     for (const e of store.tokenEvents) {
       const t = new Date(e.timestamp).getTime()
-      if (t < cutoff) continue
+      if (t < cutoff) {continue}
       const key = new Date(t).toISOString().slice(0, 16) // YYYY-MM-DDTHH:mm
       const b = buckets.get(key) || { count: 0, totalMs: 0, maxMs: 0 }
       b.count++
       b.totalMs += e.durationMs
-      if (e.durationMs > b.maxMs) b.maxMs = e.durationMs
+      if (e.durationMs > b.maxMs) {b.maxMs = e.durationMs}
       buckets.set(key, b)
     }
 

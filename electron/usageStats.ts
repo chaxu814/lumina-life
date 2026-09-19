@@ -145,7 +145,7 @@ class UsageStats {
 
   /** 启动自动保存（每 60s） */
   start(): void {
-    if (this.saveTimer) return
+    if (this.saveTimer) {return}
     // 每 60 秒保存一次，同时结算当前模式时长
     this.saveTimer = setInterval(() => {
       this.flushModeDuration()
@@ -168,7 +168,7 @@ class UsageStats {
   flushModeDuration(): void {
     const now = Date.now()
     const elapsedMin = (now - this.currentModeSince) / 60000
-    if (elapsedMin < 0.1) return // 不足 6 秒不计
+    if (elapsedMin < 0.1) {return} // 不足 6 秒不计
 
     const stats = this.getTodayStats()
     stats.modeDuration[this.currentMode] = (stats.modeDuration[this.currentMode] || 0) + elapsedMin

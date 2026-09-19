@@ -74,7 +74,7 @@ export default function ChatInputBar({
       setSttStatus({ listening: true, engine: 'web-speech', engineLabel: 'Web Speech', retryCount: 0 })
       sttService.setCallbacks(
         (text: string) => { const cur = typeof input === 'function' ? (input as any)() : input; setInput(cur + text) },
-        (s: STTStatus) => { setSttStatus(s); if (!s.listening) setSttListening(false) },
+        (s: STTStatus) => { setSttStatus(s); if (!s.listening) {setSttListening(false)} },
       )
       await sttService.start()
     } catch (e) {
@@ -308,7 +308,7 @@ export default function ChatInputBar({
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                         {group.emojis.map((emoji, ei) => {
-                          if (emoji === 'x') return <div key={ei} style={{ width: 30, height: 30 }} />
+                          if (emoji === 'x') {return <div key={ei} style={{ width: 30, height: 30 }} />}
                           return (
                             <button key={ei}
                               onClick={() => {

@@ -137,7 +137,7 @@ export default function FamilyTreePanel() {
           <div style={{ display: 'flex', gap: 40, marginTop: 8 }}>
             {['recha', 'yak'].map(id => {
               const a = findById(id)
-              if (!a) return null
+              if (!a) {return null}
               const isSelected = selectedAgent === id
               return (
                 <div key={id} onClick={() => setSelectedAgent(id)} style={{

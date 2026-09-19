@@ -35,7 +35,7 @@ export const FILLER_PATTERNS: RegExp[] = [
  * 剥离模型回复末尾的填充性废话
  */
 export function stripFillerText(text: string): string {
-  if (!text || text.length < 5) return text
+  if (!text || text.length < 5) {return text}
   let cleaned = text
   for (const pattern of FILLER_PATTERNS) {
     cleaned = cleaned.replace(pattern, '')
@@ -61,7 +61,7 @@ export const META_COMMENTARY_PATTERNS: RegExp[] = [
 ]
 
 export function stripMetaCommentary(text: string): string {
-  if (!text) return text
+  if (!text) {return text}
   // 🆕 fix-稳定生成: 先把合法的团队身份声明保护起来，避免被误杀
   const identityPlaceholders: string[] = []
   const LEGACY_IDENTITY_PATTERNS: RegExp[] = [
@@ -105,7 +105,7 @@ export const LEAKED_PATTERNS: RegExp[] = [
 ]
 
 export function stripLeakedOutput(text: string): string {
-  if (!text || text.length < 5) return text
+  if (!text || text.length < 5) {return text}
   let cleaned = text
   for (const pattern of LEAKED_PATTERNS) {
     cleaned = cleaned.replace(pattern, '')
@@ -129,10 +129,10 @@ export function normalizeDedupeKey(text: string): string {
 export function similarityRatio(a: string, b: string): number {
   const A = new Set([...a])
   const B = new Set([...b])
-  if (A.size === 0 || B.size === 0) return 0
+  if (A.size === 0 || B.size === 0) {return 0}
   let overlap = 0
   for (const ch of A) {
-    if (B.has(ch)) overlap++
+    if (B.has(ch)) {overlap++}
   }
   return overlap / Math.max(A.size, B.size)
 }
@@ -167,7 +167,7 @@ export function safeStripChain(
   text: string,
   ...fns: Array<(t: string) => string>
 ): string {
-  if (!text) return text
+  if (!text) {return text}
   const original = text
   let current = text
   for (const fn of fns) {
@@ -199,7 +199,7 @@ export function safeStripChain(
 }
 
 export function stripRepeatedBlocks(text: string): string {
-  if (!text || text.length < 30) return text
+  if (!text || text.length < 30) {return text}
 
   const normalized = text.replace(/\r\n/g, '\n')
   const blocks = normalized.split(/\n{1,}/).map(b => b.trim()).filter(Boolean)
@@ -224,7 +224,7 @@ export function stripRepeatedBlocks(text: string): string {
   }
 
   const cleaned = result.join('\n').replace(/\n{3,}/g, '\n\n').trim()
-  if (dropped === 0) return text
+  if (dropped === 0) {return text}
   return cleaned.length >= text.length * 0.35 ? cleaned : text
 }
 
@@ -233,7 +233,7 @@ export function stripRepeatedBlocks(text: string): string {
 // ═══════════════════════════════════════════════════════════
 
 export function isEmojiOnly(text: string): boolean {
-  if (!text) return false
+  if (!text) {return false}
   const trimmed = text.trim()
   const withoutEmoji = trimmed
     .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')  // Misc Symbols, Emoticons, etc.

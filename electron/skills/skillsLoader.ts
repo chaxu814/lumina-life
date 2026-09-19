@@ -44,7 +44,7 @@ function extractToolNames(md: string): string[] {
   const tools: string[] = []
   // 匹配 Markdown 表格行: | tool_name | 描述 |
   const tableRowRegex = /^\|\s*(`[^`]+`|\w+)\s*\|/gm
-  let inTable = false
+  const inTable = false
   let inCodeBlock = false
   const lines = md.split('\n')
 
@@ -56,7 +56,7 @@ function extractToolNames(md: string): string[] {
       inCodeBlock = !inCodeBlock
       continue
     }
-    if (inCodeBlock) continue
+    if (inCodeBlock) {continue}
 
     // 检测表格区域（以 | 开头且包含 --- 的行是表头分隔）
     if (line.trim().startsWith('|') && line.includes('---')) {

@@ -102,8 +102,8 @@ function hasXmlToolCall(text: string): boolean {
 
 /** 清理文本中的 XML 工具调用标记 */
 function cleanXmlToolCalls(text: string): string {
-  if (!text) return text
-  let cleaned = text
+  if (!text) {return text}
+  const cleaned = text
     .replace(/<tool_call>[\s\S]*?<\/tool_call>\s*/gi, '')  // 移除完整 <tool_call> 块
     .replace(/<tool_call>\s*/gi, '')                       // [fix] 容错未闭合 <tool_call> 开标签（仅删标签，保留正文）
     .replace(/<\w+\s*\([^)]*\)\s*>\s*/gi, '')              // [fix] 容错 <tool(...)> 括号参数风格（含可选 >）
@@ -128,7 +128,7 @@ async function tryExecuteXmlToolCall(
   // [fix] 括号参数风格兜底：<web_search(query="...", engine="...")>（兼容未闭合）
   if (!match) {
     const paren = text.match(/<tool_call>[\s\S]*?<(\w+)\s*\(([^)]*)\)/i) || text.match(/<(\w+)\s*\(([^)]*)\)/i)
-    if (paren) match = paren as any
+    if (paren) {match = paren as any}
   }
   // 增加 JSON 参数格式兜底：<tool_call><tool_name>xxx</tool_name><tool_args>JSON</tool_args></tool_call>
   if (!match) {
@@ -203,7 +203,7 @@ async function tryExecuteXmlToolCall(
       }
     }
   }
-  if (!match) return false
+  if (!match) {return false}
 
   const toolName = match[1]     // e.g. "web_search"
   const paramsBlock = match[2]  // e.g. 'query="本周五 A 股"\nmax_results=10'
@@ -218,7 +218,7 @@ async function tryExecuteXmlToolCall(
   // 处理 search_depth → 不传给 webSearch
   delete args.search_depth
 
-  if (Object.keys(args).length === 0) return false
+  if (Object.keys(args).length === 0) {return false}
 
   console.log(`[ReActEngine] 🔄 检测到 XML 工具调用: ${toolName}(${JSON.stringify(args)})，尝试执行...`)
 
@@ -306,7 +306,7 @@ export class ReActEngine {
     let slowSummarizeInjected = false
 
     for (let round = 0; round < maxRounds; round++) {
-      if (this.abortController?.signal.aborted) break
+      if (this.abortController?.signal.aborted) {break}
 
       this.emit?.onThinking?.(`思考中... (第 ${round + 1} 轮)`)
 
@@ -440,7 +440,7 @@ export class ReActEngine {
           }
           // 执行失败 → 至少清理标记
           replyText = cleanXmlToolCalls(replyText)
-          if (!replyText) continue // 清空后跳到空回复处理
+          if (!replyText) {continue} // 清空后跳到空回复处理
         }
 
         if (replyText) {
@@ -611,7 +611,7 @@ export class ReActEngine {
     toolCalls: LLMResponse['toolCalls'],
     messages: ReactMessage[],
   ): Promise<void> {
-    if (!toolCalls) return
+    if (!toolCalls) {return}
 
     if (toolCalls.length === 1) {
       const tc = toolCalls[0]
@@ -741,7 +741,7 @@ export class ReActEngine {
         }
         allowedCalls.push(tc)
       }
-      if (allowedCalls.length === 0) return
+      if (allowedCalls.length === 0) {return}
 
       const batches = groupParallelBatches(allowedCalls)
       for (const batch of batches) {

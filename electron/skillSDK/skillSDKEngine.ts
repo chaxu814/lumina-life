@@ -141,7 +141,7 @@ const SKILL_MANIFEST_TEMPLATE = `{
 
 function getSDKDir(): string {
   const baseDir = path.join(app.getPath('userData'), 'skill-sdk')
-  if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true })
+  if (!fs.existsSync(baseDir)) {fs.mkdirSync(baseDir, { recursive: true })}
   return baseDir
 }
 
@@ -201,12 +201,12 @@ export function generateSkillTemplate(params: {
 export function exportSkillToDisk(skillDir: string, files: Record<string, string>): boolean {
   try {
     const basePath = path.join(getSDKDir(), skillDir)
-    if (!fs.existsSync(basePath)) fs.mkdirSync(basePath, { recursive: true })
+    if (!fs.existsSync(basePath)) {fs.mkdirSync(basePath, { recursive: true })}
 
     Object.entries(files).forEach(([filePath, content]) => {
       const fullPath = path.join(basePath, filePath)
       const dir = path.dirname(fullPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
       fs.writeFileSync(fullPath, content, 'utf-8')
     })
 

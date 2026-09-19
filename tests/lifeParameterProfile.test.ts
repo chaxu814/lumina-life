@@ -39,7 +39,7 @@ describe('parameterProfile 参数发现', () => {
   })
 
   it('Mao 完整映射覆盖全部标准通道', () => {
-    for (const ch of STANDARD_CHANNELS) expect(MAO_CHANNEL_MAP[ch]).toBeTruthy()
+    for (const ch of STANDARD_CHANNELS) {expect(MAO_CHANNEL_MAP[ch]).toBeTruthy()}
   })
 
   it('非对象/空 cdi3 不崩溃', () => {

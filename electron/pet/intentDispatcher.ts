@@ -45,7 +45,7 @@ let lifeStateLoaded = false
 
 /** 首次使用时从磁盘恢复内驱力/情绪（离线期间按冷落时长推进，重启不失忆） */
 function ensureLifeStateLoaded(): void {
-  if (lifeStateLoaded) return
+  if (lifeStateLoaded) {return}
   lifeStateLoaded = true
   try {
     const saved = loadLifeState()
@@ -79,10 +79,10 @@ export function initPetLifeState(): void {
       // 即时变更仍在 advanceDrives 里立刻 scheduleLifeStateSave。
       lifeStateTimer = setInterval(() => {
         try {
-          if (lifeStateLoaded) scheduleLifeStateSave(petDrives, petEmotion.get(), interactionCount)
+          if (lifeStateLoaded) {scheduleLifeStateSave(petDrives, petEmotion.get(), interactionCount)}
         } catch { /* noop */ }
       }, 60000)
-      if (typeof (lifeStateTimer as any)?.unref === 'function') (lifeStateTimer as any).unref()
+      if (typeof (lifeStateTimer as any)?.unref === 'function') {(lifeStateTimer as any).unref()}
     }
   } catch { /* 不影响主链路 */ }
 }
@@ -100,7 +100,7 @@ function petMemorySnippet(query?: string): string {
       budget: { persona: 4, facts: 6, reflection: 2, recent: 2, working: 3 },
       maxLineLen: 70,
     })
-    if (recall.prompt) return recall.prompt
+    if (recall.prompt) {return recall.prompt}
     // 极端情况下五层门面失败，退回旧桥
     return buildPetMemoryContext(store, { maxFacts: 6, maxSummaries: 2 }).snippet
   } catch { return '' }
@@ -165,19 +165,19 @@ const PERFORMANCE_GUIDE = `（可选）你还可以给 "performance" 字段做�
 function lifeContextBlock(opts?: { urge?: boolean; query?: string }): string {
   const parts: string[] = []
   const mem = petMemorySnippet(opts?.query)
-  if (mem) parts.push(mem)
+  if (mem) {parts.push(mem)}
   parts.push(`你此刻的情绪是「${currentMoodLabel()}」，请保持情绪连贯，不要无理由突变。`)
-  if (opts?.urge) { const u = driveUrgeHint(); if (u) parts.push(u) }
+  if (opts?.urge) { const u = driveUrgeHint(); if (u) {parts.push(u)} }
   parts.push(PERFORMANCE_GUIDE)
   return '\n' + parts.join('\n')
 }
 
 /** 出口前清洗表演指令：非法/越界字段直接丢弃，绝不让不可信结构到达渲染层 */
 function sanitizePerformance(intent: PetIntent): void {
-  if (intent.performance === undefined) return
+  if (intent.performance === undefined) {return}
   const cmd = safePerformance(intent.performance)
-  if (cmd) intent.performance = cmd
-  else delete intent.performance
+  if (cmd) {intent.performance = cmd}
+  else {delete intent.performance}
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -287,7 +287,7 @@ const LOCAL_RULES: Array<{ test: RegExp; intent: PetIntent }> = [
 
 function localIntent(text: string): PetIntent {
   for (const r of LOCAL_RULES) {
-    if (r.test.test(text)) return { ...r.intent }
+    if (r.test.test(text)) {return { ...r.intent }}
   }
   const pool: PetIntent[] = [
     { action: 'blink', mood: '开心 😊', speech: '喵~' },
@@ -302,18 +302,18 @@ function localIntent(text: string): PetIntent {
 // ═══════════════════════════════════════════════════════════
 
 function parseIntentJson(raw: string): PetIntent | null {
-  if (!raw) return null
+  if (!raw) {return null}
   // 1. 直接解析
   try {
     const obj = JSON.parse(raw.trim())
-    if (obj && typeof obj.action === 'string') return obj as PetIntent
+    if (obj && typeof obj.action === 'string') {return obj as PetIntent}
   } catch { /* 继续 */ }
   // 2. 提取第一个 {...}
   const m = raw.match(/\{[\s\S]*?\}/)
   if (m) {
     try {
       const obj = JSON.parse(m[0])
-      if (obj && typeof obj.action === 'string') return obj as PetIntent
+      if (obj && typeof obj.action === 'string') {return obj as PetIntent}
     } catch { /* 放弃 */ }
   }
   return null
@@ -327,7 +327,7 @@ function parseIntentJson(raw: string): PetIntent | null {
 const recentIntents: Array<{ action: string; speech?: string; ts: number }> = []
 export function dispatchIntent(intent: PetIntent): boolean {
   recentIntents.push({ action: intent.action, speech: intent.speech, ts: Date.now() })
-  if (recentIntents.length > 6) recentIntents.shift()
+  if (recentIntents.length > 6) {recentIntents.shift()}
   // 连续情绪融合：LLM 逐帧离散 mood 经平滑后再下发，避免上一句笑下一句哭的硬切
   if (intent.mood) { intent.mood = petEmotion.next(intent.mood).label; persistLifeState() }
   sanitizePerformance(intent) // v0.2：表演 DSL 白名单清洗
@@ -430,7 +430,7 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
   const text = (userText || '').trim()
   advanceDrives('chat')
   try { getProactiveOrchestrator().noteUserInteraction() } catch { /* 编排器未就绪 */ }
-  if (!text) return { ok: false, text: '', source: 'fallback', error: '空输入' }
+  if (!text) {return { ok: false, text: '', source: 'fallback', error: '空输入' }}
   try {
     const cfg = resolvePetBrainConfig()
     if (!cfg) {
@@ -439,7 +439,7 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
     const provider = createPetLLM(cfg)
     const ctx: string[] = []
     const mem = petMemorySnippet(text)
-    if (mem) ctx.push(mem)
+    if (mem) {ctx.push(mem)}
     ctx.push(`你此刻的情绪是「${currentMoodLabel()}」，保持情绪连贯，不要无理由突变。`)
     const tone = PERSONA_TONES[getPetPrefs().persona || ''] || ''
     const sys = VOICE_SYSTEM_PROMPT + (tone ? `\n${tone}` : '') + '\n' + ctx.join('\n')
@@ -454,11 +454,11 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
       maxTokens: 220,
     } as any)
     const reply = (res?.text || '').trim()
-    if (!reply) return { ok: false, text: '', source: 'fallback', error: 'LLM 空回复' }
+    if (!reply) {return { ok: false, text: '', source: 'fallback', error: 'LLM 空回复' }}
     // 写入滚动上下文
     voiceHistory.push({ role: 'user', content: text })
     voiceHistory.push({ role: 'assistant', content: reply })
-    while (voiceHistory.length > VOICE_MAX_TURNS * 2) voiceHistory.shift()
+    while (voiceHistory.length > VOICE_MAX_TURNS * 2) {voiceHistory.shift()}
     return { ok: true, text: reply, source: 'llm' }
   } catch (e: any) {
     return { ok: false, text: '', source: 'fallback', error: e?.message || String(e) }
@@ -483,7 +483,7 @@ const AUTONOMY_SYSTEM_PROMPT = `你是 Lumina 桌宠的灵魂（住在用户桌�
 动作要多样化，不要总是重复同一个。`
 
 export async function petAutonomyTick(opts?: { screenshot?: boolean }): Promise<PetChatResult> {
-  if (!isPetEnabled()) return { ok: false, intent: { action: 'idle' }, source: 'fallback', error: 'pet off' }
+  if (!isPetEnabled()) {return { ok: false, intent: { action: 'idle' }, source: 'fallback', error: 'pet off' }}
 
   // v6.1：自主心跳统一走编排器（门控→内心独白→generator→dispatchIntent）。
   // 旧实现：这里直接调 LLM 出 {action,mood,speech} 并截图多模态——
@@ -547,7 +547,7 @@ export function registerPetIntentIpc(): void {
   ipcMain.handle('pet:autonomy:tick', async () => {
     try {
       const level = getPetConfig().auto
-      if (level === 'off') return { ok: true, skipped: true }
+      if (level === 'off') {return { ok: true, skipped: true }}
       return await petAutonomyTick({ screenshot: level === 'heavy' })
     } catch (e: any) {
       return { ok: false, intent: null, source: 'fallback', error: e?.message }
