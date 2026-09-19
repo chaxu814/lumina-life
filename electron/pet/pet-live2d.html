@@ -1398,8 +1398,8 @@ function doThink() {
 function doWave() {
   if (!_canAct()) return;
   markActionBusy(1000);
-  // 尝试播放内置动作
-  playRandomMotion('TapBody');
+  // 模型自带 mtn_03（热情双臂招手）优先；无 TapBody 组时回退，让挥手真的抬手
+  if (!playRandomMotion('TapBody')) playSpecial(1);
   animateParam('ParamBodyAngleZ', 14, 200); animateParam('ParamAngleZ', 10, 200);
   setTimeout(() => { animateParam('ParamBodyAngleZ', -14, 200); animateParam('ParamAngleZ', -8, 200); }, 240);
   setTimeout(() => { animateParam('ParamBodyAngleZ', 12, 200); }, 480);
@@ -1409,8 +1409,8 @@ function doHappy() {
   if (!_canAct()) return;
   markActionBusy(1500);
   applyEmotion('超开心 🎉'); setFace('joy');
-  // 尝试播放内置动作（如果模型有）
-  playRandomMotion('TapBody');
+  // 模型自带 special_01（爱心光环）：无 TapBody 组时回退播放，让开心有原生动作+特效
+  if (!playRandomMotion('TapBody')) playSpecial(3);
   // 连续跳两下
   state.jumpStart = Date.now(); state.jumpEnd = Date.now() + 500;
   setTimeout(() => { state.jumpStart = Date.now(); state.jumpEnd = Date.now() + 500; }, 550);
@@ -1435,8 +1435,8 @@ function doDance() {
   if (!_canAct()) return;
   markActionBusy(2000);
   applyEmotion('超开心 🎉'); setFace('joy');
-  // 尝试播放内置动作
-  playRandomMotion('TapBody');
+  // 模型自带 special_02（爆炸庆祝大动作）：无 TapBody 时回退
+  if (!playRandomMotion('TapBody')) playSpecial(4);
   let count = 0;
   const danceStep = () => {
     if (count >= 4) { animateParam('ParamBodyAngleZ', 0, 300); animateParam('ParamAngleZ', 0, 300); return; }
@@ -1453,8 +1453,8 @@ function doClap() {
   if (!_canAct()) return;
   markActionBusy(1200);
   applyEmotion('开心 😊');
-  // 尝试播放内置拍手动作
-  try { model.motion('TapBody', 0); } catch (e) {}
+  // 模型自带 special_03（光环喝彩）：无 TapBody 组时回退
+  if (!playRandomMotion('TapBody')) playSpecial(5);
   animateParam('ParamAngleZ', 8, 200);
   setTimeout(() => animateParam('ParamAngleZ', -8, 200), 300);
   setTimeout(() => animateParam('ParamAngleZ', 0, 300), 600);
@@ -1540,6 +1540,12 @@ function playRandomMotion(group) {
   const cnt = modelMotions[group];
   if (!cnt) return false;
   return playBuiltinMotion(group, Math.floor(Math.random() * cnt));
+}
+/** 播放模型自带特殊动作（无名组 '' 的指定 index；Mao 实测：3=special_01 爱心光环、4=special_02 爆炸庆祝、5=special_03 光环喝彩）。无该 index 则静默回退 */
+function playSpecial(index) {
+  const cnt = modelMotions[''] || 0;
+  if (!cnt || index >= cnt) return false;
+  return playBuiltinMotion('', index);
 }
 
 /** 启动空闲动作循环（定期播放 Idle 组动作，让模型"活"起来） */

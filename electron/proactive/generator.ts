@@ -37,10 +37,10 @@ export interface ProactiveGenContext {
   unfinishedQuestion?: string | null
 }
 
-const ACTIONS = 'wave/nod/think/sleep/wake/happy/sad/angry/surprised/dance/clap/shake/blink/walk/say/idle'
+export const ACTIONS = 'wave/nod/think/sleep/wake/happy/sad/angry/surprised/dance/clap/shake/blink/walk/say/idle'
 
 /** 可见的大动作集合（区别于只有口型的 say） */
-const VISIBLE_ACTIONS = new Set([
+export const VISIBLE_ACTIONS = new Set([
   'wave', 'nod', 'think', 'sleep', 'wake', 'happy', 'sad', 'angry',
   'surprised', 'dance', 'clap', 'shake', 'walk',
 ])
