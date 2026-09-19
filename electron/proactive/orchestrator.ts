@@ -17,6 +17,10 @@ import { loadLifeState } from '../pet/lifeStateStore'
 import { getScreenGate } from '../pet/lifeServices'
 import { isPetEnabled, getPetLastInteraction } from '../pet/petWindow'
 import { dispatchIntent, type PetIntent } from '../pet/intentDispatcher'
+import { getMemoryStore } from '../memory/memoryStore'
+import { buildLayeredRecall } from '../memory/layeredMemory'
+import { createMemoryStoreAdapter } from '../memory/layeredMemoryAdapter'
+import { buildPetMemoryContext } from '../pet/petMemoryBridge'
 import type { ProactiveEvent, ProactiveDecision } from './types'
 import { BackoffState } from './backoff'
 import { decideGate, type GateInput } from './gate'
@@ -39,6 +43,20 @@ export interface OrchestratorConfig {
   followupTopicsEnabled: boolean
   /** 退避开关 */
   backoffEnabled: boolean
+}
+
+/** 五层记忆召回（人格/事实/反思/近期/工作），与 intentDispatcher.petMemorySnippet 同一套门面；失败安全降级为空串 */
+function buildMemorySnippet(query?: string): string {
+  try {
+    const store = getMemoryStore()
+    const recall = buildLayeredRecall(createMemoryStoreAdapter(store), {
+      query,
+      budget: { persona: 4, facts: 6, reflection: 2, recent: 2, working: 3 },
+      maxLineLen: 70,
+    })
+    if (recall.prompt) return recall.prompt
+    return buildPetMemoryContext(store, { maxFacts: 6, maxSummaries: 2 }).snippet
+  } catch { return '' }
 }
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
@@ -102,6 +120,8 @@ export class ProactiveOrchestrator {
     const drives = life.drives
     const idleMin = Math.max(0, (now - getPetLastInteraction()) / 60000)
     const scene = (event.scene as string) || getScreenGate().scene || 'idle'
+    // 现场记忆召回（五层门面），屏幕场景/外部话题作为检索线索
+    const memorySnippet = buildMemorySnippet(event.screenSummary || event.externalTopics?.[0])
 
     const gateInput: GateInput = {
       hasUnfinishedThread: !!this.threads.peek(),
@@ -139,7 +159,7 @@ export class ProactiveOrchestrator {
           drives,
           mood: life.emotion.label,
           recentEvent: event.screenSummary || (event.externalTopics?.[0] ?? ''),
-          memorySnippet: '',
+          memorySnippet,
         })
       } catch { innerThought = '' }
     }
@@ -155,7 +175,7 @@ export class ProactiveOrchestrator {
       valence: life.emotion.v,
       arousal: life.emotion.a,
       currentMoodLabel: life.emotion.label,
-      memorySnippet: '',
+      memorySnippet,
       recentSpeeches: this.recentSpeeches,
       followups,
       gapMinutes: event.gapMinutes,
