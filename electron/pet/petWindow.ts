@@ -1119,6 +1119,15 @@ export function registerPetIpc(): void {
         return
       }
       win.setShape(valid)
+      try {
+        const b0 = win.getBounds()
+        const sf0 = screen.getDisplayMatching(b0).scaleFactor || 1
+        const r0 = valid[0]
+        const isFull = valid.length === 1 && r0.x === 0 && r0.y === 0 && r0.width >= b0.width * sf0 * 0.98 && r0.height >= b0.height * sf0 * 0.98
+        const wasCompact = (win as any).__shapeCompact === true
+        ;(win as any).__shapeCompact = !isFull
+        if (!isFull && !wasCompact) console.log('[PetWindow] setShape 已生效：窗口物理裁剪到角色区域，后方视频/图片不再被全屏透明层覆盖')
+      } catch { /* 日志失败不影响裁剪 */ }
     } catch (err) {
       console.warn('[PetWindow] set-shape failed:', err)
     }

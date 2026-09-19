@@ -936,7 +936,7 @@ function computeModelAlphaTrim() {
 
 function reportPetShape() {
   try {
-    if (typeof ipcRenderer === "undefined") return
+    if (!ipc) return // 修复：原误用未声明的 ipcRenderer，导致 pet:set-shape 从未上报、全屏透明窗压住后方视频黑屏
     const dpr = window.devicePixelRatio || 1
     const W = innerWidth, H = innerHeight
     const fullRects = () => [{ x: 0, y: 0, width: Math.round(W * dpr), height: Math.round(H * dpr) }]
@@ -993,7 +993,7 @@ function sendPetShape(rects, key) {
     if (key === __shapeLastKey) return
     if (key !== "full" && now - __shapeLastT < 70) return // 紧凑态节流约 14fps，降低 SetWindowRgn 开销
     __shapeLastKey = key; __shapeLastT = now
-    ipcRenderer.send("pet:set-shape", rects)
+    if (ipc) ipc.send("pet:set-shape", rects)
   } catch (e) {}
 }
 function positionOverlays() {
