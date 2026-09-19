@@ -127,6 +127,9 @@ export const BusEvents = {
   PROACTIVE_SEND: 'proactive:send',
   PROACTIVE_MESSAGE: 'proactive:message',
   PROACTIVE_CONFIG: 'proactive:config',
+  // 🧭 统一主动管线（v6.1 N.E.K.O 对齐）：决策/沉默调试日志
+  PROACTIVE_DECISION: 'proactive:decision',
+  PROACTIVE_SILENT: 'proactive:silent',
 
   // 社交引擎事件
   SOCIAL_TRIGGER: 'social:trigger',

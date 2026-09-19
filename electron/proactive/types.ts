@@ -21,6 +21,7 @@ export type ProactiveEventSource =
   | 'drive_hard'      // 内驱力硬顶（social 积压太久）
   | 'unfinished_thread' // 上次她问了问题、用户还没答
   | 'startup'         // 应用启动重逢
+  | 'autonomy_tick'   // 渲染页自主心跳（旧 petAutonomyTick 统一入口）
   | 'external'        // 外部注入（IPC/其他模块主动喂事件）
 
 /** 屏幕场景（与 pet/vision/screenAwareness 的 SceneKind 对齐） */

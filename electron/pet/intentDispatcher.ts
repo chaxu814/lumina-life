@@ -29,6 +29,7 @@ import { createMemoryStoreAdapter } from '../memory/layeredMemoryAdapter'
 import { tickDrives, applyInteraction, behaviorUrges, dominantUrge, DEFAULT_DRIVES, type DriveState, type InteractionKind } from './life/drives'
 import { safePerformance } from './life/performanceDsl'
 import { loadLifeState, scheduleLifeStateSave, saveLifeStateNow } from './lifeStateStore'
+import { getProactiveOrchestrator } from '../proactive/orchestrator'  // 🧭 v6.1 统一主动编排器
 
 // 🫀 连续情绪融合单例：LLM 每帧输出的离散 mood 经此平滑，避免情绪瞬切（详见 emotionFusion.ts）
 const petEmotion = new PetEmotionFusion()
@@ -350,6 +351,7 @@ export function dispatchIntent(intent: PetIntent): boolean {
 export async function petChat(userText: string): Promise<PetChatResult> {
   const text = (userText || '').trim()
   advanceDrives('chat') // v0.2：用户主动说话，满足社交需求
+  try { getProactiveOrchestrator().noteUserInteraction() } catch { /* 编排器未就绪 */ }
   if (!text) {
     const intent = localIntent('你好')
     dispatchIntent(intent)
@@ -427,6 +429,7 @@ export function clearVoiceHistory(): void { voiceHistory.length = 0 }
 export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
   const text = (userText || '').trim()
   advanceDrives('chat')
+  try { getProactiveOrchestrator().noteUserInteraction() } catch { /* 编排器未就绪 */ }
   if (!text) return { ok: false, text: '', source: 'fallback', error: '空输入' }
   try {
     const cfg = resolvePetBrainConfig()
@@ -482,74 +485,39 @@ const AUTONOMY_SYSTEM_PROMPT = `你是 Lumina 桌宠的灵魂（住在用户桌�
 export async function petAutonomyTick(opts?: { screenshot?: boolean }): Promise<PetChatResult> {
   if (!isPetEnabled()) return { ok: false, intent: { action: 'idle' }, source: 'fallback', error: 'pet off' }
 
-  // ── 组装上下文 ─────────────────────────────────
-  const now = new Date()
-  const week = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()]
+  // v6.1：自主心跳统一走编排器（门控→内心独白→generator→dispatchIntent）。
+  // 旧实现：这里直接调 LLM 出 {action,mood,speech} 并截图多模态——
+  // 现在屏幕感知交给 ScreenAwareness.scene，生成交给 generator，
+  // 本函数只负责推进内驱力 + 触发编排器。opts.screenshot 保留为兼容参数（不再截图）。
   const idleMin = Math.round((Date.now() - getPetLastInteraction()) / 60000)
-  const evts = getPetRecentEvents()
-  const recent = evts.length ? evts.map(e => e.type).slice(-8).join(',') : '无'
-  const myRecent = recentIntents.length ? recentIntents.map(i => i.action).join(',') : '无'
   advanceDrives(undefined, idleMin < 2) // v0.2：内驱力随时间/是否被理会自然消长
-  let userContent = `当前：周${week} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}；近期互动：${recent}；距上次互动 ${idleMin} 分钟；你最近做过：${myRecent}（别重复，保持自然连贯）。请决定你的下一个行为。`
 
-  // 重度模式附加屏幕快照（多模态）
-  let images: string[] | undefined
-  if (opts?.screenshot) {
-    try {
-      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 640, height: 360 } })
-      if (sources[0]) images = [sources[0].thumbnail.toDataURL()]
-    } catch { /* 截屏失败不影响决策 */ }
-  }
-
-  // ── 尝试 LLM ──────────────────────────────────
   try {
-    const cfg = resolvePetBrainConfig()
-    if (cfg) {
-      const provider = createPetLLM(cfg)
-      const sysContent = AUTONOMY_SYSTEM_PROMPT + (PERSONA_TONES[getPetPrefs().persona || ''] || '') + lifeContextBlock({ urge: true, query: userContent })
-      let res = await provider.call({
-        messages: [
-          { role: 'system', content: sysContent },
-          { role: 'user', content: userContent, images },
-        ],
-        temperature: 1.0,
-        maxTokens: 150,
-      } as any)
-      let intent = parseIntentJson(res?.text || '')
-      // 带截图调用失败（纯文本模型）→ 去掉图片，仅凭时间/互动历史再决策一次
-      if (!intent && images && images.length) {
-        try {
-          res = await provider.call({
-            messages: [
-              { role: 'system', content: sysContent },
-              { role: 'user', content: userContent + '（你看不到屏幕，请只根据时间和互动历史决定行为）' },
-            ],
-            temperature: 1.0, maxTokens: 150,
-          } as any)
-          intent = parseIntentJson(res?.text || '')
-        } catch { /* 继续降级 */ }
-      }
-      if (intent) {
-        dispatchIntent(intent)
-        return { ok: true, intent, source: 'llm' }
+    const decision = await getProactiveOrchestrator().onTrigger({
+      source: 'autonomy_tick',
+      gapMinutes: idleMin,
+    })
+    if (decision.shouldSpeak) {
+      return {
+        ok: true,
+        intent: { action: decision.action || 'say', mood: decision.mood, speech: decision.speech },
+        source: 'llm',
       }
     }
+    // 本轮被门控/LLM 判定沉默：做个无害小动作保证活着
+    dispatchIntent({ action: 'idle' })
+    return { ok: true, intent: { action: 'idle' }, source: 'fallback', error: decision.reason }
   } catch (e: any) {
-    console.warn('[IntentDispatcher] 自主心跳 LLM 失败:', e?.message || e)
+    console.warn('[IntentDispatcher] 自主心跳走编排器失败，本地兜底:', e?.message || e)
+    const pool: PetIntent[] = [
+      { action: 'walk', dir: Math.random() < 0.5 ? -1 : 1 },
+      { action: 'blink' },
+      { action: 'idle' },
+    ]
+    const intent = pool[Math.floor(Math.random() * pool.length)]
+    dispatchIntent(intent)
+    return { ok: true, intent, source: 'fallback' }
   }
-
-  // ── 降级：本地随机行为（保证活着）──────────────
-  const pool: PetIntent[] = [
-    { action: 'walk', dir: Math.random() < 0.5 ? -1 : 1 },
-    { action: 'blink' },
-    { action: 'wave', speech: '喵~' },
-    { action: 'say', speech: '尾巴摇啊摇~' },
-    { action: 'think' },
-    { action: 'idle' },
-  ]
-  const intent = Math.random() < 0.85 ? urgeToLocalIntent() : pool[Math.floor(Math.random() * pool.length)]
-  dispatchIntent(intent)
-  return { ok: true, intent, source: 'fallback' }
 }
 
 // ═══════════════════════════════════════════════════════════

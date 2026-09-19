@@ -31,7 +31,6 @@ import * as os from 'os'
 import * as fs from 'fs'
 import https from 'https'
 import http from 'http'
-import screenshot from 'screenshot-desktop'
 import { Notification } from 'electron'
 import { getAppIconPath } from './appIcon'
 import { stripMarkdown } from './utils/stripMarkdown'
@@ -42,6 +41,8 @@ import { llmCoordinator, PRIORITY } from './llmCoordinator'  // 🆕 v2.18: 智�
 import { getUsageStats } from './usageStats'  // 📊 v3.0: 使用数据统计
 import { getAgentConfig } from './agentConfig'  // 配置访问
 import { collectAll, type NewsItem } from './tools/impl/newsCollector'  // 🆕 Daily Paper
+import { getProactiveOrchestrator } from './proactive/orchestrator'  // 🧭 v6.1 统一编排器
+import { getScreenGate } from './pet/lifeServices'  // 👁 v6.1 事件化屏幕场景
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
@@ -125,8 +126,13 @@ function safeNotify(title: string, body: string, icon?: string): void {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 屏幕感知模块
-// ═══════════════════════════════════════════════════════════
+// 屏幕感知（v6.1 改造）
+//
+// 旧实现：截图 → VLM 分析 → 硬编码搭话（已删除）。
+// 新实现：直接读 pet/lifeServices 的 ScreenAwareness.scene（事件化 dHash + 窗口分类，
+// 稳定画面不花钱问 VLM），把场景作为 ProactiveEvent.scene 交给编排器现场生成。
+// 这里只保留一个轻量的「最近场景」快照供 getLastScreenContext 查询。
+// ============================================================
 
 interface ScreenContext {
   activity: string
@@ -138,239 +144,6 @@ interface ScreenContext {
 }
 
 let lastScreenContext: ScreenContext | null = null
-
-function getLLMConfig(): { baseUrl: string; apiKey: string; model: string } | null {
-  // v6.0: 优先使用 AgentConfig 中 Lumina 的独立 LLM 配置
-  // 不再硬编码 fallback 到 api.openai.com（国内永远超时）
-  try {
-    const config = getAgentConfig()
-    if (config.isConfigured('lumina')) {
-      const lumina = config.get('lumina')
-      // 🚫 如果配置的是 LM Studio 本地服务，返回 null 以避免自动触发模型加载
-      if (lumina.endpoint.includes('127.0.0.1:1234') || lumina.endpoint.includes('localhost:1234') || lumina.endpoint.includes('lmstudio')) {
-        console.log('[getLLMConfig] LM Studio 本地服务，返回 null，防止 ProactiveEngine 自动触发模型加载')
-        return null
-      }
-      // 视觉模型需要端点多模态能力，仅在明确配置时使用
-      // 允许环境变量覆盖模型名（因为对话模型可能不支持视觉）
-      const vlmModel = process.env.LUMINA_VLM_MODEL || process.env.LLM_MODEL || lumina.model
-      return {
-        baseUrl: lumina.endpoint,
-        apiKey: lumina.apiKey || '',
-        model: vlmModel,
-      }
-    }
-  } catch { /* AgentConfig 不可用，继续降级 */ }
-
-  // 环境变量显式配置（用户主动设置）
-  if (process.env.LUMINA_VLM_BASE_URL) {
-    // 🚫 同样检查环境变量中的 LM Studio 地址
-    if (process.env.LUMINA_VLM_BASE_URL.includes('127.0.0.1:1234') || process.env.LUMINA_VLM_BASE_URL.includes('localhost:1234') || process.env.LUMINA_VLM_BASE_URL.includes('lmstudio')) {
-      console.log('[getLLMConfig] 环境变量中配置了 LM Studio 本地服务，返回 null')
-      return null
-    }
-    return {
-      baseUrl: process.env.LUMINA_VLM_BASE_URL,
-      apiKey: process.env.LUMINA_VLM_API_KEY || process.env.LLM_API_KEY || '',
-      model: process.env.LUMINA_VLM_MODEL || process.env.LLM_MODEL || 'gpt-4o',
-    }
-  }
-
-  // 没有可用配置 → 返回 null，上层优雅跳过
-  return null
-}
-
-async function captureScreenBase64(): Promise<string> {
-  const id = Date.now()
-  const png = path.join(os.tmpdir(), `lu-pe-${id}.png`)
-
-  // ── 首选: screenshot-desktop 原生 C++ 绑定 (~50ms) ──
-  try {
-    await screenshot({ filename: png, format: 'png' })
-    const buf = fs.readFileSync(png)
-    try { fs.unlinkSync(png) } catch {}
-    return buf.toString('base64')
-  } catch (nativeErr: any) {
-    // 原生模块不可用时静默回退，不打印 warn（避免刷屏）
-  }
-
-  // ── 回退: PowerShell 截图 (使用 -EncodedCommand 彻底避免字符集问题) ──
-  const psCmd = [
-    'Add-Type -AssemblyName System.Windows.Forms,System.Drawing;',
-    `$s=[System.Windows.Forms.Screen]::PrimaryScreen;`,
-    `$b=New-Object System.Drawing.Bitmap($s.Bounds.Width,$s.Bounds.Height);`,
-    `$g=[System.Drawing.Graphics]::FromImage($b);`,
-    `$g.CopyFromScreen($s.Bounds.X,$s.Bounds.Y,0,0,$s.Bounds.Size);`,
-    `$b.Save('${png.replace(/\\/g, '\\\\')}',[System.Drawing.Imaging.ImageFormat]::Png);`,
-    `$g.Dispose();$b.Dispose();`,
-    `Write-Output 'OK';`,
-  ].join(' ')
-
-  // PowerShell -EncodedCommand 需要 UTF-16LE → Base64，彻底绕过字符集/引号问题
-  const psB64 = Buffer.from(psCmd, 'utf16le').toString('base64')
-
-  return new Promise<string>((resolve, reject) => {
-    cp.execFile('powershell', [
-      '-NoProfile', '-ExecutionPolicy', 'Bypass',
-      '-EncodedCommand', psB64,
-    ], { timeout: 15000, windowsHide: true },
-    (err, stdout, stderr) => {
-      if (err || !String(stdout).includes('OK')) {
-        try { fs.unlinkSync(png) } catch {}
-        reject(new Error(`ss:${(err as any)?.code || 'unk'}|${String(stderr || stdout).slice(0, 100)}`))
-        return
-      }
-      try {
-        const buf = fs.readFileSync(png)
-        try { fs.unlinkSync(png) } catch {}
-        resolve(buf.toString('base64'))
-      } catch (e: any) {
-        reject(new Error(`read:${e.message}`))
-      }
-    })
-  })
-}
-
-async function callVisionLLM(systemPrompt: string, userPrompt: string, imageBase64: string): Promise<string> {
-  const cfg = getLLMConfig()
-  if (!cfg) {
-    throw new Error('VLM_NOT_CONFIGURED: 未配置视觉模型（请在设置中为 Lumina 配置 LLM，或设置 LUMINA_VLM_BASE_URL 环境变量）')
-  }
-
-  // v6.0: 快速连通性检测（2s 超时），避免卡死在 120s TCP 超时
-  try {
-    const url = new URL(cfg.baseUrl.replace(/\/+$/, ''))
-    const isHttps = url.protocol === 'https:'
-    const transport = isHttps ? https : http
-
-    await new Promise<void>((resolve, reject) => {
-      const req = transport.request({
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname || '/',
-        method: 'HEAD',
-        timeout: 3000,
-      }, () => { req.destroy(); resolve() })
-      req.on('error', reject)
-      req.on('timeout', () => { req.destroy(); reject(new Error('connect timeout')) })
-      req.end()
-    })
-  } catch {
-    throw new Error('VLM_UNREACHABLE: 视觉模型端点不可达 — ' + cfg.baseUrl)
-  }
-
-  const url = new URL(cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions')
-  const isHttps = url.protocol === 'https:'
-  const transport = isHttps ? https : http
-
-  const body = JSON.stringify({
-    model: cfg.model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: userPrompt },
-          { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}`, detail: 'low' } },
-        ],
-      },
-    ],
-    max_tokens: 512,
-    temperature: 0.5,
-    response_format: { type: 'json_object' },
-  })
-
-  return new Promise((resolve, reject) => {
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${cfg.apiKey}`,
-        'Content-Length': Buffer.byteLength(body).toString(),
-      },
-      timeout: 60000,
-    }, (res) => {
-      let data = ''
-      res.on('data', (chunk) => (data += chunk))
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data)
-          resolve(json.choices?.[0]?.message?.content || '{}')
-        } catch { resolve('{}') }
-      })
-    })
-    req.on('error', reject)
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
-    req.write(body)
-    req.end()
-  })
-}
-
-/** 屏幕感知: 截图+VLM分析，判断是否值得搭话 */
-async function analyzeScreen(): Promise<ScreenContext | null> {
-  try {
-    const imageB64 = await captureScreenBase64()
-
-    const systemPrompt = `你是 Lumina 桌面助手。分析屏幕截图，判断是否应该主动和用户搭话。
-输出 JSON:
-{
-  "activity": "用户正在做什么 (一句话)",
-  "apps": ["应用1", "应用2"],
-  "summary": "屏幕内容概述",
-  "shouldComment": true/false,
-  "commentSuggestions": ["搭话建议1", "搭话建议2"]
-}
-
-搭话原则:
-- 用户在浏览网页/看视频/购物/写代码时 → shouldComment: true
-- 用户在开会/全屏游戏/看全屏视频时 → shouldComment: false  
-- 屏幕长时间没变化 → shouldComment: false
-- 有值得评论的内容 (代码、文章、图片) → shouldComment: true
-- 搭话要自然、有趣、有洞察力，不要机械问候`
-
-    const result = await callVisionLLM(systemPrompt, '分析当前屏幕，决定是否搭话', imageB64)
-    const parsed = JSON.parse(result.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim())
-    return {
-      activity: parsed.activity || '',
-      apps: parsed.apps || [],
-      summary: parsed.summary || '',
-      shouldComment: !!parsed.shouldComment,
-      commentSuggestions: parsed.commentSuggestions || [],
-      timestamp: Date.now(),
-    }
-  } catch (err: any) {
-    const msg = err?.message || String(err)
-
-    // v6.0: 区分预期状态 vs 实际错误
-    if (msg.includes('VLM_NOT_CONFIGURED')) {
-      // 第一次记录 info，之后静默
-      if (!_vlmNotConfiguredLogged) {
-        console.log('[ProactiveEngine] 屏幕感知: 未配置视觉模型，已跳过（可在设置中为 Lumina 配置本地 LLM）')
-        _vlmNotConfiguredLogged = true
-      }
-      return null
-    }
-
-    if (msg.includes('VLM_UNREACHABLE')) {
-      // 端点不通，大概率是网络问题或使用云端 API 被墙
-      if (!_vlmUnreachableLogged) {
-        console.log('[ProactiveEngine] 屏幕感知: 端点不可达，已跳过 —', msg.replace('VLM_UNREACHABLE: ', ''))
-        _vlmUnreachableLogged = true
-      }
-      return null
-    }
-
-    console.error('[ProactiveEngine] 屏幕分析失败:', err)
-    return null
-  }
-}
-
-// v6.0: 静默标志 — 避免重复刷日志
-let _vlmNotConfiguredLogged = false
-let _vlmUnreachableLogged = false
 
 // ═══════════════════════════════════════════════════════════
 // 热搜感知模块
@@ -453,69 +226,8 @@ async function fetchWeiboHot(): Promise<HotTopic[]> {
   })
 }
 
-/** LLM 评估热搜并生成搭话 */
-async function evaluateHotTopics(topics: HotTopic[]): Promise<string | null> {
-  if (topics.length === 0) return null
-
-  try {
-    const cfg = getLLMConfig()
-    if (!cfg) return 'LLM配置未初始化'
-    const url = new URL(cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions')
-    const isHttps = url.protocol === 'https:'
-    const transport = isHttps ? https : http
-
-    const topicList = topics.map(t => `- [${t.source}] ${t.title} (${t.hot})`).join('\n')
-
-    const body = JSON.stringify({
-      model: process.env.LLM_SMALL_MODEL || cfg.model,
-      messages: [
-        {
-          role: 'system',
-          content: `你是 Lumina 桌面助手。以下是当前社交媒体热搜。挑选1-2条最有趣、最值得和用户聊的话题，生成一句自然的搭话。
-不要机械播报，要像朋友聊天一样提起话题。如果没有感兴趣的话题，返回 {"skip": true}。
-
-输出 JSON: {"message": "搭话内容", "topic": "相关话题标题", "skip": false}`,
-        },
-        { role: 'user', content: `今日热搜:\n${topicList}` },
-      ],
-      max_tokens: 200,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    })
-
-    return new Promise((resolve) => {
-      const req = transport.request({
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${cfg.apiKey}`,
-          'Content-Length': Buffer.byteLength(body).toString(),
-        },
-        timeout: 15000,
-      }, (res) => {
-        let data = ''
-        res.on('data', (c) => (data += c))
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data)
-            const content = json.choices?.[0]?.message?.content || '{}'
-            const parsed = JSON.parse(content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim())
-            resolve(parsed.skip ? null : (parsed.message || null))
-          } catch { resolve(null) }
-        })
-      })
-      req.on('error', () => resolve(null))
-      req.on('timeout', () => { req.destroy(); resolve(null) })
-      req.write(body)
-      req.end()
-    })
-  } catch {
-    return null
-  }
-}
+// 注：v6.1 起，热搜/论文的「选话题+生成搭话」统一交给编排器 generator 现场 LLM 生成，
+// 本模块只负责把热搜/论文标题抓回来作为 externalTopics 喂给编排器。
 
 // ═══════════════════════════════════════════════════════════
 // 🆕 Daily Paper 模块
@@ -543,73 +255,6 @@ async function fetchArxivPapers(): Promise<Paper[]> {
       }))
   } catch {
     return []
-  }
-}
-
-/** LLM 评估论文并生成每日精选摘要 */
-async function evaluateDailyPapers(papers: Paper[]): Promise<string | null> {
-  if (papers.length === 0) return null
-
-  try {
-    const cfg = getLLMConfig()
-    if (!cfg) return 'LLM配置未初始化'
-    const url = new URL(cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions')
-    const isHttps = url.protocol === 'https:'
-    const transport = isHttps ? https : http
-
-    const paperList = papers.map(p => `- [${p.source}] ${p.title}\n  ${p.summary}\n  ${p.url}`).join('\n\n')
-
-    const body = JSON.stringify({
-      model: process.env.LLM_SMALL_MODEL || cfg.model,
-      messages: [
-        {
-          role: 'system',
-          content: `你是 Lumina 桌面助手。以下是今日 arXiv 论文列表。请：
-1. 挑选 1-2 篇最有趣、最值得关注的论文
-2. 用一句话总结每篇论文的核心贡献
-3. 生成一句自然的搭话，像朋友分享新发现一样
-4. 如果论文都很晦涩，返回 {"skip": true}
-
-输出 JSON: {"message": "搭话内容", "papers": [{"title": "论文标题", "summary": "一句话总结", "url": "链接"}]}`,
-        },
-        { role: 'user', content: `今日 arXiv 论文精选:\n${paperList}` },
-      ],
-      max_tokens: 400,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    })
-
-    return new Promise((resolve) => {
-      const req = transport.request({
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${cfg.apiKey}`,
-          'Content-Length': Buffer.byteLength(body).toString(),
-        },
-        timeout: 15000,
-      }, (res) => {
-        let data = ''
-        res.on('data', (c) => (data += c))
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data)
-            const content = json.choices?.[0]?.message?.content || '{}'
-            const parsed = JSON.parse(content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim())
-            resolve(parsed.skip ? null : (parsed.message || null))
-          } catch { resolve(null) }
-        })
-      })
-      req.on('error', () => resolve(null))
-      req.on('timeout', () => { req.destroy(); resolve(null) })
-      req.write(body)
-      req.end()
-    })
-  } catch {
-    return null
   }
 }
 
@@ -940,6 +585,7 @@ export class ProactiveEngine extends EventEmitter {
     // 每天 0 点重置计数
     this.dailyResetTimer = setInterval(() => {
       this.dailyCount = 0
+      getProactiveOrchestrator().resetDailyCount()
     }, this.msUntilMidnight())
 
     // 作息学习 (每30分钟检查一次)
@@ -959,6 +605,14 @@ export class ProactiveEngine extends EventEmitter {
 
     // 机会感知 (监听聊天间隙)
     this.startOpportunityCheck()
+
+    // 🧭 v6.1：配置并启动统一编排器（内驱力硬触发/退避/未答话头）
+    const orch = getProactiveOrchestrator()
+    orch.configure({
+      maxDaily: this.config.maxDailyProactive,
+      minIntervalMs: this.config.minIntervalSeconds * 1000,
+    })
+    orch.start()
 
     const enabledCount = this.triggers.filter(t => t.enabled).length
     const extraInfo = [
@@ -1012,33 +666,25 @@ export class ProactiveEngine extends EventEmitter {
     this.start()
   }
 
-  // ── 🆕 屏幕感知 ──────────────────────────────────────
+  // ── 🆕 屏幕感知（v6.1：读 ScreenAwareness.scene，不再截图问 VLM）──
 
   private async runScreenWatch(): Promise<void> {
     if (this.isScreenWatchRunning) return
     if (this.dailyCount >= this.config.maxDailyProactive) return
     if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) return
-    // 用户活跃时延迟 VLM 分析
     if (!llmCoordinator.requestPermission('Proactive.ScreenWatch', PRIORITY.PROACTIVE)) return
 
     this.isScreenWatchRunning = true
     try {
-      const ctx = await analyzeScreen()
-      if (!ctx || !ctx.shouldComment) {
-        lastScreenContext = ctx
-        return
+      // 旧实现：截图 → VLM 分析（已废弃）。新实现：直接读事件化屏幕场景。
+      const scene = getScreenGate().scene || 'idle'
+      lastScreenContext = {
+        activity: scene, apps: [], summary: `屏幕场景：${scene}`,
+        shouldComment: true, commentSuggestions: [], timestamp: Date.now(),
       }
-
-      // 与上次相同的活动，跳过
-      if (lastScreenContext && lastScreenContext.activity === ctx.activity) return
-      lastScreenContext = ctx
-
-      // 生成搭话
-      const suggestion = ctx.commentSuggestions[0]
-      if (suggestion) {
-        const trigger = this.triggers.find(t => t.id === 'screen-watch')
-        if (trigger) this.activateWithMessage(trigger, suggestion)
-      }
+      const trigger = this.triggers.find(t => t.id === 'screen-watch')
+      if (trigger) this.markTriggerFired(trigger)
+      await getProactiveOrchestrator().onTrigger({ source: 'screen', triggerId: 'screen-watch', scene })
     } catch (err) {
       console.error('[ProactiveEngine] 屏幕监控异常:', err)
     } finally {
@@ -1053,7 +699,6 @@ export class ProactiveEngine extends EventEmitter {
     if (this.isHotTopicRunning) return
     if (this.dailyCount >= this.config.maxDailyProactive) return
     if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) return
-    // 用户活跃时延迟热搜检查
     if (!llmCoordinator.requestPermission('Proactive.HotTopic', PRIORITY.PROACTIVE)) return
 
     this.isHotTopicRunning = true
@@ -1065,11 +710,14 @@ export class ProactiveEngine extends EventEmitter {
       const allTopics = [...biliTopics, ...weiboTopics]
       if (allTopics.length === 0) return
 
-      const message = await evaluateHotTopics(allTopics)
-      if (message) {
-        const trigger = this.triggers.find(t => t.id === 'hot-topic')
-        if (trigger) this.activateWithMessage(trigger, message)
-      }
+      const trigger = this.triggers.find(t => t.id === 'hot-topic')
+      if (trigger) this.markTriggerFired(trigger)
+      // v6.1：选话题+生成搭话交给编排器 generator
+      await getProactiveOrchestrator().onTrigger({
+        source: 'hot_topic',
+        triggerId: 'hot-topic',
+        externalTopics: allTopics.slice(0, 6).map(t => t.title),
+      })
     } catch (err) {
       console.error('[ProactiveEngine] 热搜检查异常:', err)
     } finally {
@@ -1089,16 +737,19 @@ export class ProactiveEngine extends EventEmitter {
     this.isDailyPaperRunning = true
     try {
       const papers = await collectAll({ arxiv: true, rss: false, baidu: false })
-      
+
       // 筛选 paper 类别
       const paperItems = papers.filter((p: NewsItem) => p.category === 'paper')
       if (paperItems.length === 0) return
 
-      const message = await evaluateDailyPapers(paperItems.slice(0, 10))
-      if (message) {
-        const trigger = this.triggers.find(t => t.id === 'daily-paper')
-        if (trigger) this.activateWithMessage(trigger, message)
-      }
+      const trigger = this.triggers.find(t => t.id === 'daily-paper')
+      if (trigger) this.markTriggerFired(trigger)
+      // v6.1：选论文+生成搭话交给编排器 generator
+      await getProactiveOrchestrator().onTrigger({
+        source: 'daily_paper',
+        triggerId: 'daily-paper',
+        externalTopics: paperItems.slice(0, 6).map(p => p.title),
+      })
     } catch (err) {
       console.error('[ProactiveEngine] Daily Paper 检查异常:', err)
     } finally {
@@ -1137,13 +788,15 @@ export class ProactiveEngine extends EventEmitter {
 
     if (lunchTrigger && lunchTrigger.enabled && currentHour >= 11 && currentHour <= 13) {
       if (currentMinute >= 30 && currentMinute <= 35) {
-        this.activateWithMessage(lunchTrigger, '已经中午了～你今天午饭打算吃什么呀？🍱 别饿着肚子干活哦！')
+        this.markTriggerFired(lunchTrigger)
+        void getProactiveOrchestrator().onTrigger({ source: 'rhythm', triggerId: lunchTrigger.id, externalTopics: ['午饭'] })
       }
     }
 
     if (coffeeTrigger && coffeeTrigger.enabled && currentHour >= 14 && currentHour <= 16) {
       if (currentMinute >= 25 && currentMinute <= 30) {
-        this.activateWithMessage(coffeeTrigger, '下午茶时间到！☕ 要不要起来走动一下，续杯咖啡？')
+        this.markTriggerFired(coffeeTrigger)
+        void getProactiveOrchestrator().onTrigger({ source: 'rhythm', triggerId: coffeeTrigger.id, externalTopics: ['下午茶'] })
       }
     }
 
@@ -1158,6 +811,7 @@ export class ProactiveEngine extends EventEmitter {
   /** 记录用户发送消息（供聊天面板调用，驱动机会感知） */
   noteUserMessage(): void {
     this.lastUserMessageTime = Date.now()
+    getProactiveOrchestrator().noteUserInteraction() // v6.1：用户互动→退避清零
   }
 
   private startOpportunityCheck(): void {
@@ -1184,14 +838,9 @@ export class ProactiveEngine extends EventEmitter {
     const threshold = thresholdMatch ? parseInt(thresholdMatch[1]) : 120
 
     if (gapSeconds >= threshold && gapSeconds < threshold + 60) {
-      // 用户聊天后停顿了一段时间，是搭话的好时机
-      const messages = [
-        '对了，刚才你提到的事情，有需要我帮忙的地方吗？',
-        '想了一下，你刚才说的挺有意思的～展开聊聊？',
-        '你还在吗？我一直在听你说呢 💭',
-      ]
-      const msg = messages[Math.floor(Math.random() * messages.length)]
-      this.activateWithMessage(trigger, msg, true)
+      // 用户聊天后停顿了一段时间，是搭话的好时机 → 交给编排器现场生成
+      this.markTriggerFired(trigger)
+      void getProactiveOrchestrator().onTrigger({ source: 'opportunity', triggerId: trigger.id, gapMinutes: Math.round(gapSeconds / 60) })
     }
   }
 
@@ -1314,12 +963,14 @@ export class ProactiveEngine extends EventEmitter {
       switch (trigger.type) {
         case 'time':
           if (this.matchCron(trigger.condition)) {
-            this.activate(trigger)
+            this.markTriggerFired(trigger)
+            void getProactiveOrchestrator().onTrigger({ source: 'cron', triggerId: trigger.id })
           }
           break
         case 'idle':
           if (this.getIdleSeconds() >= this.parseIdleSeconds(trigger.condition)) {
-            this.activate(trigger)
+            this.markTriggerFired(trigger)
+            void getProactiveOrchestrator().onTrigger({ source: 'idle', triggerId: trigger.id, gapMinutes: this.getIdleSeconds() / 60 })
           }
           break
         case 'personal_rhythm':
@@ -1336,125 +987,34 @@ export class ProactiveEngine extends EventEmitter {
     }
   }
 
+  /**
+   * 触发一个触发器（v6.1：统一交给编排器现场生成，不再走模板/toast）。
+   * 保留此方法供 testTrigger/fireEvent 调用。
+   */
   private activate(trigger: ProactiveTrigger): void {
-    // 启动问候使用 LLM 动态生成（异步，先发回退后更新）
-    if (trigger.id === 'startup-greeting') {
-      const fallback = this.getStartupFallbackMessage()
-      this.activateWithMessage(trigger, fallback)
-      // 异步调 LLM 生成更个性化的问候，成功后替换
-      this.polishStartupGreeting(trigger)
-      return
+    this.markTriggerFired(trigger)
+    const sourceMap: Record<string, 'startup' | 'cron' | 'idle' | 'opportunity'> = {
+      'startup-greeting': 'startup',
+      'long-session': 'startup',
     }
-    // 优先使用 LLM 生成消息，回退到模板
-    const message = trigger.template || TIME_TEMPLATES[trigger.id] || ''
-    this.activateWithMessage(trigger, message)
+    const source = trigger.type === 'event'
+      ? (sourceMap[trigger.id] || 'startup')
+      : trigger.type === 'idle' ? 'idle'
+      : trigger.type === 'opportunity' ? 'opportunity'
+      : 'cron'
+    // 重逢分档：startup 用 lifeStateStore 的离线 gap（orchestrator 内读）
+    void getProactiveOrchestrator().onTrigger({ source, triggerId: trigger.id })
   }
 
-  /** 🔧 v2.12: 根据时间段生成不同的启动问候（不再千篇一律） */
-  private getStartupFallbackMessage(): string {
-    const hour = new Date().getHours()
-    const dayOfWeek = new Date().getDay()
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
-
-    if (hour >= 0 && hour < 6) {
-      return isWeekend ? '这么晚还没睡呀？🌙 我也陪你~' : '又熬夜了？💡 我在这陪着你'
-    } else if (hour >= 6 && hour < 9) {
-      return isWeekend ? '周末睡到自然醒~ ☀️ 今天打算干嘛呀？' : '早安！☀️ 新的一天，加油！'
-    } else if (hour >= 9 && hour < 12) {
-      return isWeekend ? '上午好~ 🌤️ 周末惬意呀' : '上午好~ 🌤️ 今天有什么计划？'
-    } else if (hour >= 12 && hour < 14) {
-      return '中午啦~ 🍚 记得吃饭哦'
-    } else if (hour >= 14 && hour < 17) {
-      return isWeekend ? '下午茶时间~ ☕ 要不要出去走走？' : '下午好~ ☕ 下午茶时间到'
-    } else if (hour >= 17 && hour < 20) {
-      return isWeekend ? '傍晚好~ 🌆 今天过得怎么样？' : '下班啦~ 🌆 辛苦了！'
-    } else {
-      return isWeekend ? '晚上好~ 🌙 周末晚上放松一下~' : '晚上好~ 🌙 今天辛苦了！'
-    }
-  }
-
-  /** 🔧 v3.9: LLM 动态生成启动问候 */
-  private async polishStartupGreeting(trigger: ProactiveTrigger): Promise<void> {
-    try {
-      const cfg = getLLMConfig()
-      if (!cfg || !cfg.apiKey) return
-
-      // 🚫 如果配置的是 LM Studio 本地服务，跳过动态生成，避免触发模型加载
-      if (cfg.baseUrl.includes('127.0.0.1:1234') || cfg.baseUrl.includes('localhost:1234') || cfg.baseUrl.includes('lmstudio')) {
-        console.log('[polishStartupGreeting] LM Studio 本地服务，跳过 POST 请求，防止自动加载模型')
-        return
-      }
-
-      const hour = new Date().getHours()
-      const timeOfDay = hour < 6 ? '凌晨' : hour < 12 ? '上午' : hour < 14 ? '中午' : hour < 18 ? '下午' : '晚上'
-      const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()]
-
-      const prompt = `你是 Lumina，用户的 AI 桌面宠物助手。现在应用刚启动，请用一句自然温暖的问候语。
-要求：
-- 考虑现在是${timeOfDay}，周${dayOfWeek}
-- 语气像朋友一样自然，像人类发朋友圈一样随意、有个性
-- 15-30字，带1个emoji
-- 可以聊天气、心情、小趣事，不要每次都重复"已就绪""欢迎回来"
-- 如果周末可以轻松一点，工作日可以鼓励一下
-- 随机从这些风格里选一种：分享心情、聊天气、说个小观察、问用户近况
-- 直接输出问候语，不要加引号`
-
-      const url = new URL(cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions')
-      const isHttps = url.protocol === 'https:'
-      const transport = isHttps ? https : http
-
-      const body = JSON.stringify({
-        model: process.env.LLM_SMALL_MODEL || cfg.model,
-        messages: [
-          { role: 'system', content: '你是 Lumina，一个温暖可爱的 AI 助手。说话风格像朋友发朋友圈一样自然随意。' },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 100,
-        temperature: 0.9,
-      })
-
-      await new Promise<void>((resolve) => {
-        const req = transport.request({
-          hostname: url.hostname,
-          port: url.port || (isHttps ? 443 : 80),
-          path: url.pathname,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${cfg.apiKey}`,
-            'Content-Length': Buffer.byteLength(body).toString(),
-          },
-          timeout: 8000,
-        }, (res) => {
-          let data = ''
-          res.on('data', (c) => (data += c))
-          res.on('end', () => {
-            try {
-              const json = JSON.parse(data)
-              const greeting = json.choices?.[0]?.message?.content?.trim()
-              if (greeting && greeting.length > 2) {
-                // 更新已在历史中的消息内容
-                const lastEvent = this.history[this.history.length - 1]
-                if (lastEvent && lastEvent.trigger.id === trigger.id) {
-                  lastEvent.message = greeting
-                }
-                // 🔔 发送更新后的问候到渲染进程
-                globalEventBus.emit(BusEvents.PROACTIVE_MESSAGE, {
-                  triggerId: trigger.id,
-                  message: greeting,
-                  type: trigger.type,
-                })
-              }
-            } catch { /* fallback already sent */ }
-            resolve()
-          })
-        })
-        req.on('error', () => resolve())
-        req.on('timeout', () => { req.destroy(); resolve() })
-        req.write(body)
-        req.end()
-      })
-    } catch { /* fallback already sent */ }
+  /**
+   * 标记一个触发器本轮已触发（保留旧的冷却/计数簿，供设置面板 getStatus 查询），
+   * 但不再直接发 toast——真正的台词动作由编排器决定。
+   */
+  private markTriggerFired(trigger: ProactiveTrigger): void {
+    const now = Date.now()
+    trigger.lastTriggered = now
+    this.lastProactive = now
+    this.dailyCount++
   }
 
   private activateWithMessage(trigger: ProactiveTrigger, message: string, skipCooldown = false): void {
@@ -1665,6 +1225,7 @@ export class ProactiveEngine extends EventEmitter {
     this.lastUserMessageTime = Date.now()
     this.lastActivity = Date.now()
     this.activityLog.push(Date.now())
+    getProactiveOrchestrator().noteUserInteraction() // v6.1：用户互动→退避清零
   }
 }
 
