@@ -15,8 +15,10 @@ Lumina Life 非常重视安全问题。如果您发现了安全漏洞，**请不
 
 请通过以下方式之一私下报告：
 
-1. **GitHub Security Advisory（推荐）**：在仓库页面 → Security → Report a vulnerability 提交
-2. **电子邮件**：发布后将在此处补充安全联系邮箱（⚠️ 目前占位，发布前由维护者填写）
+1. **GitHub Security Advisory（推荐，私密）**：在仓库页面 → Security → Report a vulnerability 提交，这是目前唯一的私密报告渠道
+2. **GitHub Discussions**：若问题不涉及未公开漏洞，可在 Discussions 中以「Security」分类公开讨论
+
+> 维护者承诺 24 小时内确认收到报告；若确实需要邮件渠道，可在 Advisory 中向维护者索取。
 
 > 🔑 **API Key 泄漏紧急处置**：如果发现自己的 API Key 被误提交到仓库历史，请立即：
 > 1. 去对应 LLM 提供商后台撤销/轮换该 Key
