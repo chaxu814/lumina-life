@@ -4,8 +4,10 @@
 
 | 版本 | 支持状态 |
 |------|---------|
-| 1.0.x | ✅ 积极维护 |
-| < 1.0 | ❌ 不再支持 |
+| 0.1.x (preview) | ✅ 积极维护 |
+| < 0.1 | ❌ 不再支持 |
+
+> ⚠️ Lumina Life 目前处于 v0.1 preview 阶段，API 和架构可能会有 breaking change。生产环境请谨慎使用。
 
 ## 报告安全漏洞
 
@@ -13,8 +15,13 @@ Lumina Life 非常重视安全问题。如果您发现了安全漏洞，**请不
 
 请通过以下方式之一私下报告：
 
-1. **GitHub Security Advisory**：在仓库页面 → Security → Report a vulnerability 提交
-2. **电子邮件**：**[请在此处填写联系邮箱]**
+1. **GitHub Security Advisory（推荐）**：在仓库页面 → Security → Report a vulnerability 提交
+2. **电子邮件**：发布后将在此处补充安全联系邮箱（⚠️ 目前占位，发布前由维护者填写）
+
+> 🔑 **API Key 泄漏紧急处置**：如果发现自己的 API Key 被误提交到仓库历史，请立即：
+> 1. 去对应 LLM 提供商后台撤销/轮换该 Key
+> 2. 用 GitHub Security Advisory 私下通知维护者
+> 3. 不要在公开 Issue 中粘贴包含 Key 的日志
 
 我们承诺：
 

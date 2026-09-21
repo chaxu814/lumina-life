@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/lumina-life/lumina-life/discussions
+    about: 提问、分享使用技巧、讨论功能设计
+  - name: 📖 文档站
+    url: https://github.com/lumina-life/lumina-life/tree/main/docs
+    about: 查看 ARCHITECTURE / DEVELOPER / FAQ / TROUBLESHOOTING
