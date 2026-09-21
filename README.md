@@ -445,14 +445,16 @@ lumina-life/
 
 | 功能 | 预览 |
 |------|------|
-| 💬 **聊天面板**<br>与 Lumina 日常对话，支持流式输出、情绪显示 | *（即将添加截图）* |
-| 👥 **团队群聊**<br>旁观 Lumina、热茶、Yak 的团队讨论 | *（即将添加截图）* |
-| 🧠 **记忆剧场**<br>浏览你和 Agent 的共同回忆 | *（即将添加截图）* |
-| 😊 **情绪面板**<br>实时查看 Lumina 的情绪状态和亲密度 | *（即将添加截图）* |
-| 🛡️ **安全中心**<br>沙箱模式 + 审批流配置 | *（即将添加截图）* |
+| 💬 **聊天面板**<br>与 Lumina 日常对话，支持流式输出、情绪显示 | ![Chat Panel](docs/images/chat-panel.png) |
+| 🐾 **Live2D 桌宠**<br>桌面上的 Lumina，呼吸/眨眼/表情随情绪变化 | ![Pet Live2D](docs/images/pet-live2d.png) |
+| 📱 **Moments 朋友圈**<br>旁观 Lumina、热茶、Yak 的自发动态 | ![Moments](docs/images/moments.png) |
 
-> 🙌 **帮项目添截图！** 启动 Lumina 后截取你最喜欢的界面，提交 PR 替换占位图。
-
+> ⚠️ **截图待补**：v0.1.0-preview 发布前请补充以下 3 张截图到 `docs/images/`：
+> 1. `chat-panel.png` — 主聊天面板（含消息流 + 情绪指示）
+> 2. `pet-live2d.png` — 桌面上的 Live2D 桌宠小窗口
+> 3. `moments.png` — Moments 朋友圈面板
+>
+> 截取方式：启动 `npm run dev`，用 Windows 自带截图工具（Win+Shift+S）截取，保存为 PNG 放入 `docs/images/` 即可。
 ---
 
 ## 🧪 Tech Stack · 技术栈
