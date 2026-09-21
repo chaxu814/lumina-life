@@ -24,6 +24,9 @@ function copyPetAssets() {
         if (existsSync(resolve(srcDir, 'onboarding.html'))) {
           copyFileSync(resolve(srcDir, 'onboarding.html'), resolve(destDir, 'onboarding.html'))
         }
+        if (existsSync(resolve(srcDir, 'pet-chat.html'))) {
+          copyFileSync(resolve(srcDir, 'pet-chat.html'), resolve(destDir, 'pet-chat.html'))
+        }
         if (existsSync(resolve(srcDir, 'assets'))) {
           cpSync(resolve(srcDir, 'assets'), resolve(destDir, 'assets'), { recursive: true })
         }

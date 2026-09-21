@@ -63,6 +63,10 @@
         "to": "pet/onboarding.html"
       },
       {
+        "from": "electron/pet/pet-chat.html",
+        "to": "pet/pet-chat.html"
+      },
+      {
         "from": "electron/pet/assets",
         "to": "pet/assets"
       }

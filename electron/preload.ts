@@ -904,6 +904,8 @@ const api = {
   petUpdatePrefs: (patch: any) => ipcRenderer.invoke('pet:update-prefs', patch),
   petOpenSettings: () => ipcRenderer.invoke('pet:open-settings'),
   petOpenOnboarding: () => ipcRenderer.invoke('pet:open-onboarding'),
+  /** 打开独立可拖动聊天窗口 */
+  petOpenChatWindow: () => ipcRenderer.invoke('pet:open-chat-window'),
   /** 监听桌宠开关状态广播（主进程 toggle 时推送） */
   onPetState: (callback: (running: boolean) => void) => {
     const handler = (_event: any, running: boolean) => callback(running)

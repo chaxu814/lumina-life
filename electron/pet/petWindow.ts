@@ -71,6 +71,8 @@ export interface PetConfig {
   auto: 'off' | 'light' | 'heavy'  // 自主行为级别：off 关闭 / light 轻度 / heavy 重度
   x?: number              // compact 小窗口模式下记住的窗口左上角屏幕坐标（DIP）
   y?: number
+  chatX?: number          // 独立聊天窗口记住的左上角屏幕坐标（DIP）
+  chatY?: number
 }
 
 export interface PetEvent {
@@ -235,6 +237,8 @@ function ensurePetConfigLoaded(): void {
   if (saved.auto === 'off' || saved.auto === 'light' || saved.auto === 'heavy') {config.auto = saved.auto}
   if (typeof saved.x === 'number') {config.x = saved.x} // v6.4 compact 记住窗口位置
   if (typeof saved.y === 'number') {config.y = saved.y}
+  if (typeof saved.chatX === 'number') {config.chatX = saved.chatX} // 独立聊天窗口记住位置
+  if (typeof saved.chatY === 'number') {config.chatY = saved.chatY}
 }
 function persistPetConfig(): void {
   const s = readPersistedPetState()
@@ -843,6 +847,11 @@ function copyPetAssets(dir: string): void {
     if (fs.existsSync(vrmSrc)) {
       fs.copyFileSync(vrmSrc, path.join(dir, 'pet-vrm.html'))
     }
+    // 复制独立聊天窗口页（可拖到屏幕任意位置）
+    const chatSrc = path.join(src, 'pet-chat.html')
+    if (fs.existsSync(chatSrc)) {
+      fs.copyFileSync(chatSrc, path.join(dir, 'pet-chat.html'))
+    }
   } catch (e: any) {
     console.error('[PetWindow] copyPetAssets error:', e)
   }
@@ -1044,6 +1053,8 @@ export function closePetWindow(): void {
     clearTimeout(crashRecoveryTimer)
     crashRecoveryTimer = null
   }
+  // 桌宠整体退出时，一并关闭独立聊天窗
+  closePetChatWindow()
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.close()
     petWindow = null
@@ -1231,39 +1242,58 @@ export function registerPetIpc(): void {
     }
   })
 
-  // ── 聊天同步：pet ↔ 主窗口 Lumina Agent ──────────────
+  // ── 聊天同步：pet / 独立聊天窗 ↔ 主窗口 Lumina Agent ──────────────
   ipcMain.on('pet:sync-send', (_e, data: { text: string }) => {
-    // 桌宠发消息 → 转发给主窗口注入聊天
+    // 桌宠或独立聊天窗发消息 → 转发给主窗口注入聊天
     let target = petMainWindow
     if (!target || target.isDestroyed()) {
-      target = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w !== petWindow) || null
+      // 排除桌宠窗与独立聊天窗，避免把聊天窗误判为主窗口
+      target = BrowserWindow.getAllWindows()
+        .find(w => !w.isDestroyed() && w !== petWindow && w !== petChatWindow) || null
     }
     if (target && !target.isDestroyed()) {
       target.webContents.send('pet:sync-message', { text: data.text, from: 'pet' })
     }
   })
   ipcMain.on('pet:sync-reply', (_e, data: { text: string; role: string }) => {
-    // 主窗口 Agent 回复 → 转发给桌宠显示
-    if (petWindow && !petWindow.isDestroyed()) {
+    // 主窗口 Agent 回复 → 独立聊天窗打开时只送独立窗；否则送桌宠窗（面板或气泡）
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      petChatWindow.webContents.send('pet:sync-reply', data)
+    } else if (petWindow && !petWindow.isDestroyed()) {
       petWindow.webContents.send('pet:sync-reply', data)
     }
   })
-  // 桌宠请求历史记录 → 转发给主窗口
-  ipcMain.on('pet:sync-history-request', () => {
+  // 历史记录请求方（桌宠窗或独立聊天窗），回复时定向送回
+  let historyRequester: BrowserWindow | null = null
+  // 桌宠/聊天窗请求历史记录 → 转发给主窗口
+  ipcMain.on('pet:sync-history-request', (e) => {
+    const sender = BrowserWindow.fromWebContents(e.sender) || null
+    historyRequester = sender
     let target = petMainWindow
     if (!target || target.isDestroyed()) {
-      target = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w !== petWindow) || null
+      target = BrowserWindow.getAllWindows()
+        .find(w => !w.isDestroyed() && w !== petWindow && w !== petChatWindow) || null
     }
     if (target && !target.isDestroyed()) {
       target.webContents.send('pet:sync-history-request')
     }
   })
-  // 主窗口返回历史记录 → 转发给桌宠
+  // 主窗口返回历史记录 → 优先送回请求方；请求方已关闭则按 聊天窗 > 桌宠窗 兜底
   ipcMain.on('pet:sync-history-reply', (_e, messages: Array<{ role: string; content: string }>) => {
-    if (petWindow && !petWindow.isDestroyed()) {
+    if (historyRequester && !historyRequester.isDestroyed()) {
+      historyRequester.webContents.send('pet:sync-history-reply', messages)
+      return
+    }
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      petChatWindow.webContents.send('pet:sync-history-reply', messages)
+    } else if (petWindow && !petWindow.isDestroyed()) {
       petWindow.webContents.send('pet:sync-history-reply', messages)
     }
   })
+
+  // ── 独立聊天窗口：打开 / 关闭（桌宠工具栏按钮触发）──────────────
+  ipcMain.handle('pet:open-chat-window', () => openPetChatWindow())
+  ipcMain.on('pet:chat-window-close', () => closePetChatWindow())
 
   // ── 读取持久化模型（渲染页启动时调用）────────────
   ipcMain.handle('pet:get-model', () => {
@@ -1801,6 +1831,128 @@ export function sendPetCommand(cmd: any): boolean {
     console.error('[PetWindow] sendPetCommand 失败:', e)
     return false
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 独立聊天窗口（可拖到屏幕任意位置，不再被 compact 小窗物理边界锁死）
+// ═══════════════════════════════════════════════════════════
+
+export const PET_CHAT_WINDOW_W = 420
+export const PET_CHAT_WINDOW_H = 620
+
+let petChatWindow: BrowserWindow | null = null
+
+export function isPetChatOpen(): boolean {
+  return !!(petChatWindow && !petChatWindow.isDestroyed())
+}
+
+/** 独立聊天窗口 HTML 路径（独立检查 mtime，保证新页被复制到 userData） */
+function getPetChatHtmlPath(): string {
+  const dir = path.join(app.getPath('userData'), 'pet-assets')
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
+  const chatHtmlPath = path.join(dir, 'pet-chat.html')
+  const src = findPetSourceDir()
+  if (src) {
+    const srcFile = path.join(src, 'pet-chat.html')
+    const srcMtime = fs.existsSync(srcFile) ? fs.statSync(srcFile).mtimeMs : 0
+    const dstMtime = fs.existsSync(chatHtmlPath) ? fs.statSync(chatHtmlPath).mtimeMs : 0
+    if (dstMtime < srcMtime) {copyPetAssets(dir)}
+  }
+  return chatHtmlPath
+}
+
+/**
+ * 创建（或聚焦）独立聊天窗口。
+ * frame:false + 透明 + 置顶，页面标题栏用 -webkit-app-region:drag 由系统原生拖动，
+ * 可拖到屏幕任意位置；位置写回 pet-config.json（chatX/chatY），重启恢复。
+ */
+export function openPetChatWindow(): { ok: boolean; error?: string } {
+  if (petChatWindow && !petChatWindow.isDestroyed()) {
+    petChatWindow.show()
+    petChatWindow.focus()
+    return { ok: true }
+  }
+  try {
+    const chatHtml = getPetChatHtmlPath()
+    if (!fs.existsSync(chatHtml)) {return { ok: false, error: 'pet-chat.html not found' }}
+
+    const petCaps = currentPlatformCaps()
+    const display = screen.getPrimaryDisplay()
+    const wa = display.workArea
+    const w = PET_CHAT_WINDOW_W
+    const h = PET_CHAT_WINDOW_H
+    let x = Number.isFinite(config.chatX) ? (config.chatX as number) : wa.x + wa.width - w - 40
+    let y = Number.isFinite(config.chatY) ? (config.chatY as number) : wa.y + Math.max(40, wa.height - h - 60)
+    const c = clampWindowPos(x, y, w, h)
+    x = c.x; y = c.y
+
+    petChatWindow = new BrowserWindow({
+      width: w,
+      height: h,
+      x,
+      y,
+      transparent: petCaps.transparent,
+      frame: false,
+      alwaysOnTop: petCaps.alwaysOnTop,
+      skipTaskbar: false, // 独立窗口显示在任务栏，方便找回
+      resizable: true,
+      minWidth: 360,
+      minHeight: 420,
+      hasShadow: false,
+      focusable: true,
+      backgroundColor: petCaps.backgroundColor,
+      webPreferences: {
+        preload: resolvePreloadPath(),
+        sandbox: false,
+        contextIsolation: false,
+        nodeIntegration: true,
+        backgroundThrottling: true,
+        spellcheck: false,
+      },
+    })
+
+    petChatWindow.loadFile(chatHtml).then(() => {
+      // 通知页面聚焦输入框
+      if (petChatWindow && !petChatWindow.isDestroyed()) {
+        petChatWindow.webContents.send('pet:chat-window-focus')
+      }
+    }).catch(err => {
+      console.error('[PetChatWindow] loadFile failed:', err)
+    })
+
+    // 拖拽结束（系统原生拖动）后持久化位置
+    let saveTimer: ReturnType<typeof setTimeout> | null = null
+    const persistPos = () => {
+      if (!petChatWindow || petChatWindow.isDestroyed()) {return}
+      if (saveTimer) {clearTimeout(saveTimer)}
+      saveTimer = setTimeout(() => {
+        if (!petChatWindow || petChatWindow.isDestroyed()) {return}
+        const [cx, cy] = petChatWindow.getPosition()
+        config.chatX = cx; config.chatY = cy
+        persistPetConfig()
+      }, 300)
+    }
+    petChatWindow.on('move', persistPos)
+    petChatWindow.on('closed', () => {
+      petChatWindow = null
+      console.log('[PetChatWindow] 独立聊天窗口已关闭')
+    })
+
+    console.log('[PetChatWindow] 🐱 独立聊天窗口已创建')
+    return { ok: true }
+  } catch (e: any) {
+    petChatWindow = null
+    console.error('[PetChatWindow] 创建失败:', e)
+    return { ok: false, error: String(e) }
+  }
+}
+
+/** 关闭独立聊天窗口（桌宠整体退出时调用） */
+export function closePetChatWindow(): void {
+  if (petChatWindow && !petChatWindow.isDestroyed()) {
+    petChatWindow.close()
+  }
+  petChatWindow = null
 }
 
 // ═══════════════════════════════════════════════════════════

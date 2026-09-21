@@ -1892,7 +1892,7 @@ document.getElementById('pet-container').addEventListener('click', (e) => {
   if (dragMoved > 4) return;
   if (chatJustDragged) return;  // 刚拖完聊天框，不触发
   if (!overModel(e.clientX, e.clientY)) return;
-  toggleChat();
+  openChatWindow();
   sendEvent('click', { x: e.clientX, y: e.clientY });
 });
 document.getElementById('pet-container').addEventListener('dblclick', (e) => {
@@ -2013,7 +2013,7 @@ petMenu.addEventListener('click', (e) => {
     case 'act-wake': execIntent({ action: 'wake', mood: '开心 😊', speech: '唔…醒啦！' }); break;
     case 'tts-edge': livePref({ ttsEngine: 'edge-tts' }); say('已切换到 Edge TTS 喵~'); break;
     case 'tts-indextts': livePref({ ttsEngine: 'indextts' }); say('已切换到 IndexTTS 喵~'); break;
-    case 'chat': toggleChat(true); break;
+    case 'chat': openChatWindow(); break;
     case 'lock':
       state.locked = !state.locked;
       if (state.locked) {
@@ -2120,6 +2120,13 @@ function toggleChat(force) {
     chatPanel.classList.add('closing');
     setTimeout(() => { chatPanel.classList.remove('closing'); }, 200);
   }
+}
+// 主动打开聊天：优先独立可拖动窗口（可拖到屏幕任意位置）；无 IPC 时退回内嵌面板
+function openChatWindow() {
+  if (HAS_IPC) {
+    try { ipc.invoke('pet:open-chat-window'); return; } catch (e) {}
+  }
+  toggleChat(true);
 }
 function submitChat() {
   const text = (chatInput && chatInput.value || '').trim();
@@ -2820,7 +2827,7 @@ function bindSparklePanel() {
   bind('sk-think', () => execIntent({ action: 'think', speech: '唔…让我想想' }));
   bind('sk-fish', () => { spawnDropEffect(); say('小鱼干！喵~'); });
   bind('sk-ground', () => { state.floating = false; state.floatY = groundY(); });
-  bind('sk-chat', () => { closeAllPanels(); toggleChat(true); });
+  bind('sk-chat', () => { closeAllPanels(); openChatWindow(); });
 }
 
 /* ── 面板刷新 ────────────────────────────────────────────── */
@@ -2857,10 +2864,10 @@ document.getElementById('tb-collapsed').onclick = () => {
   tb.classList.remove('collapsed');
   positionToolbar();
 };
-// 聊天按钮：打开/关闭聊天面板
+// 聊天按钮：打开独立可拖动聊天窗口
 document.getElementById('tb-chat').onclick = () => {
   closeAllPanels();
-  toggleChat();
+  openChatWindow();
 };
 // TTS 引擎切换移到右键菜单
 document.getElementById('tb-voice').onclick = (e) => {

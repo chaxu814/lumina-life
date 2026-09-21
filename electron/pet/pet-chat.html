@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Lumina Chat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: transparent;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  }
+  /* 让圆角卡片浮在透明窗口内，留出阴影边距 */
+  #chat-panel {
+    position: fixed; top: 10px; left: 10px; right: 10px; bottom: 10px;
+    background: rgba(245,247,255,0.96); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.6); border-radius: 18px;
+    box-shadow: 0 12px 40px rgba(40,60,120,0.30); overflow: hidden;
+    display: flex; flex-direction: column;
+    font-size: 13px; color: #2a3a5c; user-select: text;
+  }
+  /* 标题栏：整个原生窗口的拖拽手柄（frame:false 下系统级拖动） */
+  #chat-panel .cp-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; flex: none;
+    background: linear-gradient(135deg, rgba(74,158,255,0.15), rgba(107,181,255,0.10));
+    border-bottom: 1px solid rgba(100,130,180,0.12);
+    -webkit-app-region: drag;
+    cursor: move;
+  }
+  #chat-panel .cp-head .cp-title { display: flex; align-items: center; gap: 8px; }
+  #chat-panel .cp-head .cp-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #4a9eff, #6bb5ff);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    box-shadow: 0 2px 8px rgba(74,158,255,0.3);
+  }
+  #chat-panel .cp-head .cp-name { display: flex; flex-direction: column; gap: 1px; }
+  #chat-panel .cp-head .cp-name b { font-weight: 700; font-size: 13px; }
+  #chat-panel .cp-head .cp-name .cp-status {
+    font-size: 10px; font-weight: 500; color: #5a9a5a;
+    display: flex; align-items: center; gap: 4px;
+  }
+  #chat-panel .cp-head .cp-name .cp-status::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%; background: #5ac85a;
+  }
+  #chat-panel .cp-head .cp-actions { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+  #chat-panel .cp-head .cp-btn,
+  #chat-panel .cp-head .cp-actions button {
+    -webkit-app-region: no-drag;
+    width: 26px; height: 26px; border-radius: 8px; border: none;
+    background: rgba(100,130,180,0.1); color: #5a7aaa; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    transition: all .15s;
+  }
+  #chat-panel .cp-head .cp-btn:hover { background: rgba(74,158,255,0.2); color: #2a6abb; }
+  #chat-panel #chat-log {
+    flex: 1; overflow-y: auto;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    background: rgba(255,255,255,0.3);
+  }
+  #chat-panel #chat-log::-webkit-scrollbar { width: 5px; }
+  #chat-panel #chat-log::-webkit-scrollbar-thumb { background: rgba(100,130,180,0.25); border-radius: 3px; }
+  #chat-panel .cp-msg {
+    max-width: 82%; padding: 8px 12px; border-radius: 14px; line-height: 1.5; word-break: break-word;
+    font-size: 13px; animation: msgIn .25s ease;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  #chat-panel .cp-msg.user {
+    align-self: flex-end; background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
+    border-bottom-right-radius: 4px; box-shadow: 0 2px 8px rgba(74,158,255,0.25);
+  }
+  #chat-panel .cp-msg.pet {
+    align-self: flex-start; background: rgba(255,255,255,0.9); color: #2a3a5c;
+    border-bottom-left-radius: 4px; border: 1px solid rgba(100,130,180,0.1);
+    box-shadow: 0 1px 4px rgba(40,60,120,0.06);
+  }
+  #chat-panel .cp-msg.pet .cp-msg-avatar {
+    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(135deg, #4a9eff, #6bb5ff); color: #fff;
+    align-items: center; justify-content: center; font-size: 12px;
+    margin-right: 6px; vertical-align: middle;
+  }
+  #chat-panel .cp-typing {
+    align-self: flex-start; background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(100,130,180,0.1); border-radius: 14px;
+    border-bottom-left-radius: 4px; padding: 10px 14px;
+    display: none; gap: 4px; align-items: center;
+  }
+  #chat-panel .cp-typing.show { display: flex; }
+  #chat-panel .cp-typing span {
+    width: 7px; height: 7px; border-radius: 50%; background: #8aa0c8;
+    animation: typingBounce 1.2s infinite ease-in-out;
+  }
+  #chat-panel .cp-typing span:nth-child(2) { animation-delay: 0.15s; }
+  #chat-panel .cp-typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typingBounce { 0%,60%,100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-5px); opacity: 1; } }
+  #chat-panel .cp-quick {
+    display: flex; gap: 6px; padding: 8px 12px 0; flex-wrap: wrap; flex: none;
+  }
+  #chat-panel .cp-quick .cp-quick-btn {
+    padding: 4px 12px; border-radius: 999px; font-size: 11px;
+    border: 1px solid rgba(74,158,255,0.3); background: rgba(74,158,255,0.08);
+    color: #2a6abb; cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  #chat-panel .cp-quick .cp-quick-btn:hover { background: rgba(74,158,255,0.18); }
+  #chat-panel .cp-emoji-panel {
+    display: none; padding: 8px 12px; gap: 6px; flex-wrap: wrap; flex: none;
+    border-top: 1px solid rgba(100,130,180,0.1); background: rgba(255,255,255,0.5);
+    max-height: 100px; overflow-y: auto;
+  }
+  #chat-panel .cp-emoji-panel.show { display: flex; }
+  #chat-panel .cp-emoji-panel .cp-emoji-item {
+    font-size: 18px; cursor: pointer; padding: 3px 6px; border-radius: 8px; transition: background .15s;
+  }
+  #chat-panel .cp-emoji-panel .cp-emoji-item:hover { background: rgba(74,158,255,0.15); }
+  #chat-panel .cp-msg-options {
+    display: flex; flex-direction: column; gap: 5px; padding: 0 12px 2px 44px; flex: none;
+  }
+  #chat-panel .cp-opt-btn {
+    text-align: left; padding: 6px 11px; border-radius: 10px; font-size: 12px; cursor: pointer;
+    border: 1px solid rgba(74,158,255,0.3); background: rgba(74,158,255,0.07);
+    color: #2a6abb; transition: all .15s;
+  }
+  #chat-panel .cp-opt-btn:hover { background: rgba(74,158,255,0.16); transform: translateX(2px); }
+  #chat-panel .cp-input-row {
+    display: flex; gap: 8px; padding: 10px 12px 12px; flex: none;
+    border-top: 1px solid rgba(100,130,180,0.1);
+    background: rgba(255,255,255,0.4); align-items: flex-end;
+    -webkit-app-region: no-drag;
+  }
+  #chat-panel #pet-chat-input {
+    flex: 1; padding: 9px 12px; border-radius: 12px;
+    border: 1px solid rgba(100,130,180,0.15); background: rgba(255,255,255,0.85);
+    color: #2a3a5c; outline: none; font-size: 13px; font-family: inherit;
+    resize: none; min-height: 36px; max-height: 80px; line-height: 1.4;
+    transition: border-color .15s;
+  }
+  #chat-panel #pet-chat-input:focus { border-color: rgba(74,158,255,0.5); }
+  #chat-panel #pet-chat-input::placeholder { color: #9aaccc; }
+  #chat-panel .cp-input-btn {
+    width: 36px; height: 36px; border-radius: 10px; border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: all .15s; flex: none;
+  }
+  #chat-panel #pet-chat-emoji { background: rgba(100,130,180,0.1); color: #5a7aaa; }
+  #chat-panel #pet-chat-emoji:hover { background: rgba(100,130,180,0.2); }
+  #chat-panel #pet-chat-send {
+    background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
+    box-shadow: 0 2px 8px rgba(74,158,255,0.3);
+  }
+  #chat-panel #pet-chat-send:hover { filter: brightness(1.1); transform: scale(1.05); }
+</style>
+</head>
+<body>
+<div id="chat-panel">
+  <div class="cp-head" id="chat-head">
+    <span class="cp-title">
+      <span class="cp-avatar">🐱</span>
+      <span class="cp-name">
+        <b>Lumina Virtual Pet</b>
+        <span class="cp-status">在线</span>
+      </span>
+    </span>
+    <span class="cp-actions">
+      <button class="cp-btn" id="chat-life" title="朋友圈 / 剧场 / 日报（在主窗口打开）">🌸</button>
+      <button class="cp-btn" id="chat-clear" title="清空聊天">🗑</button>
+      <button class="cp-btn" id="chat-close" title="关闭窗口">✕</button>
+    </span>
+  </div>
+
+  <div id="chat-log"></div>
+  <div class="cp-typing" id="chat-typing"><span></span><span></span><span></span></div>
+  <div class="cp-quick" id="chat-quick">
+    <button class="cp-quick-btn" data-text="你好呀 Lumina！">👋 打招呼</button>
+    <button class="cp-quick-btn" data-text="今天心情怎么样？">💭 聊聊天</button>
+    <button class="cp-quick-btn" data-text="挥挥手！">👋 挥挥手</button>
+    <button class="cp-quick-btn" data-text="讲个笑话吧">😂 讲笑话</button>
+  </div>
+  <div class="cp-emoji-panel" id="chat-emoji-panel">
+    <span class="cp-emoji-item">😺</span><span class="cp-emoji-item">😸</span><span class="cp-emoji-item">😻</span>
+    <span class="cp-emoji-item">😽</span><span class="cp-emoji-item">🙀</span><span class="cp-emoji-item">😿</span>
+    <span class="cp-emoji-item">❤️</span><span class="cp-emoji-item">✨</span><span class="cp-emoji-item">🌟</span>
+    <span class="cp-emoji-item">🎵</span><span class="cp-emoji-item">🌸</span><span class="cp-emoji-item">🎀</span>
+    <span class="cp-emoji-item">🐟</span><span class="cp-emoji-item">🍰</span><span class="cp-emoji-item">☕</span>
+    <span class="cp-emoji-item">🌙</span><span class="cp-emoji-item">☀️</span><span class="cp-emoji-item">💤</span>
+    <span class="cp-emoji-item">👍</span><span class="cp-emoji-item">🎉</span><span class="cp-emoji-item">🤔</span>
+  </div>
+  <div class="cp-input-row">
+    <button class="cp-input-btn" id="pet-chat-emoji" title="表情">😊</button>
+    <input id="pet-chat-input" type="text" placeholder="和 Lumina 说点什么…" autocomplete="off" />
+    <button class="cp-input-btn" id="pet-chat-send" title="发送">➤</button>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   Lumina 独立聊天窗口（pet-chat.html）
+   - 由 petWindow.ts 的 openPetChatWindow 创建：frame:false + 透明 + 置顶
+   - 标题栏 -webkit-app-region: drag → 系统级自由拖动，可拖到屏幕任意位置
+   - 消息收发复用桌宠既有通道：pet:sync-send / pet:chat / pet:sync-reply
+   ════════════════════════════════════════════════════════════ */
+let ipc = null;
+try { ipc = require('electron').ipcRenderer; } catch (e) {}
+if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer; } catch (e) {} }
+if (!ipc && window.ipcRenderer) ipc = window.ipcRenderer;
+if (!ipc && window.electron) ipc = window.electron.ipcRenderer;
+const HAS_IPC = !!ipc;
+
+const chatLog = document.getElementById('chat-log');
+const chatInput = document.getElementById('pet-chat-input');
+const typingEl = document.getElementById('chat-typing');
+
+function addChatMsg(role, text) {
+  const d = document.createElement('div');
+  d.className = 'cp-msg ' + role;
+  if (role === 'pet') {
+    d.innerHTML = '<span class="cp-msg-avatar">🐱</span>';
+    const span = document.createElement('span');
+    span.textContent = text;
+    d.appendChild(span);
+  } else {
+    d.textContent = text;
+  }
+  chatLog.appendChild(d);
+  while (chatLog.children.length > 30) chatLog.removeChild(chatLog.firstChild);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+function showTyping(show) { typingEl.classList.toggle('show', show); if (show) chatLog.scrollTop = chatLog.scrollHeight; }
+function addChatOptions(options) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cp-msg-options';
+  (options || []).slice(0, 3).forEach((o, i) => {
+    const b = document.createElement('button');
+    b.className = 'cp-opt-btn';
+    b.textContent = String.fromCharCode(65 + i) + '. ' + o;
+    b.onclick = () => { wrap.remove(); sendText(o); };
+    wrap.appendChild(b);
+  });
+  chatLog.appendChild(wrap);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+function clearChat() { chatLog.innerHTML = ''; }
+
+function sendText(text) {
+  const t = (text || '').trim();
+  if (!t) return;
+  addChatMsg('user', t);
+  if (chatInput) chatInput.value = '';
+  showTyping(true);
+  if (HAS_IPC) {
+    try { ipc.send('pet:sync-send', { text: t }); } catch (e) {}
+    ipc.invoke('pet:chat', { text: t }).then(res => {
+      if (!res || !res.ok) { addChatMsg('pet', '呜…脑子转不动了喵…'); showTyping(false); }
+    }).catch(() => { showTyping(false); addChatMsg('pet', '喵…连接出了点问题…'); });
+  } else {
+    showTyping(false);
+    addChatMsg('pet', '喵~');
+  }
+}
+function submitChat() { sendText(chatInput && chatInput.value); }
+
+// 发送
+chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitChat(); } });
+document.getElementById('pet-chat-send').addEventListener('click', submitChat);
+// 清空 / 关闭
+document.getElementById('chat-clear').addEventListener('click', clearChat);
+document.getElementById('chat-close').addEventListener('click', () => {
+  try { if (HAS_IPC) ipc.send('pet:chat-window-close'); } catch (e) {}
+  window.close();
+});
+// 朋友圈等：在主窗口打开（独立聊天窗不内嵌生活视图）
+document.getElementById('chat-life').addEventListener('click', () => {
+  if (HAS_IPC) { try { ipc.invoke('pet:open-life', 'moments'); } catch (e) {} }
+});
+
+// 表情面板
+const emojiBtn = document.getElementById('pet-chat-emoji');
+const emojiPanel = document.getElementById('chat-emoji-panel');
+emojiBtn.addEventListener('click', (e) => { e.stopPropagation(); emojiPanel.classList.toggle('show'); });
+emojiPanel.querySelectorAll('.cp-emoji-item').forEach(item => {
+  item.addEventListener('click', () => { chatInput.value += item.textContent; chatInput.focus(); });
+});
+document.addEventListener('click', (e) => {
+  if (!emojiPanel.contains(e.target) && e.target !== emojiBtn) emojiPanel.classList.remove('show');
+});
+// 快捷回复
+document.querySelectorAll('.cp-quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => sendText(btn.dataset.text || ''));
+});
+
+// 主 Agent 回复
+if (HAS_IPC) {
+  ipc.on('pet:sync-reply', (_e, data) => {
+    showTyping(false);
+    if (data && data.text) {
+      addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
+      if (data.role !== 'user' && Array.isArray(data.options) && data.options.length) addChatOptions(data.options);
+    }
+  });
+  // 历史回填
+  ipc.on('pet:sync-history-reply', (_e, messages) => {
+    if (!Array.isArray(messages) || messages.length === 0) return;
+    chatLog.innerHTML = '';
+    for (const m of messages) addChatMsg(m.role === 'user' ? 'user' : 'pet', m.content);
+  });
+  // 拉取历史
+  try { ipc.send('pet:sync-history-request'); } catch (e) {}
+  // 主进程通知聚焦输入框（窗口刚打开时）
+  ipc.on('pet:chat-window-focus', () => { setTimeout(() => chatInput.focus(), 120); });
+}
+
+// 欢迎语（无 IPC 时也能看到界面）
+if (!HAS_IPC) {
+  addChatMsg('pet', '你好呀！我是 Lumina，你的 AI 桌宠喵~');
+}
+</script>
+</body>
+</html>
