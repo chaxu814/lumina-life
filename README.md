@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion%20System-5D-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-90%2B-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="90+ Tools & Skills">
+  <img src="https://img.shields.io/badge/Tools-25-60-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="25-60 Tools & Skills">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -155,7 +155,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 
 | 等级 | 说明 |
 |------|------|
-| **7 级严重度 × 8 类威胁规则库** | 现 26 条可枚举规则：级别 SAFE → INFO → LOW → MEDIUM → HIGH → CRITICAL → BLOCK；类别含命令注入 · 路径穿越 · 数据泄露 · 敏感文件 · 凭证泄漏 · Prompt 注入 · 代码执行 · 提权（Windows 上与 IL 降级四层纵深打通） |
+| **双层安全审查** | ① 消息/参数级：securityGuard 6 级×10 类，审查 LLM 输入和工具参数；② 命令级：sandboxRules 7 级×8 类 26 条规则，审查即将执行的 shell 命令（含 BLOCK 级硬拦截：格式化/rm -rf 根/fork 炸弹/删系统目录） |
 | **🔍 沙箱玻璃房** | 侧栏「沙箱玻璃房」面板实时显示每条命令命中的级别 / 威胁类别 / 处置（放行 · 降级 · 拦截 · 审批），安全过程对你透明 |
 | **审批流** | 危险操作先弹窗问你，你点头她才做 |
 | **密钥拦截** | Token/Key 自动检测，阻止外泄 |
@@ -192,9 +192,9 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ---
 
-### 🔧 90+ Built-in Tools & Skills · 90+ 内置工具与技能（另可经 MCP / 技能市场扩展）
+### 🔧 25–60 Built-in Tools · 运行时按模式加载（另可经 MCP / 技能市场扩展）
 
-<sub>口径：运行时注册约 90+ 个工具/技能名（约 80 个功能工具 + 8 个内置技能，来自约 50 个实现模块，部分模块含多个工具）；另有少量反幻觉别名与重定向。</sub>
+<sub>口径：代码库共实现约 110 个工具名（含团队/语音/系统等后台工具）；用户可见的聊天/Agent 运行时按模式加载 25–60 个，另可经 MCP 协议动态扩展。</sub>
 
 `搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · ……
 
@@ -214,8 +214,8 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **🖥️ Computer Use** | ❌ 只有闭源产品有 | ✅ **截图→理解→操作** |
 | **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
 | **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + TF-IDF/BM25 混合召回（可选语义向量）+ 证据链** |
-| **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **沙箱模式 + 7级×8类 + 审批流** |
-| **🔧 工具生态** | ⭐ 看项目 | ✅ **90+ 工具/技能 + MCP + 技能商店** |
+| **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **双层安全审查 + 审批流** |
+| **🔧 工具生态** | ⭐ 看项目 | ✅ **25–60 工具/技能 + MCP + 技能商店** |
 | **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
@@ -260,51 +260,19 @@ npm run dev                     # 启动！
 
 ---
 
-## 🖥️ 跨平台兼容性
+## 🖥️ 系统要求与平台支持
 
-Lumina Life 主要面向 **Windows**，但也支持 macOS 和 Linux，以下是各平台的状态和注意事项。
+> **当前 v0.1.0-preview 仅支持 Windows 10/11 (x64)**。macOS 和 Linux 支持在 Roadmap 中（见下文）。
 
-| 平台 | 状态 | 安装方式 | 已知限制 |
-|------|------|---------|---------|
-| 🟢 **Windows 10/11** | ✅ 完全支持 | NSIS 安装包 / 便携版 | — |
-| 🟡 **macOS (Intel)** | ⚠️ 可用 | `.dmg` 安装包 | ① 首次打开需右键→打开（绕过 Gatekeeper）<br>② 需要 `xcode-select --install`<br>③ 托盘图标可能不完美 |
-| 🟡 **macOS (Apple Silicon)** | ⚠️ 可用 | ARM64 `.dmg` | 同上 + ONNX 语音可能需 Rosetta 2<br>`softwareupdate --install-rosetta` |
-| 🟡 **Linux (Ubuntu/Debian)** | ⚠️ 可用 | `.AppImage` / `.deb` | ① 需安装系统依赖：`libappindicator1 libnss3 libfuse2`<br>② 托盘依赖 `libayatana-appindicator3-1`<br>③ 某些发行版可能需要 `--no-sandbox` 参数 |
+| 平台 | 状态 | 说明 |
+|------|------|------|
+| 🟢 **Windows 10/11 x64** | ✅ 当前唯一支持 | NSIS 安装包 / 便携版 |
+| 🟡 **macOS** | 🔜 Roadmap (v1.3.0) | 代码有初步适配但未验证，CU/键鼠走 PowerShell 需重写 |
+| 🟡 **Linux** | 🔜 Roadmap (v1.3.0) | 同上 |
 
-### macOS 用户必读
+> ⚠️ **为什么当前只有 Windows？**<br>Computer Use 的键鼠注入、沙箱规则库、托盘集成都深度依赖 Windows API（PowerShell、UIA、IL 降级）。macOS/Linux 支持需要重写这些模块，计划在 v1.3.0 完成。
 
-```bash
-# 首次打开绕过 Gatekeeper
-右键单击 Lumina Life.app → 选择"打开" → 确认
-
-# 如遇语音模块报错，安装 Rosetta 2
-softwareupdate --install-rosetta
-```
-
-### Linux 用户必读
-
-```bash
-# 安装系统依赖
-sudo apt-get update
-sudo apt-get install -y libappindicator1 libayatana-appindicator3-1 libnss3 libfuse2
-
-# 运行 AppImage
-chmod +x Lumina-Life-*.AppImage
-./Lumina-Life-*.AppImage
-
-# 如遇 sandbox 错误
-./Lumina-Life-*.AppImage --no-sandbox
-```
-
-### 已知跨平台问题
-
-1. **托盘图标** — macOS/Linux 上托盘交互与 Windows 有差异，部分右键菜单功能可能不完整
-2. **剪贴板集成** — Linux 上剪贴板读取需 `xclip` 或 `wl-clipboard`
-3. **文件对话框** — Linux KDE 下文件选择器可能出现主题不一致
-4. **语音输入** — macOS 上 ONNX 语音识别需 Rosetta 2；Linux 上需额外安装 `portaudio` 和 `ffmpeg`
-
-> 📢 **v1.3.0 计划重点提升 macOS/Linux 体验**，欢迎在 GitHub Issues 中反馈平台相关问题。
-
+---
 ---
 
 ## 🖥️ CLI & API
@@ -387,7 +355,7 @@ Lumina 记得你。每次对话都是你们关系的延续，不是从头开始�
 
 | 安全机制 | 说明 |
 |---------|------|
-| 🛡️ 沙箱模式 | 7 级 × 8 类安全策略配置 |
+| 🛡️ 沙箱模式 | 双层审查：消息/参数级（6×10）+ 命令级（7×8，26 条规则） |
 | 📋 审批流 | 高风险操作需要用户手动确认 |
 | 🔒 隐私优先 | 所有数据本地存储，不上传云端 |
 | 🔑 API Key 隔离 | LLM Key 与应用权限分离 |
@@ -417,7 +385,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  90+ tools/skills · MCP │  Plugin SDK · Skill Store      │ │
+│  │  25-60 tools/skills · MCP │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -474,7 +442,7 @@ lumina-life/
 
 ## 🗺️ Roadmap · 路线图
 
-- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统 + 90+ 工具/技能 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
+- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统 + 25–60 工具/技能 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
 - 🔜 **v1.1.0** — 自定义 Agent 创建（定义新角色加入团队）
 - 🔜 **v1.2.0** — 插件生态开放（社区技能商店）
 - 🔜 **v1.3.0** — macOS / Linux 支持

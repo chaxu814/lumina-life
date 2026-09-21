@@ -1,14 +1,20 @@
 // ============================================================
-// securityGuard.ts — 分级安全审查 (v2.7)
+// securityGuard.ts — 消息/工具参数级安全审查 (v2.7)
+//
+// ⚠️ 与 sandboxRules.ts 的分工（不要混淆）：
+//   - 本模块：审查 LLM 消息文本和工具调用参数（checkMessage / checkToolCall）
+//   - sandboxRules.ts：审查即将执行的 shell 命令字符串（evaluateCommand）
+//   两者互补，不重复。命令执行时先过 securityGuard 再过 sandboxRules。
 //
 // 借鉴 QwenPaw tool_guard:
 //   旧 injectionGuard.ts: 二元开关 + 简单正则
-//   新: 7 级严重度 × 8 类威胁 × 工具参数级审查
+//   新: 6 级严重度 × 10 类威胁 × 工具参数级审查
 //
 // 威胁分类 (借鉴 QwenPaw GuardThreatCategory):
 //   COMMAND_INJECTION, PATH_TRAVERSAL, DATA_EXFILTRATION,
 //   SENSITIVE_FILE_ACCESS, CREDENTIAL_EXPOSURE,
-//   PROMPT_INJECTION, CODE_EXECUTION, PRIVILEGE_ESCALATION
+//   PROMPT_INJECTION, CODE_EXECUTION, PRIVILEGE_ESCALATION,
+//   RESOURCE_ABUSE, NETWORK_ABUSE
 //
 // 安全响应:
 //   SAFE → 放行
