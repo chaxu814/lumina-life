@@ -121,7 +121,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 |------|------|
 | **短期记忆** | 当前对话上下文，支持自动压缩 |
 | **长期记忆** | SQLite 持久化 + 结构化事实/反思/人格 |
-| **混合召回** | 默认内置 TF-IDF + BM25 关键词混合检索（CJK 友好）；配置本地 Ollama / Python 语义模型后可升级为真·语义向量召回与精排<br>Hybrid recall: built-in TF-IDF + BM25 by default; optional semantic embeddings via local Ollama/Python |
+| **混合召回** | BM25 词法检索（CJK 友好，已实现）；向量语义召回在 Roadmap 中（需配置本地 Ollama / Python embedding）<br>Hybrid recall: BM25 lexical recall (implemented); semantic embeddings on roadmap |
 | **自动精炼** | 定时清理低质量记忆，保留真正重要的 |
 | **证据链** | 每条记忆有置信度评分，不是瞎猜 |
 | **记忆剧场** | 可视化浏览你和 Lumina 的回忆 |
@@ -213,7 +213,7 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **😊 情感系统** | ❌ 几乎没有 | ✅ **5 维情绪 + 可视化 + 亲密度** |
 | **🖥️ Computer Use** | ❌ 只有闭源产品有 | ✅ **截图→理解→操作** |
 | **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
-| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + TF-IDF/BM25 混合召回（可选语义向量）+ 证据链** |
+| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + BM25 词法召回（向量语义在 Roadmap）+ 证据链** |
 | **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **双层安全审查 + 审批流** |
 | **🔧 工具生态** | ⭐ 看项目 | ✅ **25–60 工具/技能 + MCP + 技能商店** |
 | **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
@@ -239,7 +239,7 @@ cp .env.example .env            # 编辑 .env 填入 LLM API（默认 LM Studio 
 npm run dev                     # 启动！
 ```
 
-> 💡 **可选：安装 Python 依赖**（语音输入/输出、以及可选的语义向量召回需要；默认 TF-IDF/BM25 无需 Python）
+> 💡 **可选：安装 Python 依赖**（语音输入/输出、以及可选的语义向量召回需要；默认 BM25 无需 Python）
 > ```bash
 > pip install -r python/requirements.txt
 > ```
@@ -345,7 +345,7 @@ Lumina 记得你。每次对话都是你们关系的延续，不是从头开始�
 
 ```
 短期记忆（当前会话）→ 是否重要？→ 长期记忆（SQLite）
-                                    → TF-IDF/BM25 混合召回（默认）· 可选语义向量（Ollama/Python）
+                                    → BM25 词法召回（默认，已实现）· 向量语义召回（Roadmap，未实现）
                                     → 摘要 → 每日记忆
 ```
 
@@ -452,7 +452,7 @@ lumina-life/
 ### 🧪 实验性 / 彩蛋功能（非主线，请勿当真）
 
 - **梦境日记、Agent 真人秀**：已接 LLM 真实生成（在设置里配好 LLM 后即走真实模型）；未配置时回退到 **9 个情绪锚点模板 + 记忆片段关键词**，UI 用 `来源: llm / 来源: template` 诚实标注，绝不假装是大模型写的。
-- **记忆检索**：默认 TF-IDF / BM25 混合召回；真·语义向量召回需自行配置本地 Ollama / Python 模型。
+- **记忆检索**：当前为 BM25 词法召回（已实现）；向量语义召回在 Roadmap 中，需配置本地 Ollama / Python embedding 服务。
 - **副人格觉醒（实验）**：最小真实机制已上线——基于长期记忆 + 情绪状态的人格漂移 / 副视角，触发条件为「高亲密度 + 累计约 200 轮对话」或「持续高焦虑」，置于 `personality.subPersona` 开关后**默认关闭**、可随时关；仍属实验性，不代表核心陪伴能力。
 
 ---

@@ -3,6 +3,14 @@
 //
 // 目标：解决 CJK 子串召回问题
 // 方案：向量检索 + BM25 关键词 fallback
+//
+// 当前状态（2026-09 诚实标注）：
+//   ✅ BM25 词法召回：已实现（k1=1.5, b=0.75，中文单字+短语双重索引）
+//   ⚠️ 向量语义召回：预留接口，未实现
+//      RetrievalResult.source 枚举含 'vector'/'hybrid'，
+//      但 search() 当前只返回 source: 'bm25'。
+// TODO(vector-recall): 接入本地 embedding 服务（Ollama / Python sidecar）
+//   后实现向量召回，并与 BM25 做 RRF 融合。见 Roadmap v1.2.0。
 // ============================================================
 
 import { getAgentMemoryManager, type MemoryNote } from './agentMemoryManager'
