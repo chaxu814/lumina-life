@@ -171,4 +171,16 @@ electron/MEMORY.md
 
 # HTML self-check screenshots
 _shots/
+docs/_shots/
+docs/_ref/
+
+# ── Internal analysis / audit artifacts (NOT for public repo) ──
+artifacts/
+Lumina-发布前深度竞品评测-*.html
+Lumina-竞品对比分析-*.md
+Lumina竞品深度对比分析*.html
+
+# ── VitePress build output (regenerated on deploy) ──
+docs/.vitepress/dist/
+docs/.vitepress/cache/
 
