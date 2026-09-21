@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore, type PanelType } from '../stores/appStore'
 import {
   IconMessageCircle, IconMail, IconSettings,
-  IconZap, IconGlobe, IconUser, IconStar, IconHeart,
+  IconZap, IconGlobe, IconUser, IconStar, IconHeart, IconShield,
 } from './Icons'
 import TeamLiveFeed from './TeamLiveFeed'  // 🆕 v1.0: 团队直播小窗
+import { loadFlags } from '../services/featureFlagsClient'  // I7 精简模式
 
 // Sidebar XP 游戏化进度条组件
 function GamificationProgressBar() {
@@ -187,6 +188,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     { id: 'more', label: '更多设置', Icon: IconSettings },
     { id: 'deepresearch', label: '深度调研', Icon: IconGlobe },
     { id: 'skillmarket', label: '技能商店', Icon: IconZap },
+    { id: 'sandbox', label: '沙箱玻璃房', Icon: IconShield },  // I5
 
   ]},
 ]
@@ -200,6 +202,10 @@ export default function Sidebar() {
   const activePanel = useStore((s) => s.activePanel)
   const setActivePanel = useStore((s) => s.setActivePanel)
   const [mailUnread, setMailUnread] = useState(0)
+  // I7 精简模式：主进程开关加载后决定侧边栏显隐（只露 聊天/设置 + 一键办事）
+  const [minimal, setMinimal] = useState(false)
+  useEffect(() => { loadFlags().then(f => setMinimal(!!f['mode.minimal'])) }, [])
+  const organizeDownloads = () => { (window as any).luminaAPI?.commandExecute?.('帮我把下载文件夹里的文件按类型整理到对应子文件夹') }
 
   useEffect(() => {
     // 初始化时获取未读数
@@ -228,6 +234,7 @@ export default function Sidebar() {
       {sections.map((section) => (
         <div key={section.label} className="sidebar-section">
           {section.items.map((item) => {
+            if (minimal && item.id !== 'chat' && item.id !== 'settings') return null
             const isActive = activePanel === item.id
             return (
               <button key={item.id}
@@ -265,6 +272,15 @@ export default function Sidebar() {
 
       {/* 🐱 桌宠快捷开关（左侧栏） */}
       <PetSidebarToggle />
+      {/* I7 精简模式：唯一露出的「一键办事」入口 */}
+      {minimal && !compact && (
+        <button onClick={organizeDownloads} title="让她安全地帮你整理下载文件夹（走审批）"
+          style={{
+            margin: '6px 8px', padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
+            border: '1px solid var(--border-light)', background: 'var(--surface-1)',
+            fontSize: 12, color: 'var(--text-primary)',
+          }}>整理下载文件夹</button>
+      )}
 
         {/* spacer pushes everything below to the bottom */}
         <div className="sidebar-spacer" />

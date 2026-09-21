@@ -72,7 +72,7 @@ import type { ToolDef, ToolResult } from '../types'
 import { getProcessManager, killProcessTree } from '../../processSandbox'
 import { getShellMonitor } from './shellMonitor'
 import { getNetCage } from './shellNetCage'
-import { ensureFileWallSandbox, wrapLowIntegrity, stripExitMarker, markRunasUnavailable, probeRunasAvailability } from './shellFileWall'
+import { ensureFileWallSandbox, wrapLowIntegrity, stripExitMarker, markRunasUnavailable, probeRunasAvailability, decideLowIL } from './shellFileWall'
 
 export const shellExecDef: ToolDef = {
   name: 'shell_exec',
@@ -333,10 +333,12 @@ async function executeSandboxed(command: string, cwd: string, timeoutMs: number,
   const sandboxDir = ensureFileWallSandbox()
 
   // D: Windows Low IL 包装（runas /trustlevel:0x10000）
+  // v6.2 (F1): 先过 7×8 规则库 —— >=HIGH 才降级，普通命令保持正常 IL（避免 npm/build 写不进用户项目）
   let effectiveCommand = command
   let effectiveUseShell = useShell_
   let lowIntegrityWrapped = false
-  if (process.platform === 'win32') {
+  const lowILDecision = decideLowIL(command)
+  if (process.platform === 'win32' && lowILDecision.shouldWrap) {
     const wrapped = wrapLowIntegrity(effectiveCommand, sandboxDir)
     if (wrapped !== effectiveCommand) {
       effectiveCommand = wrapped

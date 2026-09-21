@@ -19,6 +19,7 @@ import MoreSettingsModal from './components/MoreSettingsModal'  // ⚙️ v1.0: 
 import TeamCommunityModal from './components/TeamCommunityModal'  // 👥 v1.0: 团队社区弹窗
 import PersonalModal from './components/PersonalModal'  // 👤 v1.0: 个性化弹窗
 import NewsPanel from './panels/NewsPanel'  // 🆕 v1.1: 新闻早报
+import SandboxPanel from './panels/SandboxPanel'  // 🔍 I5: 沙箱透明玻璃房
 
 import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8.1: 插件面板
 import Toast from './components/Toast'
@@ -101,6 +102,7 @@ const panelMap: Record<string, React.FC> = {
   social: SocialPanel, // 🌐 v3.0: 跨用户社交
   familytree: FamilyTreePanel, // 🌳 v3.0: Agent 家谱
   news: NewsPanel, // 🆕 v1.1: 新闻早报
+  sandbox: SandboxPanel, // 🔍 I5: 沙箱透明玻璃房（7×8 规则实时审计）
 
   plugins: PluginPanelContainer, // 🆕 v8.1: 插件面板
   more: MoreSettingsPanel, // ⚙️ v1.0: 更多设置（整合入口）

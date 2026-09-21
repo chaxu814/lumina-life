@@ -64,6 +64,28 @@
     let handle = null
     let bounds = null
     let opacity = 1
+    // F3：是否开启 VRM 连续情绪动作（flag pet.vrmExpressive，beta 默认关）
+    let vrmExpressive = false
+
+    // 把前端三维 (mood:-1~1, energy:0~1) 折算成 emotionCore 五维喂给 VRM
+    // （与 Live2D 的 frontendThreeToCore 同口径；离线/未配 LLM 时也能驱动表情）
+    function applyContinuousEmotion(mood, energy) {
+      if (!handle || typeof handle.setEmotionCore !== 'function') return
+      const valence = Math.max(-1, Math.min(1, Number(mood) || 0))
+      const arousal = Math.max(0, Math.min(1, Number(energy) || 0.5))
+      const fatigue = Math.max(0, Math.min(1, 1 - arousal))
+      const anxiety = Math.max(0, Math.min(1, -valence * 0.5))
+      handle.setEmotionCore({ valence, arousal, anxiety, fatigue, energy: arousal })
+    }
+    // 与 Live2D 页同口径，定时拉情绪喂给身体
+    function pollEmotion() {
+      if (!ipc || !vrmExpressive) return
+      ipc.invoke('gamification:getEmotionXp').then(res => {
+        if (res && res.success && res.emotion) {
+          applyContinuousEmotion(res.emotion.mood, res.emotion.energy)
+        }
+      }).catch(() => {})
+    }
 
     function setStatus(text, withBar) {
       statusEl.style.display = text ? 'block' : 'none'
@@ -159,12 +181,22 @@
 
       // 主进程命令（与 Live2D 桌宠同一套命令协议）
       if (ipc) {
+        // F3：读取 VRM 连续情绪 flag（默认关），开了才轮询情绪驱动身体
+        ipc.invoke('pet:get-feature-flags').then(f => {
+          vrmExpressive = !!(f && f.vrmExpressive)
+          if (vrmExpressive) { pollEmotion(); setInterval(pollEmotion, 15000) }
+        }).catch(() => { vrmExpressive = false })
         ipc.on('pet:command', (_e, cmd) => {
           if (!cmd || !handle) return
           if (cmd.type === 'say' || cmd.type === 'set-tooltip') speak(cmd.text || '喵~')
           if (cmd.type === 'set-emotion' && cmd.emotion) {
-            const key = EMOTION_MAP[cmd.emotion.label || cmd.emotion] || (typeof cmd.emotion === 'string' ? EMOTION_MAP[cmd.emotion] : '')
-            if (key) handle.setExpression(key)
+            // F3：flag 开 → 连续情绪驱动（用 mood/energy 折算五维）；flag 关 → 旧的一次性表情
+            if (vrmExpressive && typeof cmd.emotion.mood === 'number') {
+              applyContinuousEmotion(cmd.emotion.mood, cmd.emotion.energy)
+            } else {
+              const key = EMOTION_MAP[cmd.emotion.label || cmd.emotion] || (typeof cmd.emotion === 'string' ? EMOTION_MAP[cmd.emotion] : '')
+              if (key) handle.setExpression(key)
+            }
           }
           if (cmd.type === 'set-opacity' && typeof cmd.value === 'number') {
             opacity = Math.max(0.15, Math.min(1, cmd.value))

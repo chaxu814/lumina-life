@@ -1,0 +1,324 @@
+LUMINA · 竞品深度对标 · 2026-09-20
+cc-haha 到底强在哪？Lumina 3 人团队 × cc-haha Agent Teams 与 Computer Use 全拆解
+分析对象：本地 Lumina Life v0.1.0-preview 源码精读 ｜ cc-haha（NanmiCoder/cc-haha，main 分支 2026-09-20 拉取）
+参照：N.E.K.O（2.9k★）、AIRI（49.3k★）、openclaw（390k★）——三者沿用你 9-19 竞品报告的结论，本次只做定位更新。
+cc-haha 14,651★ / 8,571 forks / MIT
+TS · Electron · React · Bun
+cc-haha 今日仍在推送
+Lumina 未发布 v0.1
+三句话回答你的问题
+
+1. 「cc-haha 的团队比我的强吗？」—— 干工程活，是；比生命感，不是同一个物种。 cc-haha 的 Agent Teams 是一支按需组建、干完解散的临时项目组（共享任务板、点对点信箱、自领取任务、worktree 隔离、可视化泳道、模型当场写编排脚本、断点续跑）； Lumina 是三个常驻、有情绪有关系的家人。前者是生产级"调度系统"，后者是"生活系统"，比"人数"比错了维度。
+
+2. 所谓「5 个 agent」是一张示例拓扑图：Team Lead + Research + Code + Review + Deploy。 实际数量是运行时按需 spawn 的（N 个），底层还有 6 种内置工种类（general-purpose / Explore / Plan / verification / claude-code-guide / statusline-setup）和 8 种职业头像。Lumina 也不是严格 3 个——Yak 能临时招最多 3 个实习生（InternPool），但只服务于代码子任务。
+
+3. Computer Use 工程成熟度 cc-haha 明显领先，但你有两个它没有的东西。 它领先在：应用三级白名单+前台校验、会话锁、浏览器只读/终端只点、macOS 原生无障碍树（AX）+ 虚拟光标、Windows 物理输入冲突仲裁、Teach 演示教学、确定性 js 脚本。 你领先在：Set-of-Mark 编号网格 + zoom 两级放大（专门喂本地 9B 小模型的设计，它默认吃 Claude 级视觉模型）和 Ctrl+Alt+X 全局急停（它在文档里明确承认"没有全局中止热键"）。
+
+01五个项目现在的位置
+	cc-haha	Lumina（你）	N.E.K.O	AIRI / openclaw
+本质	Claude Code 的桌面工作台（壳），工程向	有身体、有团队的桌面生命伴侣	会主动找你的猫娘（已上 Steam）	AIRI=Neuro-sama 复刻；openclaw=IM 渠道助手网关
+Agent 模型	动态 N 成员团队 + 动态 Workflow 脚本	固定 3 人格 + Yak 实习生池（≤3）	单角色（含 CUA/插件）	基本单角色 / cron 触发 agent turn
+核心壁垒	调度编排、权限治理、Git/Diff/MCP 工程流	情绪/内驱力/关系/社交/实时表演	主动开口的决策管线	多渲染器 / 渠道与生态规模
+桌面操控	最强（两套实现+原生 AX）	闭环已通，SoM 是亮点，安全门薄	computer_use+browser-use	AIRI 有 computer-use-mcp；openclaw 不做
+模型假设	Claude/ChatGPT/Grok 级，也接本地	主打 LM Studio 本地 9B 也能跑	14+ 厂商，含免费模型	可插拔 / 可插拔
+
+关键背景：cc-haha 自己不造 agent 运行时——它站在 Anthropic Claude Code（生产级 Agent SDK）的肩膀上，自己做的是桌面壳、可视化工作台和 Computer Use 桥。Lumina 是自研整套运行时，还得让 9B 本地模型跑得动。所以你看到的很多"脚手架"（复杂度分析、阶段门、SoM 网格），本质是 Lumina 对弱模型的补偿设计，方向并不土。
+
+02「3 人家庭」 vs 「5 人项目组」——先看清两种拓扑
+Lumina：星型 · 3 个常驻人格（+ 临时工实习生）
+Lumina 🐱
+老大 · 唯一用户接口
+▲ 派活 / 回结果　｜　铁则：两个 worker 互相不能说话，所有通信经 Lumina
+Yak 📊
+代码工程师
+热茶 🍵
+审查员 · 挑错
+复杂任务时 Yak 可临时招「实习生」（最多 3 名，只做代码子任务，用完即走）
+
+证据：agentTeamPersonas.ts 铁则 3「Yak/热茶永远不互相说话」；orchestration/internPool.ts、yakParallel.ts。
+
+cc-haha：网状 · 动态 N 成员（示例拓扑恰为 5 人）
+Research
+知识/分析
+Team Lead
+编排/协调
+Code
+实现
+Review
+质量保证
+Deploy
+部署/运维
+成员之间可直接 SendMessage（DM/广播）· 文件信箱 inboxes/{name}.json 1s 轮询 + 文件锁 · 共享任务板自领取 · 关停握手
+
+证据：官方架构图 docs/internals/images/04-agent-teams.png；TeamCreateTool/prompt.ts、teammateMailbox.ts、teamService.ts。
+
+「5 个 agent」的真相（先纠正这个直觉）
+
+cc-haha 没有固定的 5 个 agent。你看到的 5 人是文档里的一张示例团队拓扑图。它的团队是三层概念：
+
+6 种内置工种（Claude Code 自带）：general-purpose（全能）、Explore（只读快搜，跑 Haiku 小模型）、Plan（只规划不写文件）、verification（常驻后台，输出 PASS/FAIL 判定）、claude-code-guide（文档查询，Haiku）、statusline-setup（状态栏配置，范围极小）。
+Agent Teams：Lead 运行时 TeamCreate 建队，按需 spawn 任意数量成员，给名字、选工种、选模型、选工具池、选权限模式，干完发 shutdown_request 握手解散。
+工作台 8 种职业头像：team-lead / server-engineer / ui-designer / qa-engineer / security-reviewer / data-analyst / release-engineer / docs-coordinator——纯视觉角色，按成员名字和任务关键词正则匹配。
+
+所以正确的对比不是「3 个 vs 5 个」，而是「3 个固定人格」 vs 「1 个 Lead + 任意数量临时工种」；你也不是严格 3 个——你的实习生池就是同一思路的雏形，只是被限定在代码场景。
+
+03团队系统 14 维硬碰硬
+维度	cc-haha Agent Teams	Lumina 三人团队	谁强
+成员构成	运行时动态 spawn，N 个，干完解散；6 工种 + 8 职业视觉	3 个固定常驻人格；Yak 可招 ≤3 实习生（仅代码任务）	工程上 cc-haha 灵活
+通信拓扑	点对点网状：DM、广播、peer DM 对 Lead 可见摘要，文件信箱+文件锁	纯星型：worker 被铁则禁止互相说话，全部经 Lumina 转述	cc-haha
+任务分配	共享任务板：成员轮询 TaskList、自己 claim（owner 自领取）、blockedBy 依赖、按 ID 顺序做	Lumina 派活（delegate_to）；taskBoard 有 DAG 但靠引擎路由，worker 不自领取	cc-haha（你的 DAG 已具雏形）
+生命周期	建队 → 干活（每轮后自动 idle 等消息）→ 关停握手 → 删队；配置文件落盘	三人常驻；实习生 hire→assign→collect→review→dismiss	各有取舍
+并行与隔离	单消息内并行 spawn；每个改文件的 agent 可开独立 git worktree；后端 in-process / tmux / iTerm2	实习生并行（≤3）；没有 worktree 隔离，并行写同一工作区有冲突风险	cc-haha
+编排方式	模型当场写 JS 编排脚本：parallel/pipeline/phase/循环/条件，确定性执行，可断点续跑（见 04 节）	写死的五阶段门控 research→plan→execute→verify→review + 规则复杂度分析	cc-haha 灵活，Lumina 对小模型更稳
+质量验证	独立 verification 工种后台跑、PASS/FAIL；Workflow 内置对抗验证：N 个怀疑者投票、多视角评审、评审团、穷尽循环、完整性批评员	verifyLoop 跑 tsc/测试/lint，失败自动回修 ≤3 轮，连续相同错误收敛中止；热茶只报「1 个最严重问题」	cc-haha 模式丰富；Lumina 对代码闭环更实
+每 agent 配置	模型、推理强度（5 档）、工具白/黑名单、权限模式（7 种）、MCP、skills、记忆作用域、worktree、颜色……定义在 .md frontmatter	每 agent 独立 LLM（agent.json）、工具白名单、approvalLevel、TTS 音色	cc-haha 细
+定义与热加载	纯 Markdown 文件，6 级来源优先级（策略>CLI>项目>用户>插件>内置），保存即热重载	agent.json + 代码里写死 persona，改角色要改代码	cc-haha（你的 v1.1 自定义 Agent 正该抄这个）
+后台执行	前台 agent 超 120 秒自动转后台；完成发 task-notification；模型请求 trace 可查	asyncTaskManager + 通知板 + 定时任务；无自动后台化和请求追踪	cc-haha 完整
+可视化	工作台泳道图：按依赖深度分列、成员头像站在当前任务上、通信流、成员检查器、历史回放	TeamPanel / TasksPanel / GroupChatView 面板，无 DAG 泳道与站位	cc-haha
+权限边界	7 种权限模式（含 dontAsk、bubble 冒泡给父 agent）、每工具级授权、TeamAllowedPaths 文件系统边界	7 级严重度 × 8 类威胁 + 审批流；worker 只有 approvalLevel 开关	维度不同，整体 cc-haha 贴 agent 粒度更细
+人格/情绪/关系	基本没有——agent 是工牌，只有 task-aware 桌宠卖萌；无连续自我、无关系演化	三人有人格、五维情绪、亲密度/信任持久化、群聊/朋友圈/早安仪式	Lumina 碾压级领先
+情绪参与调度	无	有：焦虑/不耐烦时自动跳过阶段直派、内驱力影响主动性（emotionAware）	Lumina 独有
+04cc-haha 团队的 8 个新奇点（按可借鉴度排序）
+1文件信箱 + 共享任务板（最值得抄）
+
+成员不互相等：inboxes/{name}.json 1 秒轮询、文件锁防并发；任务板上每人自己 claim 任务、更新 owner、查 blockedBy。Lead 不用逐个人派活，团队像真的敏捷小组一样自组织。
+
+你的 taskBoard.ts 已经有 DAG/并行组/owner 字段，差的是「worker 自己 claim + 信箱轮询」这一层。
+
+2模型当场写的 Workflow 脚本
+
+不是预设套餐，而是模型在对话里现写一段 JS：parallel() 屏障、pipeline() 无屏障流水（A 件到第 3 阶段时 B 件还在第 1 阶段）、schema 强制结构化输出、token 预算硬上限、并发帽、journal 断点续跑（改一处只重跑变更点，前面全缓存）。
+
+你的 workflowTemplateManager.ts 是「预设 prompt+工具套餐」，phaseGate 是写死的代码，两者都不是运行时脚本。
+
+3对抗式验证模式库
+
+每个发现派 N 个独立「怀疑者」专门去反驳，多数票反驳成功就杀掉；多视角评审（正确性/安全/性能/可复现）；评审团出 N 个独立方案再打分嫁接；loop-until-dry 连续 K 轮没新东西才停；最后一个「完整性批评员」专问漏了什么。
+
+热茶现在被 prompt 限定「只报 1 个最严重问题」，可以升级成多视角投票。
+
+4git worktree 隔离并行
+
+多个 agent 同时改文件，各自在独立 worktree/分支里跑，互不踩；无改动自动清理；非 git 仓库降级为普通目录。配合分支/Worktree 启动会话和整轮 Diff 可撤销。
+
+你有 gitAgent.ts 和实习生并行，但并行写没有隔离层——这是实习生一多就会踩的坑。
+
+5Agent 即 Markdown，热加载
+
+自定义 agent 就是一个带 frontmatter 的 .md（tools/model/effort/permissionMode/maxTurns/skills/memory/isolation…），用户级/项目级两个目录，保存即热重载，同名按 6 级优先级覆盖。
+
+你路线图 v1.1 要做自定义 Agent，这是现成答案；甚至比你现在的 agent.json 更适合让用户手写。
+
+6可视化工作台（泳道+站位+通信流）
+
+任务按依赖深度自动分列（拓扑最长路径算泳道），成员头像实时站在自己当前任务上，消息流、plan 审批、关停握手全可见，还能回放历史快照（被解散的成员仍保留其任务和对话）。
+
+这是把「多 agent 在干嘛」从黑盒变成直播，天然适合你的团队社交叙事。
+
+7关停握手与 idle 语义
+
+队员每轮干完自动 idle（不是退出，发消息即可唤醒）；任务结束 Lead 发 shutdown_request，队员 approve 后才解散；prompt 反复教模型「别看到 idle 就以为人家挂了」。
+
+你的实习生是 dismiss 即销号，缺少「挂起待命」和优雅收尾。
+
+8小模型干杂活的成本意识
+
+Explore / claude-code-guide 这类只读工种默认跑 Haiku 小模型，强模型只给 Plan 和实现；自动后台化、token 用量统计、Workflow 必须用户显式 opt-in（说 ultracode 才大规模扇出）。
+
+你全团同一个 9B 时没差，一旦接强模型 API，这就是真金白银的成本控制。
+
+但有 4 件事，它抄不走你
+① 连续自我：它的 agent 是一次性工牌，无名字延续、无独立记忆；你的三人有独立记忆（agentIndependentMemory.ts）、关系、情绪历史。
+② 社交生活：群聊、朋友圈、早安仪式、亲密度随真实委托演化——它的「团队」只在任务期间存在，你的团队 24 小时在你电脑里过日子。
+③ 情绪进入调度回路：心情影响派单路径和主动性，这是「生命体」才有的架构。
+④ 小模型友好的工程哲学：SoM 网格、阶段门、规则复杂度分析是为「没 Claude 也能跑」设计的；cc-haha 的下限绑定 Claude 级模型。
+05Computer Use 正面对决：它厚在哪，你赢在哪
+两套流水线的形状
+cc-haha：四道关 + 双实现
+① MCP 工具
+24 基础工具 + 3 个 Teach 工具，schema 校验
+→
+② 会话授权
+应用白名单/前台/会话锁/剪贴板与系统键 grant
+→
+③ Python Bridge
+隔离 venv，按 requirements 哈希装依赖
+→
+④ 平台 Helper
+Win: win_helper.py（71KB）；Mac: 原生 Swift 守护进程
+
+另有第二套 vendored MCP：窗口锁定截图 + get_app_state 返回无障碍元素编号 + js 工具（cua 对象写确定性自动化，可循环/变量，单次 ≤256 KiB、≤256 次原生调用）+ sequence 批量。
+
+Lumina：单一内核 + 小模型定位术
+① 截图
+captureScreen，真实像素尺寸 + scaleFactor
+→
+② 标注
+Set-of-Mark 编号网格；目标小先 zoom 放大再画细网格
+→
+③ VLM 决策
+选格子编号而非猜像素；可 batch 一串确定性动作
+→
+④ cuCore 执行
+归一化坐标换算；中文走剪贴板；高危正则硬拦截
+
+agent 工具 desktop_see / desktop_act 与 IPC 引擎共用同一内核；默认 8 步、上限 16；全局 Ctrl+Alt+X 急停。
+
+13 项能力矩阵
+能力	cc-haha	Lumina 现状	判定
+应用级权限	每应用 read / click / full 三级授权，动作前检查前台应用是否在白名单，不在即拒	无应用概念；只有 auto/ask/strict 三姿态 + 写操作弹窗	落后
+危险应用分区	浏览器只读不能点、终端/IDE 只点不能输入（网页走扩展、命令走 Bash）	无分区，VLM 点哪里都行	落后
+会话互斥	会话锁：同一时间只许一条会话控制输入，带进程信息、可从失效恢复	单例实例，无显式锁/前台校验	落后
+系统键/剪贴板	剪贴板读写、系统组合键分别授权；危险按键黑名单；粘贴前保存、事后恢复剪贴板	中文输入直接走剪贴板；cuSafety 13 条正则针对 shell 命令形态，对 GUI 动作几乎无防护	落后
+物理输入冲突	Windows 低层键鼠钩子：用户一碰鼠标键盘（ForegroundLease），当前动作立即中止	无	落后
+视觉定位	Claude 级 VLM 直接读像素；macOS 走 AX 无障碍元素树/元素指纹；窗口锁定截图	SoM 编号网格 + zoom 两级放大，模型选编号；仅主显示器	你更适合小模型；多显示器落后
+确定性自动化	js REPL：cua.getApp 后写循环/变量做确定性批量；Teach 模式录制回放	无脚本、无录制；batch 只能执行模型一次给出的固定动作串	落后
+动作面	click/drag/select_text/set_value/scroll/press_key/paste/secondary/sequence 等 24 工具	单击/双击/右键/拖拽/滚动/输入/按键/开应用/关窗/剪贴板/等待；缺悬停、长按、修饰键组合、文本选择	基本够用
+动作后验证	每动作回帧；窗口锁定；像素陈旧检测能力存在（默认关）；失败在模型层重规划	每步回帧；失败即停（防连环误点）；无前后帧 diff、无变化检测	可补
+全局急停	明确没有全局热键，只能点会话停止按钮（⌘.）	Ctrl+Alt+X 真·全局快捷键（main.ts:253 注册 globalShortcut）	你赢
+截图隐私	macOS 合成层剔除未授权窗口；Windows 不过滤（文档明确警告用户先关敏感窗）	全屏幕截图，不过滤任何窗口	平手偏落后
+多显示器/DPI	截图尺寸、逻辑尺寸、缩放、显示器原点作为整体冻结，Retina/多屏坐标不出错	有 scaleFactor 归一化，但只取主显示器	部分落后
+人格化	无——它是工具，操作者感觉不到「她」	屏幕感知接主动陪伴，热茶会看你写代码主动提建议	你独有
+你在 CU 上真正领先的两点
+
+① 小模型可点得准。cc-haha 的成立前提是 Claude 级视觉；你用编号网格把「猜像素」变成「选编号」，zoom 放大解决小目标——这是你本地 9B 路线的正确解法，他们没有。
+
+② 真急停。他们文档白纸黑字写「没有全局中止热键」，你有，而且是在任何应用置顶生效的全局快捷键。
+
+必须诚实面对的安全差距
+
+你的 cuSafety.ts 13 条正则拦的是 format C:、rm -rf / 这类命令行文本；但 CU 的动作是点击和按键——模型在密码管理器上点一下、在聊天框里按 Ctrl+V、在银行 App 里按回车，正则一条都拦不住。cc-haha 的白名单/前台/分区/输入冲突仲裁防的正是这个。这是「敢不敢长期无人值守开着」的差距，不是功能差距。
+
+06五个项目能力雷达（主观工程评分，1–10）
+
+评分为本次基于源码精读的主观判断，用于定位而非精确测量：cc-haha 与 openclaw 在工程/生态维度封顶，Lumina 在生命感与形象上封顶，N.E.K.O 是陪伴+主动的另一极。Lumina 桌面操控 6.5 分指「闭环已通但安全门薄」，cc-haha 8.5 分指「工程成熟但无人格化、Linux 无执行器」。
+
+07把 cc-haha 的「新」搬到 Lumina：三级路线图
+
+原则：不动你的灵魂层，只补工程调度层。用户始终只见 Lumina 的铁则不变，新能力全部发生在后台。
+
+P0 · 1–2 周
+先补「敢无人值守」的 CU 安全门（最高优先级）
+应用白名单 + 前台校验 + 会话锁：在 cuCore.ts 的 executeCuAction 前加 gate——Windows 用 GetForegroundWindow + 进程名（win_helper 已有同款实现可参考）；非白名单前台应用一律拒动作。
+危险分区：浏览器默认只读、终端/IDE 只点不输入；剪贴板写入与系统组合键单独授权，粘贴前保存/事后恢复剪贴板内容。
+动作后验证：执行前后帧做 dHash 比对（你已有 desktopScan.ts / screenAwareness 的 dHash 资产），画面没变化即判失败，让模型重看，而不是闷头点下去。
+保留并放大你的 Ctrl+Alt+X 急停——这是你对它的现成差异化，写进 README 对比表。
+P1 · 3–6 周
+把「实习生池」升级为真正的动态团队
+通用化 InternPool：不再只服务代码任务，任何可并行子任务（调研/搜索/数据）都能 spawn 临时工，注册进已有的 core/teamRegistry.ts。
+加文件信箱 + 自领取任务板：你的 taskBoard.ts 已有 DAG/owner/blockedBy 字段，补 worker 轮询 claim + inboxes 消息；有条件放开 worker 间点对点通信（保留 Lumina 汇总出口），加 plan_approval。
+worktree 隔离：并行写代码的任务各开 git worktree（gitAgent.ts 扩展），Yak 最后 integrate——这是实习生数量上到 3 以后的必踩坑。
+热茶升级为多视角对抗评审：correctness / security / reproducibility 三票，外加一个「完整性批评员」；verification 独立输出 PASS/FAIL（你的 verifyLoop 已经在跑 tsc/test，套壳即可）。
+团队工作台 UI：TeamPanel 加 DAG 泳道（依赖深度分列）+ 成员头像站位 + 通信流，这直接复用你 GroupChatView 的社交基因，能做得比它更有「过日子」感。
+P2 · 1.5–3 月
+动态编排 + 动作教学 + 自定义 Agent
+Workflow 脚本化：在 workflowTemplateManager（现在是套餐）和 loopEngineering（现在写死）之间，加一层「模型当场写的确定性编排」：parallel/pipeline 原语 + JSON schema 强制结构化输出 + journal 记录每步结果、改脚本后续跑只重跑变更点。先做 3 个内置模板（多源调研、多维审查、批量迁移）。
+Teach 模式：你说一遍操作，她录制动作序列、回放执行——对应她「看一遍就学会」的人设，比 cc-haha 的工程向 Teach 更有情感叙事。
+Windows UI Automation 元素树：你 9-16 的 CU 计划里已经写了这一步——能读 UIA 树就点元素句柄，不靠像素、不吃 VLM 眼神；这是 cc-haha 在 Windows 上都没做的差异化反超（它只在 macOS 有 AX 树）。
+Agent 定义 Markdown 化：agent.json 升级为带 frontmatter 的 .md，热加载、用户级/项目级优先级——正好对接你路线图 v1.1 的自定义 Agent。
+08别抄什么，以及抄不动什么
+不该抄
+无名工牌文化。它的 agent 没有人格、干完即焚，这是它的工程定位；你的全部品牌资产都在「三人在你电脑里过日子」。动态团队只该补在后台，前台永远是 Lumina。
+9 个 IM 渠道全家桶。它和 openclaw（20+ 渠道）的核心卖点就是渠道，你不是；你已有 ServerChan/钉钉推送，等有真实用户需求再扩。
+Claude 账号登录体系。那是它的商业模式，你的本地优先路线用 LM Studio/Ollama 是对的。
+短期抄不动（但要知道差距）
+macOS 原生 AX 守护进程：cu-helper 是上万行 Swift（虚拟光标、元素指纹、进程证明、截图合成层过滤），macOS 上短期追不平；你主战场是 Windows，把筹码押在 Windows UIA 树更划算。
+底层 agent harness：它直接复用 Anthropic 生产级运行时（AsyncLocalStorage 隔离、tmux 后端、后台任务通知）；你自研运行时，这些要用实习生池/信箱/worktree 一步步补。
+模型代差：强模型 + 动态编排成立的前提是单次推理够可靠；本地 9B 上大规模 fan-out 会放大错误率——所以你写死的阶段门、复杂度分析、SoM 补偿设计短期内仍要保留。
+最终判断
+
+cc-haha 是更好的「工程队包工头」，Lumina 是独一无二的「住在电脑里的生命」——你们的重叠面只有「多 agent 调度 + Computer Use」两块，这两块它确实领先你一个身位，而且差距是纯工程量，不是理念或模型能力问题。按上面的 P0→P2 补齐后，你会得到一个没人做过的组合：有情绪、有关系、会主动关心你的 Lumina，背后带着一支按需组建、能并行干活、操作电脑还受严格权限约束的项目组。这是 cc-haha（无生命）和 N.E.K.O（单角色无团队）都占不住的生态位。
+
+09证据与局限
+
+cc-haha（main 分支，2026-09-20 拉取）：docs/internals/agent.md（6 内置工种/权限模式/自定义 agent）、docs/internals/computer-use.md 与 docs/desktop/computer-use.md（四道关、24+3 工具、白名单、已知边界）、src/tools/TeamCreateTool/prompt.ts（信箱/任务板/关停握手）、src/tools/WorkflowTool/prompt.ts（pipeline/parallel/schema/对抗验证/断点续跑）、desktop/src/components/agentTeams/agentTeamsModel.ts（8 职业头像/DAG 泳道）、src/vendor/computer-use-mcp/tools.ts、runtime/win_helper.py（71KB，ForegroundLease/输入钩子）、架构图 docs/internals/images/04-agent-teams.png（5 人示例拓扑）。
+
+Lumina（本地源码）：agentTeamPersonas.ts / agentTeamTypes.ts（铁则与角色）、delegationManager.ts（委托/重试/阶段门/验证环）、orchestration/*（taskBoard/internPool/yakParallel/phaseGate/verifyLoop/complexityAnalyzer）、tools/impl/computerUse.ts + cuCore.ts + cuSafety.ts + cuGeometry.ts、electron/computerUse.ts、main.ts:253（急停注册）、workflowTemplateManager.ts。
+
+局限：未实际运行 cc-haha；Swift cu-helper 只读了文件清单与架构文档；雷达分为主观评分；star 数为 GitHub API 2026-09-20 快照（openclaw 390k、AIRI 49.3k、cc-haha 14.7k、N.E.K.O 2.9k）。N.E.K.O/AIRI/openclaw 结论沿用你 2026-09-19《Lumina-竞品对比分析.md》，本次未重新逐行核验。
+
+10v3.20 落地核验：路线图逐项对账（2026-09-20）
+一句话结论
+
+P0 安全门全部闭环（4/4）；P1 动态团队 4 项主体完成、1 项部分完成（缺 plan_approval）；P2 按计划尚未启动（Workflow 脚本化 / Teach / UIA 元素树 / Agent Markdown 化）。另有增强项（物理输入仲裁、历史回放、关停握手、成本分级）未做——最该优先补的是物理输入冲突仲裁（ForegroundLease），它是 P0 安全门里唯一还没抄到的一块。验证：tsc --noEmit --strict 零错误，749 测试通过，electron-vite 三端构建成功，拓扑图已用真实数据渲染截图自检。
+
+P0 · CU 安全门（最高优先级）— 4/4 全部落地
+路线图条目	状态	落地证据（代码位置）
+应用白名单 + 前台校验 + 会话锁	✅ 已落地	cuPermissions.ts 在 cuCore 唯一动作入口 executeCuAction 加 gate；PowerShell GetForegroundWindow 探测前台进程（400ms 缓存 / 2.5s 超时 / 探测故障 fail-open）；agent 批次与 IPC 引擎双持锁，锁被占用即拒（cu_session_busy）。
+危险分区：浏览器只读、终端/IDE 只点不打、剪贴板/系统键单独授权	✅ 已落地	浏览器分区点击/输入硬拒（只读/截图/滚动放行）；终端/IDE 的 type/clipboard 硬拒、keypress 仅放行导航键白名单（esc/tab/方向键/PageUpDown/Home/End/Ctrl+C）；剪贴板写入需 full 级；Win+R/Win+L/Alt+F4/Ctrl+Shift+Esc/Alt+Tab 等系统键任何级别硬拦。
+粘贴前保存 / 事后恢复剪贴板	✅ 本就具备	cuType 原有「读剪贴板备份 → 粘贴 → 120ms 后还原」；本轮新增的是 full 级授权门禁。
+动作后验证 dHash 无变化即重看	✅ 已落地（设计改软）	cuVerify.ts：click/drag 前后截图 9×8 dHash 比对，分数低于阈值追加「⚠️ 画面无变化，建议重新 desktop_see」。有意不判失败（打开菜单/聚焦输入框等合法点击本就无像素变化），把重看决策权交给 agent，避免误杀。
+保留放大 Ctrl+Alt+X 急停	✅ 仍在	main.ts:253 globalShortcut 未动；权限门异常 fail-open，急停永远不被门禁挡住。
+P1 · 动态团队 — 4 项主体完成，1 项部分
+路线图条目	状态	落地证据
+通用化实习生池：任意工种 spawn 临时工并注册 teamRegistry	✅ 已落地	dynamicWorker.ts：research/search/data/code/review/test/general 七工种，hire→并行执行→统一 dismiss 一键流水线，复用 Lumina 的 LLM 配置与工具黑名单，干完团队回到 3 人。
+文件信箱 + 自领取任务板 + worker 点对点（保留 Lumina 出口）	🟡 部分完成	信箱（jsonl 追加+游标+锁，1s 轮询）、任务板（首认领者胜/blockedBy 门禁/10 分钟心跳回收）、worker 私信自动抄送 Lumina 全部落地（teamMailbox.ts / teamSharedBoard.ts）。未做：plan_approval（任务开跑前的人工审批开关），目前只有危险工具审批流。
+git worktree 隔离并行	🟡 工具级落地	gitWorktree.ts + git_worktree 工具：独立 worktree/分支、detached 回退、非 git 降级临时目录、mergeWorktree 回收。未做自动绑定：还不会在 spawn code worker 时自动给它开 worktree，需要 agent 主动调用。
+热茶升级多视角对抗评审 + 完整性批评员	✅ 已落地	adversarialReview.ts：正确性/安全/可复现三视角并行（热茶已配置则委托热茶，否则临时雇 3 个复核员），JSON 判定，多数票失败或高危一票否决即不通过，再跑一个完整性批评员补遗漏。
+团队工作台 UI：DAG 泳道 + 站位 + 通信流	✅ 已落地	TeamPanel 新增「🕸 团队拓扑」实时图：队长置顶、成员卡片实时状态（执行中 #id / 阻塞 / 待领 + 脉冲）、任务按依赖波次分列、成员→任务与依赖三种连线、信箱未读角标、「刚解锁」绿点、卡片可直接认领/完成/释放。未做：历史快照回放、成员检查器。
+P2 · 动态编排与教学 — 0/4，按计划尚未启动（本就是 1.5–3 月档）
+路线图条目	状态	说明
+模型当场写的 Workflow（parallel/pipeline/schema/journal 断点续跑）	❌ 未做	现有 workflowTemplateManager 仍是预设套餐；这是 cc-haha 新奇点 #2，也是 P2 工程量最大的一块。
+Teach 模式录制回放	❌ 未做	「看一遍就学会」的人设级功能，依赖动作录制层，建议与 UIA 同期做。
+Windows UIA 元素树（点句柄不靠像素）	❌ 未做	仍是最有价值的反超点：cc-haha 只在 macOS 有 AX 树，Windows 上它也靠像素。
+Agent 定义 Markdown 化 + 热加载	❌ 未做	对接路线图 v1.1 自定义 Agent，与 cc-haha 差距纯工程量。
+仍诚实存在的差距（按建议优先级）
+物理输入冲突仲裁（最该先补）：cc-haha 的 ForegroundLease 在用户一碰鼠标键盘时立即中止动作；Lumina 现在只有「AI 会话之间互斥」，没有「人机互斥」。
+动作面：仍缺悬停、长按、修饰键组合、文本选择（select_text/set_value）。
+多显示器：仍只截主显示器；截图隐私过滤（未授权窗口剔除）也未做。
+团队增强件：关停握手 + idle 待命（新奇点 #7）、小模型干杂活的成本分级（#8）、拓扑历史回放/成员检查器、plan_approval。
+确定性自动化：无 js REPL（同 P2）。
+本轮后依旧 cc-haha 抄不走的东西
+真·全局急停：Ctrl+Alt+X，cc-haha 明确承认自己没有。
+SoM 编号网格 + zoom 两级放大：9B 本地模型也能点得准，cc-haha 的下限绑定 Claude 级视觉。
+有人格的三人：记忆、关系、情绪进调度回路；cc-haha 的 worker 是无名工牌，干完即焚。
+新拓扑把「多 agent 在干嘛」从黑盒变直播，天然接上 Lumina 的社交叙事——它的工作台是冷的，你的是有角色在过日子的。
+
+对账方式：以本节 07 路线图原条目逐条对照实际代码（新增 9 个后端模块 + 2 个前端文件 + 6 个 agent 工具 + 15 个 IPC 通道，测试 749 全绿）。评分为工程判断，非精确测量；「工具级落地」指能力已可被 agent 调用但未自动接入默认流程。
+
+11v3.30 落地核验 + v3.31 首版限制收口（2026-09-20）
+一句话结论
+
+P1 全部清账、P2 四件全部落地，第 10 节列出的「仍诚实存在的差距」逐条补齐：ForegroundLease 人机互斥（低级钩子过滤注入事件，真人一碰键鼠立即中止）、动作面扩充（hover/long_press/select_text/set_value/mouse_move + 组合键编译）、多显示器虚拟桌面截屏、隐私遮罩、plan_approval 审批泳道、worktree 自动绑定与合并回原分支、idle 待命与关停握手、小模型成本分级、拓扑历史回放与成员检查器；P2 交付模型现写 Workflow JSON DSL（非 eval、分层并发、journal 断点续跑）、Teach 录制回放、Windows UIA 元素树、Agent Markdown 热加载。验证：tsc --noEmit --strict 零错误，782 测试通过（较 v3.20 +33），electron-vite 三端构建成功，协作中心新增 2 个 tab，拓扑新增时间轴/检查器/审批按钮。
+
+v3.31 收口（2026-09-20）：3 项首版限制全部升级，只剩 1 项诚实保留
+
+① Teach 换低级钩子重录：WH_MOUSE_LL/WH_KEYBOARD_LL 原生录制（替代 50ms 轮询），滚轮、逐字键盘（含修饰键双沿）都录得到，过滤注入事件不串扰；连续打字可勾选聚合为一次粘贴回放（默认关，保护隐私），协作中心新增「▶ 回放」按钮，不必再对 Lumina 说指令，回放仍走会话锁/权限门/人机互斥。② UIA set_value 升级 ValuePattern：先按坐标找到输入框（含向上 4 级找 Edit/ComboBox/Document）直接控件级赋值，不经过键盘与剪贴板、不吃焦点时序，不支持/只读/自绘 UI 自动回退「点击→全选→粘贴」，并补齐同一套权限门。③ Workflow 加条件与重试：每步可写 when（引用上游结果 contains/equals/truthy，可 not 取反，不满足自动 skipped 且下游连带跳过）与 retry（异常/结果不达标都重试，最多 5 次、until 判定即停、有界间隔）。验证：tsc --noEmit --strict 零错误，795 测试通过（新增 v331 测试 13 用例），三端构建成功。仍保留：隐私遮罩是窗口矩形 best-effort 涂黑，非系统合成层过滤，默认关闭。
+
+P1 收尾（第 10 节缺口全部闭合）— 9/9
+条目	状态	落地证据（代码位置 + 机制）
+plan_approval 人工审批	✅	teamSharedBoard.ts：requireApproval 任务进 pending_approval 泳道，worker 认领被硬拒，人工批准/驳回为纯函数变换 + 历史留痕；拓扑图待批准卡片有「批准/驳回」按钮，任务板可勾选「需人工批准」。
+worktree 自动绑定	✅	dynamicWorker.ts：code 工种雇佣时自动开 worktree（失败降级主目录），工作目录写进 worker 系统提示；任务成功后自动合并回创建时的当前分支（不再写死 main，经 git rev-parse --git-common-dir 找主仓库根），合并成功自动回收，失败保留现场。
+idle 待命 + 关停握手	✅	worker 状态机 starting/working/idle/shutdown_requested：keepAlive 干完进 idle 可唤醒复用；requestShutdown 对 idle 立即解散、对 working 打标记，由执行循环 finally 自动 dismiss。UI 卡片与检查器均有「解散」。
+小模型成本分级	✅	modelTier.ts：research/search/data/general 用小模型、code/review/test 保主力；家族映射（gpt-4o→mini、deepseek-reasoner→chat、glm→4-flash、qwen→turbo），LUMINA_SMALL_MODEL 可覆盖，本地/未知型号不瞎换；Worker 构造后替换 config.model 并重建 LLMProvider。
+拓扑历史回放 + 成员检查器	✅	任务板 history 环形缓冲（400 条）+ board-history IPC；拓扑图底部新增「回放时间轴」（最近 14 条状态变更）与「临时工检查器」（状态/模型分级/工作区/未读）。
+ForegroundLease 人机互斥	✅	cuInputGuard.ts：常驻 PowerShell 低级钩子 WH_MOUSE_LL/WH_KEYBOARD_LL，按 LLMHF_INJECTED / LLKHF_INJECTED 位过滤 AI 自己注入的事件（这是 GetLastInputInfo 做不到的关键）；真人点击/滚轮/按键一遇即中止，鼠标移动用计数阈值（默认 8）防手抖；租约 broken 后必须释放会话才能再动。
+动作面扩充	✅	cuCore.ts 与 IPC 引擎：hover、mouse_move、long_press（0.5–3s 夹紧）、select_text（两点拖拽）、set_value（点击聚焦→Ctrl+A→粘贴）；buildSendKeysToken 把 ctrl_shift_esc / alt+tab 等组合键编译为 SendKeys 记号；VLM 提示词同步。
+多显示器	✅	虚拟桌面截屏含负坐标原点，所有动作按 vx/vy 原点偏移，UIA 元素中心与截图共用同一套归一化坐标系。
+隐私遮罩	✅ 策略默认关	applyPrivacyMask：开启后把非前台窗口区域涂黑（best-effort 按窗口矩形枚举），CU 策略页有开关；默认关闭避免误遮。
+P2 · 动态编排与教学 — 4/4 全部落地（v3.31 已收口 3 项首版限制，仅剩遮罩 best-effort）
+条目	状态	落地证据
+模型现写 Workflow（pipeline/parallel + 续跑）	✅
+v3.31 ↑	workflowScript.ts：JSON DSL（主进程不 eval JS，安全红线）——steps / after / parallelWith / timeoutMs，Kahn 拓扑检环 + 缺依赖校验、≤20 步、并发 ≤8；runJournal 支持 pipeline 分层 / parallel 并发、$id.result 引用替换、依赖失败下游标 skipped、已 done 断点跳过、journal 原子落盘；agent 工具 workflow（run/resume/list/get），协作中心「🧶 工作流」tab 实时看每步状态。v3.31 新增 when 条件（contains/equals/truthy + not，引用步骤是隐式依赖，不满足自动 skipped）与 retry 有界重试（maxAttempts≤5、until 结果判定、异常同样计入、有间隔），JSON DSL 第一次有了条件分支和循环韧性。
+Teach 模式录制回放	✅
+v3.31 ↑	teachRecorder.ts：v3.31 录制脚本换成 WH_MOUSE_LL/WH_KEYBOARD_LL 低级钩子（teach-record-v331.ps1），SetProcessDPIAware、按注入位过滤 AI 自己的事件、F8 结束；eventsToActions 纯转换为 CuAction——点击/右键/拖拽、滚轮合并切段（±20 夹紧）、键盘 kd/ku 双沿（修饰键组合键在 key-up 时正确释放）、连续打字可选聚合为一次 type（shift 符号面/大写、backspace 退格、900ms 切段，默认关，勿在密码框录制）；回放走 replayLesson 共享路径——会话锁、权限门、真人介入保护全部生效，协作中心「⏺ Teach」tab 可录制/命名/删除/▶ 一键回放（含确认弹窗与中止原因提示）。
+Windows UIA 元素树	✅
+v3.31 ↑	cuUia.ts：PowerShell 加载 UIAutomationClient，取前台窗口 Descendants（cap 200）输出紧凑 JSON；desktop_elements 给模型「[index] 类型 名称 @(坐标)」列表，desktop_element_act 按 index 点/赋值（每次强制重新扫描防空点）。v3.31 赋值先尝试 ValuePattern.SetValue（cu-uia-set.ps1：FromPoint 定位 + 向上 4 级找 Edit/ComboBox/Document + 只读检查），控件级直接赋值、不经过键盘与剪贴板；NOPATTERN/只读/自绘 UI 自动回退「点击→全选→粘贴」，两条路径都经过同一套权限门与高危文本拦截。cc-haha 的元素树只在 macOS（AX），Windows 侧 Lumina 先有——反超点。
+Agent 定义 Markdown 热加载	✅	agentMarkdown.ts：frontmatter（id/name/icon/model_tier/blocked/capabilities/blind_spots）+ 正文即提示词；扫描项目 agents/ 与 userData/agents，fs.watch 300ms 防抖重载；hire_worker 可直接雇佣自定义工种，team_roles 列出内置 + 自定义。
+v3.31 已收口的首版限制（3/4）
+Teach 滚轮/打字/UI 回放：低级钩子原生录制滚轮与键盘双沿（旧 50ms 轮询漏滚轮、不录打字）；打字聚合默认关（隐私设计，密码仍不应录制）；协作中心「▶ 回放」按钮直接触发（旧版只能 agent 对话回放），中止会返回具体原因。
+UIA ValuePattern：set_value 优先控件级直接赋值（旧版固定走点击+粘贴），不支持再回退；不支持时返回 NOPATTERN 原因并写进执行结果，模型可感知。
+Workflow 条件/重试：JSON DSL 不 eval 代码的安全红线不变，但补上 when 条件分支与 retry 有界重试（最多 5 次，杜绝无限循环）；when 引用的步骤自动算依赖，校验与拓扑检环全覆盖。
+仍诚实保留：隐私遮罩——按窗口矩形 best-effort 涂黑，不是系统级合成层过滤，重绘频繁的窗口可能有瞬时漏帧；Windows 系统级合成需要注入 DWM，成本与风险都高，保持默认关、用户显式开启。
+另：UIA 对游戏/自绘 UI/Electron 画布仍可能无元素树（系统能力边界，非实现缺口）；新 PS 钩子与 UIA 脚本已单测纯逻辑，真机 Electron 路径标注 best-effort。
+本轮后 Lumina 相对 cc-haha 的独有组合
+人格不动、能力补齐：前台永远是 Lumina，临时工后台干活、私信自动抄送队长；它的工牌是冷的，你的拓扑是有人在过日子的直播。
+真人介入即停 + 全局急停：ForegroundLease 之外，Ctrl+Alt+X 全局急停仍在，cc-haha 明确承认自己没有。
+Windows UIA 反超：元素树它只在 macOS 有，Windows 侧你先有了。
+code worker 自动 worktree + 合并回原分支：并行编码不踩主目录，失败保留现场。
+SoM 网格 + zoom 放大 + 小模型分级：9B 本地模型也能点得准，杂活自动降本。
+
+v3.30 新增/改写：后端新模块 cuInputGuard / modelTier / agentMarkdown / workflowScript / teachRecorder / cuUia 6 个，重写 teamSharedBoard / dynamicWorker，扩充 cuCore / computerUse（agent 工具 + IPC 引擎）/ cuPermissions / teamCollab / gitWorktree / tools 注册 / IPC / preload；UI 两个面板新增审批泳道、Teach、工作流、回放时间轴、成员检查器与 3 个 CU 策略开关；新增 agent 工具 6 个、IPC 通道 10 个；测试 749→782（新增 cuInputGuard / v330Team / cuCoreTokens 三组共 32 用例 + 新动作分派 1 用例）。
+v3.31 收口：重写 teachRecorder.ts（低级钩子 + 滚轮/打字），新增 cu-uia-set.ps1 + setValueByPoint 并接入 desktop_element_act，workflowScript.ts 加 when/retry，teamCollab.ts / teamCollabIpc.ts / preload.ts 新增 teach:replay 通道与共享回放路径，协作中心 Teach/工作流 tab 加回放按钮、打字聚合开关、条件/重试展示；新增 tests/v331Team.test.ts 13 用例，测试 782→795（73 文件），tsc 零错误、三端构建成功。
+
+Lumina × cc-haha 深度对标 · 2026-09-20 · 结论基于源码精读，引用路径见各节 · 第 10 节为 v3.20 对账、第 11 节为 v3.30（P1 清账 + P2 四件落地）+ v3.31（首版限制收口：Teach 滚轮/打字/UI 回放、UIA ValuePattern、Workflow 条件重试；795 测试全绿）· 配套阅读：根目录《Lumina-竞品对比分析.md》、docs/lumina-computer-use-plan.html

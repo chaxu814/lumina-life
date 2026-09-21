@@ -12,7 +12,9 @@
 
 import { getMemoryStore } from './memory/memoryStore'
 import { globalEventBus, BusEvents } from './eventBus'
+import { isEnabled } from './core/featureFlags'
 import type { AgentEvent } from './tools/types'
+import type { RelationshipEventKind } from './memory/relationshipEvents'
 
 // ═══════════════════════════════════════════════════════════
 // MemoryRefiner 配置
@@ -45,6 +47,11 @@ export async function autoRefine(
 
     // Layer 1: 事实提取
     await autoExtractFacts(config, combinedSummary)
+
+    // Layer 1.5 (I4): 关系事件提取（叙事性，区别于客观事实）
+    if (isEnabled('memory.relationshipEvents')) {
+      await autoExtractRelationshipEvents(config, combinedSummary)
+    }
 
     // Layer 2: 反思生成
     await autoGenerateReflections(config, combinedSummary)
@@ -104,6 +111,77 @@ export async function autoExtractFacts(
     }
     console.log(`[MemoryRefiner] 自动提取 ${(parsed.facts || []).length} 条事实`)
   } catch { /* ignore */ }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Layer 1.5: 关系事件提取 (I4)
+//
+// 与 Layer 1「客观事实」互补：这里抓的是「你和用户之间的叙事性事件」——
+// 承诺、共同完成的事、用户难过的时刻、争执、庆祝、小默契。
+// 复用现有的 chat/completions 提取管道，不新写 LLM 调用器。
+// ═══════════════════════════════════════════════════════════
+
+const RELATIONSHIP_KINDS: RelationshipEventKind[] = [
+  'promise', 'shared_achievement', 'sad_moment', 'argument', 'celebration', 'inside_joke',
+]
+
+export async function autoExtractRelationshipEvents(
+  config: RefinerConfig,
+  text: string
+): Promise<void> {
+  try {
+    const res = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'system', content: `你是「关系记忆」提取助手。从对话里找出 AI 助手（Lumina）与用户之间发生过的、有情感分量的叙事性事件，输出 JSON（仅 JSON）：
+{"events":[{"kind":"promise|shared_achievement|sad_moment|argument|celebration|inside_joke","title":"不超过30字的事件摘要","detail":"一句补充说明（可空）","emotional_weight":0.0-1.0,"resolved":true|false}]}。
+
+类别说明：
+- promise：AI 答应/承诺过用户要做的事（resolved=false 表示还没兑现）
+- shared_achievement：两人一起完成/做成的事
+- sad_moment：用户流露难过、失落、压力的时刻
+- argument：不愉快的争执或误会
+- celebration：一起庆祝、开心的时刻
+- inside_joke：只有你们俩懂的梗/玩笑
+
+规则：只提取真正发生过、有情感分量的事，不要把普通闲聊硬塞进来；最多 3 条。` },
+          { role: 'user', content: `从这段对话里提取关系事件：\n${text.slice(0, 1000)}` },
+        ],
+        temperature: 0.1,
+        max_tokens: 500,
+      }),
+      signal: AbortSignal.timeout(10000),
+    })
+
+    if (!res.ok) {return}
+    const data = await res.json()
+    const content = data.choices?.[0]?.message?.content || ''
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {return}
+
+    const parsed = JSON.parse(jsonMatch[0])
+    const store = getMemoryStore()
+    let added = 0
+    for (const ev of (parsed.events || [])) {
+      const kind = RELATIONSHIP_KINDS.includes(ev.kind) ? ev.kind : null
+      if (!kind || typeof ev.title !== 'string' || !ev.title.trim()) {continue}
+      store.recordRelationshipEvent({
+        kind,
+        title: ev.title.trim(),
+        detail: typeof ev.detail === 'string' ? ev.detail : '',
+        emotional_weight: typeof ev.emotional_weight === 'number' ? ev.emotional_weight : undefined,
+        resolved: typeof ev.resolved === 'boolean' ? ev.resolved : undefined,
+      })
+      added++
+    }
+    if (added > 0) {console.log(`[MemoryRefiner] 记录 ${added} 条关系事件`)}
+  } catch { /* 静默降级，不影响主对话 */ }
 }
 
 // ═══════════════════════════════════════════════════════════

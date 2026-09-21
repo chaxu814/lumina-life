@@ -21,6 +21,13 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 import { getMemoryDbPath } from '../paths'
+import { isEnabled } from '../core/featureFlags'
+import {
+  RelationshipEventStore,
+  type RelationshipEventInput,
+  type RelationshipEventQuery,
+  type RelationshipEvent,
+} from './relationshipEvents'
 
 // ── 三层记忆类型 ────────────────────────────────────────
 
@@ -89,6 +96,8 @@ export interface StructuredMemory {
  */
 export class MemoryStore {
   private db: Database.Database
+  /** I4: 关系事件记忆（叙事性事件，区别于 facts 的客观事实） */
+  private relEvents: RelationshipEventStore
 
   /** 获取底层 SQLite 数据库实例（供高级查询使用） */
   getDb(): Database.Database {
@@ -111,6 +120,9 @@ export class MemoryStore {
     this.db = new Database(targetPath)
     this.db.pragma('journal_mode = WAL')
     this.initTables()
+    // I4: 关系事件记忆（建表 IF NOT EXISTS，兼容老库）
+    this.relEvents = new RelationshipEventStore(this.db)
+    this.relEvents.init()
   }
 
   private initTables(): void {
@@ -434,6 +446,47 @@ export class MemoryStore {
     this.updatePersona({ evolutionLog: [entry] })
   }
 
+  // ── I4: 关系事件记忆（叙事性，区别于 facts 的事实 CRUD） ──
+
+  /**
+   * 记录一条「你和用户之间」的关系事件。
+   * 例如：答应过的事、一起完成的事、用户上次难过的原因。
+   */
+  recordRelationshipEvent(event: RelationshipEventInput): number {
+    if (!isEnabled('memory.relationshipEvents')) {return -1}
+    return this.relEvents.record(event)
+  }
+
+  /** 查询关系事件（按类别 / 时间过滤） */
+  getRelationshipEvents(query: RelationshipEventQuery = {}): RelationshipEvent[] {
+    if (!isEnabled('memory.relationshipEvents')) {return []}
+    return this.relEvents.list(query)
+  }
+
+  /** 未了结的承诺 / 未和解的争执 / 未抚慰的难过时刻（按情绪权重降序） */
+  getUnresolvedPromises(limit = 5): RelationshipEvent[] {
+    if (!isEnabled('memory.relationshipEvents')) {return []}
+    return this.relEvents.getUnresolvedPromises(limit)
+  }
+
+  /** 记录一次「主动提起」某条关系事件 */
+  incrementRelationshipReferenced(id: number): void {
+    if (!isEnabled('memory.relationshipEvents')) {return}
+    this.relEvents.incrementReferenced(id)
+  }
+
+  /** 把一条关系事件标记为已了结 */
+  markRelationshipResolved(id: number): void {
+    if (!isEnabled('memory.relationshipEvents')) {return}
+    this.relEvents.markResolved(id)
+  }
+
+  /** 最近 N 条关系事件的可读摘要（供梦境/上下文注入） */
+  getRelationshipEventDigest(limit = 3): string {
+    if (!isEnabled('memory.relationshipEvents')) {return ''}
+    return this.relEvents.digest(limit)
+  }
+
   // ── 结构化记忆输出 (v2.3: 三层) ──────────────────────────
 
   /**
@@ -503,6 +556,23 @@ export class MemoryStore {
 
     const summaries = this.getRecentSummaries(3)
     if (summaries.length > 0) {parts.push('## 最近对话摘要\n' + summaries.map((s, i) => `[${i + 1}] ${s}`).join('\n'))}
+
+    // I4: 未了结的关系事件主动注入（哪怕 TF-IDF 没命中，也要让 Lumina 主动提起）
+    if (isEnabled('memory.relationshipEvents')) {
+      try {
+        const unresolved = this.relEvents.getUnresolvedPromises(3)
+        if (unresolved.length > 0) {
+          const lines = unresolved.map(e => {
+            const kindMap: Record<string, string> = {
+              promise: '答应过', sad_moment: '上次难过', argument: '闹过别扭',
+            }
+            const label = kindMap[e.kind] || e.kind
+            return `- ${label}：${e.title}（还没了结，找个合适时机轻轻提起）`
+          })
+          parts.push('## 我们之间还没翻篇的事\n' + lines.join('\n'))
+        }
+      } catch { /* 注入失败不影响主记忆 */ }
+    }
 
     return parts.join('\n\n')
   }

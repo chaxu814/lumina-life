@@ -18,20 +18,31 @@ vi.mock('electron', () => ({
 // vi.mock 工厂会被提升，mock 函数必须用 vi.hoisted 创建以免 TDZ
 const m = vi.hoisted(() => ({
   executeCuAction: vi.fn(async () => ({ ok: true, msg: 'ok' })),
-  cuOpenApp: vi.fn(async () => '已尝试打开应用'),
-  cuSetClipboard: vi.fn(() => '已写入剪贴板'),
-  cuPressKey: vi.fn(async () => '按键完成'),
   resetCuAbort: vi.fn(),
   isCuAborted: vi.fn(() => false),
 }))
 
 vi.mock('../electron/tools/impl/cuCore', () => ({
   executeCuAction: m.executeCuAction,
-  cuOpenApp: m.cuOpenApp,
-  cuSetClipboard: m.cuSetClipboard,
-  cuPressKey: m.cuPressKey,
   resetCuAbort: m.resetCuAbort,
   isCuAborted: m.isCuAborted,
+  captureScreen: vi.fn(async () => ({ buffer: Buffer.from([0x89]), b64: '', w: 1920, h: 1080, vx: 0, vy: 0 })),
+  virtualDesktopBounds: vi.fn(() => ({ x: 0, y: 0, w: 0, h: 0 })),
+}))
+
+// v3.20: 会话锁/权限门 mock，避免单测向真实 userData 写锁文件或触发 PowerShell 前台探测
+vi.mock('../electron/tools/impl/cuPermissions', () => ({
+  acquireCuSession: vi.fn(() => true),
+  releaseCuSession: vi.fn(() => true),
+  checkSession: vi.fn(() => null),
+  gateCuAction: vi.fn(async () => ({ allow: true })),
+  getCuPolicy: vi.fn(() => ({
+    enabled: true, defaultLevel: 'click', rules: {},
+    browserReadonly: true, terminalClickOnly: true, clipboardGrant: true,
+    sessionLock: true, verifyAfterAction: true,
+  })),
+  getForegroundApp: vi.fn(async () => null),
+  clearForegroundCache: vi.fn(),
 }))
 
 import { ComputerUse, getComputerUse, initComputerUse } from '../electron/computerUse'
@@ -193,14 +204,34 @@ describe('executeAction dispatch', () => {
     expect(Date.now() - t0).toBeGreaterThanOrEqual(25)
   })
 
-  it('clipboard / open_app / close_window route to dedicated primitives', async () => {
+  it('v3.20: clipboard / open_app / close_window all route through the gated core', async () => {
     const cu = makeCU()
     expect(await cu.executeAction({ type: 'clipboard', params: { text: 't' } })).toBe(true)
-    expect(m.cuSetClipboard).toHaveBeenCalledWith('t')
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'clipboard', text: 't' })
     expect(await cu.executeAction({ type: 'open_app', params: { app: 'Chrome' } })).toBe(true)
-    expect(m.cuOpenApp).toHaveBeenCalledWith('Chrome')
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'open_app', app: 'Chrome' })
     expect(await cu.executeAction({ type: 'close_window', params: {} })).toBe(true)
-    expect(m.cuPressKey).toHaveBeenCalledWith('alt_f4')
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'close_window' })
+  })
+
+  it('v3.30: hover/mouse_move/long_press/select_text/set_value dispatch', async () => {
+    const cu = makeCU()
+    await cu.executeAction({ type: 'hover', params: { nx: 10, ny: 20, hold_seconds: 0.5 } } as any)
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'hover', nx: 10, ny: 20, wait_seconds: 0.5 })
+    await cu.executeAction({ type: 'mouse_move', params: { nx: 11, ny: 21 } } as any)
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'hover', nx: 11, ny: 21 })
+    await cu.executeAction({ type: 'long_press', params: { nx: 12, ny: 22, hold_seconds: 1 } } as any)
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'long_press', wait_seconds: 1 })
+    await cu.executeAction({ type: 'select_text', params: { nx: 1, ny: 2, nx2: 9, ny2: 8 } } as any)
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'select_text', nx2: 9, ny2: 8 })
+    await cu.executeAction({ type: 'set_value', params: { nx: 1, ny: 2, text: '值' } } as any)
+    expect(m.executeCuAction.mock.calls.at(-1)![0]).toMatchObject({ action_type: 'set_value', text: '值' })
+    // hover 缺坐标 → false
+    expect(await cu.executeAction({ type: 'hover', params: {} } as any)).toBe(false)
+  })
+
+  it('screenshot returns true', async () => {
+    expect(await makeCU().executeAction({ type: 'screenshot', params: {} })).toBe(true)
   })
 })
 

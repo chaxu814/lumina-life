@@ -597,6 +597,113 @@ const api = {
   teamUnregisterMember: (id: string) =>
     ipcRenderer.invoke('team:unregister-member', id) as Promise<any>,
 
+  // ─── 🤝 v3.20 团队协作（信箱 / 任务板 / 动态 worker / CU 策略）──
+  collabMembers: () =>
+    ipcRenderer.invoke('team-collab:members') as Promise<string[]>,
+
+  collabMailboxInbox: (member: string, unreadOnly = true) =>
+    ipcRenderer.invoke('team-collab:mailbox-inbox', member, unreadOnly) as Promise<any[]>,
+
+  collabMailboxCounts: () =>
+    ipcRenderer.invoke('team-collab:mailbox-counts') as Promise<Record<string, number>>,
+
+  collabMailStream: () =>
+    ipcRenderer.invoke('team-collab:mail-stream') as Promise<any[]>,
+
+  collabMailboxMark: (member: string, ids?: string[]) =>
+    ipcRenderer.invoke('team-collab:mailbox-mark', member, ids) as Promise<{ count: number }>,
+
+  collabMailboxSend: (payload: { from: string; to: string; subject: string; body: string }) =>
+    ipcRenderer.invoke('team-collab:mailbox-send', payload) as Promise<{ ok: boolean; id?: string }>,
+
+  collabBoard: () =>
+    ipcRenderer.invoke('team-collab:board') as Promise<any>,
+
+  collabBoardHistory: (since?: number) =>
+    ipcRenderer.invoke('team-collab:board-history', since) as Promise<any[]>,
+
+  collabBoardList: (filter?: any) =>
+    ipcRenderer.invoke('team-collab:board-list', filter) as Promise<any[]>,
+
+  collabBoardAction: (action: string, payload: any) =>
+    ipcRenderer.invoke('team-collab:board-action', action, payload) as Promise<any>,
+
+  collabWorkers: () =>
+    ipcRenderer.invoke('team-collab:workers') as Promise<any[]>,
+
+  collabWorkerShutdown: (id: string) =>
+    ipcRenderer.invoke('team-collab:worker-shutdown', id) as Promise<any>,
+
+  collabMembersDetail: () =>
+    ipcRenderer.invoke('team-collab:members-detail') as Promise<any[]>,
+
+  collabCustomRoles: () =>
+    ipcRenderer.invoke('team-collab:custom-roles') as Promise<any[]>,
+
+  collabWorkflows: () =>
+    ipcRenderer.invoke('team-collab:workflows') as Promise<any[]>,
+
+  collabWorkflowGet: (id: string) =>
+    ipcRenderer.invoke('team-collab:workflow-get', id) as Promise<any>,
+
+  teachRecordStart: () =>
+    ipcRenderer.invoke('teach:record-start') as Promise<any>,
+
+  teachRecordStop: () =>
+    ipcRenderer.invoke('teach:record-stop') as Promise<any>,
+
+  teachSave: (payload: { name: string; description?: string; events: any[]; aggregateTyping?: boolean }) =>
+    ipcRenderer.invoke('teach:save', payload) as Promise<any>,
+
+  teachList: () =>
+    ipcRenderer.invoke('teach:list') as Promise<any[]>,
+
+  teachRemove: (id: string) =>
+    ipcRenderer.invoke('teach:remove', id) as Promise<boolean>,
+
+  teachReplay: (id: string) =>
+    ipcRenderer.invoke('teach:replay', id) as Promise<any>,
+
+  cuPolicyGet: () =>
+    ipcRenderer.invoke('cu-policy:get') as Promise<any>,
+
+  cuPolicySet: (patch: any) =>
+    ipcRenderer.invoke('cu-policy:set', patch) as Promise<any>,
+
+  cuPolicyGrant: (proc: string, level: string) =>
+    ipcRenderer.invoke('cu-policy:grant', proc, level) as Promise<any>,
+
+  cuPolicyRevoke: (proc: string) =>
+    ipcRenderer.invoke('cu-policy:revoke', proc) as Promise<any>,
+
+  cuPolicySession: () =>
+    ipcRenderer.invoke('cu-policy:session') as Promise<any>,
+
+  cuPolicyForeground: () =>
+    ipcRenderer.invoke('cu-policy:foreground') as Promise<{ proc: string; title: string } | null>,
+
+  // ─── v3.33 绩效画像 / 任务追踪 / 自治 / 检查点 / 团队日记 ───
+  collabStatsProfiles: () =>
+    ipcRenderer.invoke('team-collab:stats-profiles') as Promise<any>,
+
+  collabStatsRank: (kind: string) =>
+    ipcRenderer.invoke('team-collab:stats-rank', kind) as Promise<any[]>,
+
+  collabTrace: (limit?: number) =>
+    ipcRenderer.invoke('team-collab:trace', limit) as Promise<{ entries: any[]; summary: any }>,
+
+  collabAutonomy: (action?: string) =>
+    ipcRenderer.invoke('team-collab:autonomy', action) as Promise<any>,
+
+  collabCheckpoints: () =>
+    ipcRenderer.invoke('team-collab:checkpoints') as Promise<any[]>,
+
+  collabCheckpointRollback: (id: string, confirm: boolean) =>
+    ipcRenderer.invoke('team-collab:checkpoint-rollback', id, confirm) as Promise<any>,
+
+  collabDailyLog: (date?: string) =>
+    ipcRenderer.invoke('team-collab:daily-log', date) as Promise<any>,
+
   // ─── 主动技能 (v3.x) ───────────────────────────────────
   proactiveGetTriggers: () =>
     ipcRenderer.invoke('proactive:get-triggers') as Promise<Array<{ id: string; type: string; enabled: boolean; lastTriggered?: number; cooldown: number; priority: number }>>,
@@ -1062,6 +1169,13 @@ const api = {
   // 🆕 v9.2: 文件文本提取 — PDF/DOCX/XLSX/PPTX 提取纯文本，供群聊附件使用
   fileExtractText: (filePath: string) => ipcRenderer.invoke('file:extract-text', filePath) as Promise<{ text?: string; error?: string }>,
   fileExtractTextFromBuffer: (ext: string, buffer: number[]) => ipcRenderer.invoke('file:extract-text-buffer', ext, buffer) as Promise<{ text?: string; error?: string }>,
+  // ── 🔍 I5/I6/I7: 沙箱审计 / 数据导出导入 / 功能开关（集成接线）────────
+  sandboxGetAuditLog: () => ipcRenderer.invoke('sandbox:audit-log') as Promise<any>,
+  featureFlagsGetAll: () => ipcRenderer.invoke('feature-flags:get-all') as Promise<Record<string, boolean>>,
+  featureFlagsSet: (key: string, value: boolean) => ipcRenderer.invoke('feature-flags:set', key, value) as Promise<{ ok: boolean }>,
+  dataExportZip: () => ipcRenderer.invoke('data:export-zip') as Promise<any>,
+  dataImportZip: () => ipcRenderer.invoke('data:import-zip') as Promise<any>,
+  dataGetLocations: () => ipcRenderer.invoke('data:get-locations') as Promise<{ userData: string; memoryDb: string; flagsFile: string }>,
 }
 
 contextBridge.exposeInMainWorld('luminaAPI', api)

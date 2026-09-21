@@ -463,6 +463,15 @@ declare global {
       fsReadFile: (filePath: string) => Promise<string>
       fsWriteFile: (filePath: string, content: string) => Promise<void>
       fsListDir: (dirPath: string) => Promise<unknown[]>
+
+      // 🧪 功能开关（I7：主进程 featureFlags 经 IPC 暴露）
+      featureFlagsGetAll: () => Promise<Record<string, boolean>>
+      featureFlagsSet: (key: string, value: boolean) => Promise<{ ok: boolean }>
+
+      // 🔐 数据导出/导入（I6：本地记忆打包 zip，合并不覆盖）
+      dataExportZip: () => Promise<{ ok: boolean; zipPath?: string; bytes?: number; error?: string }>
+      dataImportZip: () => Promise<{ ok: boolean; imported?: Record<string, number>; skipped?: Record<string, number>; error?: string }>
+      dataGetLocations: () => Promise<{ userData?: string; memoryDb?: string; flagsFile?: string }>
     }
   }
 }

@@ -19,6 +19,7 @@ import { LLMProvider } from '../core/llmProvider'
 import { detectScene } from '../sceneDetector'
 import { getProviderManager } from '../core/providerManager'
 import { currentPlatformCaps } from './platformCaps'
+import { isEnabled as isFlagEnabled, allFlags as allPetFlags } from '../core/featureFlags'
 
 /**
  * 桌宠"大脑"LLM 配置解析：
@@ -1130,6 +1131,8 @@ export function updatePetConfig(partial: Partial<PetConfig>, mainWin?: BrowserWi
 export function registerPetIpc(): void {
   registerLifeServicesIpc() // 🫀 v0.2：模型库 / 屏幕节流 / 在场 / 唤醒 / 全双工 IPC
   // ── 开关 ────────────────────────────────────────
+  // F3：渲染页查询功能开关（VRM 连续情绪等 beta 能力由 flag 门控）
+  ipcMain.handle('pet:get-feature-flags', () => ({ vrmExpressive: isFlagEnabled('pet.vrmExpressive'), all: allPetFlags() }))
   ipcMain.handle('pet:toggle', (_e, enable: boolean) => {
     try {
       // 查找主窗口

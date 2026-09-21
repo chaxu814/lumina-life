@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina × cc-haha 深度对标 · Agent Teams 3 vs 5 · Computer Use · 2026-09-20</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='28' fill='%23FF7A00'/><text x='32' y='42' font-size='30' text-anchor='middle' fill='white'>🦊</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1020; --panel:#171830; --panel2:#1e2040; --line:#2c2f55;
+    --ink:#e9ebff; --sub:#a7abd4; --mut:#7c81ad;
+    --lum:#ec4899; --cc:#ff7a00; --neko:#22d3ee; --airi:#a78bfa; --claw:#fb7185;
+    --good:#34d399; --warn:#fbbf24; --bad:#f87171; --acc:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0d0e1c,#0f1020 260px);color:var(--ink);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.65;font-size:15px;
+    overflow-wrap:anywhere;min-width:0}
+  .wrap{max-width:1200px;margin:0 auto;padding:36px 22px 90px}
+  h1{font-size:27px;margin:0 0 8px;letter-spacing:.4px;line-height:1.35}
+  h1 .l{color:var(--lum)} h1 .c{color:var(--cc)}
+  h2{font-size:20px;margin:46px 0 14px;padding-left:11px;border-left:4px solid var(--cc)}
+  h2 .n{color:var(--cc);font-size:14px;margin-right:8px;font-weight:700}
+  h3{font-size:16px;margin:24px 0 8px}
+  p{margin:8px 0}
+  .sub{color:var(--sub)} .mut{color:var(--mut);font-size:12.8px}
+  .meta{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 0}
+  .chip{font-size:12px;padding:3px 11px;border-radius:999px;border:1px solid var(--line);color:var(--sub);background:var(--panel)}
+  .chip.l{border-color:var(--lum);color:#f9a8d4} .chip.c{border-color:var(--cc);color:#fdba74}
+  .verdict{background:linear-gradient(135deg,rgba(255,122,0,.13),rgba(236,72,153,.10));
+    border:1px solid #4a3520;border-radius:15px;padding:20px 22px;margin:22px 0 6px}
+  .verdict h3{margin-top:0}
+  .verdict b{color:#fff}
+  .grid{display:grid;gap:14px;min-width:0}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:920px){.g2,.g3{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px;min-width:0}
+  .card h4{margin:0 0 7px;font-size:15px}
+  .card.good{border-top:3px solid var(--good)} .card.lum{border-top:3px solid var(--lum)}
+  .card.cc{border-top:3px solid var(--cc)} .card.bad{border-top:3px solid var(--bad)}
+  .tag{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:999px;border:1px solid var(--line);color:var(--sub);margin:2px 4px 2px 0}
+  .tag.win{border-color:#1c5e45;color:#6ee7b7} .tag.lose{border-color:#7a3030;color:#fca5a5} .tag.draw{border-color:#7a6430;color:#fcd34d}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.3px;background:var(--panel);border-radius:12px;overflow:hidden;table-layout:fixed}
+  th,td{border-bottom:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top;word-wrap:break-word}
+  th{background:var(--panel2);font-weight:600;white-space:normal}
+  td:first-child{color:var(--sub)}
+  tr:last-child td{border-bottom:none}
+  .s{color:var(--good);font-weight:700} .m{color:var(--warn);font-weight:700} .n{color:var(--bad);font-weight:700}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px 0}
+  .chart .ec{width:100%;height:460px}
+  .chart .ec.sm{height:340px}
+  .src{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:var(--sub);font-size:12.8px;margin-top:16px;overflow-wrap:anywhere}
+  .foot{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px;overflow-wrap:anywhere}
+  code{background:#0c0d1a;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px;color:#fdba74;
+    font-family:"Cascadia Code",Consolas,monospace;overflow-wrap:anywhere;word-break:break-word}
+  .grid > *{min-width:0}
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:12px 0}
+  .flow .step{flex:1 1 150px;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.8px}
+  .flow .step b{display:block;margin-bottom:3px;font-size:13.4px}
+  .flow .arrow{display:flex;align-items:center;color:var(--mut);font-size:18px}
+  /* topology */
+  .topo{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:12px 0}
+  .topo .lead{background:linear-gradient(135deg,#3a2440,#2a2040);border:2px solid var(--lum);border-radius:12px;
+    padding:12px 16px;text-align:center;font-weight:700;margin:0 auto 14px;max-width:340px}
+  .topo.cc .lead{background:linear-gradient(135deg,#4a2c10,#3a2410);border-color:var(--cc)}
+  .topo .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .topo .node{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;text-align:center;min-width:140px;font-size:13px}
+  .topo .node b{display:block}
+  .topo .node .role{color:var(--mut);font-size:11.5px}
+  .topo .node.boss{border-top:3px solid var(--lum)} .topo.cc .node.boss{border-top-color:var(--cc)}
+  .topo .links{text-align:center;color:var(--mut);font-size:12px;margin:10px 0}
+  /* timeline */
+  .tl{margin:14px 0}
+  .tl-row{display:grid;grid-template-columns:96px 26px 1fr;gap:0 14px;margin-bottom:2px}
+  .tl-time{font-size:12.5px;color:var(--sub);text-align:right;padding-top:14px}
+  .tl-axis{position:relative;display:flex;justify-content:center}
+  .tl-axis::before{content:"";position:absolute;top:0;bottom:-14px;width:2px;background:var(--line)}
+  .tl-row:last-child .tl-axis::before{bottom:50%}
+  .tl-dot{width:13px;height:13px;border-radius:50%;margin-top:17px;z-index:1;border:2px solid var(--bg)}
+  .p0{background:var(--bad)} .p1{background:var(--warn)} .p2{background:var(--acc)}
+  .tl-body{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 15px;margin-bottom:14px}
+  .tl-body h4{margin:0 0 5px;font-size:14.5px}
+  .tl-body ul{margin:6px 0 0;padding-left:18px} .tl-body li{margin:4px 0;font-size:13.2px}
+  .num{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;
+    background:var(--panel2);border:1px solid var(--cc);color:#fdba74;font-size:12px;font-weight:700;margin-right:6px}
+  .score{font-variant-numeric:tabular-nums}
+  .big{font-size:22px;font-weight:800}
+  .kbd{background:#0c0d1a;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 7px;font-size:12px;color:#e9ebff}
+  .foot{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px}
+  @media(max-width:640px){
+    body{font-size:14.5px}
+    .wrap{padding:24px 14px 60px}
+    table{font-size:12.5px} th,td{padding:7px 8px}
+    h1{font-size:22px} h2{font-size:18px}
+    .tl-row{grid-template-columns:60px 20px 1fr;gap:0 9px}
+    .tl-time{font-size:10.5px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ 头部 ============ -->
+  <div style="font-size:12px;letter-spacing:2px;color:var(--cc);font-weight:700;">LUMINA · 竞品深度对标 · 2026-09-20</div>
+  <h1>cc-haha 到底强在哪？<span class="l">Lumina 3 人团队</span> × <span class="c">cc-haha Agent Teams</span> 与 Computer Use 全拆解</h1>
+  <div class="sub">分析对象：本地 <code>Lumina Life v0.1.0-preview</code> 源码精读 ｜ cc-haha（NanmiCoder/cc-haha，main 分支 2026-09-20 拉取）<br>
+  参照：N.E.K.O（2.9k★）、AIRI（49.3k★）、openclaw（390k★）——三者沿用你 9-19 竞品报告的结论，本次只做定位更新。</div>
+  <div class="meta">
+    <span class="chip">cc-haha 14,651★ / 8,571 forks / MIT</span>
+    <span class="chip">TS · Electron · React · Bun</span>
+    <span class="chip">cc-haha 今日仍在推送</span>
+    <span class="chip l">Lumina 未发布 v0.1</span>
+  </div>
+
+  <!-- ============ 一眼结论 ============ -->
+  <div class="verdict">
+    <h3>三句话回答你的问题</h3>
+    <p><b>1. 「cc-haha 的团队比我的强吗？」—— 干工程活，是；比生命感，不是同一个物种。</b>
+    cc-haha 的 Agent Teams 是<b>一支按需组建、干完解散的临时项目组</b>（共享任务板、点对点信箱、自领取任务、worktree 隔离、可视化泳道、模型当场写编排脚本、断点续跑）；
+    Lumina 是<b>三个常驻、有情绪有关系的家人</b>。前者是生产级"调度系统"，后者是"生活系统"，比"人数"比错了维度。</p>
+    <p><b>2. 所谓「5 个 agent」是一张示例拓扑图：Team Lead + Research + Code + Review + Deploy。</b>
+    实际数量是运行时按需 spawn 的（N 个），底层还有 6 种内置工种类（general-purpose / Explore / Plan / verification / claude-code-guide / statusline-setup）和 8 种职业头像。<b>Lumina 也不是严格 3 个</b>——Yak 能临时招最多 3 个实习生（InternPool），但只服务于代码子任务。</p>
+    <p><b>3. Computer Use 工程成熟度 cc-haha 明显领先，但你有两个它没有的东西。</b>
+    它领先在：应用三级白名单+前台校验、会话锁、浏览器只读/终端只点、macOS 原生无障碍树（AX）+ 虚拟光标、Windows 物理输入冲突仲裁、Teach 演示教学、确定性 js 脚本。
+    你领先在：<b>Set-of-Mark 编号网格 + zoom 两级放大</b>（专门喂本地 9B 小模型的设计，它默认吃 Claude 级视觉模型）和 <b>Ctrl+Alt+X 全局急停</b>（它在文档里明确承认"没有全局中止热键"）。</p>
+    <p style="margin-bottom:0;color:#6ee7b7"><b>⟡ 改造后更新（v3.31 / v3.32 / v3.33）：</b>上面三条是 2026-09-20 改造前的诊断。安全门、动态团队、人机互斥、动作面、Teach、UIA 元素树、Workflow 条件重试已在 v3.20/v3.30/v3.31 落地；<b>v3.32 把团队工作台补齐到 cc-haha 同款形态</b>（头像站位、右侧通讯流、快照回放）；<b>v3.33 不再只是对标，而是长出它没有的东西：工种绩效画像与经验卡、内驱力自领取、关系进调度、崩溃恢复、任务 trace、整轮检查点回滚、CU 操作员/观察员/安全员三人组、团队日记</b>（819 测试，见第 13 节）。cc-haha 的 CU 领先项已逐项补齐，仅隐私遮罩、自由 js REPL、bubble 冒泡权限、path_scope 硬拦截 4 处小幅落后。</p>
+  </div>
+
+  <!-- ============ 阅读指引（v3.31 加） ============ -->
+  <div class="card" style="border-left:3px solid var(--good);margin-top:16px">
+    <h4 style="color:#6ee7b7">📌 阅读指引：03 / 05 / 06 节是「改造前基线诊断」，不是现状</h4>
+    <p style="margin:4px 0 0">这三节保留的是 <b>v3.20 改造前</b>逐行读源码的差距快照（作对照用）；两张对比表已新增<b>「改造后（v3.31/v3.32）」列</b>，雷达图新增 <b>Lumina v3.31</b> 系列。改造逐项落地的代码证据在<b>第 10 节（v3.20）、第 11 节（v3.30 / v3.31，795 测试）、第 12 节（v3.32 工作台三项，799 测试）与第 13 节（v3.33 团队纵深 8 件，819 测试全绿）</b>。结论：<b>工程调度与 Computer Use 已基本追平，团队工作台 v3.32 已对齐；v3.33 起 Lumina 在「会成长、会自我修复的团队」上反超，这是 cc-haha 没有的维度；生命感维度 Lumina 仍领先一个生态位。</b></p>
+  </div>
+
+  <!-- ============ 五项目速览 ============ -->
+  <h2><span class="n">01</span>五个项目现在的位置</h2>
+  <div class="chart"><div id="stars" class="ec sm"></div></div>
+  <table>
+    <colgroup><col style="width:13%"><col style="width:23%"><col style="width:24%"><col style="width:20%"><col style="width:20%"></colgroup>
+    <tr><th></th><th>cc-haha</th><th>Lumina（你）</th><th>N.E.K.O</th><th>AIRI / openclaw</th></tr>
+    <tr><td>本质</td><td>Claude Code 的桌面工作台（壳），工程向</td><td>有身体、有团队的桌面生命伴侣</td><td>会主动找你的猫娘（已上 Steam）</td><td>AIRI=Neuro-sama 复刻；openclaw=IM 渠道助手网关</td></tr>
+    <tr><td>Agent 模型</td><td><b>动态 N 成员团队</b> + 动态 Workflow 脚本</td><td>固定 3 人格 + 后台动态 7 工种临时工（v3.31 已通用化）+ 自定义 .md 工种</td><td>单角色（含 CUA/插件）</td><td>基本单角色 / cron 触发 agent turn</td></tr>
+    <tr><td>核心壁垒</td><td>调度编排、权限治理、Git/Diff/MCP 工程流</td><td><b>情绪/内驱力/关系/社交/实时表演</b>（v3.31 后调度工程也已补齐）</td><td>主动开口的决策管线</td><td>多渲染器 / 渠道与生态规模</td></tr>
+    <tr><td>桌面操控</td><td class="s">工程成熟（两套实现+原生 AX；Windows 无元素树）</td><td class="s">v3.31 已追平：安全门+人机互斥+UIA 元素树+Teach 教学，SoM 与全局急停仍领先</td><td class="m">computer_use+browser-use</td><td>AIRI 有 computer-use-mcp；openclaw 不做</td></tr>
+    <tr><td>模型假设</td><td>Claude/ChatGPT/Grok 级，也接本地</td><td>主打 LM Studio 本地 9B 也能跑</td><td>14+ 厂商，含免费模型</td><td>可插拔 / 可插拔</td></tr>
+  </table>
+  <p class="mut">关键背景：cc-haha 自己<b>不造 agent 运行时</b>——它站在 Anthropic Claude Code（生产级 Agent SDK）的肩膀上，自己做的是桌面壳、可视化工作台和 Computer Use 桥。Lumina 是<b>自研整套运行时，还得让 9B 本地模型跑得动</b>。所以你看到的很多"脚手架"（复杂度分析、阶段门、SoM 网格），本质是 Lumina 对弱模型的补偿设计，方向并不土。</p>
+  <!-- ============ 02 团队拓扑对比 ============ -->
+  <h2><span class="n">02</span>「3 人家庭」 vs 「5 人项目组」——先看清两种拓扑</h2>
+
+  <div class="grid g2">
+    <div class="topo">
+      <div class="lead">Lumina：星型 · 3 个常驻人格（+ 临时工实习生）</div>
+      <div class="row">
+        <div class="node boss"><b>Lumina 🐱</b><span class="role">老大 · 唯一用户接口</span></div>
+      </div>
+      <div class="links">▲ 派活 / 回结果　｜　铁则：两个 worker 互相不能说话，所有通信经 Lumina</div>
+      <div class="row">
+        <div class="node"><b>Yak 📊</b><span class="role">代码工程师</span></div>
+        <div class="node"><b>热茶 🍵</b><span class="role">审查员 · 挑错</span></div>
+      </div>
+      <div class="links">复杂任务时 Yak 可临时招「实习生」（最多 3 名，只做代码子任务，用完即走）</div>
+      <p class="mut" style="margin-bottom:0">证据：<code>agentTeamPersonas.ts</code> 铁则 3「Yak/热茶永远不互相说话」；<code>orchestration/internPool.ts</code>、<code>yakParallel.ts</code>。</p>
+      <p style="margin:8px 0 0;color:#6ee7b7;font-size:12px">⬆ 改造前拓扑。v3.31 后：Lumina 身后还有一层<b>动态 7 工种临时工 + 自领取任务板 + 信箱 + 自动 worktree</b>（干完即解散，前台仍只见三人），见第 11 节。</p>
+    </div>
+    <div class="topo cc">
+      <div class="lead">cc-haha：网状 · 动态 N 成员（示例拓扑恰为 5 人）</div>
+      <div class="row">
+        <div class="node"><b>Research</b><span class="role">知识/分析</span></div>
+        <div class="node boss"><b>Team Lead</b><span class="role">编排/协调</span></div>
+        <div class="node"><b>Code</b><span class="role">实现</span></div>
+      </div>
+      <div class="row">
+        <div class="node"><b>Review</b><span class="role">质量保证</span></div>
+        <div class="node"><b>Deploy</b><span class="role">部署/运维</span></div>
+      </div>
+      <div class="links">成员之间可直接 SendMessage（DM/广播）· 文件信箱 <code>inboxes/{name}.json</code> 1s 轮询 + 文件锁 · 共享任务板自领取 · 关停握手</div>
+      <p class="mut" style="margin-bottom:0">证据：官方架构图 <code>docs/internals/images/04-agent-teams.png</code>；<code>TeamCreateTool/prompt.ts</code>、<code>teammateMailbox.ts</code>、<code>teamService.ts</code>。</p>
+    </div>
+  </div>
+
+  <div class="card" style="border-left:3px solid var(--cc)">
+    <h4>「5 个 agent」的真相（先纠正这个直觉）</h4>
+    <p style="margin-bottom:6px">cc-haha <b>没有固定的 5 个 agent</b>。你看到的 5 人是文档里的一张<b>示例团队拓扑图</b>。它的团队是三层概念：</p>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>6 种内置工种</b>（Claude Code 自带）：general-purpose（全能）、Explore（只读快搜，跑 Haiku 小模型）、Plan（只规划不写文件）、verification（常驻后台，输出 PASS/FAIL 判定）、claude-code-guide（文档查询，Haiku）、statusline-setup（状态栏配置，范围极小）。</li>
+      <li><b>Agent Teams</b>：Lead 运行时 <code>TeamCreate</code> 建队，按需 spawn 任意数量成员，给名字、选工种、选模型、选工具池、选权限模式，干完发 <code>shutdown_request</code> 握手解散。</li>
+      <li><b>工作台 8 种职业头像</b>：team-lead / server-engineer / ui-designer / qa-engineer / security-reviewer / data-analyst / release-engineer / docs-coordinator——纯视觉角色，按成员名字和任务关键词正则匹配。</li>
+    </ul>
+    <p class="mut" style="margin-bottom:0">所以正确的对比不是「3 个 vs 5 个」，而是<b>「3 个固定人格」 vs 「1 个 Lead + 任意数量临时工种」</b>；你也不是严格 3 个——你的实习生池就是同一思路的雏形，只是被限定在代码场景。</p>
+  </div>
+
+  <!-- ============ 03 团队 14 维对比 ============ -->
+  <h2><span class="n">03</span>团队系统 14 维硬碰硬 <span class="tag win">前三列为改造前基线，最右列「改造后 v3.32」为现状</span></h2>
+  <table>
+    <colgroup><col style="width:11%"><col style="width:24%"><col style="width:24%"><col style="width:14%"><col style="width:27%"></colgroup>
+    <tr><th>维度</th><th>cc-haha（基线）</th><th>Lumina 改造前</th><th>改造前判定</th><th>改造后（v3.32）现状</th></tr>
+    <tr><td>成员构成</td><td>运行时动态 spawn，N 个，干完解散；6 工种 + 8 职业视觉</td><td>3 个固定常驻人格；Yak 可招 ≤3 实习生（仅代码任务）</td><td class="m">cc-haha 灵活</td><td class="s"><b>已追平</b>：7 工种临时工（research/search/data/code/review/test/general）+ agents/*.md 自定义工种，运行时 spawn/干完 dismiss；三人常驻不变（<code>dynamicWorker / agentMarkdown</code>）</td></tr>
+    <tr><td>通信拓扑</td><td>点对点网状：DM、广播、peer DM 对 Lead 可见摘要，文件信箱+文件锁</td><td>纯星型：worker 被铁则禁止互相说话，全部经 Lumina 转述</td><td class="n">cc-haha</td><td class="s"><b>功能对等</b>：文件信箱（jsonl+游标+锁+1s 轮询）、worker 私信自动抄送 Lumina；有意保留「队长汇总出口」做叙事与安全</td></tr>
+    <tr><td>任务分配</td><td><b>共享任务板</b>：成员轮询 TaskList、自己 claim、blockedBy 依赖、按 ID 顺序做</td><td>Lumina 派活（<code>delegate_to</code>）；taskBoard 有 DAG 但靠引擎路由，worker 不自领取</td><td class="n">cc-haha</td><td class="s"><b>已追平</b>：首认领者胜、blockedBy 门禁、10 分钟心跳回收、<code>pending_approval</code> 审批泳道（<code>teamSharedBoard</code>）</td></tr>
+    <tr><td>生命周期</td><td>建队 → 干活（每轮后自动 idle 等消息）→ 关停握手 → 删队；配置文件落盘</td><td>三人常驻；实习生 hire→assign→collect→review→dismiss</td><td class="m">各有取舍</td><td class="s"><b>已追平</b>：idle 待命可唤醒、shutdown_request 握手、working 中标记由执行循环收尾（<code>dynamicWorker</code>）</td></tr>
+    <tr><td>并行与隔离</td><td>单消息内并行 spawn；<b>每个改文件的 agent 可开独立 git worktree</b>；后端 in-process / tmux / iTerm2</td><td>实习生并行（≤3）；<b>没有 worktree 隔离</b>，并行写同一工作区有冲突风险</td><td class="n">cc-haha</td><td class="s"><b>已追平</b>：code worker 雇佣时自动开 worktree，成功后自动合并回<b>创建时的原分支</b>并回收，失败保留现场（<code>gitWorktree</code>）</td></tr>
+    <tr><td>编排方式</td><td><b>模型当场写 JS 编排脚本</b>：parallel/pipeline/phase/循环/条件，确定性执行，可断点续跑</td><td>写死的五阶段门控 research→plan→execute→verify→review + 规则复杂度分析</td><td class="n">cc-haha</td><td class="m"><b>基本追平</b>：模型现写 JSON DSL（pipeline/parallel、<code>$id.result</code>、journal 断点续跑、<b>v3.31 when 条件 + retry 有界重试</b>）；不 eval JS 是安全取舍，任意 JS 表达式能力仍不如它</td></tr>
+    <tr><td>质量验证</td><td>独立 verification 工种后台跑、PASS/FAIL；N 怀疑者投票、多视角评审、评审团、穷尽循环、完整性批评员</td><td>verifyLoop 跑 tsc/测试/lint，失败自动回修 ≤3 轮；热茶只报「1 个最严重问题」</td><td class="m">cc-haha 模式丰富</td><td class="s"><b>已追平</b>：正确性/安全/可复现三视角并行 + 多数票/高危一票否决 + 完整性批评员（<code>adversarialReview</code>），代码闭环仍走 verifyLoop</td></tr>
+    <tr><td>每 agent 配置</td><td>模型、推理强度（5 档）、工具白/黑名单、权限模式（7 种）、MCP、skills、记忆作用域、worktree、颜色……</td><td>每 agent 独立 LLM（agent.json）、工具白名单、approvalLevel、TTS 音色</td><td class="n">cc-haha 细</td><td class="m"><b>小幅落后</b>：已加模型分级（modelTier）、工具黑名单、approvalLevel、自定义 .md frontmatter；未做推理强度 5 档、bubble 冒泡权限</td></tr>
+    <tr><td>定义与热加载</td><td><b>纯 Markdown 文件</b>，6 级来源优先级，保存即热重载</td><td>agent.json + 代码里写死 persona，改角色要改代码</td><td class="n">cc-haha</td><td class="s"><b>已追平</b>：frontmatter .md + 正文即提示词，项目/用户双目录、fs.watch 300ms 防抖热重载；未做 6 级来源优先级</td></tr>
+    <tr><td>后台执行</td><td>前台 agent 超 120 秒自动转后台；完成发 task-notification；模型请求 trace 可查</td><td>asyncTaskManager + 通知板 + 定时任务；无自动后台化和请求追踪</td><td class="m">cc-haha 完整</td><td class="m"><b>小幅落后</b>：asyncTaskManager/通知板/定时任务都在，新增任务板历史留痕；仍无 120 秒自动转后台与请求 trace</td></tr>
+    <tr><td>可视化</td><td><b>工作台泳道图</b>：依赖深度分列、成员头像站位、通信流、成员检查器、历史回放</td><td>TeamPanel / TasksPanel / GroupChatView 面板，无 DAG 泳道与站位</td><td class="n">cc-haha</td><td class="s"><b>v3.32 形态对齐</b>：DAG 波次分列 + <b>成员头像直接站在任务卡上</b>（执行中红色脉冲）+ 待命区长凳 + <b>右侧通讯流（全部/指派/私信 + 成员信箱过滤）</b> + <b>快照回放（播放/0.5–4×/点击时间轴跳转，localStorage 保留 60 分钟）</b> + 未读角标/检查器/审批按钮；社交叙事仍是独有项</td></tr>
+    <tr><td>权限边界</td><td>7 种权限模式（含 dontAsk、bubble 冒泡）、每工具级授权、TeamAllowedPaths 文件系统边界</td><td>7 级严重度 × 8 类威胁 + 审批流；worker 只有 approvalLevel 开关</td><td class="m">维度不同</td><td class="m"><b>接近够用</b>：plan_approval 泳道、worker 工具白名单、危险工具审批、CU 会话锁/前台分区；未做 bubble 冒泡与路径沙箱</td></tr>
+    <tr><td>人格/情绪/关系</td><td><b>基本没有</b>——工牌 + task-aware 桌宠卖萌；无连续自我、无关系演化</td><td><b>三人有人格、五维情绪、亲密度/信任持久化、群聊/朋友圈/早安仪式</b></td><td class="s">Lumina 碾压</td><td class="s"><b>继续碾压</b>（本轮未动灵魂层）：动态团队全部在后台，前台永远是 Lumina</td></tr>
+    <tr><td>情绪参与调度</td><td>无</td><td><b>有</b>：焦虑/不耐烦时跳过阶段直派、内驱力影响主动性</td><td class="s">Lumina 独有</td><td class="s"><b>Lumina 独有</b>，cc-haha 至今无对应架构</td></tr>
+  </table>
+
+  <!-- ============ cc-haha 新奇点 ============ -->
+  <h2><span class="n">04</span>cc-haha 团队的 8 个新奇点（按可借鉴度排序）</h2>
+  <div class="grid g2">
+    <div class="card cc">
+      <h4><span class="num">1</span>文件信箱 + 共享任务板（最值得抄）</h4>
+      <p style="margin:4px 0">成员不互相等：<code>inboxes/{name}.json</code> 1 秒轮询、文件锁防并发；任务板上每人自己 claim 任务、更新 owner、查 blockedBy。Lead 不用逐个人派活，<b>团队像真的敏捷小组一样自组织</b>。</p>
+      <p class="mut" style="margin:0">你的 <code>taskBoard.ts</code> 已经有 DAG/并行组/owner 字段，差的是「worker 自己 claim + 信箱轮询」这一层。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">2</span>模型当场写的 Workflow 脚本</h4>
+      <p style="margin:4px 0">不是预设套餐，而是模型在对话里现写一段 JS：<code>parallel()</code> 屏障、<code>pipeline()</code> 无屏障流水（A 件到第 3 阶段时 B 件还在第 1 阶段）、schema 强制结构化输出、token 预算硬上限、并发帽、<b>journal 断点续跑（改一处只重跑变更点，前面全缓存）</b>。</p>
+      <p class="mut" style="margin:0">你的 <code>workflowTemplateManager.ts</code> 是「预设 prompt+工具套餐」，<code>phaseGate</code> 是写死的代码，两者都不是运行时脚本。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">3</span>对抗式验证模式库</h4>
+      <p style="margin:4px 0">每个发现派 N 个独立「怀疑者」专门去<b>反驳</b>，多数票反驳成功就杀掉；多视角评审（正确性/安全/性能/可复现）；评审团出 N 个独立方案再打分嫁接；loop-until-dry 连续 K 轮没新东西才停；最后一个「完整性批评员」专问漏了什么。</p>
+      <p class="mut" style="margin:0">热茶现在被 prompt 限定「只报 1 个最严重问题」，可以升级成多视角投票。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">4</span>git worktree 隔离并行</h4>
+      <p style="margin:4px 0">多个 agent 同时改文件，各自在独立 worktree/分支里跑，互不踩；无改动自动清理；非 git 仓库降级为普通目录。配合分支/Worktree 启动会话和整轮 Diff 可撤销。</p>
+      <p class="mut" style="margin:0">你有 <code>gitAgent.ts</code> 和实习生并行，但并行写没有隔离层——这是实习生一多就会踩的坑。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">5</span>Agent 即 Markdown，热加载</h4>
+      <p style="margin:4px 0">自定义 agent 就是一个带 frontmatter 的 .md（tools/model/effort/permissionMode/maxTurns/skills/memory/isolation…），用户级/项目级两个目录，保存即热重载，同名按 6 级优先级覆盖。</p>
+      <p class="mut" style="margin:0">你路线图 v1.1 要做自定义 Agent，这是现成答案；甚至比你现在的 agent.json 更适合让用户手写。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">6</span>可视化工作台（泳道+站位+通信流）</h4>
+      <p style="margin:4px 0">任务按依赖深度自动分列（拓扑最长路径算泳道），成员头像实时站在自己当前任务上，消息流、plan 审批、关停握手全可见，还能回放历史快照（被解散的成员仍保留其任务和对话）。</p>
+      <p class="mut" style="margin:0">这是把「多 agent 在干嘛」从黑盒变成直播，天然适合你的团队社交叙事。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">7</span>关停握手与 idle 语义</h4>
+      <p style="margin:4px 0">队员每轮干完自动 idle（不是退出，发消息即可唤醒）；任务结束 Lead 发 shutdown_request，队员 approve 后才解散；prompt 反复教模型「别看到 idle 就以为人家挂了」。</p>
+      <p class="mut" style="margin:0">你的实习生是 dismiss 即销号，缺少「挂起待命」和优雅收尾。</p>
+    </div>
+    <div class="card cc">
+      <h4><span class="num">8</span>小模型干杂活的成本意识</h4>
+      <p style="margin:4px 0">Explore / claude-code-guide 这类只读工种默认跑 Haiku 小模型，强模型只给 Plan 和实现；自动后台化、token 用量统计、Workflow 必须用户显式 opt-in（说 ultracode 才大规模扇出）。</p>
+      <p class="mut" style="margin:0">你全团同一个 9B 时没差，一旦接强模型 API，这就是真金白银的成本控制。</p>
+    </div>
+  </div>
+
+  <div class="card lum" style="border-left:3px solid var(--lum);margin-top:14px">
+    <h4>但有 4 件事，它抄不走你</h4>
+    <div class="grid g2" style="margin-top:8px">
+      <div>① <b>连续自我</b>：它的 agent 是一次性工牌，无名字延续、无独立记忆；你的三人有独立记忆（<code>agentIndependentMemory.ts</code>）、关系、情绪历史。</div>
+      <div>② <b>社交生活</b>：群聊、朋友圈、早安仪式、亲密度随真实委托演化——它的「团队」只在任务期间存在，你的团队 24 小时在你电脑里过日子。</div>
+      <div>③ <b>情绪进入调度回路</b>：心情影响派单路径和主动性，这是「生命体」才有的架构。</div>
+      <div>④ <b>小模型友好的工程哲学</b>：SoM 网格、阶段门、规则复杂度分析是为「没 Claude 也能跑」设计的；cc-haha 的下限绑定 Claude 级模型。</div>
+    </div>
+  </div>
+
+  <!-- ============ 05 Computer Use ============ -->
+  <h2><span class="n">05</span>Computer Use 正面对决：它厚在哪，你赢在哪</h2>
+
+  <h3>两套流水线的形状</h3>
+  <div class="grid g2">
+    <div class="card cc">
+      <h4>cc-haha：四道关 + 双实现</h4>
+      <div class="flow">
+        <div class="step"><b>① MCP 工具</b>24 基础工具 + 3 个 Teach 工具，schema 校验</div>
+        <div class="arrow">→</div>
+        <div class="step"><b>② 会话授权</b>应用白名单/前台/会话锁/剪贴板与系统键 grant</div>
+        <div class="arrow">→</div>
+        <div class="step"><b>③ Python Bridge</b>隔离 venv，按 requirements 哈希装依赖</div>
+        <div class="arrow">→</div>
+        <div class="step"><b>④ 平台 Helper</b>Win: win_helper.py（71KB）；Mac: 原生 Swift 守护进程</div>
+      </div>
+      <p class="mut" style="margin:8px 0 0">另有第二套 vendored MCP：窗口锁定截图 + <code>get_app_state</code> 返回无障碍元素编号 + <code>js</code> 工具（cua 对象写确定性自动化，可循环/变量，单次 ≤256 KiB、≤256 次原生调用）+ <code>sequence</code> 批量。</p>
+    </div>
+    <div class="card lum">
+      <h4>Lumina：单一内核 + 小模型定位术</h4>
+      <div class="flow">
+        <div class="step"><b>① 截图</b>captureScreen，真实像素尺寸 + scaleFactor</div>
+        <div class="arrow">→</div>
+        <div class="step"><b>② 标注</b>Set-of-Mark 编号网格；目标小先 zoom 放大再画细网格</div>
+        <div class="arrow">→</div>
+        <div class="step"><b>③ VLM 决策</b>选格子编号而非猜像素；可 batch 一串确定性动作</div>
+        <div class="arrow">→</div>
+        <div class="step"><b>④ cuCore 执行</b>归一化坐标换算；中文走剪贴板；高危正则硬拦截</div>
+      </div>
+      <p class="mut" style="margin:8px 0 0">agent 工具 <code>desktop_see / desktop_act</code> 与 IPC 引擎共用同一内核；默认 8 步、上限 16；全局 <span class="kbd">Ctrl+Alt+X</span> 急停。</p>
+    </div>
+  </div>
+
+  <h3>13 项能力矩阵 <span class="tag win">前三列为改造前基线，最右列「改造后 v3.31」为现状</span></h3>
+  <table>
+    <colgroup><col style="width:11%"><col style="width:25%"><col style="width:25%"><col style="width:12%"><col style="width:27%"></colgroup>
+    <tr><th>能力</th><th>cc-haha（基线）</th><th>Lumina 改造前</th><th>改造前判定</th><th>改造后（v3.31）现状</th></tr>
+    <tr><td>应用级权限</td><td>每应用 <b>read / click / full 三级授权</b>，动作前检查前台应用是否在白名单，不在即拒</td><td>无应用概念；只有 auto/ask/strict 三姿态 + 写操作弹窗</td><td class="n">落后</td><td class="s"><b>已补</b>：白名单 + <code>GetForegroundWindow</code> 前台进程校验（400ms 缓存）+ 会话锁；粒度是进程级而非三级/应用，略粗</td></tr>
+    <tr><td>危险应用分区</td><td><b>浏览器只读不能点、终端/IDE 只点不能输入</b>（网页走扩展、命令走 Bash）</td><td>无分区，VLM 点哪里都行</td><td class="n">落后</td><td class="s"><b>已追平</b>：浏览器只读/截图/滚动放行、点击输入硬拒；终端/IDE 只点不输入、keypress 仅导航键白名单；剪贴板写需 full 级</td></tr>
+    <tr><td>会话互斥</td><td>会话锁：同一时间只许一条会话控制输入，带进程信息、可从失效恢复</td><td>单例实例，无显式锁/前台校验</td><td class="n">落后</td><td class="s"><b>已追平</b>：agent 批次与 IPC 引擎双持锁，占用即拒（<code>cu_session_busy</code>），租约失效可恢复</td></tr>
+    <tr><td>系统键/剪贴板</td><td>剪贴板读写、系统组合键分别授权；危险按键黑名单；粘贴前保存、事后恢复剪贴板</td><td>中文输入直接走剪贴板；cuSafety 13 条正则<b>针对 shell 命令形态</b>，对 GUI 动作几乎无防护</td><td class="n">落后</td><td class="s"><b>已追平</b>：Win+R/Win+L/Alt+F4/Ctrl+Shift+Esc/Alt+Tab 等硬拦；剪贴板写需 full 级；粘贴备份/恢复原本就有；VLM 组合键走 SendKeys 编译</td></tr>
+    <tr><td>物理输入冲突</td><td>Windows 低层键鼠钩子：用户一碰鼠标键盘（ForegroundLease），当前动作立即中止</td><td>无</td><td class="n">落后</td><td class="s"><b>已追平</b>：<code>cuInputGuard</code> WH_MOUSE_LL/WH_KEYBOARD_LL 常驻钩子，按注入位过滤 AI 自己的事件，真人滚轮/点击/按键即中止（鼠标移动有计数阈值防手抖）</td></tr>
+    <tr><td>视觉定位</td><td>Claude 级 VLM 直接读像素；macOS 走 AX 无障碍元素树/元素指纹；窗口锁定截图</td><td><b>SoM 编号网格 + zoom 两级放大</b>，模型选编号；仅主显示器</td><td class="s">小模型领先</td><td class="s"><b>领先扩大</b>：SoM+zoom 保留；新增 Windows UIA 元素树（<b>它在 Windows 没有元素树，只在 macOS 有 AX</b>），v3.31 还支持 ValuePattern 直接赋值</td></tr>
+    <tr><td>确定性自动化</td><td><code>js</code> REPL：cua.getApp 后写循环/变量做确定性批量；Teach 模式录制回放</td><td>无脚本、无录制；batch 只能执行模型一次给出的固定动作串</td><td class="n">落后</td><td class="m"><b>部分追平</b>：Teach 低级钩子录制（点击/拖拽/滚轮/打字/组合键）+ 一键回放；Workflow JSON DSL 带 when/retry/续跑；仍无自由 js REPL（安全取舍，不 eval 代码）</td></tr>
+    <tr><td>动作面</td><td>click/drag/select_text/set_value/scroll/press_key/paste/secondary/sequence 等 24 工具</td><td>单击/双击/右键/拖拽/滚动/输入/按键/开应用/关窗/剪贴板/等待；缺悬停、长按、修饰键组合、文本选择</td><td class="m">基本够用</td><td class="s"><b>已补齐</b>：hover/mouse_move/long_press/select_text/set_value/scroll/组合键编译全在；动作面与 cc-haha 核心集对等（工具数量仍略少）</td></tr>
+    <tr><td>动作后验证</td><td>每动作回帧；窗口锁定；像素陈旧检测能力存在（默认关）；失败在模型层重规划</td><td>每步回帧；失败即停（防连环误点）；无前后帧 diff、无变化检测</td><td class="m">可补</td><td class="s"><b>已补（设计改软）</b>：click/drag 前后 9×8 dHash 比对，无变化追加「建议重新 desktop_see」；有意不判失败，避免误杀合法无变化点击</td></tr>
+    <tr><td>全局急停</td><td><b>明确没有</b>全局热键，只能点会话停止按钮（⌘.）</td><td><b>Ctrl+Alt+X 真·全局快捷键</b>（main.ts:253 注册 globalShortcut）</td><td class="s">你赢</td><td class="s"><b>仍领先</b>：急停未动，权限门异常 fail-open，急停永远不被门禁挡住</td></tr>
+    <tr><td>截图隐私</td><td>macOS 合成层剔除未授权窗口；Windows 不过滤（文档明确警告用户先关敏感窗）</td><td>全屏幕截图，不过滤任何窗口</td><td class="m">平手偏落后</td><td class="m"><b>小幅落后（诚实保留）</b>：非前台窗口矩形遮罩可开关（默认关，best-effort）；Windows 两边都不是系统级合成过滤——与它 Windows 侧实际持平</td></tr>
+    <tr><td>多显示器/DPI</td><td>截图尺寸、逻辑尺寸、缩放、显示器原点作为整体冻结，Retina/多屏坐标不出错</td><td>有 scaleFactor 归一化，但只取主显示器</td><td class="m">部分落后</td><td class="s"><b>已补</b>：虚拟桌面截屏含负坐标原点，动作按 vx/vy 偏移，UIA 元素与截图共用归一化坐标系；冻结模型成熟度略逊</td></tr>
+    <tr><td>人格化</td><td>无——它是工具，操作者感觉不到「她」</td><td>屏幕感知接主动陪伴，热茶会看你写代码主动提建议</td><td class="s">你独有</td><td class="s"><b>你独有</b>：Teach 还套了「看一遍就学会」的人设叙事，它的 Teach 是纯工程工具</td></tr>
+  </table>
+
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card good">
+      <h4>你在 CU 上真正领先的两点</h4>
+      <p style="margin:4px 0"><b>① 小模型可点得准。</b>cc-haha 的成立前提是 Claude 级视觉；你用编号网格把「猜像素」变成「选编号」，zoom 放大解决小目标——这是你本地 9B 路线的正确解法，他们没有。</p>
+      <p style="margin:4px 0"><b>② 真急停。</b>他们文档白纸黑字写「没有全局中止热键」，你有，而且是在任何应用置顶生效的全局快捷键。</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--good)">
+      <h4>必须诚实面对的安全差距 <span class="tag win">改造前问题 · v3.20 已闭合，见第 10 节</span></h4>
+      <p style="margin:4px 0">你的 <code>cuSafety.ts</code> 13 条正则拦的是 <code>format C:</code>、<code>rm -rf /</code> 这类<b>命令行文本</b>；但 CU 的动作是<b>点击和按键</b>——模型在密码管理器上点一下、在聊天框里按 Ctrl+V、在银行 App 里按回车，正则一条都拦不住。cc-haha 的白名单/前台/分区/输入冲突仲裁防的正是这个。<b>这是「敢不敢长期无人值守开着」的差距，不是功能差距。</b></p>
+      <p style="margin:4px 0 0;color:#6ee7b7">✅ v3.20 已按此清单全部补齐：白名单/前台/会话锁、浏览器只读/终端只点、系统键与剪贴板授权、动作后 dHash 验证；v3.30 再补 ForegroundLease 人机互斥。</p>
+    </div>
+  </div>
+
+  <!-- ============ 06 雷达 ============ -->
+  <h2><span class="n">06</span>五个项目能力雷达（主观工程评分，1–10）<span class="tag win">已叠加 Lumina v3.31 改造后曲线</span></h2>
+  <div class="chart"><div id="radar" class="ec"></div></div>
+  <p class="mut">评分为本次基于源码精读的<b>主观判断</b>，用于定位而非精确测量：<b>灰色的「Lumina」面是改造前基线（桌面操控 6.5 分＝闭环已通但安全门薄），粉色高亮的「Lumina v3.31」是改造后</b>——工程编排 6→9、安全治理 7→9、桌面操控 6.5→8.5、生命感与形象维持 9/8.5 封顶；cc-haha 8.5 分指「工程成熟但无人格化、Linux 无执行器」。生态·渠道（5）未在本轮路线图内，保持原状。</p>
+
+  <!-- ============ 07 借鉴路线图 ============ -->
+  <h2><span class="n">07</span>把 cc-haha 的「新」搬到 Lumina：三级路线图</h2>
+  <p class="sub">原则：<b>不动你的灵魂层，只补工程调度层</b>。用户始终只见 Lumina 的铁则不变，新能力全部发生在后台。</p>
+
+  <div class="tl">
+    <div class="tl-row">
+      <div class="tl-time">P0 · 1–2 周</div>
+      <div class="tl-axis"><div class="tl-dot p0"></div></div>
+      <div class="tl-body">
+        <h4>先补「敢无人值守」的 CU 安全门（最高优先级）</h4>
+        <ul>
+          <li><b>应用白名单 + 前台校验 + 会话锁</b>：在 <code>cuCore.ts</code> 的 <code>executeCuAction</code> 前加 gate——Windows 用 GetForegroundWindow + 进程名（win_helper 已有同款实现可参考）；非白名单前台应用一律拒动作。</li>
+          <li><b>危险分区</b>：浏览器默认只读、终端/IDE 只点不输入；剪贴板写入与系统组合键单独授权，粘贴前保存/事后恢复剪贴板内容。</li>
+          <li><b>动作后验证</b>：执行前后帧做 dHash 比对（你已有 <code>desktopScan.ts</code> / screenAwareness 的 dHash 资产），画面没变化即判失败，让模型重看，而不是闷头点下去。</li>
+          <li>保留并放大你的 <span class="kbd">Ctrl+Alt+X</span> 急停——这是你对它的现成差异化，写进 README 对比表。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-time">P1 · 3–6 周</div>
+      <div class="tl-axis"><div class="tl-dot p1"></div></div>
+      <div class="tl-body">
+        <h4>把「实习生池」升级为真正的动态团队</h4>
+        <ul>
+          <li><b>通用化 InternPool</b>：不再只服务代码任务，任何可并行子任务（调研/搜索/数据）都能 spawn 临时工，注册进已有的 <code>core/teamRegistry.ts</code>。</li>
+          <li><b>加文件信箱 + 自领取任务板</b>：你的 <code>taskBoard.ts</code> 已有 DAG/owner/blockedBy 字段，补 worker 轮询 claim + inboxes 消息；有条件放开 worker 间点对点通信（保留 Lumina 汇总出口），加 plan_approval。</li>
+          <li><b>worktree 隔离</b>：并行写代码的任务各开 git worktree（<code>gitAgent.ts</code> 扩展），Yak 最后 integrate——这是实习生数量上到 3 以后的必踩坑。</li>
+          <li><b>热茶升级为多视角对抗评审</b>：correctness / security / reproducibility 三票，外加一个「完整性批评员」；verification 独立输出 PASS/FAIL（你的 verifyLoop 已经在跑 tsc/test，套壳即可）。</li>
+          <li><b>团队工作台 UI</b>：TeamPanel 加 DAG 泳道（依赖深度分列）+ 成员头像站位 + 通信流，这直接复用你 GroupChatView 的社交基因，能做得比它更有「过日子」感。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-time">P2 · 1.5–3 月</div>
+      <div class="tl-axis"><div class="tl-dot p2"></div></div>
+      <div class="tl-body">
+        <h4>动态编排 + 动作教学 + 自定义 Agent</h4>
+        <ul>
+          <li><b>Workflow 脚本化</b>：在 <code>workflowTemplateManager</code>（现在是套餐）和 <code>loopEngineering</code>（现在写死）之间，加一层「模型当场写的确定性编排」：parallel/pipeline 原语 + JSON schema 强制结构化输出 + journal 记录每步结果、改脚本后续跑只重跑变更点。先做 3 个内置模板（多源调研、多维审查、批量迁移）。</li>
+          <li><b>Teach 模式</b>：你说一遍操作，她录制动作序列、回放执行——对应她「看一遍就学会」的人设，比 cc-haha 的工程向 Teach 更有情感叙事。</li>
+          <li><b>Windows UI Automation 元素树</b>：你 9-16 的 CU 计划里已经写了这一步——能读 UIA 树就点元素句柄，不靠像素、不吃 VLM 眼神；这是 cc-haha 在 Windows 上都没做的差异化反超（它只在 macOS 有 AX 树）。</li>
+          <li><b>Agent 定义 Markdown 化</b>：agent.json 升级为带 frontmatter 的 .md，热加载、用户级/项目级优先级——正好对接你路线图 v1.1 的自定义 Agent。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 08 不要抄 ============ -->
+  <h2><span class="n">08</span>别抄什么，以及抄不动什么</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h4>不该抄</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><b>无名工牌文化。</b>它的 agent 没有人格、干完即焚，这是它的工程定位；你的全部品牌资产都在「三人在你电脑里过日子」。动态团队只该补在后台，前台永远是 Lumina。</li>
+        <li><b>9 个 IM 渠道全家桶。</b>它和 openclaw（20+ 渠道）的核心卖点就是渠道，你不是；你已有 ServerChan/钉钉推送，等有真实用户需求再扩。</li>
+        <li><b>Claude 账号登录体系。</b>那是它的商业模式，你的本地优先路线用 LM Studio/Ollama 是对的。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>短期抄不动（但要知道差距）</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><b>macOS 原生 AX 守护进程</b>：cu-helper 是上万行 Swift（虚拟光标、元素指纹、进程证明、截图合成层过滤），macOS 上短期追不平；你主战场是 Windows，把筹码押在 Windows UIA 树更划算。</li>
+        <li><b>底层 agent harness</b>：它直接复用 Anthropic 生产级运行时（AsyncLocalStorage 隔离、tmux 后端、后台任务通知）；你自研运行时，这些要用实习生池/信箱/worktree 一步步补。</li>
+        <li><b>模型代差</b>：强模型 + 动态编排成立的前提是单次推理够可靠；本地 9B 上大规模 fan-out 会放大错误率——所以你写死的阶段门、复杂度分析、SoM 补偿设计短期内仍要保留。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="verdict" style="margin-top:20px">
+    <h3>最终判断 <span class="tag win">P0→P2 已在 v3.20/v3.30/v3.31 完成，见第 10/11 节</span></h3>
+    <p style="margin-bottom:0">cc-haha 是<b>更好的「工程队包工头」</b>，Lumina 是<b>独一无二的「住在电脑里的生命」</b>——你们的重叠面只有「多 agent 调度 + Computer Use」两块，改造前这两块它确实领先你一个身位，而且差距是<b>纯工程量</b>，不是理念或模型能力问题。<b style="color:#6ee7b7">v3.31 现状：这个身位已经补齐（27 项对账 26 项落地），并保留了你预期的组合</b>——有情绪、有关系、会主动关心你的 Lumina，背后带着一支按需组建、能并行干活、操作电脑还受严格权限约束的项目组。这是 cc-haha（无生命）和 N.E.K.O（单角色无团队）都占不住的生态位。</p>
+  </div>
+
+  <!-- ============ 09 证据 ============ -->
+  <h2><span class="n">09</span>证据与局限</h2>
+  <div class="src">
+    <p style="margin:4px 0"><b>cc-haha（main 分支，2026-09-20 拉取）</b>：<code>docs/internals/agent.md</code>（6 内置工种/权限模式/自定义 agent）、<code>docs/internals/computer-use.md</code> 与 <code>docs/desktop/computer-use.md</code>（四道关、24+3 工具、白名单、已知边界）、<code>src/tools/TeamCreateTool/prompt.ts</code>（信箱/任务板/关停握手）、<code>src/tools/WorkflowTool/prompt.ts</code>（pipeline/parallel/schema/对抗验证/断点续跑）、<code>desktop/src/components/agentTeams/agentTeamsModel.ts</code>（8 职业头像/DAG 泳道）、<code>src/vendor/computer-use-mcp/tools.ts</code>、<code>runtime/win_helper.py</code>（71KB，ForegroundLease/输入钩子）、架构图 <code>docs/internals/images/04-agent-teams.png</code>（5 人示例拓扑）。</p>
+    <p style="margin:4px 0"><b>Lumina（本地源码）</b>：<code>agentTeamPersonas.ts / agentTeamTypes.ts</code>（铁则与角色）、<code>delegationManager.ts</code>（委托/重试/阶段门/验证环）、<code>orchestration/*</code>（taskBoard/internPool/yakParallel/phaseGate/verifyLoop/complexityAnalyzer）、<code>tools/impl/computerUse.ts + cuCore.ts + cuSafety.ts + cuGeometry.ts</code>、<code>electron/computerUse.ts</code>、<code>main.ts:253</code>（急停注册）、<code>workflowTemplateManager.ts</code>。</p>
+    <p style="margin:4px 0"><b>局限</b>：未实际运行 cc-haha；Swift cu-helper 只读了文件清单与架构文档；雷达分为主观评分；star 数为 GitHub API 2026-09-20 快照（openclaw 390k、AIRI 49.3k、cc-haha 14.7k、N.E.K.O 2.9k）。N.E.K.O/AIRI/openclaw 结论沿用你 2026-09-19《Lumina-竞品对比分析.md》，本次未重新逐行核验。</p>
+  </div>
+
+  <!-- ============ 10 v3.20 落地核验 ============ -->
+  <h2><span class="n">10</span>v3.20 落地核验：路线图逐项对账（2026-09-20）</h2>
+  <div class="verdict" style="border-color:#1c5e45;background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(236,72,153,.07))">
+    <h3 style="color:#6ee7b7">一句话结论</h3>
+    <p style="margin-bottom:0"><b>P0 安全门全部闭环</b>（4/4）；<b>P1 动态团队 4 项主体完成、1 项部分完成</b>（缺 plan_approval）；<b>P2 按计划尚未启动</b>（Workflow 脚本化 / Teach / UIA 元素树 / Agent Markdown 化）。另有增强项（物理输入仲裁、历史回放、关停握手、成本分级）未做——最该优先补的是<b>物理输入冲突仲裁（ForegroundLease）</b>，它是 P0 安全门里唯一还没抄到的一块。验证：<code>tsc --noEmit --strict</code> 零错误，<b>749 测试通过</b>，electron-vite 三端构建成功，拓扑图已用真实数据渲染截图自检。</p>
+  </div>
+
+  <div class="chart"><div id="completion" class="ec sm"></div></div>
+  <div class="chart"><div id="beforeafter" class="ec" style="height:620px"></div></div>
+
+  <h3>P0 · CU 安全门（最高优先级）— <span class="s">4/4 全部落地</span></h3>
+  <table>
+    <colgroup><col style="width:26%"><col style="width:11%"><col style="width:63%"></colgroup>
+    <tr><th>路线图条目</th><th>状态</th><th>落地证据（代码位置）</th></tr>
+    <tr><td>应用白名单 + 前台校验 + 会话锁</td><td class="s">✅ 已落地</td><td><code>cuPermissions.ts</code> 在 cuCore 唯一动作入口 <code>executeCuAction</code> 加 gate；PowerShell <code>GetForegroundWindow</code> 探测前台进程（400ms 缓存 / 2.5s 超时 / 探测故障 fail-open）；agent 批次与 IPC 引擎双持锁，锁被占用即拒（<code>cu_session_busy</code>）。</td></tr>
+    <tr><td>危险分区：浏览器只读、终端/IDE 只点不打、剪贴板/系统键单独授权</td><td class="s">✅ 已落地</td><td>浏览器分区点击/输入硬拒（只读/截图/滚动放行）；终端/IDE 的 type/clipboard 硬拒、keypress 仅放行导航键白名单（esc/tab/方向键/PageUpDown/Home/End/Ctrl+C）；剪贴板写入需 full 级；Win+R/Win+L/Alt+F4/Ctrl+Shift+Esc/Alt+Tab 等系统键任何级别硬拦。</td></tr>
+    <tr><td>粘贴前保存 / 事后恢复剪贴板</td><td class="s">✅ 本就具备</td><td><code>cuType</code> 原有「读剪贴板备份 → 粘贴 → 120ms 后还原」；本轮新增的是 full 级授权门禁。</td></tr>
+    <tr><td>动作后验证 dHash 无变化即重看</td><td class="m">✅ 已落地（设计改软）</td><td><code>cuVerify.ts</code>：click/drag 前后截图 9×8 dHash 比对，分数低于阈值追加「⚠️ 画面无变化，建议重新 desktop_see」。<b>有意不判失败</b>（打开菜单/聚焦输入框等合法点击本就无像素变化），把重看决策权交给 agent，避免误杀。</td></tr>
+    <tr><td>保留放大 Ctrl+Alt+X 急停</td><td class="s">✅ 仍在</td><td>main.ts:253 globalShortcut 未动；权限门异常 fail-open，急停永远不被门禁挡住。</td></tr>
+  </table>
+
+  <h3>P1 · 动态团队 — <span class="s">4 项主体完成，1 项部分</span></h3>
+  <table>
+    <colgroup><col style="width:26%"><col style="width:11%"><col style="width:63%"></colgroup>
+    <tr><th>路线图条目</th><th>状态</th><th>落地证据</th></tr>
+    <tr><td>通用化实习生池：任意工种 spawn 临时工并注册 teamRegistry</td><td class="s">✅ 已落地</td><td><code>dynamicWorker.ts</code>：research/search/data/code/review/test/general 七工种，hire→并行执行→统一 dismiss 一键流水线，复用 Lumina 的 LLM 配置与工具黑名单，干完团队回到 3 人。</td></tr>
+    <tr><td>文件信箱 + 自领取任务板 + worker 点对点（保留 Lumina 出口）</td><td class="m">🟡 部分完成</td><td><b>信箱（jsonl 追加+游标+锁，1s 轮询）、任务板（首认领者胜/blockedBy 门禁/10 分钟心跳回收）、worker 私信自动抄送 Lumina 全部落地</b>（<code>teamMailbox.ts / teamSharedBoard.ts</code>）。<b>plan_approval 于 v3.30 补齐</b>（pending_approval 审批泳道，见第 11 节）。</td></tr>
+    <tr><td>git worktree 隔离并行</td><td class="m">🟡 工具级落地</td><td><code>gitWorktree.ts</code> + <code>git_worktree</code> 工具：独立 worktree/分支、detached 回退、非 git 降级临时目录、mergeWorktree 回收。<b>未做自动绑定</b>：还不会在 spawn code worker 时自动给它开 worktree，需要 agent 主动调用。</td></tr>
+    <tr><td>热茶升级多视角对抗评审 + 完整性批评员</td><td class="s">✅ 已落地</td><td><code>adversarialReview.ts</code>：正确性/安全/可复现三视角并行（热茶已配置则委托热茶，否则临时雇 3 个复核员），JSON 判定，多数票失败或高危一票否决即不通过，再跑一个完整性批评员补遗漏。</td></tr>
+    <tr><td>团队工作台 UI：DAG 泳道 + 站位 + 通信流</td><td class="s">✅ 已落地</td><td>TeamPanel 新增「🕸 团队拓扑」实时图：队长置顶、成员卡片实时状态（执行中 #id / 阻塞 / 待领 + 脉冲）、任务按依赖波次分列、成员→任务与依赖三种连线、信箱未读角标、「刚解锁」绿点、卡片可直接认领/完成/释放。<b>历史快照回放、成员检查器、头像站位、通讯流均在 v3.31/v3.32 补齐</b>（见第 11/12 节）。</td></tr>
+  </table>
+
+  <h3>P2 · 动态编排与教学 — <span class="n">0/4，按计划尚未启动</span>（本就是 1.5–3 月档）</h3>
+  <table>
+    <colgroup><col style="width:26%"><col style="width:11%"><col style="width:63%"></colgroup>
+    <tr><th>路线图条目</th><th>状态</th><th>说明</th></tr>
+    <tr><td>模型当场写的 Workflow（parallel/pipeline/schema/journal 断点续跑）</td><td class="n">❌ 未做</td><td>现有 workflowTemplateManager 仍是预设套餐；这是 cc-haha 新奇点 #2，也是 P2 工程量最大的一块。</td></tr>
+    <tr><td>Teach 模式录制回放</td><td class="n">❌ 未做</td><td>「看一遍就学会」的人设级功能，依赖动作录制层，建议与 UIA 同期做。</td></tr>
+    <tr><td>Windows UIA 元素树（点句柄不靠像素）</td><td class="n">❌ 未做</td><td>仍是最有价值的<b>反超点</b>：cc-haha 只在 macOS 有 AX 树，Windows 上它也靠像素。</td></tr>
+    <tr><td>Agent 定义 Markdown 化 + 热加载</td><td class="n">❌ 未做</td><td>对接路线图 v1.1 自定义 Agent，与 cc-haha 差距纯工程量。</td></tr>
+  </table>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card bad">
+      <h4>仍诚实存在的差距（按建议优先级）</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><b>物理输入冲突仲裁（最该先补）</b>：cc-haha 的 ForegroundLease 在用户一碰鼠标键盘时立即中止动作；Lumina 现在只有「AI 会话之间互斥」，没有「人机互斥」。</li>
+        <li><b>动作面</b>：仍缺悬停、长按、修饰键组合、文本选择（select_text/set_value）。</li>
+        <li><b>多显示器</b>：仍只截主显示器；截图隐私过滤（未授权窗口剔除）也未做。</li>
+        <li><b>团队增强件</b>：关停握手 + idle 待命（新奇点 #7）、小模型干杂活的成本分级（#8）、拓扑历史回放/成员检查器、plan_approval。</li>
+        <li><b>确定性自动化</b>：无 js REPL（同 P2）。</li>
+      </ul>
+    </div>
+    <div class="card good">
+      <h4>本轮后依旧 cc-haha 抄不走的东西</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><b>真·全局急停</b>：Ctrl+Alt+X，cc-haha 明确承认自己没有。</li>
+        <li><b>SoM 编号网格 + zoom 两级放大</b>：9B 本地模型也能点得准，cc-haha 的下限绑定 Claude 级视觉。</li>
+        <li><b>有人格的三人</b>：记忆、关系、情绪进调度回路；cc-haha 的 worker 是无名工牌，干完即焚。</li>
+        <li>新拓扑把「多 agent 在干嘛」从黑盒变直播，天然接上 Lumina 的社交叙事——它的工作台是冷的，你的是有角色在过日子的。</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="mut" style="margin-top:12px">对账方式：以本节 07 路线图原条目逐条对照实际代码（新增 9 个后端模块 + 2 个前端文件 + 6 个 agent 工具 + 15 个 IPC 通道，测试 749 全绿）。评分为工程判断，非精确测量；「工具级落地」指能力已可被 agent 调用但未自动接入默认流程。</p>
+
+  <!-- ============ 11 v3.30 / v3.31 落地核验 ============ -->
+  <h2><span class="n">11</span>v3.30 落地核验 + v3.31 首版限制收口（2026-09-20）</h2>
+  <div class="verdict" style="border-color:#1c5e45;background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(236,72,153,.07))">
+    <h3 style="color:#6ee7b7">一句话结论</h3>
+    <p style="margin-bottom:0"><b>P1 全部清账、P2 四件全部落地</b>，第 10 节列出的「仍诚实存在的差距」逐条补齐：<b>ForegroundLease 人机互斥</b>（低级钩子过滤注入事件，真人一碰键鼠立即中止）、动作面扩充（hover/long_press/select_text/set_value/mouse_move + 组合键编译）、多显示器虚拟桌面截屏、隐私遮罩、plan_approval 审批泳道、worktree 自动绑定与合并回原分支、idle 待命与关停握手、小模型成本分级、拓扑历史回放与成员检查器；P2 交付<b>模型现写 Workflow JSON DSL</b>（非 eval、分层并发、journal 断点续跑）、<b>Teach 录制回放</b>、<b>Windows UIA 元素树</b>、<b>Agent Markdown 热加载</b>。验证：<code>tsc --noEmit --strict</code> 零错误，<b>782 测试通过</b>（较 v3.20 +33），electron-vite 三端构建成功，协作中心新增 2 个 tab，拓扑新增时间轴/检查器/审批按钮。</p>
+  </div>
+  <div class="verdict" style="border-color:#1c5e45;background:linear-gradient(135deg,rgba(52,211,153,.12),rgba(96,165,250,.07));margin-top:10px">
+    <h3 style="color:#6ee7b7">v3.31 收口（2026-09-20）：3 项首版限制全部升级，只剩 1 项诚实保留</h3>
+    <p style="margin-bottom:0"><b>① Teach 换低级钩子重录</b>：WH_MOUSE_LL/WH_KEYBOARD_LL 原生录制（替代 50ms 轮询），<b>滚轮、逐字键盘（含修饰键双沿）都录得到</b>，过滤注入事件不串扰；连续打字可勾选聚合为一次粘贴回放（默认关，保护隐私），<b>协作中心新增「▶ 回放」按钮，不必再对 Lumina 说指令</b>，回放仍走会话锁/权限门/人机互斥。<b>② UIA set_value 升级 ValuePattern</b>：先按坐标找到输入框（含向上 4 级找 Edit/ComboBox/Document）直接控件级赋值，<b>不经过键盘与剪贴板、不吃焦点时序</b>，不支持/只读/自绘 UI 自动回退「点击→全选→粘贴」，并补齐同一套权限门。<b>③ Workflow 加条件与重试</b>：每步可写 <code>when</code>（引用上游结果 contains/equals/truthy，可 not 取反，不满足自动 skipped 且下游连带跳过）与 <code>retry</code>（异常/结果不达标都重试，最多 5 次、until 判定即停、有界间隔）。验证：<code>tsc --noEmit --strict</code> 零错误，<b>795 测试通过</b>（新增 v331 测试 13 用例），三端构建成功。<b>仍保留：隐私遮罩是窗口矩形 best-effort 涂黑，非系统合成层过滤，默认关闭。</b></p>
+  </div>
+
+  <h3>P1 收尾（第 10 节缺口全部闭合）— <span class="s">9/9</span></h3>
+  <table>
+    <colgroup><col style="width:24%"><col style="width:9%"><col style="width:67%"></colgroup>
+    <tr><th>条目</th><th>状态</th><th>落地证据（代码位置 + 机制）</th></tr>
+    <tr><td>plan_approval 人工审批</td><td class="s">✅</td><td><code>teamSharedBoard.ts</code>：<code>requireApproval</code> 任务进 <code>pending_approval</code> 泳道，worker 认领被硬拒，人工批准/驳回为纯函数变换 + 历史留痕；拓扑图待批准卡片有「批准/驳回」按钮，任务板可勾选「需人工批准」。</td></tr>
+    <tr><td>worktree 自动绑定</td><td class="s">✅</td><td><code>dynamicWorker.ts</code>：code 工种雇佣时自动开 worktree（失败降级主目录），工作目录写进 worker 系统提示；任务成功后自动合并回<b>创建时的当前分支</b>（不再写死 main，经 <code>git rev-parse --git-common-dir</code> 找主仓库根），合并成功自动回收，失败保留现场。</td></tr>
+    <tr><td>idle 待命 + 关停握手</td><td class="s">✅</td><td>worker 状态机 starting/working/idle/shutdown_requested：<code>keepAlive</code> 干完进 idle 可唤醒复用；<code>requestShutdown</code> 对 idle 立即解散、对 working 打标记，由执行循环 finally 自动 dismiss。UI 卡片与检查器均有「解散」。</td></tr>
+    <tr><td>小模型成本分级</td><td class="s">✅</td><td><code>modelTier.ts</code>：research/search/data/general 用小模型、code/review/test 保主力；家族映射（gpt-4o→mini、deepseek-reasoner→chat、glm→4-flash、qwen→turbo），<code>LUMINA_SMALL_MODEL</code> 可覆盖，本地/未知型号不瞎换；Worker 构造后替换 config.model 并重建 LLMProvider。</td></tr>
+    <tr><td>拓扑历史回放 + 成员检查器</td><td class="s">✅</td><td>任务板 <code>history</code> 环形缓冲（400 条）+ board-history IPC；拓扑图底部新增「回放时间轴」（最近 14 条状态变更）与「临时工检查器」（状态/模型分级/工作区/未读）。</td></tr>
+    <tr><td>ForegroundLease 人机互斥</td><td class="s">✅</td><td><code>cuInputGuard.ts</code>：常驻 PowerShell 低级钩子 WH_MOUSE_LL/WH_KEYBOARD_LL，按 <code>LLMHF_INJECTED / LLKHF_INJECTED</code> 位<b>过滤 AI 自己注入的事件</b>（这是 GetLastInputInfo 做不到的关键）；真人点击/滚轮/按键一遇即中止，鼠标移动用计数阈值（默认 8）防手抖；租约 broken 后必须释放会话才能再动。</td></tr>
+    <tr><td>动作面扩充</td><td class="s">✅</td><td><code>cuCore.ts</code> 与 IPC 引擎：hover、mouse_move、long_press（0.5–3s 夹紧）、select_text（两点拖拽）、set_value（点击聚焦→Ctrl+A→粘贴）；<code>buildSendKeysToken</code> 把 ctrl_shift_esc / alt+tab 等组合键编译为 SendKeys 记号；VLM 提示词同步。</td></tr>
+    <tr><td>多显示器</td><td class="s">✅</td><td>虚拟桌面截屏含负坐标原点，所有动作按 vx/vy 原点偏移，UIA 元素中心与截图共用同一套归一化坐标系。</td></tr>
+    <tr><td>隐私遮罩</td><td class="m">✅ 策略默认关</td><td><code>applyPrivacyMask</code>：开启后把非前台窗口区域涂黑（best-effort 按窗口矩形枚举），CU 策略页有开关；默认关闭避免误遮。</td></tr>
+  </table>
+
+  <h3>P2 · 动态编排与教学 — <span class="s">4/4 全部落地（v3.31 已收口 3 项首版限制，仅剩遮罩 best-effort）</span></h3>
+  <table>
+    <colgroup><col style="width:24%"><col style="width:9%"><col style="width:67%"></colgroup>
+    <tr><th>条目</th><th>状态</th><th>落地证据</th></tr>
+    <tr><td>模型现写 Workflow（pipeline/parallel + 续跑）</td><td class="s">✅<br><span class="m">v3.31 ↑</span></td><td><code>workflowScript.ts</code>：<b>JSON DSL（主进程不 eval JS，安全红线）</b>——steps / after / parallelWith / timeoutMs，Kahn 拓扑检环 + 缺依赖校验、≤20 步、并发 ≤8；<code>runJournal</code> 支持 pipeline 分层 / parallel 并发、<code>$id.result</code> 引用替换、依赖失败下游标 skipped、已 done 断点跳过、journal 原子落盘；agent 工具 <code>workflow</code>（run/resume/list/get），协作中心「🧶 工作流」tab 实时看每步状态。<b>v3.31 新增 <code>when</code> 条件（contains/equals/truthy + not，引用步骤是隐式依赖，不满足自动 skipped）与 <code>retry</code> 有界重试（maxAttempts≤5、until 结果判定、异常同样计入、有间隔），JSON DSL 第一次有了条件分支和循环韧性。</b></td></tr>
+    <tr><td>Teach 模式录制回放</td><td class="s">✅<br><span class="m">v3.31 ↑</span></td><td><code>teachRecorder.ts</code>：<b>v3.31 录制脚本换成 WH_MOUSE_LL/WH_KEYBOARD_LL 低级钩子（<code>teach-record-v331.ps1</code>）</b>，SetProcessDPIAware、按注入位过滤 AI 自己的事件、F8 结束；<code>eventsToActions</code> 纯转换为 CuAction——点击/右键/拖拽、<b>滚轮合并切段（±20 夹紧）</b>、键盘 kd/ku 双沿（修饰键组合键在 key-up 时正确释放）、<b>连续打字可选聚合为一次 type（shift 符号面/大写、backspace 退格、900ms 切段，默认关，勿在密码框录制）</b>；回放走 <code>replayLesson</code> 共享路径——<b>会话锁、权限门、真人介入保护全部生效</b>，协作中心「⏺ Teach」tab 可录制/命名/删除/<b>▶ 一键回放（含确认弹窗与中止原因提示）</b>。</td></tr>
+    <tr><td>Windows UIA 元素树</td><td class="s">✅<br><span class="m">v3.31 ↑</span></td><td><code>cuUia.ts</code>：PowerShell 加载 UIAutomationClient，取前台窗口 Descendants（cap 200）输出紧凑 JSON；<code>desktop_elements</code> 给模型「[index] 类型 名称 @(坐标)」列表，<code>desktop_element_act</code> 按 index 点/赋值（每次强制重新扫描防空点）。<b>v3.31 赋值先尝试 ValuePattern.SetValue</b>（<code>cu-uia-set.ps1</code>：FromPoint 定位 + 向上 4 级找 Edit/ComboBox/Document + 只读检查），<b>控件级直接赋值、不经过键盘与剪贴板</b>；NOPATTERN/只读/自绘 UI 自动回退「点击→全选→粘贴」，两条路径都经过同一套权限门与高危文本拦截。cc-haha 的元素树只在 macOS（AX），Windows 侧 Lumina 先有——<b>反超点</b>。</td></tr>
+    <tr><td>Agent 定义 Markdown 热加载</td><td class="s">✅</td><td><code>agentMarkdown.ts</code>：frontmatter（id/name/icon/model_tier/blocked/capabilities/blind_spots）+ 正文即提示词；扫描项目 <code>agents/</code> 与 userData/agents，fs.watch 300ms 防抖重载；hire_worker 可直接雇佣自定义工种，<code>team_roles</code> 列出内置 + 自定义。</td></tr>
+  </table>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card good">
+      <h4>v3.31 已收口的首版限制（3/4）</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><b>Teach 滚轮/打字/UI 回放</b>：低级钩子原生录制滚轮与键盘双沿（旧 50ms 轮询漏滚轮、不录打字）；打字聚合默认关（隐私设计，密码仍不应录制）；协作中心「▶ 回放」按钮直接触发（旧版只能 agent 对话回放），中止会返回具体原因。</li>
+        <li><b>UIA ValuePattern</b>：set_value 优先控件级直接赋值（旧版固定走点击+粘贴），不支持再回退；不支持时返回 NOPATTERN 原因并写进执行结果，模型可感知。</li>
+        <li><b>Workflow 条件/重试</b>：JSON DSL 不 eval 代码的安全红线不变，但补上 <code>when</code> 条件分支与 <code>retry</code> 有界重试（最多 5 次，杜绝无限循环）；when 引用的步骤自动算依赖，校验与拓扑检环全覆盖。</li>
+        <li><b>仍诚实保留：隐私遮罩</b>——按窗口矩形 best-effort 涂黑，不是系统级合成层过滤，重绘频繁的窗口可能有瞬时漏帧；Windows 系统级合成需要注入 DWM，成本与风险都高，保持默认关、用户显式开启。</li>
+        <li class="mut">另：UIA 对游戏/自绘 UI/Electron 画布仍可能无元素树（系统能力边界，非实现缺口）；新 PS 钩子与 UIA 脚本已单测纯逻辑，真机 Electron 路径标注 best-effort。</li>
+      </ul>
+    </div>
+    <div class="card good">
+      <h4>本轮后 Lumina 相对 cc-haha 的独有组合</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><b>人格不动、能力补齐</b>：前台永远是 Lumina，临时工后台干活、私信自动抄送队长；它的工牌是冷的，你的拓扑是有人在过日子的直播。</li>
+        <li><b>真人介入即停 + 全局急停</b>：ForegroundLease 之外，Ctrl+Alt+X 全局急停仍在，cc-haha 明确承认自己没有。</li>
+        <li><b>Windows UIA 反超</b>：元素树它只在 macOS 有，Windows 侧你先有了。</li>
+        <li><b>code worker 自动 worktree + 合并回原分支</b>：并行编码不踩主目录，失败保留现场。</li>
+        <li><b>SoM 网格 + zoom 放大 + 小模型分级</b>：9B 本地模型也能点得准，杂活自动降本。</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="mut" style="margin-top:12px">v3.30 新增/改写：后端新模块 <code>cuInputGuard / modelTier / agentMarkdown / workflowScript / teachRecorder / cuUia</code> 6 个，重写 <code>teamSharedBoard / dynamicWorker</code>，扩充 <code>cuCore / computerUse（agent 工具 + IPC 引擎）/ cuPermissions / teamCollab / gitWorktree / tools 注册 / IPC / preload</code>；UI 两个面板新增审批泳道、Teach、工作流、回放时间轴、成员检查器与 3 个 CU 策略开关；新增 agent 工具 6 个、IPC 通道 10 个；测试 749→782（新增 cuInputGuard / v330Team / cuCoreTokens 三组共 32 用例 + 新动作分派 1 用例）。<br>
+  <b>v3.31 收口</b>：重写 <code>teachRecorder.ts</code>（低级钩子 + 滚轮/打字），新增 <code>cu-uia-set.ps1</code> + <code>setValueByPoint</code> 并接入 <code>desktop_element_act</code>，<code>workflowScript.ts</code> 加 when/retry，<code>teamCollab.ts / teamCollabIpc.ts / preload.ts</code> 新增 <code>teach:replay</code> 通道与共享回放路径，协作中心 Teach/工作流 tab 加回放按钮、打字聚合开关、条件/重试展示；新增 <code>tests/v331Team.test.ts</code> 13 用例，<b>测试 782→795（73 文件），tsc 零错误、三端构建成功</b>。<br>
+  <b>v3.32 工作台收口</b>：<code>teamMailbox.ts</code> 新增 <code>dedupStream / MailboxStore.stream</code>（私信/广播/cc 去重、时间倒序），<code>teamCollabIpc.ts + preload.ts</code> 新增 <code>mail-stream</code> 通道；<code>TeamTopologyView.tsx</code> 重排为头像站位 + 待命区长凳 + 右侧通讯流 + 快照回放（播放/0.5–4×/时间轴/事件跳转，localStorage 60 分钟），<code>TeamCollabSection.tsx</code> 接线；新增 <code>tests/v332MailStream.test.ts</code> 4 用例、更新 <code>teamTopologySmoke.test.ts</code>，<b>测试 795→799（74 文件），tsc 零错误、三端构建成功、SSR 满载截图核对</b>。</p>
+
+  <!-- ============ 12 v3.32 工作台三项 ============ -->
+  <h2><span class="n">12</span>v3.32 工作台收口：头像站位 · 通讯流 · 快照回放（2026-09-20）</h2>
+  <div class="verdict" style="border-color:#1c5e45;background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(236,72,153,.07))">
+    <h3 style="color:#6ee7b7">一句话结论</h3>
+    <p style="margin-bottom:0">对照 cc-haha 工作台截图逐项补齐最后三个视觉差距：<b>① 成员头像直接站在自己当前的任务卡上</b>（执行中红色脉冲，完成/已认领蓝绿同色），没活的成员坐进底部<b>待命区长凳</b>；<b>② 右侧通讯流</b>（全部/指派/私信三个 tab + 成员信箱过滤，私信/广播/任务指派按时间合并去重）；<b>③ 真·快照回放</b>——播放/暂停、0.5×/1×/2×/4× 倍速、时间轴点击跳转、底部指派事件点按跳转，回放时画面与通讯流一起冻结到历史时刻。验证：<code>tsc --noEmit --strict</code> 零错误，<b>799 测试通过</b>（74 文件，新增通讯流去重 4 用例），三端构建成功，拓扑已用满载数据 SSR 截图自检。</p>
+  </div>
+  <table>
+    <colgroup><col style="width:22%"><col style="width:10%"><col style="width:68%"></colgroup>
+    <tr><th>条目</th><th>状态</th><th>落地证据（代码位置 + 机制）</th></tr>
+    <tr><td>成员头像站在任务卡上 + 待命区长凳</td><td class="s">✅</td><td><code>TeamTopologyView.tsx</code> 布局重排：claimed/running/blocked 任务卡右上角渲染成员头像圆牌+名牌（running 红色脉冲），队长通讯虚线跟随到站位；无活跃任务的成员进入底部待命区（idle/在岗/待关停 + 未读角标 + 解散按钮）。统计新增「待命」数。</td></tr>
+    <tr><td>右侧通讯流（全部/指派/私信）</td><td class="s">✅</td><td>新增 <code>MailboxStore.stream()</code> 扫描全部成员收件箱，<b>纯函数 <code>dedupStream</code> 去重</b>：私信按剥离 <code>_cc_</code> 后缀的原 id 归并、广播按 <code>broadcastId</code> 归并，原件优先于 cc 通知；新 IPC <code>team-collab:mail-stream</code> + <code>collabMailStream</code>。拓扑右侧面板：全部/指派（任务板事件）/私信三 tab、成员信箱过滤（带未读数）、回放时只显示该时刻之前。</td></tr>
+    <tr><td>快照回放（播放/倍速/时间轴）</td><td class="s">✅</td><td>拓扑组件内置 1s 轮询（父面板 5s 之上加细颗粒度），状态变化才录快照（任务+成员紧凑字段），<b>localStorage 保留 60 分钟 / 240 帧、跨重启</b>；顶栏播放/暂停、0.5×/1×/2×/4×、可拖动时间轴与「回到实时」；底部指派事件轴点击即跳到最近帧，早于录制起点会明确提示；回放中冻结全部看板操作入口（解散/认领）。</td></tr>
+    <tr><td>诚实边界</td><td class="m">🟡</td><td>① 快照只在协作中心面板打开期间录制（无后台录像），与 cc-haha 的录制窗口语义一致；② 通讯流是只读聚合，写信仍在「信箱」tab；③ 成员「自领取」当时仍靠系统提示纪律——<b style="color:#6ee7b7">v3.33 已补为进程级内驱力自领取循环（30s 抖动轮询、越闲越主动、并发帽 2，见第 13 节）</b>，且有意不用 1s 硬轮询。</td></tr>
+  </table>
+
+  <!-- ============ 13 v3.33 团队纵深 ============ -->
+  <h2><span class="n">13</span>v3.33 团队纵深：绩效画像 · 内驱力自领取 · 崩溃恢复 · CU 三人组（2026-09-21）</h2>
+  <div class="verdict" style="border-color:#1c5e45;background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(236,72,153,.07))">
+    <h3 style="color:#6ee7b7">一句话结论</h3>
+    <p style="margin-bottom:0">cc-haha 的 worker 是<b>无名工牌、干完即焚、永远零成长</b>；Lumina v3.33 让「工种」这个身份延续下去：<b>每个工种有绩效画像、易错档案和前任留下的经验卡</b>；留场 idle 成员不是 1 秒硬轮询，而是<b>按工种责任心、越闲越主动地自己去任务板认领</b>；团队重启后<b>自动回收孤儿任务、对账 worktree 现场</b>；交付按<b>关系信任双签</b>；整轮代码合并有<b>检查点可一键回滚</b>；Computer Use 升级为<b>操作员/观察员/安全员三人组</b>（回放里被权限门拒、连续点空、连续失败都会主动中止）。这些在 cc-haha 里没有对应物——它是「更好的工程队包工头」，Lumina 开始长出<b>有记忆、有责任心、会自我修复的团队</b>。验证：<code>tsc --noEmit --strict</code> 零错误，<b>819 测试通过</b>（75 文件，新增 v3.33 纯逻辑 20 用例），三端构建成功。</p>
+  </div>
+
+  <div class="chart"><div id="v333" class="ec" style="height:440px"></div></div>
+
+  <table>
+    <colgroup><col style="width:21%"><col style="width:9%"><col style="width:70%"></colgroup>
+    <tr><th>v3.33 能力</th><th>状态</th><th>落地证据（代码位置 + 机制）</th></tr>
+    <tr><td>① 工种绩效画像 + 易错档案 + 经验卡</td><td class="s">✅<br><span class="mut">Lumina 独有</span></td><td>新增 <code>electron/team/workerStats.ts</code>：按<b>工种</b>（而非易逝的临时实例）累计单数/成败/均时；成功率用拉普拉斯平滑避免「1 单即 100%」；<code>extractMistakeTags</code> 12 类确定性关键词归类；散伙时 <code>autoShutdownCard</code> 不调 LLM 生成「前任经验卡」（累计成绩+Top3 易错点+最近失败）。<code>dynamicWorker</code> 开工注入 <code>profileHint</code>，每单结果写画像；<code>adversarial_review</code> 新增 <code>author_role</code>，评审不通过自动把问题写进该工种易错档案。<code>rankRolesForKind</code> 给派活路由打分（成功率+置信度−均时惩罚，新工种中性 0.5 不被埋没）。</td></tr>
+    <tr><td>② 内驱力驱动的自领取（非 1s 硬轮询）</td><td class="s">✅</td><td>新增 <code>teamAutonomy.ts</code>：仅对 <code>keepAlive</code> 留场的 idle 成员生效；<b>抖动轮询（30s×0.65–1.35）</b>；主动性 <code>willingness=工种责任心基线（general .85/code .8/data .75/research .7/search .65/test .6/review .5）×(0.4+0.6×待命时长/3min 封顶)+抖动</b>；全局并发帽 2；认领走 <code>board.claimNext</code>（first-claim-wins），执行期 45s 心跳续租，完成/失败写任务板+画像+关系+trace+私信 Lumina（星型出口不变）。应用启动时 <code>teamCollabIpc</code> 自动 start；<code>team_autonomy</code> 工具与协作中心「📈 成长/日记」页可开关。</td></tr>
+    <tr><td>③ 关系进调度：信任双签 + 聊天式审批</td><td class="s">✅</td><td>新增 <code>teamPolicy.ts</code>：工种以 <code>role:xxx</code> 虚拟身份进关系系统；<code>needsDoubleReview</code>（信任 &lt;60 或高危 force → 双签复核）、<code>pickByTrust</code>（&lt;40 排除、其余按信任排序）；<code>team_tasks create</code> 的 <code>require_approval</code> 任务自动由创建者给 Lumina 发<b>信箱审批申请</b>（正文含「回复批准 {id}」），批准/驳回回写关系信任并私信通知申请人。</td></tr>
+    <tr><td>④ 团队崩溃恢复</td><td class="s">✅</td><td><code>teamSharedBoard.ts</code> 新增 <code>reapOrphansInState / store.reapOrphans</code>（claimed/running→pending，force 全收、否则按心跳 10 分钟判僵死）；<code>recoverOnStartup()</code> 启动时强制回收全部中断任务 + 用 <code>listWorktrees</code> 对账 <code>.lumina-worktrees</code> 遗留现场（<b>只报告不删，保护未合并改动</b>），结果进系统信箱。</td></tr>
+    <tr><td>⑤ 配置粒度：effort / path_scope + 任务级 trace</td><td class="s">✅</td><td><code>agentMarkdown.ts</code> frontmatter 新增 <code>effort: low|medium|high</code>（映射工具步预算 8/12/24 与「少绕路/多轮验证」提示；本地 Provider 无 reasoning effort 透传，<b>诚实映射为步预算而非 API 参数</b>）与 <code>path_scope</code>（注入路径作用域硬约束提示）；<code>hire_worker</code> jobs 可透传。新增 <code>llmTrace.ts</code>：<b>任务级</b> start/end 环形追踪（500 条，落 userData/team/task-trace.json），来源 hire/autonomy/workflow/cu_crew，120s 标长任务，<code>team_stats action=trace</code> 与 UI 可见。</td></tr>
+    <tr><td>⑥ 整轮 Diff 检查点 / 一键回滚</td><td class="s">✅</td><td>新增 <code>teamCheckpoint.ts</code>：code worker 的 worktree 合并前自动拍点（主仓库 branch+HEAD，经 <code>git rev-parse --git-common-dir</code> 定位），合并后记 mergedHead；环形 30 落盘；<code>team_checkpoint list/create/rollback</code>，rollback 必须 <code>confirm=true</code> 且会 <code>git reset --hard</code>（工具层与 UI 双重确认）；JobResult 带回检查点 id。</td></tr>
+    <tr><td>⑦ CU 三人组（操作员/观察员/安全员）</td><td class="s">✅</td><td>新增 <code>cuCrew.ts</code> 纯策略状态机：安全员拒绝=一票否决立即 abort；连续 2 次动作失败→abort 上报重看（1 次 reobserve）；变更类动作（click/drag/type/keypress/set_value/open/close，scroll/hover/wait 豁免）dHash 连续 2 次无变化→abort 防连环点空。<code>cuCore.CuExecResult</code> 新增 <code>verified/changed</code>（仅在开启动作后验证时填）；Teach 回放 <code>replayLesson</code> 全程接入三人组，中止原因与执行报告进回放结果。</td></tr>
+    <tr><td>⑧ 团队日记</td><td class="s">✅<br><span class="mut">Lumina 独有</span></td><td>新增 <code>teamDailyLog.ts</code>：纯函数 <code>buildDigest</code> 按本地日界统计新挂/认领/完成/失败/自治数/长任务/明星工种/各工种当日成长，剪成可接早安晚会的「团队日记」markdown，缓存 60 天；<code>team_log</code> 工具（today/yesterday/date/recent）与成长页「今日团队日记」。</td></tr>
+  </table>
+
+  <h3 style="color:#6ee7b7">v3.33 诚实边界（不吹的部分）</h3>
+  <ul style="font-size:12.5px;line-height:1.8;color:#c8cbe8">
+    <li><b>trace 是任务级</b>，不是 Provider token 级计费日志；<b>effort 映射为工具步预算</b>，本地 Provider 不支持透传 API reasoning effort；<code>path_scope</code> 目前是提示层硬约束，<b>尚未做文件系统强制拦截</b>（下一步可补）；cc-haha 的 bubble 冒泡权限 Lumina 没有等价物。</li>
+    <li>自领取只覆盖 <b>keepAlive 留场成员 + 内置 7 工种</b>；自定义 .md 工种与一次性 worker 不自动揽活（避免不可控角色乱接任务）。</li>
+    <li>CU 三人组的观察员依赖「动作后验证」开关（dHash）；自治循环、PS 低级钩子、UIA 元素树目前是<b>单测 + 构建</b>验证，未做真机 Electron E2E。</li>
+  </ul>
+  <p class="mut">新增模块：<code>workerStats / teamPolicy / llmTrace / teamCheckpoint / teamDailyLog / cuCrew / teamAutonomy</code>（7 个，均在 electron/team/）；改动：<code>dynamicWorker（绩效/trace/关系/经验卡/effort/检查点注入）、agentMarkdown（effort/path_scope）、teamSharedBoard（孤儿回收）、cuCore（verified/changed）、teamCollab（4 个新工具 + 审批/评审接线 + 三人组回放）、tools/index（注册）、teamCollabIpc（启动恢复/自治 + 7 个只读通道）、preload（7 个 API）、TeamCollabSection（📈 成长/日记页）</code>；新增 <code>tests/v333Team.test.ts</code> 20 用例，<b>测试 799→819（75 文件全绿），tsc 零错误、三端构建成功</b>。</p>
+
+  <div class="foot">Lumina × cc-haha 深度对标 · 2026-09-21 更新 · 结论基于源码精读，引用路径见各节 · 第 10 节 v3.20、第 11 节 v3.30/v3.31、第 12 节 v3.32（工作台三项；799 测试）、第 13 节 v3.33（团队纵深 8 件：绩效画像/内驱力自领取/关系调度/崩溃恢复/effort/trace/检查点/CU 三人组/团队日记；819 测试全绿）· 配套阅读：根目录《Lumina-竞品对比分析.md》、docs/lumina-computer-use-plan.html</div>
+</div>
+
+<script>
+(function(){
+  var dark = {backgroundColor:'transparent',textStyle:{color:'#a7abd4'}};
+  // stars
+  var el1 = document.getElementById('stars');
+  if (window.echarts && el1){
+    var c1 = echarts.init(el1);
+    c1.setOption({
+      backgroundColor:'transparent',
+      title:{text:'GitHub Star 量级（2026-09-20 快照）',left:'center',top:6,textStyle:{color:'#e9ebff',fontSize:14}},
+      tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+      grid:{left:150,right:60,top:48,bottom:24},
+      xAxis:{type:'log',name:'stars（对数轴）',nameTextStyle:{color:'#7c81ad'},axisLabel:{color:'#7c81ad'},splitLine:{lineStyle:{color:'#2c2f55'}},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      yAxis:{type:'category',data:['Lumina · 未发布','N.E.K.O','cc-haha','AIRI','openclaw'],axisLabel:{color:'#e9ebff',fontSize:13},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      series:[{type:'bar',data:[
+        {value:1,itemStyle:{color:'#ec4899'}},
+        {value:2940,itemStyle:{color:'#22d3ee'}},
+        {value:14651,itemStyle:{color:'#ff7a00'}},
+        {value:49273,itemStyle:{color:'#a78bfa'}},
+        {value:390108,itemStyle:{color:'#fb7185'}}],
+        barWidth:22,
+        label:{show:true,position:'right',color:'#e9ebff',formatter:function(p){return p.value>=1000? p.value.toLocaleString() : 'v0.1 未发布'}},
+        itemStyle:{borderRadius:[0,5,5,0]}
+      }]
+    });
+    window.addEventListener('resize',function(){c1.resize()});
+  }
+  // radar
+  var el2 = document.getElementById('radar');
+  if (window.echarts && el2){
+    var c2 = echarts.init(el2);
+    c2.setOption({
+      backgroundColor:'transparent',
+      title:{text:'五项目能力雷达（灰粉＝改造前基线，亮粉＝Lumina v3.31）',left:'center',top:6,textStyle:{color:'#e9ebff',fontSize:14}},
+      legend:{bottom:0,textStyle:{color:'#a7abd4'},data:['Lumina 改造前','Lumina v3.31','cc-haha','N.E.K.O','AIRI','openclaw']},
+      tooltip:{},
+      radar:{center:['50%','54%'],radius:'62%',
+        indicator:[
+          {name:'工程编排',max:10},{name:'生命感·主动陪伴',max:10},{name:'桌面操控',max:10},
+          {name:'记忆系统',max:10},{name:'形象表演',max:10},{name:'生态·渠道',max:10},{name:'安全治理',max:10}
+        ],
+        axisName:{color:'#e9ebff',fontSize:12.5},
+        splitLine:{lineStyle:{color:'#2c2f55'}},splitArea:{areaStyle:{color:['rgba(255,255,255,0.02)','rgba(255,255,255,0.04)']}},
+        axisLine:{lineStyle:{color:'#2c2f55'}}},
+      series:[{type:'radar',data:[
+        {name:'Lumina 改造前',value:[6,9,6.5,7,8.5,5,7],itemStyle:{color:'#9d6a8f'},areaStyle:{opacity:.08},lineStyle:{width:1.5,type:'dashed'}},
+        {name:'Lumina v3.31',value:[9,9,8.5,7,8.5,5,9],itemStyle:{color:'#ec4899'},areaStyle:{opacity:.25},lineStyle:{width:3}},
+        {name:'cc-haha',value:[9.5,2,8.5,5,3,8.5,9],itemStyle:{color:'#ff7a00'},areaStyle:{opacity:.14},lineStyle:{width:2.5}},
+        {name:'N.E.K.O',value:[2,9.5,6,8.5,9,6,5],itemStyle:{color:'#22d3ee'},areaStyle:{opacity:.08}},
+        {name:'AIRI',value:[2.5,8,6,7,9,7,4.5],itemStyle:{color:'#a78bfa'},areaStyle:{opacity:.08}},
+        {name:'openclaw',value:[5,5,0,7,0,9.5,7],itemStyle:{color:'#fb7185'},areaStyle:{opacity:.08}}
+      ]}]
+    });
+    window.addEventListener('resize',function(){c2.resize()});
+  }
+  // v3.30/v3.31 落地核验：路线图完成度（13 项中 12 项完整，1 项首版：隐私遮罩）
+  var el3 = document.getElementById('completion');
+  if (window.echarts && el3){
+    var c3 = echarts.init(el3);
+    c3.setOption({
+      backgroundColor:'transparent',
+      title:{text:'P0/P1/P2 路线图 13 项落地状态（v3.31：12 项完整，仅遮罩 best-effort）',left:'center',top:6,textStyle:{color:'#e9ebff',fontSize:14}},
+      tooltip:{trigger:'item',formatter:'{b}: {c} 项 ({d}%)'},
+      legend:{bottom:0,textStyle:{color:'#a7abd4'}},
+      series:[{
+        type:'pie',radius:['42%','66%'],center:['50%','52%'],
+        label:{color:'#e9ebff',formatter:'{b}\n{c} 项'},
+        data:[
+          {value:12,name:'完整落地',itemStyle:{color:'#34d399'}},
+          {value:1,name:'首版（隐私遮罩 best-effort，默认关）',itemStyle:{color:'#fbbf24'}},
+          {value:0,name:'未开始',itemStyle:{color:'#f87171'}}
+        ]
+      }]
+    });
+    window.addEventListener('resize',function(){c3.resize()});
+  }
+  // v3.30 前后能力分（19 维）
+  var el4 = document.getElementById('beforeafter');
+  if (window.echarts && el4){
+    var dims = ['多显示器/DPI','元素树(无障碍句柄)','小模型视觉定位','全局急停','动作教学/录制','确定性脚本','团队可视化','对抗验证','并行隔离(worktree)','信箱/自领取','动态团队','物理输入冲突仲裁','动作面(悬停/长按/选择)','动作后验证','系统键/剪贴板','会话互斥','危险分区','应用白名单/前台','隐私遮罩'];
+    var c4 = echarts.init(el4);
+    c4.setOption({
+      backgroundColor:'transparent',
+      title:{text:'关键能力评分：v3.20 前 → v3.20 → v3.30 → v3.31 → v3.32 vs cc-haha（1–10 主观工程分）',left:'center',top:6,textStyle:{color:'#e9ebff',fontSize:14}},
+      legend:{bottom:0,textStyle:{color:'#a7abd4'},data:['Lumina 升级前','Lumina v3.20','Lumina v3.30','Lumina v3.31','Lumina v3.32','cc-haha']},
+      tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+      grid:{left:140,right:40,top:44,bottom:42},
+      xAxis:{type:'value',max:10,axisLabel:{color:'#7c81ad'},splitLine:{lineStyle:{color:'#2c2f55'}},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      yAxis:{type:'category',data:dims,axisLabel:{color:'#e9ebff',fontSize:11.5},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      series:[
+        {name:'Lumina 升级前',type:'bar',data:[4,1,10,10,0,0,2,5,2,1,3,0,4,4,3,2,1,2,1],itemStyle:{color:'#6b7280',borderRadius:[0,3,3,0]},barGap:'10%'},
+        {name:'Lumina v3.20',type:'bar',data:[4,1,10,10,0,0,8,8.5,7.5,8.5,8.5,2,4,8,8.5,8,8.5,8.5,3],itemStyle:{color:'#f472b6',borderRadius:[0,3,3,0]}},
+        {name:'Lumina v3.30',type:'bar',data:[8,7,10,10,7,8,9,8.5,9,9,9,8.5,8.5,8,8.5,8,8.5,8.5,7],itemStyle:{color:'#f9a8d4',borderRadius:[0,3,3,0]}},
+        {name:'Lumina v3.31',type:'bar',data:[8,8,10,10,8.5,8.5,9,8.5,9,9,9,8.5,8.5,8,8.5,8,8.5,8.5,7],itemStyle:{color:'#ec4899',borderRadius:[0,3,3,0]},barWidth:8},
+        {name:'Lumina v3.32',type:'bar',data:[8,8,10,10,8.5,8.5,9.5,8.5,9,9,9,8.5,8.5,8,8.5,8,8.5,8.5,7],itemStyle:{color:'#f0abfc',borderRadius:[0,3,3,0]},barWidth:8},
+        {name:'cc-haha',type:'bar',data:[9,7,5,0,8,9,9.5,9,9,9,9,9,9,8,9,9,9,9,9],itemStyle:{color:'#ff7a00',borderRadius:[0,3,3,0]}}
+      ]
+    });
+    window.addEventListener('resize',function(){c4.resize()});
+  }
+  // v3.33 团队纵深：cc-haha 没有的 10 个维度
+  var el5 = document.getElementById('v333');
+  if (window.echarts && el5){
+    var d333 = ['工种绩效/经验沉淀','内驱力自领取','关系进调度(信任双签)','崩溃恢复(孤儿/worktree对账)','任务级 trace','整轮检查点/回滚','CU 三人组(操作/观察/安全)','团队日记/叙事','动态团队(工种/任务板)','可视化工作台'];
+    var c5 = echarts.init(el5);
+    c5.setOption({
+      backgroundColor:'transparent',
+      title:{text:'v3.33 团队纵深：cc-haha 没长出来的 10 个维度（1–10 主观工程分）',left:'center',top:6,textStyle:{color:'#e9ebff',fontSize:14}},
+      legend:{bottom:0,textStyle:{color:'#a7abd4'},data:['Lumina v3.32','Lumina v3.33','cc-haha']},
+      tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+      grid:{left:200,right:50,top:44,bottom:42},
+      xAxis:{type:'value',max:10,axisLabel:{color:'#7c81ad'},splitLine:{lineStyle:{color:'#2c2f55'}},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      yAxis:{type:'category',data:d333,axisLabel:{color:'#e9ebff',fontSize:11.5},axisLine:{lineStyle:{color:'#2c2f55'}}},
+      series:[
+        {name:'Lumina v3.32',type:'bar',data:[0,1,3,2,1,3,5,4,9,9.5],itemStyle:{color:'#9d6a8f',borderRadius:[0,3,3,0]}},
+        {name:'Lumina v3.33',type:'bar',data:[9,9,8,8,7,9,9,9,9.5,9.5],itemStyle:{color:'#ec4899',borderRadius:[0,3,3,0]},barWidth:9},
+        {name:'cc-haha',type:'bar',data:[0,9,0,5,8,7,6,0,9.5,9.5],itemStyle:{color:'#ff7a00',borderRadius:[0,3,3,0]}}
+      ]
+    });
+    window.addEventListener('resize',function(){c5.resize()});
+  }
+})();
+</script>
+</body>
+</html>

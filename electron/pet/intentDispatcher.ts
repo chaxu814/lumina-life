@@ -30,6 +30,11 @@ import { tickDrives, applyInteraction, behaviorUrges, dominantUrge, DEFAULT_DRIV
 import { safePerformance } from './life/performanceDsl'
 import { loadLifeState, scheduleLifeStateSave, saveLifeStateNow } from './lifeStateStore'
 import { getProactiveOrchestrator } from '../proactive/orchestrator'  // 🧭 v6.1 统一主动编排器
+// I2 情绪外显 + 冷战/原谅
+import { getColdWar } from './life/coldWar'
+import { deriveBehaviorHints } from './life/emotionExpressions'
+import { moodToCore, normalizeMood, type MoodLabel } from './life/emotionCore'
+import { isEnabled } from '../core/featureFlags'
 
 // 🫀 连续情绪融合单例：LLM 每帧输出的离散 mood 经此平滑，避免情绪瞬切（详见 emotionFusion.ts）
 const petEmotion = new PetEmotionFusion()
@@ -89,6 +94,27 @@ export function initPetLifeState(): void {
 
 function currentMoodLabel(): string {
   try { return petEmotion.get().label } catch { return '平静 😐' }
+}
+
+/**
+ * I2：把当前情绪 + 冷战状态翻译成外显行为，并下发透明度命令。
+ * 桌宠动作（sigh/perk/turnaway）由渲染层 engine.setExpressionHints 消费；
+ * 这里只负责主进程侧：算提示 + 发 set-opacity（疲劳变淡）。
+ * feature flag 关闭时静默跳过，不改任何现有行为。
+ */
+function applyExpressionHintsToPet(): void {
+  try {
+    if (!isEnabled('emotion.expressiveness')) {return}
+    const label = normalizeMood(currentMoodLabel()) ?? '平静 😐' as MoodLabel
+    const core = moodToCore(label)
+    const cold = getColdWar()
+    const hints = deriveBehaviorHints(core, {
+      coldState: cold.getState(),
+      userSpokeWithin24h: cold.userSpokeWithin24h(),
+    })
+    // 透明度：petWindow 已有 set-opacity 命令通道
+    sendPetCommand({ type: 'set-opacity', value: hints.petOpacity })
+  } catch { /* 外显提示失败不影响主链路 */ }
 }
 
 /** 五层记忆召回（人格/事实/反思/近期/工作），失败安全降级为空串 */
@@ -352,6 +378,9 @@ export async function petChat(userText: string): Promise<PetChatResult> {
   const text = (userText || '').trim()
   advanceDrives('chat') // v0.2：用户主动说话，满足社交需求
   try { getProactiveOrchestrator().noteUserInteraction() } catch { /* 编排器未就绪 */ }
+  // I2：用户主动搭话 → 刷新冷战时间戳（原谅窗口），并按情绪/冷战下发外显提示
+  try { if (isEnabled('emotion.coldWar')) { getColdWar().markUserInteraction() } } catch { /* noop */ }
+  applyExpressionHintsToPet()
   if (!text) {
     const intent = localIntent('你好')
     dispatchIntent(intent)
@@ -430,6 +459,9 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
   const text = (userText || '').trim()
   advanceDrives('chat')
   try { getProactiveOrchestrator().noteUserInteraction() } catch { /* 编排器未就绪 */ }
+  // I2：语音搭话同样刷新冷战时间戳
+  try { if (isEnabled('emotion.coldWar')) { getColdWar().markUserInteraction() } } catch { /* noop */ }
+  applyExpressionHintsToPet()
   if (!text) {return { ok: false, text: '', source: 'fallback', error: '空输入' }}
   try {
     const cfg = resolvePetBrainConfig()

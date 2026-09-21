@@ -19,6 +19,7 @@ import {
 import { moodToCore, normalizeMood, type MoodLabel, type CoreEmotion } from './emotionCore'
 import { textToVisemeSegments, sampleViseme, opennessFromRms, type VisemeSeg } from './lipsync'
 import { safePerformance } from './performanceDsl'
+import type { BehaviorHints, PetAction } from './emotionExpressions'
 
 export type { CoreEmotion }
 export interface ParamPatch { id: string; value: number }
@@ -30,6 +31,21 @@ export interface PerformHints {
 }
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
+
+/** I2：外显动作 → 语义姿态（sigh/perk/turnaway；idle 表示不压 action 层） */
+function expressionActionPose(action: PetAction): StandardPose | null {
+  switch (action) {
+    case 'sigh':
+      return { headPitch: 8, browLY: -0.25, browRY: -0.25, eyeLOpen: 0.7, eyeROpen: 0.7 }
+    case 'perk':
+      return { eyeLOpen: 1.15, eyeROpen: 1.15, headPitch: -4, browLY: 0.3, browRY: 0.3 }
+    case 'turnaway':
+      return { headYaw: 28, eyeBallX: -1, headRoll: -6 }
+    case 'idle':
+    default:
+      return null
+  }
+}
 
 /** 可用语义参数姿态合成的手势（其余手势交给渲染层播 motion3） */
 function parametricGesture(name: string, intensity: number): StandardPose {
@@ -58,6 +74,8 @@ export class PetPerformanceEngine {
   private blinkStart = -1
   /** 可替换的随机源（测试确定性） */
   random: () => number = Math.random
+  /** I2：外显行为提示（焦虑/疲劳/冷战/原谅 → 动作、透明度），由主进程定期下发 */
+  private exprHints: BehaviorHints | null = null
 
   constructor(cdi3?: unknown, modelName = 'Mao') {
     this.profile = cdi3 ? discoverProfile(cdi3, modelName) : maoProfile()
@@ -75,6 +93,25 @@ export class PetPerformanceEngine {
       this.emo = moodToCore(normalizeMood(labelOrCore) ?? '平静 😐')
     }
     this.mixer.setLayer('emotion', poseForEmotion(this.emo), { weight: 1, now })
+  }
+
+  /**
+   * I2：接收主进程算出的外显行为提示。
+   * petAction 映射到 action 层的常驻姿态（sigh/perk/turnaway）；
+   * 'idle' 不压 action 层，让一次性表演（perform）自由。
+   * 透明度 petOpacity 由主进程走既有 set-opacity 命令控制（见 petWindow）。
+   */
+  setExpressionHints(hints: BehaviorHints, now = 0): void {
+    this.exprHints = hints
+    const pose = expressionActionPose(hints.petAction)
+    if (!pose) {this.mixer.clearLayer('action'); return}
+    // 常驻（无 ttl）：在一次性手势之间持续呈现；perform() 的一次性手势会临时覆盖
+    this.mixer.setLayer('action', pose, { weight: 1, now, fadeMs: 300 })
+  }
+
+  /** 读取当前外显提示（调试/UI 用） */
+  getExpressionHints(): BehaviorHints | null {
+    return this.exprHints
   }
 
   /** 临时视线（DSL/表演用；持续跟随仍由渲染层 focusController 负责） */

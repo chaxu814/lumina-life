@@ -218,6 +218,7 @@ function stampTemplate(e: ShowEvent): ShowEvent {
 /**
  * 异步生成一条事件：仅「内心独白」会尝试 LLM（其它类型仍是剧本，避免过度调用）。
  * 任何失败都回退模板，绝不抛错。
+ * F2：内心独白的 LLM prompt 里注入当前三人两两亲密度，让 OS 关系「活」起来。
  */
 export async function generateShowEventAsync(context = ''): Promise<ShowEvent> {
   const base = generateShowEvent()
@@ -226,12 +227,31 @@ export async function generateShowEventAsync(context = ''): Promise<ShowEvent> {
     const agent = base.agents[0] || 'Lumina'
     const sys = `你是桌面多 Agent 团队「Lumina Life」里的 ${agent}。${AGENT_VOICE[agent] || ''}。
 现在是 24 小时「真人秀」的一条内心独白，请输出一句 30 字以内、自然、像真实内心 OS 的话（不要引号、不要前缀、不要动作描写）。
-可以结合近期活动，但不要编造具体数字；偶尔撒娇、偶尔吐槽、偶尔关心，语气多样。`
+可以结合近期活动，但不要编造具体数字；偶尔撒娇、偶尔吐槽、偶尔关心，语气多样。${relationshipContext()}`
     const text = (await realityLLMCaller(agent, sys + (context ? `\n近期活动：${context.slice(0, 500)}` : ''))).trim()
     if (!text) {return base}
     return { ...base, content: text.slice(0, 120), source: 'llm' }
   } catch (e) {
     return base
+  }
+}
+
+/**
+ * F2：从关系库懒读三人两两亲密度，拼成一句给 LLM 的关系上下文。
+ * 读不到（未启动/测试环境）就返回空串，绝不抛错。
+ */
+function relationshipContext(): string {
+  try {
+    // 懒 require 避免测试环境硬依赖 electron 持久化
+    const mod = require('../agentRelationships')
+    const store = mod?.getRelationshipStore?.()
+    if (!store) {return ''}
+    const rels = store.getAll?.() || []
+    if (!rels.length) {return ''}
+    const bits = rels.map((r: any) => `${r.agentA}-${r.agentB} 亲密度${Math.round(r.affinity)}`).join('；')
+    return `\n团队当前关系（亲密度，高=亲近信任）：${bits}。独白可以自然反映你们之间的远近，但不要把这句关系数据念出来。`
+  } catch {
+    return ''
   }
 }
 

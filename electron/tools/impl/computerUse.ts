@@ -10,8 +10,11 @@
 import type { ToolDef, ToolResult } from '../types'
 import {
   captureScreen, callVisionModel, executeCuAction,
-  resetCuAbort, isCuAborted, type CuAction,
+  resetCuAbort, isCuAborted, type CuAction, type CuScreen,
 } from './cuCore'
+import { getUiaCache, renderElementsText, parseUiaJson, normalizeElements, setValueByPoint } from './cuUia'
+import { acquireCuSession, releaseCuSession, gateCuAction } from './cuPermissions'
+import { destructiveReason } from './cuSafety'
 import { cellToNorm, zoomCrop, localToGlobal, gridDims, type GridInfo, type NormRect } from './cuGeometry'
 import { annotateGrid, annotateZoom, type AnnotatedImage } from './cuAnnotate'
 
@@ -33,6 +36,9 @@ interface VLMAction extends CuAction {
 }
 
 type View = { kind: 'full' } | { kind: 'zoom'; crop: NormRect }
+
+/** v3.30 截图 → 动作视图（含多显示器虚拟原点） */
+const viewOf = (shot: CuScreen) => ({ imgW: shot.w, imgH: shot.h, vx: shot.vx || 0, vy: shot.vy || 0 })
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 const num = (v: any): number | null => {
@@ -146,8 +152,11 @@ function buildSysPrompt(step: number, maxSteps: number, som?: { view: View; grid
 
 通用动作 action_type：
 - click / double_click / right_click：点击
-- type：输入文本，{"action_type":"type","text":"内容"}（中文直接给）
-- keypress：按键/组合键，key 如 enter esc tab space backspace enter up down left right ctrl_c ctrl_v ctrl_a ctrl_z ctrl_s alt_f4 win
+- hover：悬停（展开悬停菜单/提示），可带 wait_seconds；long_press：长按（触发右键菜单/拖拽手柄）
+- select_text：从 nx,ny 按住拖到 nx2,ny2 选中文本
+- set_value：定位输入框并整体替换内容，{"action_type":"set_value","nx":..,"ny":..,"text":"内容"}（比 click+type 更可靠，中文直接给）
+- type：输入文本，{"action_type":"type","text":"内容"}（中文自动走剪贴板）
+- keypress：按键/组合键，key 如 enter esc tab space backspace up down left right ctrl_c ctrl_v ctrl_a ctrl_z ctrl_s alt_f4 win shift_tab（多键用下划线连接，如 ctrl_shift_esc）
 - scroll：滚动，scroll_amount 正数向下、负数向上
 - drag：拖拽，起点 nx,ny 终点 nx2,ny2
 - open_app：打开应用，app 为名称；close_window：关当前窗；clipboard：写剪贴板 text；wait：等待 wait_seconds 秒
@@ -199,12 +208,14 @@ function resolvePoint(a: any, grid: GridInfo, view: View): { nx: number; ny: num
 /** 解析点击/拖拽坐标（含 zoom 换算），就地写回全局 nx/ny；坐标缺失返回 false */
 function preparePoint(a: any, grid: GridInfo, view: View): boolean {
   const t = a.action_type
-  if (t !== 'click' && t !== 'double_click' && t !== 'right_click' && t !== 'drag') {return true}
+  const pointActions = ['click', 'double_click', 'right_click', 'drag',
+    'hover', 'long_press', 'select_text', 'set_value']
+  if (!pointActions.includes(t)) {return true}
   const start = resolvePoint(a, grid, view)
   if (!start) {return false}
   a.nx = start.nx; a.ny = start.ny
   delete a.cell
-  if (t === 'drag') {
+  if (t === 'drag' || t === 'select_text') {
     let end: { nx: number; ny: number } | null = null
     if (typeof a.cell2 === 'number') {end = cellToNorm(a.cell2, grid.cols, grid.rows)}
     else { const x2 = num(a.nx2), y2 = num(a.ny2); if (x2 !== null && y2 !== null) {end = { nx: x2, ny: y2 }} }
@@ -225,6 +236,34 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
   let view: View = { kind: 'full' }
   resetCuAbort()
 
+  // v3.20: 会话锁——同一时刻只允许一个操控者驱动键鼠（对标 cc-haha ForegroundLease）
+  const sessionId = `desktop_act_${Date.now()}`
+  let locked = false
+  try {
+    locked = acquireCuSession(sessionId, 'agent desktop_act')
+    if (!locked) {
+      return {
+        callId: '', ok: false,
+        content: '🖥️ Computer Use 会话锁正被另一个操控任务占用，请等待当前任务结束后再试。',
+        error: 'cu_session_busy',
+      }
+    }
+  } catch { /* 会话锁模块异常时不阻塞 */ }
+
+  try {
+    return await desktopActLoop(instruction, maxSteps, steps, view, sessionId)
+  } finally {
+    if (locked) {try {releaseCuSession(sessionId)} catch { /* ignore */ }}
+  }
+}
+
+async function desktopActLoop(
+  instruction: string,
+  maxSteps: number,
+  steps: string[],
+  view: View,
+  sessionId: string,
+): Promise<ToolResult> {
   for (let step = 0; step < maxSteps; step++) {
     if (isCuAborted()) { steps.push('🛑 已收到全局急停(Ctrl+Alt+X)，立即停止'); break }
 
@@ -282,7 +321,7 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
         if (isCuAborted()) { steps.push('🛑 急停，批量动作中止'); denied = true; break }
         // 按“当前视图”映射坐标：全图 cell→全局；zoom 视图 cell/局部→自动换算回全屏
         if (!preparePoint(sub, grid, view)) { msgs.push('(某动作坐标无效，跳过)'); continue }
-        const r = await executeCuAction(sub, { imgW: shot.w, imgH: shot.h })
+        const r = await executeCuAction(sub, viewOf(shot), { sessionId })
         msgs.push(r.msg)
         if (r.denied) { denied = true; break }
         await sleep(180)
@@ -301,7 +340,7 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
     if (isCuAborted()) { steps.push('🛑 已收到全局急停，立即停止'); break }
     if (!preparePoint(act, grid, view)) { steps.push('⚠️ 点击/拖拽缺少有效坐标(cell 或 nx,ny)，结束'); break }
 
-    const result = await executeCuAction(act, { imgW: shot.w, imgH: shot.h })
+    const result = await executeCuAction(act, viewOf(shot), { sessionId })
     steps.push(`📌 第${step + 1}步 ${act.thought || act.action_type} → ${result.msg}`)
     view = { kind: 'full' }
     if (result.denied) { steps.push('⛔ 命中高危硬拦截，终止本次操控'); break }
@@ -318,3 +357,139 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
     ...(aborted ? { error: '用户急停（Ctrl+Alt+X）' } : {}),
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+// v3.30 UIA 元素树工具（对标 cc-haha 可交互元素）
+// ═══════════════════════════════════════════════════════════
+
+/** desktop_elements：列出前台窗口可交互元素（名字/控件类型/坐标） */
+export const desktopElementsDef: ToolDef = {
+  name: 'desktop_elements',
+  description: `扫描前台窗口的可交互 UI 元素树（Windows UI Automation）：按钮、输入框、标签页、菜单项等，
+返回「[序号] 控件类型 名称/自动化ID @(归一化坐标)」。适合：
+- 看不清截图、控件密集时点不准（用序号精确定位，比猜坐标可靠）；
+- 操作前确认控件是否存在/是否禁用/焦点在谁身上。
+扫描后用 desktop_element_act 按序号操作。该操作只读、不输入，默认放行。`,
+  params: {},
+  toolsets: ['agent', 'desktop', 'computer_use'],
+}
+
+export async function desktopElements(_args: Record<string, any> = {}): Promise<ToolResult> {
+  let shot: CuScreen
+  try {
+    shot = await captureScreen({})
+  } catch (e: any) {
+    return { callId: '', ok: false, content: '', error: `截图失败: ${e.message}` }
+  }
+  const els = await getUiaCache().scan(shot.w, shot.h, shot.vx || 0, shot.vy || 0)
+  return { callId: '', ok: true, content: renderElementsText(els) }
+}
+
+/** desktop_element_act：按元素 index 操作 */
+export const desktopElementActDef: ToolDef = {
+  name: 'desktop_element_act',
+  description: `按 desktop_elements 返回的元素序号精确操作：
+- action="click"（默认）：点击该元素中心；
+- action="set_value" + text：把文本填入输入框。v3.31 起优先用 UIA ValuePattern 控件级直接赋值（不经过键盘与剪贴板，不吃焦点时序）；控件不支持时自动回退「点击聚焦→全选→粘贴」。
+元素树可能随界面变化失效，失效时重新 desktop_elements 扫描。受写操作审批与急停保护。`,
+  params: {
+    index: { type: 'number', description: 'desktop_elements 返回的元素序号', required: true },
+    action: { type: 'string', description: 'click 或 set_value', required: false },
+    text: { type: 'string', description: 'set_value 时要填入的文本', required: false },
+  },
+  toolsets: ['agent', 'desktop', 'computer_use'],
+  dangerous: true,
+}
+
+export async function desktopElementAct(args: Record<string, any>): Promise<ToolResult> {
+  const index = Number(args.index)
+  if (!Number.isFinite(index)) {
+    return { callId: '', ok: false, content: '', error: '请提供 desktop_elements 返回的 index' }
+  }
+  const action = String(args.action || 'click')
+  if (action !== 'click' && action !== 'set_value') {
+    return { callId: '', ok: false, content: '', error: 'action 只能是 click 或 set_value' }
+  }
+  if (action === 'set_value' && (args.text == null || String(args.text) === '')) {
+    return { callId: '', ok: false, content: '', error: 'set_value 需要 text 参数' }
+  }
+
+  const sessionId = `element_act_${Date.now()}`
+  let locked = false
+  try {
+    locked = acquireCuSession(sessionId, 'agent desktop_element_act')
+    if (!locked) {
+      return {
+        callId: '', ok: false,
+        content: '🖥️ Computer Use 会话锁正被另一个操控任务占用，请稍后再试。',
+        error: 'cu_session_busy',
+      }
+    }
+  } catch { /* 锁模块异常不阻塞 */ }
+
+  try {
+    const shot = await captureScreen({ sessionId })
+    // 元素树强制刷新（避免缓存过期点错）
+    getUiaCache().clear()
+    const els = await getUiaCache().scan(shot.w, shot.h, shot.vx || 0, shot.vy || 0)
+    const el = els.find(e => e.index === index)
+    if (!el) {
+      return { callId: '', ok: false, content: '', error: `元素 index=${index} 已不在前台窗口，请重新 desktop_elements 扫描` }
+    }
+    if (action === 'set_value') {
+      const text = String(args.text)
+      // 0) 高危文本硬拦截（与 executeCuAction 同口径）
+      const hard = destructiveReason(text)
+      if (hard) {
+        return {
+          callId: '', ok: false,
+          content: `🖥️ 元素操作被拦截 [${index}]：${hard}`,
+          error: hard,
+        }
+      }
+      // 1) 权限门（会话锁/前台分区/人机互斥，与键鼠动作同一套策略）
+      const gate = await gateCuAction({ action_type: 'set_value', text } as any, { sessionId })
+      if (!gate.allow) {
+        return {
+          callId: '', ok: false,
+          content: `🖥️ 元素操作被拦截 [${index}]：${gate.reason}`,
+          error: gate.reason || '权限拦截',
+        }
+      }
+      // 2) 优先 ValuePattern 控件级赋值（元素 rect 是截图像素，加虚拟原点还原物理坐标）
+      const physX = el.rect.x + el.rect.w / 2 + (shot.vx || 0)
+      const physY = el.rect.y + el.rect.h / 2 + (shot.vy || 0)
+      const v = await setValueByPoint(physX, physY, text)
+      if (v.ok) {
+        return {
+          callId: '', ok: true,
+          content: `🖥️ 元素操作: set_value [${index}] ${el.type} ${el.name || el.automationId || ''} → ValuePattern 直接赋值成功（${text.length} 字）`,
+        }
+      }
+      // 3) 回退：点击聚焦 → 全选 → 粘贴
+      const act: any = { action_type: 'set_value', nx: el.nx, ny: el.ny, text }
+      const r = await executeCuAction(act, viewOf(shot), { sessionId })
+      return {
+        callId: '',
+        ok: r.ok && !r.denied,
+        content: `🖥️ 元素操作: set_value [${index}] ${el.type} ${el.name || el.automationId || ''} → ${r.msg}（ValuePattern 不可用：${v.reason}，已回退粘贴）`,
+        ...(r.denied ? { error: r.denyReason || '权限拦截' } : r.ok ? {} : { error: r.msg }),
+      }
+    }
+
+    const act: any = { action_type: 'click', nx: el.nx, ny: el.ny, wait_seconds: 0.2 }
+    const r = await executeCuAction(act, viewOf(shot), { sessionId })
+    return {
+      callId: '',
+      ok: r.ok && !r.denied,
+      content: `🖥️ 元素操作: click [${index}] ${el.type} ${el.name || el.automationId || ''} → ${r.msg}`,
+      ...(r.denied ? { error: r.denyReason || '权限拦截' } : r.ok ? {} : { error: r.msg }),
+    }
+  } catch (e: any) {
+    return { callId: '', ok: false, content: '', error: e?.message || String(e) }
+  } finally {
+    if (locked) {try {releaseCuSession(sessionId)} catch { /* ignore */ }}
+  }
+}
+
+export { parseUiaJson, normalizeElements }

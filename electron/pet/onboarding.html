@@ -63,6 +63,17 @@
   }
   .skip:hover { border-color: #7db8f0; color: #2277cc; transform: translateY(-1px); box-shadow: 0 5px 14px rgba(90,150,220,0.15); }
   .wm { position: fixed; right: 40px; bottom: 30px; font-size: 60px; font-weight: 900; color: rgba(74,158,255,0.06); pointer-events: none; letter-spacing: 4px; }
+  /* I6 隐私页 */
+  .privacy-screen { display: none; position: fixed; inset: 0; background: linear-gradient(180deg,#eef5ff,#f7fbff); padding: 40px 46px; overflow: auto; z-index: 50; }
+  .privacy-screen h2 { font-size: 22px; color:#1a2d4f; margin: 6px 0 12px; }
+  .privacy-screen p { color:#4a6185; font-size: 13.5px; line-height:1.8; margin-bottom: 10px; }
+  .priv-box { background:#fff; border:1.5px solid #d8e9fb; border-radius:14px; padding:16px 18px; margin:14px 0; font-size:12.5px; color:#4a6185; line-height:1.7; }
+  .priv-box b { color:#1a2d4f; }
+  .priv-actions { display:flex; gap:12px; margin-top:18px; }
+  .priv-btn { flex:1; padding:12px; border-radius:999px; border:none; font-size:14px; font-weight:700; cursor:pointer; }
+  .priv-primary { background:linear-gradient(135deg,#4a9eff,#6bb5ff); color:#fff; box-shadow:0 4px 12px rgba(74,158,255,.3); }
+  .priv-ghost { background:#fff; border:2px solid #d8e9fb; color:#5b7396; }
+  .priv-note { font-size:11.5px; color:#8aa0bd; margin-top:14px; }
 </style>
 </head>
 <body>
@@ -104,6 +115,22 @@
   <div class="foot"><button class="skip" id="skip">先跳过喵</button></div>
   <div class="wm">LUMINA</div>
 
+  <!-- I6 隐私页（选完人格后展示） -->
+  <div class="privacy-screen" id="privacy-screen">
+    <span class="chip">最后一步</span>
+    <h2>你的数据，只在这台电脑上 🔐</h2>
+    <p>关于你的所有记忆、人格文件、对话摘要，<b>只保存在本机</b>，不上传任何服务器。你的 API Key 也只在本机加密存放；离线时的语义回忆（TF-IDF）照样能用。</p>
+    <div class="priv-box">
+      🗂️ 数据目录：<b id="priv-path">本机（启动后显示）</b><br>
+      🗃️ 记忆库：lumina-memory.db（SQLite）<br>
+      ☁️ 模型推理：按你的配置走 —— 用云端模型时请求发给你填的服务商，用本地模型则完全不出本机。
+    </div>
+    <p style="font-size:12.5px;color:#8aa0bd">想带走或备份？随时可以一键导出/导入（设置 → 隐私与开关）。</p>
+    <div class="priv-actions">
+      <button class="priv-btn priv-primary" id="priv-start">开始使用喵</button>
+    </div>
+    <div class="priv-note">License: AGPL-3.0 OR Apache-2.0 — 核心永远开放，可自托管、可审计。</div>
+  </div>
 <script>
   const ipc = require('electron').ipcRenderer;
   let selected = null;
@@ -127,6 +154,7 @@
   document.getElementById('logo-btn').addEventListener('click', () => {
     ipc.invoke('pet:set-persona', { skip: true }).then(() => window.close());
   });
+  document.getElementById('priv-start').addEventListener('click', () => window.close());
 </script>
 </body>
 </html>

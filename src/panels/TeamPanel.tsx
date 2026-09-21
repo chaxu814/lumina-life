@@ -4,6 +4,7 @@
 // ============================================================
 
 import React, { useState, useEffect, useMemo } from 'react'
+import TeamCollabSection from './TeamCollabSection'
 
 type AgentActivity = 'sleeping' | 'waking' | 'working' | 'social' | 'idle' | 'resting' | 'analyzing' | 'coding' | 'caring'
 
@@ -507,6 +508,9 @@ export default function TeamPanel() {
           ))
         )}
       </div>
+
+      {/* ── 🤝 v3.20 协作中心：任务板 / 信箱 / 动态 worker / CU 策略 ── */}
+      <TeamCollabSection />
     </div>
   )
 }

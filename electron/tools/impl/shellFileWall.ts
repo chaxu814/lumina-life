@@ -32,6 +32,9 @@
 import { execSync } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
+import { evaluateCommand, Severity, type CommandEvaluation } from './sandboxRules'
+import { recordSandboxAudit, type SandboxDisposition } from './sandboxAudit'
+import { isEnabled } from '../../core/featureFlags'
 
 // ═══════════════════════════════════════════════════════════
 // 常量
@@ -257,4 +260,54 @@ export function extractExitCode(output: string): number | null {
  */
 export function stripExitMarker(output: string): string {
   return output.replace(/\r?\n?\[LUMINA_EXIT_CODE\]=\d+\r?\n?/g, '').trim()
+}
+
+// ═══════════════════════════════════════════════════════════
+// v6.2 (F1): 基于 7×8 规则库的 Low IL 降级决策
+// ═══════════════════════════════════════════════════════════
+
+export interface LowILDecision {
+  /** 是否需要 runas 降级 */
+  shouldWrap: boolean
+  /** 审计处置 */
+  disposition: SandboxDisposition
+  /** 完整评估结果（含命中规则） */
+  evaluation: CommandEvaluation
+  /** 决策理由（人类可读） */
+  reason: string
+}
+
+/**
+ * 决定一条命令是否要降级到 Low IL，并写入审计。
+ *
+ * 策略（feature flag `sandbox.severityMatrix` 开启时）：
+ *   - CRITICAL/BLOCK → 降级 + 审计记 blocked（真正的硬拦由 shell.ts 前置危险模式兜底）
+ *   - HIGH           → 降级 + 审计记 degraded
+ *   - MEDIUM         → 不降级，仅审计
+ *   - LOW/INFO/SAFE  → 不降级，仅审计（普通 npm/build 等保持正常 IL，
+ *                       否则 Low IL 写不进用户项目目录，破坏日常体验）
+ *
+ * flag 关闭 → 回退旧行为：Windows 上一律 Low IL 降级。
+ */
+export function decideLowIL(command: string): LowILDecision {
+  const evaluation = evaluateCommand(command)
+
+  // 无论走哪条分支都写一条审计（透明玻璃房）
+  recordSandboxAudit(command, {
+    source: 'shell_exec',
+    disposition: evaluation.blocked ? 'blocked' : evaluation.degraded ? 'degraded' : 'passed',
+  })
+
+  // flag 关闭 → 旧行为：一律降级
+  if (!isEnabled('sandbox.severityMatrix')) {
+    return { shouldWrap: true, disposition: 'degraded', evaluation, reason: '旧策略：Windows 一律 Low IL' }
+  }
+
+  if (evaluation.severity >= Severity.CRITICAL) {
+    return { shouldWrap: true, disposition: 'blocked', evaluation, reason: evaluation.summary }
+  }
+  if (evaluation.severity >= Severity.HIGH) {
+    return { shouldWrap: true, disposition: 'degraded', evaluation, reason: evaluation.summary }
+  }
+  return { shouldWrap: false, disposition: 'passed', evaluation, reason: evaluation.summary }
 }

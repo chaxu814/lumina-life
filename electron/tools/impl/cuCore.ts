@@ -25,6 +25,10 @@ import screenshot from 'screenshot-desktop'
 import { getAgentConfig } from '../../agentConfig'
 import { normToPx, pngDimensions } from './cuGeometry'
 import { destructiveReason } from './cuSafety'
+import {
+  gateCuAction, getCuPolicy, expectsVisualChange,
+} from './cuPermissions'
+import { computeDhashFromImage, verifyChange } from './cuVerify'
 import { classifyModelError, describeLimitation, looksLikeVisionModel, isLocalEndpoint } from '../../core/modelCompat'
 
 // 安全策略对外仍可从 cuCore 引用
@@ -53,6 +57,9 @@ export interface CuView {
   /** 当前模型所见画面的真实像素尺寸（归一化坐标据此换算） */
   imgW: number
   imgH: number
+  /** v3.30 多显示器：虚拟桌面左上角物理像素偏移（默认 0/0） */
+  vx?: number
+  vy?: number
 }
 
 export interface CuExecResult {
@@ -60,6 +67,11 @@ export interface CuExecResult {
   msg: string
   /** 命中高危硬拦截 */
   denied?: boolean
+  /** v3.30 拒绝类别（gate=权限门，hard=高危命令，policy=策略） */
+  denyReason?: 'gate' | 'hard' | 'policy'
+  /** v3.33 观察员（CU 三人组）：是否跑了 dHash 验证、画面是否变化（未验证为 undefined） */
+  verified?: boolean
+  changed?: boolean
 }
 
 export interface CuScreen {
@@ -67,6 +79,9 @@ export interface CuScreen {
   b64: string
   w: number
   h: number
+  /** v3.30 虚拟桌面左上角物理像素偏移（多显示器时可能为负） */
+  vx: number
+  vy: number
 }
 
 // ──────────────────────────────────────────────────────────
@@ -201,7 +216,118 @@ function screenshotFallbackPS(pngPath: string): Promise<string> {
   })
 }
 
+/** v3.30 PowerShell 截取整个虚拟桌面（所有显示器），输出 PNG 路径 */
+function virtualScreenCapturePS(pngPath: string): Promise<string> {
+  const psCmd = [
+    'Add-Type -AssemblyName System.Windows.Forms,System.Drawing;',
+    '$vs=[System.Windows.Forms.SystemInformation]::VirtualScreen;',
+    '$b=New-Object System.Drawing.Bitmap($vs.Width,$vs.Height);',
+    '$g=[System.Drawing.Graphics]::FromImage($b);',
+    '$g.CopyFromScreen($vs.X,$vs.Y,0,0,$vs.Size);',
+    `$b.Save('${pngPath.replace(/\\/g, '\\\\')}',[System.Drawing.Imaging.ImageFormat]::Png);`,
+    '$g.Dispose();$b.Dispose();',
+  ].join(' ')
+  const psB64 = Buffer.from(psCmd, 'utf16le').toString('base64')
+  return new Promise<string>((resolve, reject) => {
+    cp.execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', psB64],
+      { timeout: 10000, windowsHide: true },
+      (err) => {
+        if (err) { try { fs.unlinkSync(pngPath) } catch {}; reject(new Error(`virtual_capture:${err.code || 'unknown'}`)); return }
+        try { if (fs.statSync(pngPath).size > 0) {resolve(pngPath)} else {reject(new Error('virtual_capture:empty'))} }
+        catch (e: any) { reject(new Error(`virtual_capture:${e.message}`)) }
+      })
+  })
+}
+
+/**
+ * v3.30 隐私遮罩：把非前台窗口区域涂黑后再返回模型。
+ * 进程 DPI 置为 aware，矩形坐标与物理像素截图对齐。best-effort，失败返回原图。
+ */
+async function applyPrivacyMask(src: Buffer): Promise<Buffer> {
+  if (process.platform !== 'win32') {return src}
+  const inP = path.join(os.tmpdir(), `lu-mask-in-${Date.now()}.png`)
+  const outP = path.join(os.tmpdir(), `lu-mask-out-${Date.now()}.png`)
+  const ps = [
+    'Add-Type @"',
+    'using System;using System.Runtime.InteropServices;using System.Text;',
+    'public class W{',
+    '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+    '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+    '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r);',
+    '[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);',
+    '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);',
+    '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();',
+    'public delegate bool EnumProc(IntPtr h, IntPtr l);',
+    '[StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rr, B; }',
+    '}',
+    '"@',
+    '[W]::SetProcessDPIAware() | Out-Null',
+    `$b=[System.Drawing.Image]::FromFile('${inP.replace(/\\/g, '\\\\')}')`,
+    '$bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height',
+    '$g=[System.Drawing.Graphics]::FromImage($bmp)',
+    '$g.DrawImage($b,0,0)',
+    '$fg=[W]::GetForegroundWindow()',
+    '$brush=New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::Black)',
+    '$rects=New-Object System.Collections.ArrayList',
+    '$cb=[W+EnumProc]{ param($h,$l) ',
+    '  if ([W]::IsWindowVisible($h) -and $h -ne $fg) {',
+    '    $r=New-Object W+R; if ([W]::GetWindowRect($h,[ref]$r)) {',
+    '      $w=$r.Rr-$r.L; $hh=$r.B-$r.T; if ($w -gt 200 -and $hh -gt 120) { [void]$rects.Add(@($r.L,$r.T,$w,$hh)) } } }',
+    '  return $true }',
+    '[W]::EnumWindows($cb,[IntPtr]::Zero) | Out-Null',
+    'foreach ($x in $rects) { $g.FillRectangle($brush, $x[0], $x[1], $x[2], $x[3]) }',
+    `$bmp.Save('${outP.replace(/\\/g, '\\\\')}',[System.Drawing.Imaging.ImageFormat]::Png)`,
+    '$g.Dispose();$bmp.Dispose();$b.Dispose();',
+  ]
+  try {
+    fs.writeFileSync(inP, src)
+    const out = await runPS(ps, 12000)
+    if (out.startsWith('ERR:')) {return src}
+    if (fs.existsSync(outP) && fs.statSync(outP).size > 0) {
+      return fs.readFileSync(outP)
+    }
+    return src
+  } catch {
+    return src
+  } finally {
+    try { fs.unlinkSync(inP) } catch { /* ignore */ }
+    try { fs.unlinkSync(outP) } catch { /* ignore */ }
+  }
+}
+
+/** 计算虚拟桌面（所有显示器）相对主屏幕的物理像素边界 */
+export function virtualDesktopBounds(): { x: number; y: number; w: number; h: number } {
+  try {
+    let x = 0, y = 0, r = 0, b = 0
+    for (const d of screen.getAllDisplays()) {
+      const sf = d.scaleFactor || 1
+      const bx = Math.round(d.bounds.x * sf)
+      const by = Math.round(d.bounds.y * sf)
+      const bw = Math.round(d.bounds.width * sf)
+      const bh = Math.round(d.bounds.height * sf)
+      x = Math.min(x, bx); y = Math.min(y, by)
+      r = Math.max(r, bx + bw); b = Math.max(b, by + bh)
+    }
+    return { x, y, w: r - x, h: b - y }
+  } catch {
+    return { x: 0, y: 0, w: 0, h: 0 }
+  }
+}
+
 export async function captureScreenBuffer(): Promise<Buffer> {
+  const policy = getCuPolicy()
+  // v3.30 多显示器：PowerShell 直接截虚拟桌面（screenshot-desktop 只截主屏）
+  if (policy.multiMonitor && process.platform === 'win32') {
+    try {
+      const p = path.join(os.tmpdir(), `lu-vsc-${Date.now()}.png`)
+      await virtualScreenCapturePS(p)
+      const buf = fs.readFileSync(p)
+      try { fs.unlinkSync(p) } catch {}
+      if (buf.length > 0) {return buf}
+    } catch (e: any) {
+      console.warn('[cuCore] 虚拟桌面截图失败，回退主屏:', e?.message || e)
+    }
+  }
   try {
     // screenshot-desktop 不传 filename 时直接返回 PNG Buffer
     const buf = await screenshot({ format: 'png' }) as unknown as Buffer
@@ -217,12 +343,22 @@ export async function captureScreenBuffer(): Promise<Buffer> {
   }
 }
 
-/** 截屏并解析真实像素尺寸 + base64（坐标映射以此为准） */
-export async function captureScreen(): Promise<CuScreen> {
-  const buffer = await captureScreenBuffer()
+/** 截屏并解析真实像素尺寸 + base64（坐标映射以此为准）。opts 当前仅用于调用方语义统一，截图本身不区分会话 */
+export async function captureScreen(_opts?: { sessionId?: string }): Promise<CuScreen> {
+  const policy = getCuPolicy()
+  let buffer = await captureScreenBuffer()
+  // v3.30 隐私遮罩（非前台窗口涂黑）
+  if (policy.maskBackgroundWindows && process.platform === 'win32') {
+    try { buffer = await applyPrivacyMask(buffer) } catch { /* 遮罩失败返回原图 */ }
+  }
   const dims = pngDimensions(buffer)
   let w = dims?.w || 0
   let h = dims?.h || 0
+  let vx = 0, vy = 0
+  if (policy.multiMonitor) {
+    const vb = virtualDesktopBounds()
+    if (vb.w > 0 && vb.h > 0) { vx = vb.x; vy = vb.y; w = vb.w; h = vb.h }
+  }
   if (!w || !h) {
     try {
       const d = screen.getPrimaryDisplay()
@@ -230,7 +366,7 @@ export async function captureScreen(): Promise<CuScreen> {
       h = Math.round(d.size.height * d.scaleFactor)
     } catch { /* 保持 0，坐标回退像素模式 */ }
   }
-  return { buffer, b64: buffer.toString('base64'), w, h }
+  return { buffer, b64: buffer.toString('base64'), w, h, vx, vy }
 }
 
 // ──────────────────────────────────────────────────────────
@@ -308,6 +444,59 @@ export async function cuClick(x: number, y: number, btn: 'left' | 'right', dbl: 
   return r.startsWith('ERR:') ? `点击失败:${r.slice(4)}` : '点击完成'
 }
 
+/** v3.30 悬停（只移动光标不点击，用于展开 hover 菜单/工具提示） */
+export async function cuHover(x: number, y: number, holdMs = 400): Promise<string> {
+  const plat = process.platform
+  const rx = Math.round(x), ry = Math.round(y), hold = Math.round(holdMs)
+  if (plat === 'win32') {
+    const r = await runPS([
+      'Add-Type -AssemblyName System.Windows.Forms',
+      `[System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point(${rx},${ry})`,
+      `Start-Sleep -Milliseconds ${hold}`,
+      "Write-Output 'OK'",
+    ])
+    return r.startsWith('ERR:') ? `悬停失败:${r.slice(4)}` : '悬停完成'
+  }
+  if (plat === 'darwin') {
+    const r = await execCmd('osascript', ['-e', `tell application "System Events" to set mousePosition to {${rx},${ry}}`])
+    return r.startsWith('ERR:') ? `悬停失败:${r.slice(4)}` : '悬停完成'
+  }
+  const r = await execCmd('xdotool', ['mousemove', String(rx), String(ry)])
+  return r.startsWith('ERR:') ? `悬停失败:${r.slice(4)}` : '悬停完成'
+}
+
+/** v3.30 长按（左键按下保持，默认 800ms，用于右键/长按手势/拖拽排序） */
+export async function cuLongPress(x: number, y: number, holdMs = 800): Promise<string> {
+  const plat = process.platform
+  const rx = Math.round(x), ry = Math.round(y), hold = Math.round(holdMs)
+  if (plat === 'win32') {
+    const r = await runPS([
+      "Add-Type @'",
+      'using System;using System.Runtime.InteropServices;',
+      'public class ML{',
+      '[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);',
+      '[DllImport("user32.dll")]public static extern bool SetCursorPos(int X,int Y);',
+      '}',
+      "'@",
+      `[ML]::SetCursorPos(${rx},${ry})`,
+      'Start-Sleep -Milliseconds 80',
+      '[ML]::mouse_event(0x0002,0,0,0,0)',
+      `Start-Sleep -Milliseconds ${hold}`,
+      '[ML]::mouse_event(0x0004,0,0,0,0)',
+      "Write-Output 'OK'",
+    ])
+    return r.startsWith('ERR:') ? `长按失败:${r.slice(4)}` : '长按完成'
+  }
+  if (plat === 'darwin') {
+    const r = await execCmd('bash', ['-c',
+      `cliclick m:${rx},${ry} md:${rx},${ry} && sleep ${(hold / 1000).toFixed(2)} && cliclick mu:${rx},${ry}`])
+    return r.startsWith('ERR:') ? `长按失败:${r.slice(4)}` : '长按完成'
+  }
+  const r = await execCmd('bash', ['-c',
+    `xdotool mousemove ${rx} ${ry} mousedown 1 && sleep ${(hold / 1000).toFixed(2)} && xdotool mouseup 1`])
+  return r.startsWith('ERR:') ? `长按失败:${r.slice(4)}` : '长按完成'
+}
+
 /** 键盘输入文本：Windows 走剪贴板粘贴（支持中文/长文本），并备份恢复原剪贴板 */
 export async function cuType(text: string): Promise<string> {
   const plat = process.platform
@@ -334,25 +523,61 @@ export async function cuType(text: string): Promise<string> {
   return r.startsWith('ERR:') ? `输入失败:${r.slice(4)}` : '输入完成'
 }
 
-/** 单个按键 / 组合键（enter、esc、tab、ctrl_c、ctrl_v、alt_f4…） */
+/** 命名键 → SendKeys 记号 */
+const SENDKEY_NAMED: Record<string, string> = {
+  enter: '{ENTER}', return: '{ENTER}', tab: '{TAB}', esc: '{ESC}', escape: '{ESC}',
+  backspace: '{BACKSPACE}', delete: '{DELETE}', del: '{DELETE}', space: ' ',
+  up: '{UP}', down: '{DOWN}', left: '{LEFT}', right: '{RIGHT}',
+  home: '{HOME}', end: '{END}', pageup: '{PGUP}', pagedown: '{PGDN}',
+  insert: '{INSERT}', capslock: '{CAPSLOCK}',
+  f1: '{F1}', f2: '{F2}', f3: '{F3}', f4: '{F4}', f5: '{F5}', f6: '{F6}',
+  f7: '{F7}', f8: '{F8}', f9: '{F9}', f10: '{F10}', f11: '{F11}', f12: '{F12}',
+}
+
+/**
+ * v3.30 把任意修饰键组合（ctrl_shift_a / alt_s / ctrl_shift_esc / win_r）
+ * 编译为 SendKeys 记号串。纯函数，可单测。
+ * 约定：下划线/加号/空格分隔，最后一段是主键，其余为修饰键。
+ */
+export function buildSendKeysToken(key: string): string | null {
+  const k = (key || '').toLowerCase().replace(/\s+/g, '').replace(/[+]/g, '_')
+  if (!k) {return null}
+  if (SENDKEY_NAMED[k]) {return SENDKEY_NAMED[k]}
+  // 单字符直接按
+  if (k.length === 1) {return k}
+  const parts = k.split('_').filter(Boolean)
+  const modMap: Record<string, string> = { ctrl: '^', control: '^', alt: '%', shift: '+' }
+  let prefix = ''
+  for (const p of parts.slice(0, -1)) {
+    if (modMap[p]) {prefix += modMap[p]}
+    else {
+      // 不认识的修饰段，交给保守失败
+      return null
+    }
+  }
+  const main = parts[parts.length - 1]
+  if (!main) {return null}
+  const mainToken = SENDKEY_NAMED[main] || (main.length === 1 ? main : `{${main.toUpperCase()}}`)
+  return prefix ? `${prefix}${mainToken}` : mainToken
+}
+
+/** 单个按键 / 组合键（enter、esc、tab、ctrl_c、ctrl_v、alt_f4、ctrl_shift_a…） */
 export async function cuPressKey(key: string): Promise<string> {
   const plat = process.platform
   const k = (key || '').toLowerCase()
   if (!k) {return '按键失败:空按键'}
 
   if (plat === 'win32') {
-    const map: Record<string, string> = {
-      enter: '{ENTER}', tab: '{TAB}', esc: '{ESC}', escape: '{ESC}',
-      backspace: '{BACKSPACE}', delete: '{DELETE}', space: ' ',
-      up: '{UP}', down: '{DOWN}', left: '{LEFT}', right: '{RIGHT}',
-      home: '{HOME}', end: '{END}', pageup: '{PGUP}', pagedown: '{PGDN}',
-      ctrl_c: '^c', ctrl_v: '^v', ctrl_a: '^a', ctrl_x: '^x', ctrl_z: '^z', ctrl_y: '^y',
-      ctrl_s: '^s', ctrl_f: '^f', alt_f4: '%{F4}', win: '^{ESC}',
+    const legacyMap: Record<string, string> = {
+      win: '^{ESC}',
     }
-    const token = map[k] || (k.length === 1 ? k : `{${k.toUpperCase()}}`)
+    const token = legacyMap[k] || buildSendKeysToken(k)
+    if (!token) {return `按键失败:不支持的按键组合「${key}」`}
+    // SendKeys 记号里的单引号需转义
+    const safe = token.replace(/'/g, "''")
     const r = await runPS([
       'Add-Type -AssemblyName System.Windows.Forms',
-      `[System.Windows.Forms.SendKeys]::SendWait('${token}')`,
+      `[System.Windows.Forms.SendKeys]::SendWait('${safe}')`,
       "Write-Output 'OK'",
     ])
     return r.startsWith('ERR:') ? `按键失败:${r.slice(4)}` : '按键完成'
@@ -459,13 +684,20 @@ export async function cuDrag(x1: number, y1: number, x2: number, y2: number): Pr
 
 // ──────────────────────────────────────────────────────────
 // 7. 统一动作执行（归一化坐标 → 像素 → 原语）
+//    v3.20: 外层 executeCuAction 套「权限门 + 动作后验证」，
+//    本函数是不做门禁的原始执行（保留导出，供门禁用 / 测试）。
 // ──────────────────────────────────────────────────────────
 
-export async function executeCuAction(act: CuAction, view: CuView): Promise<CuExecResult> {
+export async function executeCuActionRaw(act: CuAction, view: CuView): Promise<CuExecResult> {
+  const vx = view.vx || 0, vy = view.vy || 0
   const toPxX = (n?: number, px?: number): number =>
-    typeof n === 'number' && Number.isFinite(n) ? normToPx(n, view.imgW) : Math.max(0, Math.round(Number(px) || 0))
+    typeof n === 'number' && Number.isFinite(n)
+      ? normToPx(n, view.imgW) + vx
+      : Math.round(Number(px) || 0)
   const toPxY = (n?: number, px?: number): number =>
-    typeof n === 'number' && Number.isFinite(n) ? normToPx(n, view.imgH) : Math.max(0, Math.round(Number(px) || 0))
+    typeof n === 'number' && Number.isFinite(n)
+      ? normToPx(n, view.imgH) + vy
+      : Math.round(Number(px) || 0)
   const hasNorm = (a: CuAction) => typeof a.nx === 'number' && typeof a.ny === 'number'
   const hasPx = (a: CuAction) => typeof a.x === 'number' && typeof a.y === 'number'
 
@@ -479,10 +711,51 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
       const msg = await cuClick(toPxX(act.nx, act.x), toPxY(act.ny, act.y), btn, dbl)
       return { ok: !msg.startsWith('❌') && !msg.startsWith('点击失败'), msg }
     }
+    // v3.30 悬停：移动光标并短暂停留（hover 菜单 / tooltip）
+    case 'hover':
+    case 'mouse_move': {
+      if (!hasNorm(act) && !hasPx(act)) {return { ok: false, msg: '❌ 缺少坐标' }}
+      const msg = await cuHover(toPxX(act.nx, act.x), toPxY(act.ny, act.y),
+        Math.max(100, Math.min(3000, Number(act.wait_seconds) ? Number(act.wait_seconds) * 1000 : 400)))
+      return { ok: !msg.startsWith('❌') && !msg.includes('失败'), msg }
+    }
+    // v3.30 长按：左键按下保持（默认 800ms，可用 hold_seconds 覆盖）
+    case 'long_press': {
+      if (!hasNorm(act) && !hasPx(act)) {return { ok: false, msg: '❌ 缺少坐标' }}
+      const hold = Math.max(150, Math.min(5000, Number(act.wait_seconds) ? Number(act.wait_seconds) * 1000 : 800))
+      const msg = await cuLongPress(toPxX(act.nx, act.x), toPxY(act.ny, act.y), hold)
+      return { ok: !msg.startsWith('❌') && !msg.includes('失败'), msg }
+    }
+    // v3.30 文本选择：从起点拖到终点（文本选择手势）
+    case 'select_text': {
+      const endNorm = typeof act.nx2 === 'number' && typeof act.ny2 === 'number'
+      const endPx = typeof act.drag_end_x === 'number' && typeof act.drag_end_y === 'number'
+      if ((!hasNorm(act) && !hasPx(act)) || (!endNorm && !endPx)) {return { ok: false, msg: '❌ 缺少选择起点/终点坐标' }}
+      const msg = await cuDrag(
+        toPxX(act.nx, act.x), toPxY(act.ny, act.y),
+        toPxX(act.nx2, act.drag_end_x), toPxY(act.ny2, act.drag_end_y),
+      )
+      return { ok: !msg.includes('失败'), msg: msg.includes('拖拽完成') ? '文本选择完成' : msg }
+    }
+    // v3.30 给输入框赋值：点击聚焦 → 全选 → 替换输入
+    case 'set_value': {
+      if (!hasNorm(act) && !hasPx(act)) {return { ok: false, msg: '❌ 缺少输入框坐标' }}
+      if (!act.text) {return { ok: false, msg: '❌ 缺少文本' }}
+      const deny = destructiveReason(act.text)
+      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true, denyReason: 'hard' }}
+      const clickMsg = await cuClick(toPxX(act.nx, act.x), toPxY(act.ny, act.y), 'left', false)
+      if (clickMsg.includes('失败')) {return { ok: false, msg: clickMsg }}
+      await new Promise(r => setTimeout(r, 140))
+      const sel = await cuPressKey('ctrl_a')
+      await new Promise(r => setTimeout(r, 60))
+      const typeMsg = await cuType(act.text)
+      const ok = !sel.includes('失败') && !typeMsg.includes('失败')
+      return { ok, msg: ok ? `赋值完成（${act.text.slice(0, 20)}${act.text.length > 20 ? '…' : ''}）` : `${sel}；${typeMsg}` }
+    }
     case 'type': {
       if (!act.text) {return { ok: false, msg: '❌ 缺少输入文本' }}
       const deny = destructiveReason(act.text)
-      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true }}
+      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true, denyReason: 'hard' }}
       const msg = await cuType(act.text)
       return { ok: !msg.startsWith('❌') && !msg.startsWith('输入失败'), msg }
     }
@@ -490,7 +763,7 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
     case 'key': {
       if (!act.key) {return { ok: false, msg: '❌ 缺少按键' }}
       const deny = destructiveReason(act.key)
-      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true }}
+      if (deny) {return { ok: false, msg: `🚫 ${deny}`, denied: true, denyReason: 'hard' }}
       const msg = await cuPressKey(act.key)
       return { ok: !msg.startsWith('❌') && !msg.startsWith('按键失败'), msg }
     }
@@ -531,6 +804,63 @@ export async function executeCuAction(act: CuAction, view: CuView): Promise<CuEx
     default:
       return { ok: false, msg: `❓ 未知操作类型: ${act.action_type}` }
   }
+}
+
+/**
+ * 统一动作执行（v3.20 起带权限门 + 动作后验证）。
+ *
+ * ① 权限门：会话锁 → 前台应用探测 → 白名单/分区/系统键决策（见 cuPermissions）
+ * ② 动作后验证：点击/拖拽类动作前后截图算 dHash，无变化则提示重新观察（见 cuVerify）
+ *
+ * 门禁任何异常 fail-open（放行并告警），保证不会因探测故障把用户卡死。
+ *
+ * @param opts.sessionId 操控者会话标识（agent 批次 / 引擎任务），用于会话锁
+ */
+export async function executeCuAction(
+  act: CuAction,
+  view: CuView,
+  opts?: { sessionId?: string | null },
+): Promise<CuExecResult> {
+  resetCuAbort()
+
+  // ① 权限门
+  try {
+    const gate = await gateCuAction(act, { sessionId: opts?.sessionId ?? null })
+    if (!gate.allow) {
+      return { ok: false, msg: `🚫 ${gate.reason || '权限门拒绝该动作'}`, denied: true, denyReason: 'gate' }
+    }
+  } catch (e: any) {
+    console.warn('[cuCore] 权限门异常（放行）:', e?.message || e)
+  }
+
+  // ② 动作前 dHash（仅对预期改变画面的动作）
+  const policy = getCuPolicy()
+  const doVerify = policy.enabled && policy.verifyAfterAction && expectsVisualChange(act)
+  let beforeHash: boolean[] | null = null
+  if (doVerify) {
+    try {
+      beforeHash = computeDhashFromImage(await captureScreenBuffer())
+    } catch { /* 验证失败不阻塞动作 */ }
+  }
+
+  const result = await executeCuActionRaw(act, view)
+
+  // ② 动作后验证：无变化时把提示追加到成功消息后（不判失败，让 agent 自行决定重看）
+  if (doVerify && beforeHash && result.ok && !result.denied) {
+    try {
+      // 给 UI 一点响应时间（弹窗/高亮/页面切换）
+      await new Promise(r => setTimeout(r, 260))
+      const afterHash = computeDhashFromImage(await captureScreenBuffer())
+      const vr = verifyChange(beforeHash, afterHash, policy.noChangeThreshold)
+      result.verified = true
+      result.changed = vr.changed
+      if (!vr.changed) {
+        result.msg = `${result.msg}\n${vr.hint}`
+      }
+    } catch { /* 验证失败忽略 */ }
+  }
+
+  return result
 }
 
 // ──────────────────────────────────────────────────────────

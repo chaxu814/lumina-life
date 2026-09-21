@@ -83,6 +83,8 @@ export interface AgentRunConfig {
   verbalizeThinking?: boolean
   /** 🆕 陪伴会话（如 Live2D 桌宠）：关闭"问句自动联网预搜索"，闲聊/身份问题不再被强制搜索；模型仍可自行调用 web_search */
   noAutoSearch?: boolean
+  /** v3.30 团队成本分级：动态 worker 用小模型干杂活时，覆盖 persona 配置中的模型名（baseUrl/apiKey 仍跟随 persona） */
+  modelOverride?: string
 }
 
 export type AgentEvent =

@@ -13,7 +13,6 @@
 //   4. SafetyGuard     → 操作确认 + 内核高危硬拦截 + 全局急停 Ctrl+Alt+X
 // ============================================================
 
-import screenshot from 'screenshot-desktop'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -21,9 +20,14 @@ import https from 'https'
 import http from 'http'
 import { screen } from 'electron'
 import {
-  executeCuAction, cuOpenApp, cuSetClipboard, cuPressKey,
+  executeCuAction,
+  captureScreen as captureCuScreen,
+  virtualDesktopBounds,
   resetCuAbort, isCuAborted,
 } from './tools/impl/cuCore'
+import {
+  acquireCuSession, releaseCuSession, getCuPolicy,
+} from './tools/impl/cuPermissions'
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
@@ -58,6 +62,7 @@ export interface ScreenAnalysis {
 
 export interface CUAction {
   type: 'click' | 'type' | 'keypress' | 'scroll' | 'wait' | 'drag' | 'screenshot' | 'clipboard' | 'open_app' | 'close_window'
+    | 'hover' | 'mouse_move' | 'long_press' | 'select_text' | 'set_value'
   params: Record<string, string | number>
 }
 
@@ -87,6 +92,8 @@ export class ComputerUse {
   private config: CUConfig
   private screenshotIndex = 0
   private tmpDir: string
+  /** v3.20: 当前多步任务持有的会话锁标识；null 表示没有持锁 */
+  private _sessionId: string | null = null
 
   constructor(config: CUConfig = {}) {
     this.config = {
@@ -100,16 +107,23 @@ export class ComputerUse {
     }
   }
 
-  /** 主显示器物理像素尺寸（归一化坐标据此换算） */
-  private physicalView(): { imgW: number; imgH: number } {
+  /** 视图物理像素尺寸（多显示器开启时为整个虚拟桌面）+ 虚拟原点偏移 */
+  private physicalView(): { imgW: number; imgH: number; vx: number; vy: number } {
     try {
+      if (getCuPolicy().multiMonitor) {
+        const vb = virtualDesktopBounds()
+        if (vb.w > 0 && vb.h > 0) {
+          return { imgW: vb.w, imgH: vb.h, vx: vb.x, vy: vb.y }
+        }
+      }
       const d = screen.getPrimaryDisplay()
       return {
         imgW: Math.round(d.size.width * d.scaleFactor),
         imgH: Math.round(d.size.height * d.scaleFactor),
+        vx: 0, vy: 0,
       }
     } catch {
-      return { imgW: 0, imgH: 0 }
+      return { imgW: 0, imgH: 0, vx: 0, vy: 0 }
     }
   }
 
@@ -123,6 +137,22 @@ export class ComputerUse {
     const steps: CUStepResult[] = []
     let summary = ''
     resetCuAbort()
+
+    // v3.20: 申请会话锁（与 agent desktop_act 互斥，避免并发键鼠冲突）
+    const sessionId = `cu_engine_${Date.now()}`
+    let locked = false
+    try {
+      locked = acquireCuSession(sessionId, 'IPC engine')
+      if (!locked) {
+        summary = '另一个 Computer Use 任务正在执行（会话锁占用），本次取消'
+        this.log(`🚫 ${summary}`)
+        return {
+          success: false, task, steps: [], totalSteps: 0,
+          duration: Date.now() - startTime, summary,
+        }
+      }
+      this._sessionId = sessionId
+    } catch { /* 会话锁模块异常时不阻塞 */ }
 
     this.log(`🖥️ 开始执行: ${task}`)
     this.config.onProgress?.(`开始: ${task}`)
@@ -191,6 +221,11 @@ export class ComputerUse {
     const duration = Date.now() - startTime
     this.config.onProgress?.(`完成 (${(duration / 1000).toFixed(1)}s)`)
 
+    if (locked) {
+      try { releaseCuSession(sessionId) } catch { /* ignore */ }
+      this._sessionId = null
+    }
+
     return {
       success: !!summary.includes('完成') || !!summary.includes('已执行'),
       task,
@@ -201,11 +236,15 @@ export class ComputerUse {
     }
   }
 
-  /** 快速截图（落盘，供 IPC / 预览使用） */
+  /**
+   * 快速截图（落盘，供 IPC / 预览使用）。
+   * v3.30：统一走 cuCore.captureScreen，自动应用多显示器虚拟桌面与隐私遮罩策略。
+   */
   async captureScreen(filename?: string): Promise<string> {
     const name = filename || `screen_${Date.now()}_${++this.screenshotIndex}.png`
     const filepath = path.join(this.tmpDir, name)
-    await screenshot({ filename: filepath })
+    const shot = await captureCuScreen()
+    fs.writeFileSync(filepath, shot.buffer)
     return filepath
   }
 
@@ -223,6 +262,23 @@ export class ComputerUse {
    * type 在 Windows 自动走剪贴板（支持中文），并继承内核高危硬拦截。
    */
   async executeAction(action: CUAction): Promise<boolean> {
+    // 单步 IPC（非多步任务）时申请一次性会话锁；多步任务复用 this._sessionId
+    const oneShotId = this._sessionId ? null : `cu_action_${Date.now()}`
+    const sessionId = this._sessionId || oneShotId
+    if (oneShotId) {
+      try {
+        if (!acquireCuSession(oneShotId, 'IPC single action')) {return false}
+      } catch { /* fail-open */ }
+    }
+    try {
+      // sessionId 恒为字符串：多步任务复用 this._sessionId，单步用 oneShotId
+      return await this._executeActionGated(action, sessionId as string)
+    } finally {
+      if (oneShotId) {try {releaseCuSession(oneShotId)} catch { /* ignore */ }}
+    }
+  }
+
+  private async _executeActionGated(action: CUAction, sessionId: string): Promise<boolean> {
     try {
       const p = action.params || {}
       const view = this.physicalView()
@@ -230,13 +286,14 @@ export class ComputerUse {
         const v = Number(p[k])
         return Number.isFinite(v) ? v : undefined
       }
+      const opts = { sessionId }
 
       switch (action.type) {
         case 'click': {
           if (num('nx') === undefined && num('x') === undefined) {return false}
           const r = await executeCuAction(
             { action_type: 'click', nx: num('nx'), ny: num('ny'), x: num('x'), y: num('y') },
-            view,
+            view, opts,
           )
           return r.ok
         }
@@ -250,28 +307,63 @@ export class ComputerUse {
             x: num('x'), y: num('y'),
             drag_end_x: num('x2') ?? num('drag_end_x'),
             drag_end_y: num('y2') ?? num('drag_end_y'),
-          }, view)
+          }, view, opts)
+          return r.ok
+        }
+        case 'hover':
+        case 'mouse_move': {
+          if (num('nx') === undefined && num('x') === undefined) {return false}
+          const r = await executeCuAction(
+            { action_type: 'hover', nx: num('nx'), ny: num('ny'), x: num('x'), y: num('y'), wait_seconds: num('hold_seconds') },
+            view, opts,
+          )
+          return r.ok
+        }
+        case 'long_press': {
+          if (num('nx') === undefined && num('x') === undefined) {return false}
+          const r = await executeCuAction(
+            { action_type: 'long_press', nx: num('nx'), ny: num('ny'), x: num('x'), y: num('y'), wait_seconds: num('hold_seconds') },
+            view, opts,
+          )
+          return r.ok
+        }
+        case 'select_text': {
+          const r = await executeCuAction({
+            action_type: 'select_text',
+            nx: num('nx'), ny: num('ny'), nx2: num('nx2'), ny2: num('ny2'),
+            x: num('x'), y: num('y'),
+            drag_end_x: num('x2'), drag_end_y: num('y2'),
+          }, view, opts)
+          return r.ok
+        }
+        case 'set_value': {
+          if (num('nx') === undefined && num('x') === undefined) {return false}
+          const r = await executeCuAction(
+            { action_type: 'set_value', nx: num('nx'), ny: num('ny'), x: num('x'), y: num('y'), text: String(p.text ?? '') },
+            view, opts,
+          )
           return r.ok
         }
         case 'type':
-          return (await executeCuAction({ action_type: 'type', text: String(p.text ?? '') }, view)).ok
+          return (await executeCuAction({ action_type: 'type', text: String(p.text ?? '') }, view, opts)).ok
         case 'keypress':
-          return (await executeCuAction({ action_type: 'keypress', key: String(p.key ?? '') }, view)).ok
+          return (await executeCuAction({ action_type: 'keypress', key: String(p.key ?? '') }, view, opts)).ok
         case 'scroll': {
           const dir = String(p.direction || 'down')
           const amount = Number(p.amount || 3)
           const signed = dir === 'up' ? -Math.abs(amount) : Math.abs(amount)
-          return (await executeCuAction({ action_type: 'scroll', scroll_amount: signed }, view)).ok
+          return (await executeCuAction({ action_type: 'scroll', scroll_amount: signed }, view, opts)).ok
         }
         case 'wait':
           await this.sleep(Number(p.ms || 1000))
           return true
         case 'clipboard':
-          return cuSetClipboard(String(p.text || '')).includes('已写入')
+          // v3.20: 统一走内核权限门（剪贴板写入需 full 授权）
+          return (await executeCuAction({ action_type: 'clipboard', text: String(p.text || '') }, view, opts)).ok
         case 'open_app':
-          return (await cuOpenApp(String(p.app || ''))).includes('已尝试')
+          return (await executeCuAction({ action_type: 'open_app', app: String(p.app || '') }, view, opts)).ok
         case 'close_window':
-          return (await cuPressKey('alt_f4')).includes('完成')
+          return (await executeCuAction({ action_type: 'close_window' }, view, opts)).ok
         case 'screenshot':
           try { await this.captureScreen(); return true } catch { return false }
         default:

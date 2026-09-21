@@ -30620,6 +30620,24 @@ void main() {
     let emotionUntil = 0;
     const clock = new Clock();
     let bounds = null;
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const target = { happy: 0, sad: 0, angry: 0, surprised: 0, relaxed: 0, valence: 0, arousal: 0.4, anxiety: 0, fatigue: 0.2, energy: 0.7 };
+    const cur = { happy: 0, sad: 0, angry: 0, surprised: 0, relaxed: 0 };
+    const peak = { happy: 0, sad: 0, angry: 0, surprised: 0, relaxed: 0 };
+    let breathPhase = 0;
+    function emotionToBlendTargets(s) {
+      const v = Math.max(-1, Math.min(1, s.valence));
+      const a = clamp01(s.arousal);
+      const anx = clamp01(s.anxiety);
+      const fatigue = clamp01(s.fatigue);
+      return {
+        happy: v > 0 ? clamp01(v) * (1 - fatigue * 0.4) : 0,
+        sad: v < 0 ? clamp01(-v) : 0,
+        angry: clamp01(anx * 0.55 + (v < -0.3 ? 0.35 : 0) - fatigue * 0.2),
+        surprised: clamp01((a - 0.62) * 1.5),
+        relaxed: clamp01((1 - a) * 0.85) * (v > -0.2 ? 1 : 0.4)
+      };
+    }
     let blink = 0;
     let nextBlink = 2 + Math.random() * 3;
     let blinkTimer = 0;
@@ -30717,21 +30735,34 @@ void main() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
       if (vrm) {
-        const breath = Math.sin(t * 1.6) * 0.012 + 0.012;
+        const fatigue = target.fatigue;
+        const energy = target.energy ?? 1 - fatigue;
+        const breathRate = 1.6 * (1 - fatigue * 0.45) * (0.7 + energy * 0.5);
+        breathPhase += dt * breathRate;
+        const breathAmp = 0.012 * (1 + fatigue * 0.6);
+        const breath = Math.sin(breathPhase) * breathAmp + breathAmp;
         const chest = vrm.humanoid?.getNormalizedBoneNode?.("chest");
         const spine = vrm.humanoid?.getNormalizedBoneNode?.("spine");
         const bone = chest || spine;
         if (bone) {
           bone.scale.set(1 + breath, 1 + breath * 0.4, 1 + breath);
         }
-        root.rotation.z = Math.sin(t * 0.55) * 0.015;
+        const swayAmp = 0.015 * (0.4 + energy * 0.6);
+        root.rotation.z = Math.sin(breathPhase * 0.35) * swayAmp;
         const head = vrm.humanoid?.getNormalizedBoneNode?.("head");
         if (head) {
-          head.rotation.y = Math.sin(t * 0.4) * 0.12;
-          head.rotation.x = Math.sin(t * 0.3 + 1) * 0.03;
+          head.rotation.y = Math.sin(breathPhase * 0.25) * 0.12 * (0.5 + energy * 0.5);
+          head.rotation.x = Math.sin(breathPhase * 0.18 + 1) * 0.03 + fatigue * 0.12;
         }
         talkLevel = Math.max(0, talkLevel - dt * 2.2);
         vrm.expressionManager?.setValue("aa", talkLevel);
+        const step = Math.min(1, dt * 3);
+        for (const k of ["happy", "sad", "angry", "surprised", "relaxed"]) {
+          peak[k] = Math.max(0, peak[k] - dt * 1.4);
+          cur[k] += (target[k] - cur[k]) * step;
+          const total = clamp01(cur[k] + peak[k]);
+          vrm.expressionManager?.setValue(k, total);
+        }
         if (emotionOverride && t < emotionUntil) {
           vrm.expressionManager?.setValue(emotionOverride, 0.9);
         }
@@ -30750,6 +30781,27 @@ void main() {
       setExpression(name) {
         emotionOverride = ["happy", "sad", "angry", "surprised", "relaxed"].includes(name) ? name : "";
         emotionUntil = emotionOverride ? clock.elapsedTime + 2.2 : 0;
+        if (emotionOverride) {
+          peak[emotionOverride] = 1;
+        }
+      },
+      // TODO: VRM parity with Live2D — 已做到：连续五维情绪→5 个标准 blendShape 平滑过渡、
+      //       疲劳/精力→呼吸频率与幅度、头微垂、待机摇摆幅度；一次性 setExpression 保留为峰值。
+      //       还差：Live2D 的五元音口型(A/I/U/E/O)、视线跟随(focus/gaze)、分层动作混合器
+      //       (gaze/action 层)、brow/cheek 等细粒度面部通道。VRM 模型自带的表情就这 5 个预设，
+      //       细粒度只能靠模型自带 blendShape，暂不做自动发现。
+      setEmotionCore(s) {
+        const tgt = emotionToBlendTargets(s);
+        target.happy = tgt.happy;
+        target.sad = tgt.sad;
+        target.angry = tgt.angry;
+        target.surprised = tgt.surprised;
+        target.relaxed = tgt.relaxed;
+        target.valence = Math.max(-1, Math.min(1, s.valence));
+        target.arousal = clamp01(s.arousal);
+        target.anxiety = clamp01(s.anxiety);
+        target.fatigue = clamp01(s.fatigue);
+        target.energy = s.energy === void 0 ? 1 - clamp01(s.fatigue) : clamp01(s.energy);
       },
       dispose() {
         disposed = true;

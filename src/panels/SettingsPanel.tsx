@@ -12,6 +12,7 @@ import SettingsPet from './settings/SettingsPet'
 import SecurityPanel from './SecurityPanel'
 import TasksPanel from './TasksPanel'
 import ModelPickerModal from './settings/ModelPickerModal'
+import SettingsPrivacyFlags from './settings/SettingsPrivacyFlags'
 
 const LLM_PROVIDERS = [
   // 🆕 免费 API（无需 API Key，开箱即用）
@@ -184,7 +185,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     try { return localStorage.getItem('lumina_proactive_notify') !== 'false' } catch { return true }
   })
   const [notice, setNotice] = useState<string | null>(null)
-  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks'>(
+  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy'>(
     (activeTab as any) || 'llm'
   )
   // 当 embedded + activeTab 变化时同步内部状态
@@ -919,6 +920,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
           { key: 'security' as const, label: '安全中心', icon: '🛡️' },
           { key: 'tasks' as const, label: '定时任务', icon: '⏰' },
           { key: 'pet' as const, label: '桌宠模式', icon: '💻' },
+          { key: 'privacy' as const, label: '隐私与开关', icon: '🔐' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setSettingsTab(tab.key)}
             style={{
@@ -1016,6 +1018,10 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
          ════════════════════════════════════════════════ */}
       {settingsTab === 'tasks' && (<>
         <TasksPanel embedded />
+      </>)}
+      {/* 🔐 隐私与开关 (I6/I7) */}
+      {settingsTab === 'privacy' && (<>
+        <SettingsPrivacyFlags />
       </>)}
 
     </div>

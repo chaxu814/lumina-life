@@ -47,6 +47,7 @@ import { browserDef, browserHandler } from './impl/browser'
 import { browserCDPDef, browserCDPHandler } from './impl/browser_cdp'
 // Git
 import { gitStatusDef, gitStatus, gitCommitDef, gitCommit, gitLogDef, gitLog, gitDiffDef, gitDiff } from './impl/git'
+import { devCompanionCheckDef, devCompanionCheck } from './impl/devCompanion'
 // System / Image
 import { screenshotDef, screenshot, clipboardGetDef, clipboardGet, clipboardSetDef, clipboardSet, imageGenerateDef, imageGenerate } from './impl/image'
 import { systemInfoDef, systemInfo, processListDef, processList, notificationDef, notification, openFileDef, openFile } from './impl/system'
@@ -95,10 +96,12 @@ import { hearingDefs } from './impl/hearingTools'
 import { proactiveDefs } from './impl/proactiveTools'
 // 🆕 Daily Paper 工具
 import { dailyPaperDef, dailyPaperHandler } from './impl/dailyPaper'
-// 🆕 Computer Use (v2.5)
+// 🆕 Computer Use (v2.5, v3.30 + UIA 元素树)
 import {
   desktopSeeDef, desktopSee,
   desktopActDef, desktopAct,
+  desktopElementsDef, desktopElements,
+  desktopElementActDef, desktopElementAct,
 } from './impl/computerUse'
 // 🔬 Phase C: Deep Research 工具
 import { deepResearchDef, deepResearch } from './impl/deepResearch'
@@ -142,6 +145,26 @@ import {
   saveContextDef, saveContext,
   loadContextDef, loadContext,
 } from './impl/team'
+
+// 🆕 v3.20: 文件信箱 / 共享任务板 / 动态 worker / 对抗评审 / worktree 隔离（对标 cc-haha）
+// 🆕 v3.30: plan_approval / 待命中转 / 工作流 DSL / Teach 录制回放 / Markdown 工种
+import {
+  teamMessageDef, teamMessage,
+  teamMailboxDef, teamMailbox,
+  teamTasksDef, teamTasks,
+  hireWorkerDef, hireWorker,
+  adversarialReviewDef, adversarialReview,
+  gitWorktreeDef, gitWorktree as gitWorktreeHandler,
+  teamRolesDef, teamRoles,
+  workerControlDef, workerControl,
+  workflowDef, workflow as workflowHandler,
+  teachDef, teach,
+  // v3.33: 绩效画像 / 自治自领取 / 团队日记 / 整轮检查点
+  teamStatsDef, teamStats,
+  teamAutonomyDef, teamAutonomy as teamAutonomyHandler,
+  teamLogDef, teamLog as teamLogHandler,
+  teamCheckpointDef, teamCheckpoint as teamCheckpointHandler,
+} from './impl/teamCollab'
 
 let _registered = false
 
@@ -192,6 +215,7 @@ export function registerAllTools(): void {
 
   // Git
   registerTool(gitStatusDef, gitStatus)
+  registerTool(devCompanionCheckDef, devCompanionCheck)
   registerTool(gitCommitDef, gitCommit)
   registerTool(gitLogDef, gitLog)
   registerTool(gitDiffDef, gitDiff)
@@ -257,6 +281,9 @@ export function registerAllTools(): void {
   // 🆕 Computer Use (v2.5) — 屏幕理解 + 自动操作
   registerTool(desktopSeeDef, desktopSee)
   registerTool(desktopActDef, desktopAct)
+  // v3.30 UIA 元素树（按元素序号精确操作）
+  registerTool(desktopElementsDef, desktopElements)
+  registerTool(desktopElementActDef, desktopElementAct)
 
   // 📬 Agent 邮件 (v2.6)
   registerTool(mailSendDef, mailSendHandler)
@@ -282,6 +309,24 @@ export function registerAllTools(): void {
   registerTool(readNoticesDef, readNotices)
   registerTool(saveContextDef, saveContext)
   registerTool(loadContextDef, loadContext)
+
+  // 🆕 v3.20 团队协作升级（文件信箱 / 共享任务板 / 动态 worker / 对抗评审 / worktree）
+  registerTool(teamMessageDef, teamMessage)
+  registerTool(teamMailboxDef, teamMailbox)
+  registerTool(teamTasksDef, teamTasks)
+  registerTool(hireWorkerDef, hireWorker)
+  registerTool(adversarialReviewDef, adversarialReview)
+  registerTool(gitWorktreeDef, gitWorktreeHandler)
+  // v3.30 团队深度改造
+  registerTool(teamRolesDef, teamRoles)
+  registerTool(workerControlDef, workerControl)
+  registerTool(workflowDef, workflowHandler)
+  registerTool(teachDef, teach)
+  // v3.33 绩效画像 / 自治自领取 / 团队日记 / 整轮检查点
+  registerTool(teamStatsDef, teamStats)
+  registerTool(teamAutonomyDef, teamAutonomyHandler)
+  registerTool(teamLogDef, teamLogHandler)
+  registerTool(teamCheckpointDef, teamCheckpointHandler)
 
   // ── v2.5 Skill 系统 ──────────────────────────────────
 

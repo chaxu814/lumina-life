@@ -7,7 +7,7 @@
 // 必须在最顶部加载环境变量，否则 process.env 不生效
 import 'dotenv/config'
 
-import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification, dialog } from 'electron'
 import { join } from 'path'
 import { getAppIconPath, getTrayIcon } from './appIcon'
 
@@ -94,11 +94,16 @@ import { getCommandRouter, CommandRouter } from './chatCommands'
 import { registerCommandHandlers } from './ipc/commandIpc'
 import { registerSkillMarketIpc } from './ipc/skillMarketIpc'
 import { registerComputerUseIpc } from './ipc/computerUseIpc'  // 🖥??v3.10
+import { registerTeamCollabIpc } from './ipc/teamCollabIpc'  // 🤝 v3.20: 信箱/任务板/动态 worker/CU 策略
 import { registerGitAgentIpc } from './ipc/gitAgentIpc'  // 📝 v3.11
 import { registerMCPIpc } from './ipc/mcpIpc'  // 🔌 v3.11
 import { registerDeepResearchIpc } from './ipc/deepResearchIpc'  // 🔬 v3.11
 import { registerCodingModeIpc } from './ipc/codingModeIpc'
 import { registerDiagnosticsIpc } from './ipc/diagnosticsIpc'
+import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'  // 🔍 I5: 沙箱透明审计
+import { allFlags, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
+import { exportDataToZip, importDataFromZip, getDataLocations, defaultExportFileName } from './utils/dataExport'  // I6: 数据导出/导入
+import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系剧本
 import { registerLuckyModeIpc } from './ipc/luckyModeIpc'
 import { initLuckyModeIntegration } from './luckyModeIntegration'
 import { initPanelRegistry, getPanelRegistry, listPanels } from './panelRegistry'
@@ -567,7 +572,22 @@ for (const { id } of orch.listRunners()) {
   registerSttModelIpc(() => mainWindow)          // 🎙 离线语音模型（whisper-base 多语种/中文）
   registerProviderIpc()                               // 📡 v10.0: 统一 Provider IPC
   registerTeamIpc()                                   // 🆕 v2.6: AI 小团队系统 IPC
+  registerTeamCollabIpc()                             // 🤝 v3.20: 信箱/任务板/动态 worker/CU 策略
   registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
+  registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
+  ipcMain.handle('feature-flags:get-all', () => allFlags())  // I7: 全量功能开关
+  ipcMain.handle('feature-flags:set', (_e, key: string, value: boolean) => { setFeatureFlag(key as any, !!value); return { ok: true, key, value } })  // I7: 写回开关
+  ipcMain.handle('data:get-locations', () => getDataLocations())  // I6: 本机数据位置
+  ipcMain.handle('data:export-zip', async () => {  // I6: 导出记忆 zip
+    const { canceled, filePath } = await dialog.showSaveDialog({ defaultPath: defaultExportFileName(), filters: [{ name: 'Lumina 记忆包', extensions: ['zip'] }] })
+    if (canceled || !filePath) { return { ok: false, canceled: true } }
+    return exportDataToZip(filePath)
+  })
+  ipcMain.handle('data:import-zip', async () => {  // I6: 导入记忆 zip（主键去重）
+    const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Lumina 记忆包', extensions: ['zip'] }] })
+    if (canceled || !filePaths || !filePaths[0]) { return { ok: false, canceled: true } }
+    return importDataFromZip(filePaths[0])
+  })
   registerGamificationIpc()                           // 🎮 v3.0: 游戏化系统 IPC
 
   // 3.5.1 🎭 v6.0: 社交引擎初始化（Agent 朋友??团队闲聊?
@@ -805,6 +825,7 @@ const gamificationData = loadGamificationData()
   // 梦境/真人秀接上 LLM（复用桌宠大脑配置；未配置时各自回退模板彩蛋）
   registerDreamLLM(lifeLLMCall)
   registerRealityShowLLM((_agent: string, sys: string) => lifeLLMCall(sys, ''))
+  registerDramaLLM((prompt: string) => lifeLLMCall(prompt, ''))  // I1: 团队关系剧本走真实 LLM，未配置回退模板
   // Agent 真人秀（后台生成，60s 间隔；内心独白优先 LLM，其余为剧本）
   startRealityShow(60_000)
 
