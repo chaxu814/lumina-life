@@ -120,18 +120,36 @@ describe('runAutoPlay', () => {
     expect(gameMocks.executeGameAction).not.toHaveBeenCalled()
   })
 
-  it('决策返回 null 时停止', async () => {
+  it('决策返回 null 时停止（grace=0）', async () => {
     const decide = vi.fn().mockResolvedValue(null)
     const r = await runAutoPlay({
       profile: minecraftProfile,
       config: enabledCfg,
       maxRounds: 10,
       minIntervalMs: 0,
+      nullDecideGrace: 0,
       decide,
     })
     expect(r.roundsPlayed).toBe(1)
     expect(r.stopReason).toContain('停止')
     expect(r.actionsExecuted).toBe(0)
+  })
+
+  it('nullDecideGrace 内容错重试，超 grace 才停止', async () => {
+    const decide = vi.fn().mockResolvedValue(null)
+    const focusTarget = vi.fn().mockResolvedValue(true)
+    const r = await runAutoPlay({
+      profile: minecraftProfile,
+      config: enabledCfg,
+      maxRounds: 10,
+      minIntervalMs: 0,
+      nullDecideGrace: 2,
+      focusTarget,
+      decide,
+    })
+    expect(r.roundsPlayed).toBe(3) // grace 2 次重试 + 第 3 次停止
+    expect(r.stopReason).toContain('停止')
+    expect(focusTarget.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
   it('超时停止', async () => {

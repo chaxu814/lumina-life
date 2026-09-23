@@ -30,6 +30,16 @@ export interface AutoPlayOptions {
   decide?: (state: GameState, round: number) => Promise<GameActionRequest | null>
   /** 每轮结束回调（用于 UI 展示过程） */
   onRound?: (info: AutoPlayRoundInfo) => void
+  /**
+   * 每轮执行动作前聚焦目标游戏窗口（关闭弹窗/翻译气泡造成的焦点丢失）。
+   * 默认通过平台适配器 focusWindow(config.windowTitle) 实现。
+   */
+  focusTarget?: () => Promise<boolean>
+  /**
+   * 决策连续返回 null（未检测到游戏/模型要求停止）时的容错轮数：
+   * 前 N 次先重新聚焦并继续，超过才停止。默认 2。
+   */
+  nullDecideGrace?: number
   /** 停止信号（外部可设置为 true 来紧急中断） */
   stopSignal?: { stopped: boolean }
 }
@@ -64,7 +74,10 @@ async function defaultDecide(
 ): Promise<GameActionRequest | null> {
   // 延迟 import，避免测试环境强依赖 VLM
   const { callVisionModel } = await import('../tools/impl/cuCore')
-  const prompt = `你正在操控 ${profile.displayName}。当前游戏状态：
+  const prompt = `你正在操控 ${profile.displayName}。
+${profile.vlmPrompt}
+
+当前游戏状态：
 ${JSON.stringify({
   detected: state.detected,
   health: state.health,
@@ -77,6 +90,7 @@ ${JSON.stringify({
 请选择下一步动作。只输出 JSON：
 {"action":"动作名","duration_ms":500,"reason":"一句话理由","stop":false}
 action 必须是以下之一：${Object.keys(profile.actionMap).join('、')}
+注意：click 只会点击屏幕正中心；若游戏不在屏幕中心，请改用方向键等键盘动作。
 如果局面平稳无事可做或需要用户介入，输出 {"stop":true,"reason":"..."}`
 
   try {
@@ -113,6 +127,8 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
     minIntervalMs = 800,
     decide,
     onRound,
+    focusTarget,
+    nullDecideGrace = 2,
     stopSignal,
   } = options
 
@@ -129,11 +145,28 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
 
   const decideFn = decide || ((state, round) => defaultDecide(profile, state, round))
 
+  // 默认聚焦：走平台适配器按窗口标题找窗并前台 + 点中心聚焦内容区
+  const defaultFocus = async (): Promise<boolean> => {
+    try {
+      const { getPlatformAdapter } = await import('../core/platform')
+      const adapter = getPlatformAdapter()
+      if (typeof adapter.focusWindow !== 'function') {return true}
+      return await adapter.focusWindow(config.windowTitle || profile.displayName)
+    } catch {
+      return true // 聚焦失败不阻断闭环（动作执行层仍会尝试）
+    }
+  }
+  const focusFn = focusTarget || defaultFocus
+
+  // 启动前先聚焦一次，避免首轮感知到的是其他窗口
+  try {await focusFn()} catch { /* 忽略 */ }
+
   const start = Date.now()
   let roundsPlayed = 0
   let actionsExecuted = 0
   let dangerousBlocked = 0
   let consecutiveBlocked = 0
+  let consecutiveNull = 0
   let stopReason = ''
 
   while (roundsPlayed < maxRounds) {
@@ -167,14 +200,25 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
       action = null
     }
 
-    // 决策返回 null → 停止
+    // 决策返回 null → 容错：未超 grace 先重新聚焦继续，否则停止
     if (!action) {
-      stopReason = '决策函数返回停止'
+      consecutiveNull++
+      if (consecutiveNull <= nullDecideGrace) {
+        onRound?.({
+          round: roundsPlayed, state, action: null, result: null, stopped: false,
+        })
+        try {await focusFn()} catch { /* 忽略 */ }
+        await sleep(minIntervalMs)
+        continue
+      }
+      stopReason = '决策函数连续返回停止'
       onRound?.({
         round: roundsPlayed, state, action: null, result: null, stopped: true, stopReason,
       })
       break
     }
+
+    consecutiveNull = 0
 
     // 3. 安全审查
     const guard = reviewGameAction(action, profile)
@@ -200,7 +244,10 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
 
     consecutiveBlocked = 0
 
-    // 4. 执行
+    // 4. 聚焦目标窗口（防止弹窗/翻译气泡/其他窗口抢走键盘焦点）
+    try {await focusFn()} catch { /* 聚焦失败不阻断 */ }
+
+    // 5. 执行
     let result: GameActionResult
     try {
       result = await executeGameAction(action, config)
@@ -213,7 +260,7 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
       round: roundsPlayed, state, action, result, stopped: false,
     })
 
-    // 5. 间隔
+    // 6. 间隔
     await sleep(minIntervalMs)
   }
 

@@ -14,19 +14,21 @@ import {
 import { reviewChat, reviewGameAction } from '../../electron/gaming/security'
 
 describe('PROFILES 注册表', () => {
-  it('注册了 minecraft 与 factorio', () => {
+  it('注册了 minecraft、factorio 与 generic', () => {
     expect(PROFILES.minecraft).toBeDefined()
     expect(PROFILES.factorio).toBeDefined()
+    expect(PROFILES.generic).toBeDefined()
   })
 
   it('getProfile 返回正确对象', () => {
     expect(getProfile('minecraft')?.displayName).toBe('Minecraft')
     expect(getProfile('factorio')?.displayName).toBe('Factorio')
+    expect(getProfile('generic')?.displayName).toBe('通用休闲游戏')
     expect(getProfile('nope')).toBeUndefined()
   })
 
-  it('listProfiles 返回两个 profile', () => {
-    expect(listProfiles().length).toBe(2)
+  it('listProfiles 返回三个 profile', () => {
+    expect(listProfiles().length).toBe(3)
   })
 })
 

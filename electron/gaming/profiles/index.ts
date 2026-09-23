@@ -10,6 +10,7 @@ export type {
 
 export { minecraftProfile } from './minecraft'
 export { factorioProfile } from './factorio'
+export { genericProfile } from './generic'
 export {
   PROFILES,
   getProfile,

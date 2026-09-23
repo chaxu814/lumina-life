@@ -128,14 +128,17 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
   const u = new URL(cfg.url + '/chat/completions')
   const t = u.protocol === 'https:' ? https : http
 
+  const userContent: any[] = [{ type: 'text', text: usr }]
+  // 仅在确实提供截图时附带图像；空 b64 时走纯文本（否则部分服务端会因空 data URL 报错）
+  if (b64) {
+    userContent.push({ type: 'image_url', image_url: { url: `data:${mime};base64,${b64}`, detail: 'high' } })
+  }
+
   const bodyObj: any = {
     model: cfg.model,
     messages: [
       { role: 'system', content: sys },
-      { role: 'user', content: [
-        { type: 'text', text: usr },
-        { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}`, detail: 'high' } },
-      ] },
+      { role: 'user', content: userContent },
     ],
     max_tokens: 1024,
     temperature: 0.3,
