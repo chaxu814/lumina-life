@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './styles/global.css'
 import './styles/app.css'
+import './styles/task-workspace.css'  // task workspace panel
 import './i18n'  // 🌐 i18n 初始化
 import 'uno.css' // ⚡ UnoCSS
 import './stores/loopStore' // 🔁 Loop 引擎自启动（Phase 1）

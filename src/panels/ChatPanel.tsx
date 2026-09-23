@@ -28,6 +28,8 @@ import { detectLoopIntent } from '../services/loopEngine'
 import ProactiveSidebar from '../components/ProactiveSidebar'
 import MomentsPanel from '../components/MomentsPanel'
 import AgentTaskBoard from '../components/AgentTaskBoard'
+import TaskWorkspacePanel from '../components/TaskWorkspacePanel'
+import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
 import AgentMoments from '../components/AgentMoments'
 import MemoryTheater from '../components/MemoryTheater'
 import GroupChatHistorySidebar from '../components/GroupChatHistorySidebar'
@@ -86,6 +88,9 @@ export default function ChatPanel() {
   const setAgentConfig = useStore(s => s.setAgentConfig)
   const skillConfig = useStore(s => s.skillConfig)
   const profile = useStore(s => s.profile)
+  // 📋 任务工作区面板开合状态
+  const taskPanelOpen = useTaskWorkspace(s => s.panelOpen)
+  const toggleTaskPanel = useTaskWorkspace(s => s.togglePanel)
 
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<'chat' | 'agent' | 'developer' | 'worker' | 'group'>('group')
@@ -1286,6 +1291,15 @@ export default function ChatPanel() {
               </>
             )}
           </span>
+
+          {/* 📋 任务工作区切换按钮 — 唯一开合入口，激活态高亮 */}
+          <button onClick={toggleTaskPanel}
+            title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}
+            className={`tw-toolbar-btn ${taskPanelOpen ? 'active' : ''}`}
+            style={{
+              ...subtleBtn, padding: '4px 8px', gap: 4, fontSize: 11,
+              color: taskPanelOpen ? 'var(--accent-600)' : 'var(--text-secondary)',
+            }}><span style={{ fontSize: 13 }}>📋</span><span>任务工作区</span></button>
 
           {/* 🔄 切换角色按钮 — 仅非群聊模式 */}
           {mode !== 'group' && (
@@ -2534,6 +2548,8 @@ export default function ChatPanel() {
         )}
       </> ))}
       </div>
+      {/* 📋 右侧任务工作区面板 — 作为 flex 兄弟节点，展开时聊天区自动收缩 */}
+      <TaskWorkspacePanel />
     </div>
   )
 }

@@ -67,6 +67,18 @@
         "to": "pet/pet-chat.html"
       },
       {
+        "from": "electron/pet/pet-pngtuber.html",
+        "to": "pet/pet-pngtuber.html"
+      },
+      {
+        "from": "electron/pet/pet-mmd.html",
+        "to": "pet/pet-mmd.html"
+      },
+      {
+        "from": "electron/pet/pet-cat.html",
+        "to": "pet/pet-cat.html"
+      },
+      {
         "from": "electron/pet/assets",
         "to": "pet/assets"
       }
@@ -139,6 +151,7 @@
       ],
       "category": "Utility",
       "icon": "resources/icon.png",
+      "maintainer": "Lumina Life Team <dev@lumina-life.app>",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
     },
     "publish": {

@@ -121,7 +121,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 |------|------|
 | **短期记忆** | 当前对话上下文，支持自动压缩 |
 | **长期记忆** | SQLite 持久化 + 结构化事实/反思/人格 |
-| **混合召回** | BM25 词法检索（CJK 友好，已实现）；向量语义召回在 Roadmap 中（需配置本地 Ollama / Python embedding）<br>Hybrid recall: BM25 lexical recall (implemented); semantic embeddings on roadmap |
+| **混合召回** | **BM25 词法 + TF-IDF 向量余弦双路召回，RRF 融合（已实现，CJK 友好、零依赖）**；dense 语义向量（Ollama / embedding 服务）可在记忆设置中开启，默认混合召回无需 Python<br>Hybrid recall: BM25 lexical + TF-IDF cosine fused by RRF (shipped, zero-dependency); dense semantic embeddings optional |
 | **自动精炼** | 定时清理低质量记忆，保留真正重要的 |
 | **证据链** | 每条记忆有置信度评分，不是瞎猜 |
 | **记忆剧场** | 可视化浏览你和 Lumina 的回忆 |
@@ -192,9 +192,9 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ---
 
-### 🔧 25–60 Built-in Tools · 运行时按模式加载（另可经 MCP / 技能市场扩展）
+### 🔧 100+ Built-in Tools · 三档模式按需加载（另可经 MCP / 技能市场扩展）
 
-<sub>口径：代码库共实现约 110 个工具名（含团队/语音/系统等后台工具）；用户可见的聊天/Agent 运行时按模式加载 25–60 个，另可经 MCP 协议动态扩展。</sub>
+<sub>口径：注册表共注册 100+ 个工具（含 Computer Use / 团队 / 语音 / 新闻 / 创作者等；启动日志打印精确数）；按模式分档加载——chat 纯对话 0 个、agent 日常约 32 个、developer 约 36 个，其余在对应功能与设置中启用，另可经 MCP 协议动态扩展。</sub>
 
 `搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · ……
 
@@ -213,9 +213,9 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **😊 情感系统** | ❌ 几乎没有 | ✅ **5 维情绪 + 可视化 + 亲密度** |
 | **🖥️ Computer Use** | ❌ 只有闭源产品有 | ✅ **截图→理解→操作** |
 | **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
-| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + BM25 词法召回（向量语义在 Roadmap）+ 证据链** |
+| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + BM25/TF-IDF 混合召回（RRF 融合）+ 证据链** |
 | **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **双层安全审查 + 审批流** |
-| **🔧 工具生态** | ⭐ 看项目 | ✅ **25–60 工具/技能 + MCP + 技能商店** |
+| **🔧 工具生态** | ⭐ 看项目 | ✅ **100+ 工具（日常约 32）+ MCP + 技能商店** |
 | **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
@@ -239,7 +239,7 @@ cp .env.example .env            # 编辑 .env 填入 LLM API（默认 LM Studio 
 npm run dev                     # 启动！
 ```
 
-> 💡 **可选：安装 Python 依赖**（语音输入/输出、以及可选的语义向量召回需要；默认 BM25 无需 Python）
+> 💡 **可选：安装 Python 依赖**（语音输入/输出、以及可选的 dense 语义向量需要；默认 BM25+TF-IDF 混合召回无需 Python）
 > ```bash
 > pip install -r python/requirements.txt
 > ```
@@ -271,6 +271,21 @@ npm run dev                     # 启动！
 | 🟡 **Linux** | 🔜 Roadmap (v1.3.0) | 同上 |
 
 > ⚠️ **为什么当前只有 Windows？**<br>Computer Use 的键鼠注入、沙箱规则库、托盘集成都深度依赖 Windows API（PowerShell、UIA、IL 降级）。macOS/Linux 支持需要重写这些模块，计划在 v1.3.0 完成。
+
+---
+
+## 📊 性能与资源占用
+
+> 基于 [docs/performance.md](docs/performance.md) 的真实基准采样（i5-12490F / 48GB / RTX 5060 Ti / Win11）。
+
+| 场景 | 内存 (RSS) | CPU | 说明 |
+|------|-----------|-----|------|
+| 纯 Node 脚本 idle | ~28 MB | ~0% | 仅基准进程自身 |
+| **应用空载（桌宠运行中）** | **~775 MB（5 进程合计）** | **~4%（整机）** | 主进程 ~200MB + 多个渲染/GPU 进程 |
+
+- **建议配置**：**8GB 内存以上**；4GB 内存可能紧张（尤其加载本地 ONNX 模型时）。
+- **想更省资源**：启用 `mode.minimal` 精简模式、关闭 VRM、把 Live2D 帧率从 30 降到 15、不加载本地模型而改用云端 API——可把整机占用压到 ~500MB 量级。
+- 📖 完整基准表、各模块占用分析与复现方法见 **[docs/performance.md](docs/performance.md)**。
 
 ---
 ---
@@ -345,7 +360,7 @@ Lumina 记得你。每次对话都是你们关系的延续，不是从头开始�
 
 ```
 短期记忆（当前会话）→ 是否重要？→ 长期记忆（SQLite）
-                                    → BM25 词法召回（默认，已实现）· 向量语义召回（Roadmap，未实现）
+                                    → BM25 + TF-IDF 混合召回（默认，已实现）· dense 语义向量（可选进阶）
                                     → 摘要 → 每日记忆
 ```
 
@@ -417,12 +432,12 @@ lumina-life/
 | 🐾 **Live2D 桌宠**<br>桌面上的 Lumina，呼吸/眨眼/表情随情绪变化 | ![Pet Live2D](docs/images/pet-live2d.png) |
 | 📱 **Moments 朋友圈**<br>旁观 Lumina、热茶、Yak 的自发动态 | ![Moments](docs/images/moments.png) |
 
-> ⚠️ **截图待补**：v0.1.0-preview 发布前请补充以下 3 张截图到 `docs/images/`：
+> ⚠️ **当前为占位卡片，非真实界面**：正式发布前请替换 `docs/images/` 下这 3 张 PNG 为真实截图：
 > 1. `chat-panel.png` — 主聊天面板（含消息流 + 情绪指示）
-> 2. `pet-live2d.png` — 桌面上的 Live2D 桌宠小窗口
+> 2. `pet-live2d.png` — 桌面上的 Live2D 桌宠小窗口（可顺带展示全屏注视 / 屏幕视觉）
 > 3. `moments.png` — Moments 朋友圈面板
 >
-> 截取方式：启动 `npm run dev`，用 Windows 自带截图工具（Win+Shift+S）截取，保存为 PNG 放入 `docs/images/` 即可。
+> 截取方式：启动 `npm run dev`，用 Win+Shift+S 截取，保存为同名 PNG 覆盖即可。
 ---
 
 ## 🧪 Tech Stack · 技术栈
@@ -442,7 +457,7 @@ lumina-life/
 
 ## 🗺️ Roadmap · 路线图
 
-- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统 + 25–60 工具/技能 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
+- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统（BM25/TF-IDF 混合召回）+ 100+ 工具 + 真·屏幕视觉 + 全屏注视 / 全双工对话 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
 - 🔜 **v1.1.0** — 自定义 Agent 创建（定义新角色加入团队）
 - 🔜 **v1.2.0** — 插件生态开放（社区技能商店）
 - 🔜 **v1.3.0** — macOS / Linux 支持
@@ -452,7 +467,7 @@ lumina-life/
 ### 🧪 实验性 / 彩蛋功能（非主线，请勿当真）
 
 - **梦境日记、Agent 真人秀**：已接 LLM 真实生成（在设置里配好 LLM 后即走真实模型）；未配置时回退到 **9 个情绪锚点模板 + 记忆片段关键词**，UI 用 `来源: llm / 来源: template` 诚实标注，绝不假装是大模型写的。
-- **记忆检索**：当前为 BM25 词法召回（已实现）；向量语义召回在 Roadmap 中，需配置本地 Ollama / Python embedding 服务。
+- **记忆检索**：默认 BM25 + TF-IDF 双路 RRF 混合召回（已实现、零依赖、CJK 友好）；dense 语义向量（Ollama nomic-embed-text 或外部 embedding 服务）可在记忆设置中开启，提供更强语义匹配。
 - **副人格觉醒（实验）**：最小真实机制已上线——基于长期记忆 + 情绪状态的人格漂移 / 副视角，触发条件为「高亲密度 + 累计约 200 轮对话」或「持续高焦虑」，置于 `personality.subPersona` 开关后**默认关闭**、可随时关；仍属实验性，不代表核心陪伴能力。
 
 ---
