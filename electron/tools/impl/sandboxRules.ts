@@ -61,6 +61,15 @@ export enum ThreatCategory {
 // ──────────────────────────────────────────────────────────
 // 规则结构
 // ──────────────────────────────────────────────────────────
+
+/**
+ * 规则适用平台。默认 'all'（所有平台）。
+ *   - 'win32'：仅 Windows（C:\、reg.exe、net user、del/rmdir /s 等 Windows 形态）
+ *   - 'posix'：仅 POSIX（macOS/Linux：mkfs、dd 裸设备、chmod 777 等）
+ * 加载时按 process.platform 取 'all' + 对应平台子集；Windows 上规则数量与行为保持不变。
+ */
+export type RulePlatform = 'all' | 'win32' | 'posix'
+
 export interface SandboxRule {
   /** 规则唯一 id（如 BLOCK-001） */
   id: string
@@ -72,6 +81,8 @@ export interface SandboxRule {
   description: string
   /** 处置建议（审批 UI / 日志展示） */
   remediation: string
+  /** 适用平台；缺省 'all' */
+  platform?: RulePlatform
 }
 
 export interface RuleHit {
@@ -109,6 +120,7 @@ const RULES: SandboxRule[] = [
     id: 'BLOCK-001', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bformat\s+[a-z]:/i,
     description: '格式化磁盘', remediation: '硬拦截：不可逆的磁盘格式化，禁止执行',
+    platform: 'win32',
   },
   {
     id: 'BLOCK-002', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
@@ -135,6 +147,7 @@ const RULES: SandboxRule[] = [
     id: 'BLOCK-006', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\b(del|erase|rmdir|rd|Remove-Item|Remove-ItemProperty)\b[\s\S]{0,120}([\\/](Windows|System32|SysWOW64|Program Files(?:\s\(x86\))?)[\\/]?)/i,
     description: '删除系统目录（Windows/System32）', remediation: '硬拦截：删除系统关键目录会导致系统损坏',
+    platform: 'win32',
   },
   {
     id: 'BLOCK-007', severity: Severity.BLOCK, category: ThreatCategory.CODE_EXECUTION,
@@ -145,11 +158,13 @@ const RULES: SandboxRule[] = [
     id: 'BLOCK-008', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bnet\s+user\b[\s\S]{0,40}\/\w+/i,
     description: '修改系统账户', remediation: '硬拦截：创建/修改本地账户需要人工在场确认',
+    platform: 'win32',
   },
   {
     id: 'BLOCK-009', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\breg\s+delete\b/i,
     description: '删除注册表项', remediation: '硬拦截：注册表删除不可逆，可能导致系统/软件损坏',
+    platform: 'win32',
   },
 
   // ── CRITICAL：严重，硬拦截或强审批 ──
@@ -177,6 +192,7 @@ const RULES: SandboxRule[] = [
     id: 'CRIT-005', severity: Severity.CRITICAL, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bRemove-Item\b[\s\S]{0,80}-recurse[\s\S]{0,40}-force|\brmdir\s+\/s\b|\brd\s+\/s\b/i,
     description: '递归强制删除目录', remediation: '强审批：-Recurse -Force 不可逆，需确认目标',
+    platform: 'win32',
   },
   {
     id: 'CRIT-006', severity: Severity.CRITICAL, category: ThreatCategory.DATA_EXFIL,
@@ -189,6 +205,7 @@ const RULES: SandboxRule[] = [
     id: 'HIGH-001', severity: Severity.HIGH, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bdel\s+[^|\n]*\/[fsq]|\berase\b[\s\S]{0,40}\/[fsq]/i,
     description: '强制/静默删除（不提示）', remediation: '降级 Low IL 并审批：静默删除不可恢复',
+    platform: 'win32',
   },
   {
     id: 'HIGH-002', severity: Severity.HIGH, category: ThreatCategory.SENSITIVE_FILE,
@@ -204,6 +221,7 @@ const RULES: SandboxRule[] = [
     id: 'HIGH-004', severity: Severity.HIGH, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bchmod\s+[0-7]*777\b|\bchown\s+-?R?\b[\s\S]{0,30}(root|Administrators)/i,
     description: '权限过度放开 / 改属主为管理员', remediation: '降级 Low IL：777 或 root/Administrators 属主过宽',
+    platform: 'posix',
   },
 
   // ── MEDIUM：记录日志，可提示 ──
@@ -248,6 +266,24 @@ const RULES: SandboxRule[] = [
 ]
 
 // ──────────────────────────────────────────────────────────
+// 平台规则集：按平台取 'all' + 平台专属子集
+// ──────────────────────────────────────────────────────────
+
+/** 判断某规则在给定平台是否启用。Windows 上启用 'all'+'win32'，规则集与历史完全一致。 */
+export function ruleAppliesOn(rule: SandboxRule, platform: string): boolean {
+  const p = rule.platform || 'all'
+  if (p === 'all') {return true}
+  if (p === 'win32') {return platform === 'win32'}
+  // 'posix'：darwin / linux / 其它非 win32
+  return platform !== 'win32'
+}
+
+/** 当前平台（或显式传入平台）生效的规则子集。 */
+export function activeRulesFor(platform: string = process.platform): SandboxRule[] {
+  return RULES.filter(r => ruleAppliesOn(r, platform))
+}
+
+// ──────────────────────────────────────────────────────────
 // 纯函数：评估一条命令
 // ──────────────────────────────────────────────────────────
 
@@ -269,10 +305,11 @@ export function evaluateCommand(cmd: string | undefined | null): CommandEvaluati
   }
   if (!cmd) {return empty}
   const s = String(cmd)
+  const active = activeRulesFor(process.platform)
 
   const hits: RuleHit[] = []
   let max: Severity = Severity.SAFE
-  for (const rule of RULES) {
+  for (const rule of active) {
     // 重置 lastIndex（全局/粘性正则有状态；这里不用 g 标志，但保险起见每次重测前重置）
     rule.pattern.lastIndex = 0
     if (rule.pattern.test(s)) {
@@ -345,13 +382,14 @@ export function categoryLabel(cat: ThreatCategory): string {
   }
 }
 
-/** 规则总数（供自监测/UI 展示「7×8」卖点用） */
+/** 规则总数（供自监测/UI 展示「7×8」卖点用；统计当前平台生效子集） */
 export function ruleStats(): { total: number; bySeverity: Record<number, number>; byCategory: Record<string, number> } {
   const bySeverity: Record<number, number> = {}
   const byCategory: Record<string, number> = {}
-  for (const r of RULES) {
+  const active = activeRulesFor(process.platform)
+  for (const r of active) {
     bySeverity[r.severity] = (bySeverity[r.severity] || 0) + 1
     byCategory[r.category] = (byCategory[r.category] || 0) + 1
   }
-  return { total: RULES.length, bySeverity, byCategory }
+  return { total: active.length, bySeverity, byCategory }
 }

@@ -153,9 +153,19 @@ function ensureScript(): string {
   return file
 }
 
+let _nonWinLogged = false
+
 function runPS(): Promise<string> {
   return new Promise(resolve => {
-    if (process.platform !== 'win32') {resolve('') ; return}
+    if (process.platform !== 'win32') {
+      // 优雅降级：UIA 仅 Windows 可用，非 Windows 返回空元素树（仅首次提示，避免刷屏）
+      if (!_nonWinLogged) {
+        _nonWinLogged = true
+        console.info('[cuUia] UIA 仅支持 Windows，当前平台(' + process.platform + ')返回空元素树')
+      }
+      resolve('')
+      return
+    }
     execFile('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
       '-File', ensureScript(),
