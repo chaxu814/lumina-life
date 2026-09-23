@@ -54,6 +54,10 @@ jobs:
       - name: Run tests
         run: npx vitest run --reporter=verbose
 
+      - name: Print platform capability matrix (CI log audit)
+        # 单独跑矩阵打印用例，方便在各 runner 日志里核对 Computer Use / UIA / 截屏能力
+        run: npx vitest run tests/platformMatrixLog.test.ts --reporter=verbose
+
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
