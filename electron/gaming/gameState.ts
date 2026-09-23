@@ -5,25 +5,37 @@
 // ============================================================
 
 import type { GameState, GameItemStack } from './types'
+import type { GameProfile } from './profiles'
+import { minecraftProfile } from './profiles'
 
-/** VLM 游戏状态识别提示词（视觉路线专用） */
-export const GAME_VLM_SYSTEM_PROMPT = `你是 Minecraft 游戏视觉分析助手。请观察游戏截图，输出一个 JSON 对象，描述玩家当前的游戏状态。
-只输出 JSON，不要解释。字段如下：
+/** VLM 游戏状态识别提示词（Minecraft 默认，视觉路线专用） */
+export const GAME_VLM_SYSTEM_PROMPT = minecraftProfile.vlmPrompt
+
+/**
+ * 根据 Profile 构建完整 VLM 系统提示词。
+ * 通用 JSON 字段说明 + 游戏专属读屏要点。
+ */
+export function buildVlmPrompt(profile: GameProfile = minecraftProfile): string {
+  const base = `你是游戏视觉分析助手。请观察游戏截图，输出一个 JSON 对象，描述玩家当前的游戏状态。
+只输出 JSON，不要解释。通用字段如下：
 {
-  "detected": true/false,           // 是否确实在玩 Minecraft
+  "detected": true/false,
   "window_title": "窗口标题（若可见）",
-  "health": 0-20 之间的数字,        // 当前生命值（半心=1）
-  "max_health": 20,
-  "food": 0-20 之间的数字,         // 饥饿值
-  "xp_level": 整数,
+  "health": 0-100 之间的数字,
+  "max_health": 100,
+  "food": 数字或 null,
+  "xp_level": 整数或 null,
   "yaw": 水平视角角(度, -180~180, 估算),
   "pitch": 垂直视角角(度, -90~90, 估算),
-  "position": {"x":0,"y":0,"z":0},  // 若能看到 F3 坐标则填，否则 null
-  "gamemode": "survival|creative|adventure|spectator|unknown",
-  "hotbar": [{"slot":1,"name":"物品名","count":1}],  // 快捷栏 1-9
-  "near_entities": ["附近的生物/玩家"],
+  "position": {"x":0,"y":0,"z":0} 或 null,
+  "gamemode": "模式或 unknown",
+  "hotbar": [{"slot":1,"name":"物品名","count":1}],
+  "near_entities": ["附近的实体/玩家/资源"],
   "summary": "一句话描述当前局面"
-}`
+}
+`
+  return `${base}\n【${profile.displayName} 专属读屏要点】\n${profile.vlmPrompt}`
+}
 
 /** 从 VLM 原始输出中提取 JSON 对象（容忍 markdown 代码块包裹） */
 function extractJson(raw: string): any | null {
@@ -111,14 +123,15 @@ export function parseVlmGameState(raw: string): GameState {
 }
 
 /** 把 GameState 渲染为给 Agent 的可读文本 */
-export function formatGameState(s: GameState): string {
+export function formatGameState(s: GameState, profile: GameProfile = minecraftProfile): string {
+  const name = profile.displayName
   if (!s.detected) {
-    return `🎮 未识别到 Minecraft 游戏画面。${s.raw ? `\n描述: ${s.raw}` : ''}`
+    return `🎮 未识别到 ${name} 游戏画面。${s.raw ? `\n描述: ${s.raw}` : ''}`
   }
-  const lines: string[] = ['🎮 Minecraft 状态:']
+  const lines: string[] = [`🎮 ${name} 状态:`]
   if (s.windowTitle) {lines.push(`  窗口: ${s.windowTitle}`)}
   if (s.gamemode) {lines.push(`  模式: ${s.gamemode}`)}
-  if (s.health != null) {lines.push(`  生命: ${s.health}/${s.maxHealth ?? 20}`)}
+  if (s.health != null) {lines.push(`  生命: ${s.health}/${s.maxHealth ?? 100}`)}
   if (s.food != null) {lines.push(`  饥饿: ${s.food}`)}
   if (s.xpLevel != null) {lines.push(`  经验等级: ${s.xpLevel}`)}
   if (s.yaw != null || s.pitch != null) {

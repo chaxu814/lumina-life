@@ -2,31 +2,17 @@
 // electron/gaming/security.ts — 游戏操作安全护栏
 //
 // 复用 electron/securityGuard（参数级审查），并添加游戏特定规则：
-//   - 拦截危险的聊天命令（/op /stop /kill @e /execute /gamemode 等）
+//   - 拦截危险的聊天命令（按 Profile 规则）
 //   - 拦截关闭游戏 / 修改系统设置 / 删除世界文件
 //   - 移动/攻击类动作标记为中风险（需审批流确认）
 //
 // 设计为纯函数 + 可注入，便于单测。
+// 向后兼容：不传 profile 时使用 Minecraft 默认规则。
 // ============================================================
 
 import type { GameActionRequest, GameGuardResult } from './types'
-
-/** 危险聊天命令前缀（管理员/破坏性），命中即拒绝 */
-const DANGEROUS_CHAT_COMMANDS: RegExp[] = [
-  /^\s*\/(op|deop|stop|restart|save-all|save-off|save-on)\b/i,
-  /^\s*\/(kill)\s+@(e|a|p|r)\b/i,          // /kill @e / @a
-  /^\s*\/(execute|executeas)\b/i,
-  /^\s*\/(gamemode|defaultgamemode)\b/i,
-  /^\s*\/(whitelist|ban|ban-ip|pardon|kick)\b/i,
-  /^\s*\/(op)\b/i,
-  /^\s*\/(setblock|fill|clone)\b/i,         // 大范围改方块
-  /^\s*\/(tp|teleport)\s+@(e|a)\b/i,        // 批量传送
-]
-
-/** 允许的安全聊天命令白名单（普通玩家可用） */
-const SAFE_CHAT_COMMANDS: RegExp[] = [
-  /^\s*\/(help|list|seed|spawn|home|sethome|msg|tell|w|r|me|credits|demo|question)\b/i,
-]
+import type { GameProfile } from './profiles'
+import { minecraftProfile } from './profiles'
 
 /**
  * 审查一条聊天文本。
@@ -35,20 +21,23 @@ const SAFE_CHAT_COMMANDS: RegExp[] = [
  * - "/" 开头且命中白名单 → 放行
  * - 其它 "/" 命令 → 中风险（需审批）
  */
-export function reviewChat(text: string | undefined): GameGuardResult {
+export function reviewChat(
+  text: string | undefined,
+  profile: GameProfile = minecraftProfile,
+): GameGuardResult {
   const t = (text || '').trim()
   if (!t) {return { allowed: false, reason: '聊天内容为空' }}
   if (!t.startsWith('/')) {return { allowed: true }}
 
-  for (const re of DANGEROUS_CHAT_COMMANDS) {
+  for (const re of profile.security.dangerousChatCommands) {
     if (re.test(t)) {
       return { allowed: false, reason: `⛔ 拦截危险的管理员/破坏命令: ${t.slice(0, 40)}` }
     }
   }
-  for (const re of SAFE_CHAT_COMMANDS) {
+  for (const re of profile.security.safeChatCommands) {
     if (re.test(t)) {return { allowed: true }}
   }
-  // 其它斜杠命令（如 /give /xp）→ 中风险审批
+  // 其它斜杠命令 → 中风险审批
   return {
     allowed: true,
     needsApproval: true,
@@ -56,28 +45,25 @@ export function reviewChat(text: string | undefined): GameGuardResult {
   }
 }
 
-/** 动作风险分级：哪些动作需要审批（中风险） */
-const MEDIUM_RISK_ACTIONS = new Set<GameActionRequest['action']>([
-  'attack',
-  'place',
-  'craft',
-])
-
 /**
  * 审查一个游戏动作请求（不含聊天内容，聊天单独走 reviewChat）。
  * 这是游戏入口的第一道门；registry 层还会再过一次 securityGuard。
  */
-export function reviewGameAction(req: GameActionRequest): GameGuardResult {
+export function reviewGameAction(
+  req: GameActionRequest,
+  profile: GameProfile = minecraftProfile,
+): GameGuardResult {
   // 参数基础校验
   if (!req || !req.action) {
     return { allowed: false, reason: '缺少 action 参数' }
   }
 
-  // select_slot 范围校验
+  // select_slot 范围校验（通用，按 Profile 快捷栏宽度收紧；Minecraft 1-9，Factorio 1-5）
   if (req.action === 'select_slot') {
     const slot = Number(req.slot)
-    if (!Number.isFinite(slot) || slot < 1 || slot > 9) {
-      return { allowed: false, reason: `slot 必须是 1-9，收到: ${req.slot}` }
+    const maxSlot = profile.id === 'factorio' ? 5 : 9
+    if (!Number.isFinite(slot) || slot < 1 || slot > maxSlot) {
+      return { allowed: false, reason: `slot 必须是 1-${maxSlot}，收到: ${req.slot}` }
     }
   }
 
@@ -99,11 +85,11 @@ export function reviewGameAction(req: GameActionRequest): GameGuardResult {
 
   // chat 走聊天审查
   if (req.action === 'chat') {
-    return reviewChat(req.text)
+    return reviewChat(req.text, profile)
   }
 
-  // 中风险动作
-  if (MEDIUM_RISK_ACTIONS.has(req.action)) {
+  // 中风险动作（按 Profile 配置）
+  if (profile.security.mediumRiskActions.includes(req.action)) {
     return { allowed: true, needsApproval: true, reason: `⚠️ ${req.action} 为中风险动作，建议确认` }
   }
 
@@ -115,6 +101,7 @@ export function reviewGameAction(req: GameActionRequest): GameGuardResult {
  * 规则：
  *   - 禁止自动登录正版账号（username 以 "Bot" 开头或离线名即可；真实正版 session 需用户自行配置）
  *   - 禁止连接非回环/非用户显式配置的公网服务器（host 必须由 env 显式提供）
+ * 仅 Minecraft 使用，保持不变。
  */
 export function reviewBotConnection(host: string, username: string): GameGuardResult {
   const h = (host || '').trim()

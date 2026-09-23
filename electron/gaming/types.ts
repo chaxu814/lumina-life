@@ -59,7 +59,7 @@ export interface GameState {
   raw?: string
 }
 
-/** 支持的游戏动作 */
+/** 支持的游戏动作（通用 + 各 Profile 扩展） */
 export type GameActionType =
   | 'move_forward'
   | 'move_back'
@@ -75,6 +75,12 @@ export type GameActionType =
   | 'craft'
   | 'look_at'
   | 'select_slot'
+  // Factorio 专属
+  | 'shoot'
+  | 'rotate'
+  | 'map'
+  // 允许 Profile 扩展任意动作名（视觉路线按 actionMap 映射）
+  | (string & {})
 
 /** 动作请求（统一参数，由 gameActions 分发到具体路线） */
 export interface GameActionRequest {
@@ -93,6 +99,8 @@ export interface GameActionRequest {
   /** 相对视角偏移（像素感鼠标移动） */
   deltaX?: number
   deltaY?: number
+  /** 指定目标 Profile id（可选；缺省时由 gameActions 解析） */
+  profileId?: string
 }
 
 /** 程序化路线（Mineflayer）连接参数 */
@@ -113,6 +121,10 @@ export interface GameConfig {
   /** 目标窗口标题片段（用于窗口级截图聚焦） */
   windowTitle: string
   bot: BotConfig
+  /** 当前激活的 Profile id（'minecraft' | 'factorio' | ...，缺省按配置/自动探测） */
+  activeProfile?: string
+  /** 显式启用的游戏 id 列表（逗号分隔解析；空 = 未限定，按安全默认处理） */
+  enabledGames?: string[]
 }
 
 /** 动作执行结果 */

@@ -27,6 +27,12 @@ function parsePort(v: string | undefined, fallback: number): number {
 /**
  * 从环境变量构建 GameConfig。
  * 测试时可直接传 env 对象覆盖 process.env。
+ *
+ * 新增（向后兼容，不设时行为与旧版完全一致）：
+ *   - LUMINA_GAME_PROFILE：默认 profile id（'minecraft' | 'factorio' | 'auto'），
+ *     'auto' 或缺省 = 运行时按窗口/进程自动探测，探测不到回退 'minecraft'。
+ *   - LUMINA_GAME_ENABLED_GAMES：逗号分隔的启用游戏 id 白名单，
+ *     空 = 未限定（安全默认仍由 LUMINA_GAME_ENABLED 总开关控制）。
  */
 export function loadGameConfig(env: NodeJS.ProcessEnv = process.env): GameConfig {
   const enabled = parseBool(env.LUMINA_GAME_ENABLED)
@@ -43,6 +49,14 @@ export function loadGameConfig(env: NodeJS.ProcessEnv = process.env): GameConfig
   // bot 启用条件：显式配置了 host（且非默认回环空值）
   const botConfigured = host.length > 0
 
+  // 多游戏 Profile 配置
+  const profileRaw = (env.LUMINA_GAME_PROFILE || '').trim().toLowerCase()
+  const activeProfile = profileRaw && profileRaw !== 'auto' ? profileRaw : undefined
+  const enabledGamesRaw = (env.LUMINA_GAME_ENABLED_GAMES || '').trim()
+  const enabledGames = enabledGamesRaw
+    ? enabledGamesRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+    : undefined
+
   return {
     enabled,
     route,
@@ -54,6 +68,8 @@ export function loadGameConfig(env: NodeJS.ProcessEnv = process.env): GameConfig
       version,
       enabled: botConfigured,
     },
+    ...(activeProfile ? { activeProfile } : {}),
+    ...(enabledGames ? { enabledGames } : {}),
   }
 }
 
