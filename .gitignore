@@ -154,6 +154,8 @@ resources/app.asar.unpacked/
 # ── Local agent/debug scratch (pre-open-source hygiene) ─────
 .tmp-diag/
 .cowork-temp/
+.clean-verify/
+.clean-verify-old/
 userData/
 *.before_*_fix
 *.before_perception_fix
