@@ -1,5 +1,53 @@
 # 📝 Changelog — Lumina Life
 
+## [Unreleased] — feature/crossplatform-gaming-onboarding 🚀 发布前大型改造（2026-09-23）
+
+> 本分支将 Roadmap v1.1.0/v1.3.0 的多个特性提前实现，目标是发布前大幅提升竞争力。
+
+### 🖥️ Computer Use 跨平台延伸（Linux + macOS）
+- **平台适配器层**：`electron/core/platform/` 含 WindowsAdapter / MacAdapter（AppleScript+screencapture）/ LinuxAdapter（xdotool+Wayland 降级+grim/scrot 回退）
+- **cuCore 全量走适配器**：click/hover/type/keyPress/scroll/drag/screenshot/openApp 全部委托 `getPlatformAdapter()`
+- **能力矩阵**：`platformCapabilities.ts` 声明各平台 ✅/⚠️/❌，IPC `platform:get-features` 暴露前端
+- **CI 三平台矩阵**：windows/macos/ubuntu × Node 20/22，含能力矩阵打印 step
+- **测试**：平台相关 178 例全过（含新增 Mac 19例 / Linux 14例）
+- **文档**：`docs/cross-platform-status.md`、`docs/INSTALL.md`
+
+### 🎮 Minecraft 游戏能力（对标 AIRI）
+- **双路线**：视觉路线（截图+VLM+CU 操作）+ 程序化路线（Mineflayer bot，可选动态 import）
+- **4 个新工具**：`game_status` / `game_action`（14种动作）/ `game_look` / `game_chat`
+- **安全双保险**：游戏护栏拦截危险命令 + SecurityGuard + cuCore 权限门
+- **测试**：`tests/gaming/` 4 文件 53 例全过；文档 `docs/gaming-minecraft.md`
+
+### 👋 首次启动引导向导（Setup Wizard）
+- **6 步引导**：欢迎→选 provider→配 Key/本地探测→可选 VLM→人格→完成
+- **本地模型自动发现**：LM Studio(1234)/Ollama(11434) 探测，3s 超时
+- **零门槛**：LM Studio 在线跳过 Key；云端内嵌免费 Key 指引；VLM 自动检测
+- **测试**：`tests/onboarding/` 2 文件 23 例
+
+### 🧩 自定义 Agent 创建（提前 v1.1.0）
+- **配置格式**：`agents/custom/<id>/agent.json` + SOUL.md + PROFILE.md + MEMORY.md
+- **管理器**：CRUD + 路径穿越防护 + 注册到 teamManager
+- **团队角色**：leader（对用户可见）/ member（后台可委托）/ solo（独立）
+- **完整 UI**：`CustomAgentPanel.tsx`（列表/创建/编辑/删除/设默认）
+- **测试**：`tests/customAgent/` 3 文件 21 例；文档 `docs/custom-agent-guide.md`
+
+### 📦 跨平台部署与原生依赖优化
+- macOS hardenedRuntime + entitlements（辅助功能/屏幕录制）；Linux AppImage+deb
+- postinstall 失败时输出分平台工具链指引；mineflayer 标记 optional+external
+- `docs/TROUBLESHOOTING.md` §16 原生依赖编译指南
+
+### 🔤 UTF-16 → UTF-8 转码
+- 6 个文件全部转 UTF-8（AGENTS/MEMORY/PROFILE/SOUL_LUMINA/SOUL_RECHA/SOUL_YAK）
+- `loadMdFile()` 已有编码自动检测，无需代码修改
+
+### 📊 验证
+- 类型检查零错误 / 97 文件 1170 测试通过 / `npm run build` 成功 / 16 commits
+
+### ⚠️ 未实机验证
+- macOS 授权流程、Mac 键码映射、Linux Wayland 抓屏、dmg/AppImage 打包
+- Minecraft 真实画面 VLM 识别、Mineflayer 真实连接
+- onboarding 真实 Electron 渲染、自定义 Agent 端到端委托
+
 ## [0.1.0] — 2026-09-15 🌱 首个公开预览版（开发中）
 
 ### 本次收口（v0.1 发布准备）
@@ -10,6 +58,15 @@
 - 🔀 **统一模型调用层**：归一多供应商消息 / 错误 / 模型列表，一处接入多家
 - 🔒 **密钥治理**：忽略本地 `agents/`（含 API Key/内网地址），导出三套脱敏角色模板到 `src/assets/agentTemplates/`
 - 📝 文档口径对齐代码：情绪分层表述、工具数按注册表核准为 70+、版本状态标注
+
+### 🐾 v6.2 互动性 / 视觉 / 记忆增强（发布前）
+- 👁️ **真·屏幕视觉恢复**：屏幕观看从 v6.1 的“只读窗口标题粗分类”恢复为 **截图 → VLM 识别具体游戏/应用名**（dHash 节流，画面不变不产生调用）；她现在知道你在打什么游戏、看什么视频，而不只是“在打游戏”。
+- 💬 **精彩瞬间快速反应**：VLM 判定画面值得搭话时，用桌宠脑模型生成 20 字即时反应并带 Live2D 动作 / 口型（原有秘书通道保留）。
+- 👀 **全屏注视**：主进程每 100ms 推送全局鼠标位置，Live2D 与 VRM 的眼睛**持续跟随**（窗口外也能看），静止时偶尔飘眼、回中；`fullscreenTrack` 默认开启。
+- 🗣️ **主动更勤**：主动搭话最小间隔 10 分钟 → 2 分钟，日上限 20 → 80；游戏场景搭话概率 0.5 → 0.85，打一局游戏不再只说一句。
+- 🧠 **真·混合记忆召回**：`hybridMemoryRetrieval` 从“仅 BM25、向量分支为空”补齐为 **BM25 词法 + TF-IDF 向量余弦双路召回、RRF 融合**（零依赖、CJK 友好）；dense 语义向量仍为可选进阶。
+- 🎭 **VRM 对齐 Live2D**：补齐五元音口型（A/I/U/E/O → aa/ih/ou/ee/oh）与 `lookAt` 视线跟随（原仅单一 `aa`、无眼动）。
+- 🎙️ **可打断实时语音**：barge-in 全双工链路已完整（本地能量 VAD + 回声消除 + 即时打断），开启 AI 语音时给出全双工引导；真正的 Realtime API 双向流（≈200ms）列入 Roadmap。
 
 > 下方 [1.0.0] 为 2026-07 的内部开发里程碑编号；首个对外公开版本改按语义化版本从 **0.1.0** 起步。
 
