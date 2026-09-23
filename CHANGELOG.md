@@ -1,4 +1,4 @@
-# 📝 Changelog — Lumina Life
+﻿# 📝 Changelog — Lumina Life
 
 ## [Unreleased] — feature/crossplatform-gaming-onboarding 🚀 发布前大型改造（2026-09-23）
 
@@ -17,6 +17,17 @@
 - **4 个新工具**：`game_status` / `game_action`（14种动作）/ `game_look` / `game_chat`
 - **安全双保险**：游戏护栏拦截危险命令 + SecurityGuard + cuCore 权限门
 - **测试**：`tests/gaming/` 4 文件 53 例全过；文档 `docs/gaming-minecraft.md`
+
+### 🎮 多游戏 Profile 框架（Minecraft + Factorio）
+- **GameProfile 抽象**：`electron/gaming/profiles/` 把游戏逻辑从硬编码拆为 Profile 对象（窗口匹配/动作映射/安全规则/VLM 提示词/冷却）
+- **Minecraft Profile 提取**：原硬编码逻辑 1:1 迁移为 `minecraftProfile`，行为完全一致
+- **Factorio Profile（新）**：视觉路线，WASD/左键采矿建造/R 旋转/E 制作/` 聊天/Tab 地图；`/c` 执行 Lua 等危险命令被拦截
+- **自动探测**：按窗口标题/进程名识别当前游戏，`LUMINA_GAME_PROFILE` 可显式指定
+- **自主游玩闭环** `autoPlay.ts`：感知→VLM 决策→安全审查→执行，支持 maxRounds/超时/stopSignal/连续危险拦截
+- **温馨安全提示** `safetyPrompt.ts`：首次开启游戏/自动游玩时友好提醒反作弊/多人礼仪/人在旁照看
+- **第 5 个工具** `game_auto`：AI 限时自主游玩
+- **文档**：`docs/gaming-overview.md` / `game-profiles-guide.md` / `game-safety.md`
+- **测试**：新增 profiles/autoPlay/safetyPrompt 3 文件 32 例；gaming 总计 7 文件 85 例全过
 
 ### 👋 首次启动引导向导（Setup Wizard）
 - **6 步引导**：欢迎→选 provider→配 Key/本地探测→可选 VLM→人格→完成

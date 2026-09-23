@@ -147,6 +147,8 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 💡 **屏幕感知**：你在写代码？热茶会自发提出优化建议<br>
 💡 **看得见你的操作**：不只是聊天窗口，是整个屏幕
 
+🎮 **游戏陪伴（多游戏）**：她能看画面、操作键鼠陪你玩——目前支持 **Minecraft**（视觉 + Mineflayer 程序化双路线）和 **Factorio**（视觉路线）。基于 GameProfile 框架，新游戏可通过 Profile 接入。支持自主游玩闭环 `game_auto`，但**请勿用于带反作弊的竞技网游**（封号风险）。详见 [docs/gaming-overview.md](docs/gaming-overview.md) 与 [docs/game-safety.md](docs/game-safety.md)。
+
 ---
 
 ### 🛡️ Smart Sandbox · 智能沙箱
