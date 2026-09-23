@@ -60,7 +60,7 @@ export default defineConfig({
           modeManager: resolve(__dirname, 'electron/modeManager.ts'),
           'newstools/mcpNewsServer': resolve(__dirname, 'electron/newstools/mcpNewsServer.ts'),
         },
-        external: ['better-sqlite3', '@dingtalk/stream', '@xenova/transformers']
+        external: ['better-sqlite3', '@dingtalk/stream', '@xenova/transformers', 'mineflayer']
       }
     }
   },
