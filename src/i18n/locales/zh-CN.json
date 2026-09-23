@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "Lumina Life",
+    "version": "1.0"
+  },
+  "topbar": {
+    "online": "在线",
+    "offline": "离线",
+    "checking": "检测中…",
+    "health_title": "点击手动检测 LLM 连接",
+    "messages": "消息",
+    "tokens": "tokens",
+    "usage_title": "打开用量面板",
+    "generating": "Lumina 正在回复...",
+    "done": "✅ 回复完成",
+    "switch_provider": "切换 LLM 供应商",
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "close": "关闭"
+  },
+  "settings": {
+    "tab_llm": "LLM 模型配置",
+    "tab_tts": "TTS 语音",
+    "tab_notifications": "主动通知",
+    "llm_title": "🧠 LLM 模型配置",
+    "llm_desc": "配置 AI 对话使用的语言模型供应商与参数。",
+    "tts_title": "🔊 Edge TTS（语音合成）",
+    "tts_desc": "浏览器 Edge TTS 引擎，支持多音色中英文语音合成。",
+    "notifications_title": "🔔 主动通知",
+    "notifications_desc": "配置 LLM 主动向您推送通知的条件与内容。",
+    "team_title": "Team Agent LLM 配置",
+    "team_desc": "为 Team 模式下的每个 Agent 单独配置 LLM 连接参数。"
+  },
+  "llm": {
+    "provider_label": "供应商",
+    "base_url": "API 地址",
+    "api_key": "API 密钥",
+    "model": "模型",
+    "model_placeholder": "选择或输入模型名称",
+    "fetch_models": "获取列表",
+    "fetching": "获取中…",
+    "timeout": "超时(s)",
+    "save": "保存",
+    "advanced": "⚙️ 高级选项",
+    "advanced_collapse": "收起高级选项",
+    "max_tokens": "最大输出 (tokens)",
+    "context_window": "上下文窗口",
+    "temperature": "温度",
+    "temperature_desc": "0 = 精确，2 = 创意",
+    "context_window_auto": "0 = 自动"
+  },
+  "tts": {
+    "running": "运行中",
+    "stopped": "未启动",
+    "start": "▶ 启动",
+    "stop": "⏹ 停止",
+    "voice": "音色",
+    "speed": "语速",
+    "volume": "音量"
+  },
+  "team": {
+    "advanced": "⚙️ 高级选项",
+    "advanced_collapse": "收起高级选项",
+    "advanced_expand": "⚙️ 高级选项",
+    "max_tokens": "最大输出 (tokens)",
+    "context_window": "上下文窗口",
+    "temperature": "温度",
+    "save": "保存",
+    "fetch_models": "获取列表",
+    "endpoint": "Endpoint",
+    "model": "模型",
+    "api_key": "API Key"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "confirm": "确认",
+    "enable": "启用",
+    "disable": "禁用",
+    "yes": "是",
+    "no": "否"
+  }
+}

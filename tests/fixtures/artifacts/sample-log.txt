@@ -1,0 +1,244 @@
+[2026-09-22T10:01:01.001Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:02:02.002Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:03:03.003Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:04:04.004Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:05:05.005Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:06:06.006Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:07:07.007Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:08:08.008Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:09:09.009Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:10:10.010Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:11:11.011Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:12:12.012Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:13:13.013Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:14:14.014Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:15:15.015Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:16:16.016Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:17:17.017Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:18:18.018Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:19:19.019Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:20:20.020Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:21:21.021Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:22:22.022Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:23:23.023Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:24:24.024Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:25:25.025Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:26:26.026Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:27:27.027Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:28:28.028Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:29:29.029Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:30:30.030Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:31:31.031Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:32:32.032Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:33:33.033Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:34:34.034Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:35:35.035Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:36:36.036Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:37:37.037Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:38:38.038Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:39:39.039Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:40:40.040Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:41:41.041Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:42:42.042Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:43:43.043Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:44:44.044Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:45:45.045Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:46:46.046Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:47:47.047Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:48:48.048Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:49:49.049Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:50:50.050Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:51:51.051Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:52:52.052Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:53:53.053Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:54:54.054Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:55:55.055Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:56:56.056Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:57:57.057Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:58:58.058Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:59:59.059Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:00:00.060Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:01:01.061Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:02:02.062Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:03:03.063Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:04:04.064Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:05:05.065Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:06:06.066Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:07:07.067Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:08:08.068Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:09:09.069Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:10:10.070Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:11:11.071Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:12:12.072Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:13:13.073Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:14:14.074Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:15:15.075Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:16:16.076Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:17:17.077Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:18:18.078Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:19:19.079Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:20:20.080Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:21:21.081Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:22:22.082Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:23:23.083Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:24:24.084Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:25:25.085Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:26:26.086Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:27:27.087Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:28:28.088Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:29:29.089Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:30:30.090Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:31:31.091Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:32:32.092Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:33:33.093Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:34:34.094Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:35:35.095Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:36:36.096Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:37:37.097Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:38:38.098Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:39:39.099Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:40:40.100Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:41:41.101Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:42:42.102Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:43:43.103Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:44:44.104Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:45:45.105Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:46:46.106Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:47:47.107Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:48:48.108Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:49:49.109Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:50:50.110Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:51:51.111Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:52:52.112Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:53:53.113Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:54:54.114Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:55:55.115Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:56:56.116Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:57:57.117Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:58:58.118Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:59:59.119Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:00:00.120Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:01:01.121Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:02:02.122Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:03:03.123Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:04:04.124Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:05:05.125Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:06:06.126Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:07:07.127Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:08:08.128Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:09:09.129Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:10:10.130Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:11:11.131Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:12:12.132Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:13:13.133Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:14:14.134Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:15:15.135Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:16:16.136Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:17:17.137Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:18:18.138Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:19:19.139Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:20:20.140Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:21:21.141Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:22:22.142Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:23:23.143Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:24:24.144Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:25:25.145Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:26:26.146Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:27:27.147Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:28:28.148Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:29:29.149Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:30:30.150Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:31:31.151Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:32:32.152Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:33:33.153Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:34:34.154Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:35:35.155Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:36:36.156Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:37:37.157Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:38:38.158Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:39:39.159Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:40:40.160Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:41:41.161Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:42:42.162Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:43:43.163Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:44:44.164Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:45:45.165Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:46:46.166Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:47:47.167Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:48:48.168Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:49:49.169Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:50:50.170Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:51:51.171Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:52:52.172Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:53:53.173Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:54:54.174Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:55:55.175Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:56:56.176Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:57:57.177Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:58:58.178Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:59:59.179Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:00:00.180Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:01:01.181Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:02:02.182Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:03:03.183Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:04:04.184Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:05:05.185Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:06:06.186Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:07:07.187Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:08:08.188Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:09:09.189Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:10:10.190Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:11:11.191Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:12:12.192Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:13:13.193Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:14:14.194Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:15:15.195Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:16:16.196Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:17:17.197Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:18:18.198Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:19:19.199Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:20:20.200Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:21:21.201Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:22:22.202Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:23:23.203Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:24:24.204Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+    at TaskRunner.run (TaskRunner.ts:42:15)
+    at async main (index.ts:88:3)
+[2026-09-22T10:25:25.205Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:26:26.206Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:27:27.207Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:28:28.208Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:29:29.209Z] [WARN] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:30:30.210Z] [ERROR] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:31:31.211Z] [DEBUG] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:32:32.212Z] [INFO] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:33:33.213Z] [WARN] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:34:34.214Z] [ERROR] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB
+[2026-09-22T10:35:35.215Z] [DEBUG] [worker-2] 检测到未知事件类型，请检查桥接层映射
+[2026-09-22T10:36:36.216Z] [INFO] [worker-0] 加载配置文件 config.json 完成
+[2026-09-22T10:37:37.217Z] [WARN] [worker-1] 用户 lumina 发起了一次工具调用 file_read
+[2026-09-22T10:38:38.218Z] [ERROR] [worker-2] 连接到 LLM 提供商 baseUrl 建立成功
+[2026-09-22T10:39:39.219Z] [DEBUG] [worker-0] 响应超时，准备进行第 1 次重试
+[2026-09-22T10:40:40.220Z] [INFO] [worker-1] 渲染产物 sample-data.json 成功，大小 2.4KB

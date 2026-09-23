@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "Lumina Life",
+    "version": "1.0"
+  },
+  "topbar": {
+    "online": "Online",
+    "offline": "Offline",
+    "checking": "Checking…",
+    "health_title": "Click to check LLM connection",
+    "messages": "msgs",
+    "tokens": "tokens",
+    "usage_title": "Open usage panel",
+    "generating": "Lumina is thinking...",
+    "done": "✅ Response complete",
+    "switch_provider": "Switch LLM provider",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "close": "Close"
+  },
+  "settings": {
+    "tab_llm": "LLM Model",
+    "tab_tts": "TTS Voice",
+    "tab_notifications": "Notifications",
+    "llm_title": "🧠 LLM Model Config",
+    "llm_desc": "Configure the LLM model provider & parameters.",
+    "tts_title": "🔊 Edge TTS (Speech)",
+    "tts_desc": "Browser-based Edge TTS with multi-voice support.",
+    "notifications_title": "🔔 Push Notifications",
+    "notifications_desc": "Configure when LLM pushes notifications to you.",
+    "team_title": "Team Agent LLM Config",
+    "team_desc": "Configure per-agent LLM connection parameters for Team mode."
+  },
+  "llm": {
+    "provider_label": "Provider",
+    "base_url": "API Base URL",
+    "api_key": "API Key",
+    "model": "Model",
+    "model_placeholder": "Pick or type a model name",
+    "fetch_models": "Fetch Models",
+    "fetching": "Fetching…",
+    "timeout": "Timeout (s)",
+    "save": "Save",
+    "advanced": "⚙️ Advanced",
+    "advanced_collapse": "Collapse Advanced",
+    "max_tokens": "Max Tokens",
+    "context_window": "Context Window",
+    "temperature": "Temperature",
+    "temperature_desc": "0 = precise, 2 = creative",
+    "context_window_auto": "0 = auto"
+  },
+  "tts": {
+    "running": "Running",
+    "stopped": "Stopped",
+    "start": "▶ Start",
+    "stop": "⏹ Stop",
+    "voice": "Voice",
+    "speed": "Speed",
+    "volume": "Volume"
+  },
+  "team": {
+    "advanced": "⚙️ Advanced",
+    "advanced_collapse": "Collapse Advanced",
+    "advanced_expand": "⚙️ Advanced",
+    "max_tokens": "Max Tokens",
+    "context_window": "Context Window",
+    "temperature": "Temperature",
+    "save": "Save",
+    "fetch_models": "Fetch Models",
+    "endpoint": "Endpoint",
+    "model": "Model",
+    "api_key": "API Key"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "enable": "Enable",
+    "disable": "Disable",
+    "yes": "Yes",
+    "no": "No"
+  }
+}
