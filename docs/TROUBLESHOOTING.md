@@ -204,6 +204,37 @@
 
 ---
 
+## 16. 原生依赖编译失败（better-sqlite3 / sharp / onnxruntime-node）
+
+**现象：** `npm install` 中途报 `node-gyp` 堆栈、`MSBUILD : error`、`gyp ERR!`、`make: g++: command not found`，或应用启动时报 `The module was compiled against a different Node.js version` / `was compiled against a different Node.js version`。
+
+**根因：** `better-sqlite3` 是 C++ 原生模块，必须为当前 Electron 的 ABI 重新编译；它依赖本机的 C/C++ 工具链与 Python 3。`sharp` / `onnxruntime-node` / `screenshot-desktop` 多数时候有预编译二进制，但少数平台/架构仍需回退编译。
+
+**按操作系统准备工具链：**
+
+- **Windows：**
+  1. 安装 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)，勾选「使用 C++ 的桌面开发」工作负载。
+  2. 安装 Python 3（node-gyp 需要）：https://www.python.org/downloads/
+  3. 管理员 PowerShell 中重新对齐：`npm run rebuild:electron`
+
+- **macOS：**
+  1. 安装 Xcode 命令行工具：`xcode-select --install`
+  2. 确认 Python 3 可用：`python3 --version`
+  3. 重新对齐：`npm run rebuild:electron`
+
+- **Linux（Debian/Ubuntu）：**
+  1. 安装工具链：`sudo apt install build-essential python3 make`
+  2. Fedora/RHEL：`sudo dnf groupinstall "Development Tools" && sudo dnf install python3`
+  3. 重新对齐：`npm run rebuild:electron`
+
+**其它排查：**
+1. 临时跳过原生对齐（只跑纯 Node 测试时用）：`set LUMINA_SKIP_REBUILD=1`（PowerShell）/ `export LUMINA_SKIP_REBUILD=1`（bash），再 `npm install`。
+2. 确认 Node 版本：仓库要求 Node.js 18+（CI 跑 Node 20/22）。
+3. 清干净重装：`rm -rf node_modules package-lock.json && npm install`。
+4. 若只在「打包后的 App」里报原生模块加载失败，确认 `package.json` 的 `build.asarUnpack` 已包含 better-sqlite3 / sharp / onnxruntime-node / @xenova / @img（仓库已配好，勿删）。
+
+---
+
 ## 日志怎么看？
 
 所有排查的第一步：**看日志。**
