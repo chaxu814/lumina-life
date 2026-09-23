@@ -682,6 +682,10 @@ const api = {
   cuPolicyForeground: () =>
     ipcRenderer.invoke('cu-policy:foreground') as Promise<{ proc: string; title: string } | null>,
 
+  // 跨平台能力矩阵：返回当前平台各功能是否可用 + 降级说明（platform:get-features）
+  platformGetFeatures: () =>
+    ipcRenderer.invoke('platform:get-features') as Promise<{ ok: boolean; matrix?: any; error?: string }>,
+
   // ─── v3.33 绩效画像 / 任务追踪 / 自治 / 检查点 / 团队日记 ───
   collabStatsProfiles: () =>
     ipcRenderer.invoke('team-collab:stats-profiles') as Promise<any>,
