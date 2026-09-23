@@ -116,6 +116,10 @@
       ],
       "category": "public.app-category.utilities",
       "icon": "resources/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
     },
     "linux": {
@@ -196,7 +200,6 @@
     "unocss": "^66.7.5",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.8"
-  }
   },
   "optionalDependencies": {
     "mineflayer": "^4.20.0"
