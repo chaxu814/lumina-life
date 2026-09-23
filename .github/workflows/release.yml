@@ -1,0 +1,168 @@
+# ============================================================
+# .github/workflows/release.yml — 三平台 Release 打包 + 代码签名
+#
+# 触发：
+#   - push  v* tag（如 v0.2.0）→ 正式发版
+#   - 手动 workflow_dispatch → 产三平台安装包（草稿 Release）
+#
+# 签名全部走 GitHub Secrets，没有配证书时**不会失败**，
+# 而是跳过签名直接产出未签名包（用户首次运行需手动放行）。
+# 详细申请/配置步骤见 docs/code-signing.md。
+# ============================================================
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            pack_script: pack:win
+            # 与现有 test.yml 中 release job 保持同一组 secret 命名
+            win_cert: WINDOWS_CSC_LINK
+          - os: macos-latest
+            pack_script: pack:mac
+          - os: ubuntu-latest
+            pack_script: pack:linux
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # ── Linux 系统依赖（AppImage 运行所需）────────────────────
+      - name: Linux - install system deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libappindicator1 libayatana-appindicator3-1 libfuse2 libnss3 2>/dev/null || true
+
+      # ── Windows Authenticode 签名 ────────────────────────────
+      # Secrets：
+      #   WINDOWS_CSC_LINK          base64 编码的 .pfx 证书
+      #                             生成：openssl base64 -in cert.pfx -out cert.b64
+      #   WINDOWS_CSC_KEY_PASSWORD  .pfx 导出时设置的密码
+      # 没配 CSC_LINK 时跳过签名，产出未签名 exe（SmartScreen 警告，用户可手动放行）。
+      - name: Windows - prepare certificate
+        if: matrix.os == 'windows-latest' && env.CSC_LINK != ''
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          $bytes = [Convert]::FromBase64String($env:CSC_LINK)
+          [IO.File]::WriteAllBytes("cert.pfx", $bytes)
+          # electron-builder 读绝对路径形式的 CSC_LINK
+          echo "CSC_LINK=$((Resolve-Path cert.pfx).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # ── macOS 签名 + 公证 ────────────────────────────────────
+      # Secrets：
+      #   MAC_CERTIFICATE_BASE64       base64 编码的 Developer ID Application .p12
+      #   MAC_CERTIFICATE_PASSWORD     .p12 导出密码
+      #   MAC_KEYCHAIN_PASSWORD        临时 keychain 密码（自拟随机串即可）
+      #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID  公证三件套
+      # （App Store Connect API Key 方式备选：APPLE_API_KEY / APPLE_API_KEY_ID /
+      #   APPLE_API_ISSUER_ID，二选一即可）
+      # 全部缺省时不签名（产出未签名 dmg，用户右键→打开即可）。
+      - name: macOS - prepare certificate & notarize env
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          BUILD_CERT_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MAC_KEYCHAIN_PASSWORD }}
+        run: |
+          if [ -z "$BUILD_CERT_BASE64" ]; then
+            echo "No macOS certificate secret, building unsigned."
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> $GITHUB_ENV
+          else
+            echo "$BUILD_CERT_BASE64" | base64 --decode > certificate.p12
+            security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+            security default-keychain -s build.keychain
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+            security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules for Electron
+        run: npm run rebuild:electron
+        continue-on-error: true
+
+      # ── 打包（electron-builder）─────────────────────────────
+      # 签名环境变量在这里统一注入：
+      #   Windows: CSC_LINK / CSC_KEY_PASSWORD（上方已把 pfx 落盘到 CSC_LINK）
+      #   macOS:   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID（自动公证）
+      #   Linux:   无需签名
+      - name: Build & package
+        run: npm run ${{ matrix.pack_script }}
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lumina-Life-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.yml
+            dist/*.blockmap
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.yml
+            dist/*.blockmap
+          draft: true
+          generate_release_notes: true
+          body: |
+            ## Lumina Life ${{ github.ref_name }}
+
+            详见 [docs/code-signing.md](docs/code-signing.md) 了解签名状态。
+
+            ### 下载
+            | 平台 | 安装包 |
+            |---|---|
+            | Windows | `*.exe`（NSIS） |
+            | macOS | `*.dmg`（Intel / Apple Silicon） |
+            | Linux | `*.AppImage` / `*.deb` |

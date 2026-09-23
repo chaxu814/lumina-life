@@ -1,0 +1,51 @@
+{
+  "tool": "lumina-benchmark",
+  "type": "electron-app-idle",
+  "measuredAt": "2026-09-22",
+  "method": "启动 node_modules/electron/dist/electron.exe --no-sandbox out/main/index.js，等待 30 秒稳定后，用 Get-Process 对所有 electron 进程采样；再以 10 秒窗口采样 WorkingSet64 与 CPU 累计秒数推算 CPU%。",
+  "hardware": {
+    "os": "Windows 11 家庭版 中文版 (build 26200, x64)",
+    "cpu": "12th Gen Intel Core i5-12490F",
+    "cpuCores": "6 物理 / 12 逻辑",
+    "cpuBaseMHz": 3000,
+    "ramTotalGB": 47.8,
+    "gpu": "NVIDIA GeForce RTX 5060 Ti"
+  },
+  "environment": {
+    "nodeVersion": "v22.23.2",
+    "electronVersion": "40.x (devDependencies: ^40.10.1)",
+    "builtMain": "out/main/index.js"
+  },
+  "pureNodeScriptBaseline": {
+    "scenario": "idle (纯 Node 进程，未启动 Electron)",
+    "rssMB_avg": 27.6,
+    "heapUsedMB_avg": 4.38,
+    "cpuMachinePct_avg": 0
+  },
+  "electronAppIdle": {
+    "scenario": "idle (应用已启动，Live2D 桌宠窗口运行中)",
+    "processCount": 5,
+    "totalRssMB_at30s": 795.9,
+    "totalRssMB_at40s": 754.5,
+    "totalRssMB_avg": 775.2,
+    "totalCpuMachinePct_over10s": 4.03,
+    "perProcess": [
+      { "pid": 10104, "role": "主进程 (main)", "rssMB": 199.8, "cpuMachinePct": 0.69, "cpuPerCorePct": 8.28, "threads": 59 },
+      { "pid": 5096,  "role": "渲染/GPU 进程 A (桌宠/UI)", "rssMB": 188.5, "cpuMachinePct": 1.50, "cpuPerCorePct": 17.97, "threads": 49 },
+      { "pid": 38040, "role": "渲染/GPU 进程 B (桌宠/UI)", "rssMB": 195.5, "cpuMachinePct": 1.81, "cpuPerCorePct": 21.72, "threads": 23 },
+      { "pid": 10276, "role": "工具/辅助进程", "rssMB": 115.6, "cpuMachinePct": 0.03, "cpuPerCorePct": 0.31, "threads": 16 },
+      { "pid": 21640, "role": "GPU/工具进程", "rssMB": 55.1, "cpuMachinePct": 0.0, "cpuPerCorePct": 0.0, "threads": 24 }
+    ],
+    "notes": [
+      "idle 并非绝对静止：Live2D 桌宠动画（呼吸/眨眼）仍在运行，故渲染进程有持续 CPU。",
+      "主进程 RSS ~200MB 主要来自 Electron 运行时 + better-sqlite3 + 已注册工具/Agent 编排器；未加载 ONNX 模型。",
+      "该数据为单次启动采样，存在 ±50MB 波动；正式发布前建议按 docs/performance.md 的复现方法多次采样取平均。"
+    ]
+  },
+  "unmeasuredScenarios": {
+    "chat": "未测量：需要配置 LLM 并真实对话；可用 npm run api 后 POST /api/chat，同时用 Get-Process 采样。",
+    "live2d": "未单独测量：idle 场景已包含 Live2D 桌宠运行；单独 FPS 负载需固定帧率循环后采样。",
+    "onnx-loaded": "未测量：@xenova/transformers 模型需手动下载本地模型文件；纯 Node require 运行时的开销见 benchmark-results.json。",
+    "computer-use": "未测量：需要 VLM 配置与截图循环；未配置 Key 时只测截图开销。"
+  }
+}

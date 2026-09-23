@@ -1,0 +1,104 @@
+{
+  "tool": "lumina-benchmark",
+  "version": "1.0.0",
+  "startedAt": "2026-09-22T08:22:02.890Z",
+  "endedAt": "2026-09-22T08:22:10.168Z",
+  "hardware": {
+    "platform": "win32",
+    "arch": "x64",
+    "release": "10.0.26200",
+    "nodeVersion": "v22.23.2",
+    "electronVersion": null,
+    "chromeVersion": null,
+    "cpuModel": "12th Gen Intel(R) Core(TM) i5-12490F",
+    "cpuCores": 12,
+    "cpuSpeedMHz": 2995,
+    "totalMemGB": 47.8,
+    "freeMemGB": 6
+  },
+  "result": {
+    "scenario": "onnx-loaded",
+    "isElectron": false,
+    "workloadNote": "尝试在当前进程 require @xenova/transformers 以加载 ONNX 运行时 — require 成功（运行时已加载，未加载具体模型）",
+    "sampleCount": 3,
+    "intervalMs": 800,
+    "logicalCores": 12,
+    "summary": {
+      "rssMB": {
+        "avg": 59.6,
+        "max": 59.6,
+        "min": 59.6,
+        "stddev": 0
+      },
+      "heapUsedMB": {
+        "avg": 11.4,
+        "max": 11.4,
+        "min": 11.4,
+        "stddev": 0
+      },
+      "heapTotalMB": {
+        "avg": 19.7,
+        "max": 19.7,
+        "min": 19.7,
+        "stddev": 0
+      },
+      "externalMB": {
+        "avg": 2.8,
+        "max": 2.8,
+        "min": 2.8,
+        "stddev": 0
+      },
+      "cpuMachinePct": {
+        "avg": 0,
+        "max": 0,
+        "min": 0,
+        "stddev": 0
+      },
+      "cpuPerCorePct": {
+        "avg": 0,
+        "max": 0,
+        "min": 0,
+        "stddev": 0
+      }
+    },
+    "samples": [
+      {
+        "index": 0,
+        "timestamp": "2026-09-22T08:22:08.544Z",
+        "rssMB": 59.6,
+        "heapUsedMB": 11.4,
+        "heapTotalMB": 19.7,
+        "externalMB": 2.8,
+        "arrayBuffersMB": 0.9,
+        "cpuPerCorePct": 0,
+        "cpuMachinePct": 0,
+        "systemFreeMemGB": 6
+      },
+      {
+        "index": 1,
+        "timestamp": "2026-09-22T08:22:09.354Z",
+        "rssMB": 59.6,
+        "heapUsedMB": 11.4,
+        "heapTotalMB": 19.7,
+        "externalMB": 2.8,
+        "arrayBuffersMB": 0.9,
+        "cpuPerCorePct": 0,
+        "cpuMachinePct": 0,
+        "systemFreeMemGB": 6
+      },
+      {
+        "index": 2,
+        "timestamp": "2026-09-22T08:22:10.165Z",
+        "rssMB": 59.6,
+        "heapUsedMB": 11.4,
+        "heapTotalMB": 19.7,
+        "externalMB": 2.8,
+        "arrayBuffersMB": 0.9,
+        "cpuPerCorePct": 0,
+        "cpuMachinePct": 0,
+        "systemFreeMemGB": 6
+      }
+    ],
+    "electronMetrics": null
+  }
+}
