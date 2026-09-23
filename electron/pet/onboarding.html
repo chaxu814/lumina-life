@@ -2,159 +2,368 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>Lumina Virtual Pet · 初始人格选择</title>
+<title>Lumina Virtual Pet · 首次启动引导</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     background: linear-gradient(180deg, #e8f2ff 0%, #f5f9ff 50%, #eef5ff 100%);
-    color: #1f3352; min-height: 100vh; padding: 28px 36px 24px;
+    color: #1f3352; min-height: 100vh; padding: 26px 34px 22px;
     overflow: hidden;
   }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .chip {
-    background: #dceeff; color: #2277cc; font-size: 13px; font-weight: 700;
-    padding: 7px 18px; border-radius: 999px;
-    box-shadow: 0 2px 8px rgba(80,140,220,0.15);
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .chip { background: #dceeff; color: #2277cc; font-size: 12.5px; font-weight: 700; padding: 6px 16px; border-radius: 999px; }
+  .logo { font-weight: 800; color: #fff; letter-spacing: .08em; font-size: 14px; background: linear-gradient(135deg, #4a9eff, #6bb5ff); padding: 7px 18px; border-radius: 12px; box-shadow: 0 3px 10px rgba(74,158,255,0.3); cursor: pointer; }
+
+  /* 步骤指示 */
+  .steps { display: flex; gap: 6px; margin: 4px 0 16px; }
+  .step-dot { flex: 1; height: 6px; border-radius: 999px; background: #d8e9fb; transition: background .2s; }
+  .step-dot.done { background: #7db8f0; }
+  .step-dot.active { background: #4a9eff; }
+
+  .step { display: none; animation: fade .25s ease; }
+  .step.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: 23px; margin: 4px 0 8px; color: #1a2d4f; font-weight: 800; }
+  .sub { color: #5b7396; font-size: 13px; line-height: 1.6; margin-bottom: 6px; }
+
+  /* provider / persona 卡片 */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin: 14px 0 14px; }
+  .card { background: #fff; border: 2px solid #d8e9fb; border-radius: 16px; padding: 14px 16px; cursor: pointer; position: relative; transition: all .16s; }
+  .card:hover { border-color: #7db8f0; transform: translateY(-2px); }
+  .card.selected { border-color: #4a9eff; box-shadow: 0 8px 22px rgba(74,158,255,.22); }
+  .card .emoji { font-size: 26px; }
+  .card h3 { font-size: 15.5px; margin: 6px 0 4px; color: #1a2d4f; }
+  .card .desc { color: #5b7396; font-size: 12px; line-height: 1.5; }
+  .card .tag { display: inline-block; background: #e3f1ff; color: #2277cc; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-top: 8px; }
+  .card .tag.hot { background: #fff0e6; color: #e8792b; }
+
+  /* 表单 */
+  .field { margin: 10px 0; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: #3a5578; margin-bottom: 5px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px; border: 1.5px solid #d8e9fb; border-radius: 11px;
+    font-size: 13px; background: #fff; color: #1a2d4f; outline: none;
   }
-  .logo {
-    font-weight: 800; color: #fff; letter-spacing: .08em; font-size: 15px;
-    background: linear-gradient(135deg, #4a9eff, #6bb5ff);
-    padding: 8px 20px; border-radius: 14px;
-    box-shadow: 0 3px 10px rgba(74,158,255,0.3);
-    cursor: pointer;
-  }
-  h1 { font-size: 26px; margin: 8px 0 10px; color: #1a2d4f; font-weight: 800; }
-  .sub { color: #5b7396; font-size: 13.5px; margin-bottom: 4px; line-height: 1.6; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0 18px; }
-  .card {
-    background: #fff; border: 2px solid #d8e9fb; border-radius: 20px;
-    padding: 0 20px 18px; cursor: pointer; position: relative;
-    box-shadow: 0 6px 20px rgba(90, 150, 220, .12);
-    transition: transform .18s cubic-bezier(.2,.8,.2,1), border-color .18s, box-shadow .18s;
-    overflow: hidden;
-  }
-  .card::before {
-    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: 56px; height: 10px; background: #d8e9fb;
-    border-radius: 0 0 10px 10px; transition: background .18s;
-  }
-  .card:hover { transform: translateY(-4px) scale(1.015); border-color: #7db8f0; box-shadow: 0 14px 32px rgba(90, 150, 220, .22); }
-  .card:hover::before { background: #7db8f0; }
-  .card.selected { border-color: #4a9eff; box-shadow: 0 14px 32px rgba(74,158,255,.28); }
-  .card.selected::before { background: #4a9eff; }
-  .card .tag {
-    display: inline-block; background: #e3f1ff; color: #2277cc;
-    font-size: 11.5px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
-    margin: 18px 0 10px;
-  }
-  .card h3 { font-size: 18px; margin-bottom: 8px; color: #1a2d4f; }
-  .card .desc { color: #5b7396; font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
-  .card .quote {
-    background: #f2f8ff; border: 1px solid #dceeff; border-radius: 12px;
-    color: #2277cc; font-size: 12.5px; line-height: 1.65; padding: 10px 14px;
-  }
-  .foot { text-align: center; }
-  .skip {
-    background: #fff; border: 2px solid #d8e9fb; color: #5b7396;
-    font-size: 14px; font-weight: 700; padding: 11px 40px; border-radius: 999px;
-    cursor: pointer; transition: all .18s;
-    box-shadow: 0 3px 10px rgba(90,150,220,0.08);
-  }
-  .skip:hover { border-color: #7db8f0; color: #2277cc; transform: translateY(-1px); box-shadow: 0 5px 14px rgba(90,150,220,0.15); }
-  .wm { position: fixed; right: 40px; bottom: 30px; font-size: 60px; font-weight: 900; color: rgba(74,158,255,0.06); pointer-events: none; letter-spacing: 4px; }
-  /* I6 隐私页 */
-  .privacy-screen { display: none; position: fixed; inset: 0; background: linear-gradient(180deg,#eef5ff,#f7fbff); padding: 40px 46px; overflow: auto; z-index: 50; }
-  .privacy-screen h2 { font-size: 22px; color:#1a2d4f; margin: 6px 0 12px; }
-  .privacy-screen p { color:#4a6185; font-size: 13.5px; line-height:1.8; margin-bottom: 10px; }
-  .priv-box { background:#fff; border:1.5px solid #d8e9fb; border-radius:14px; padding:16px 18px; margin:14px 0; font-size:12.5px; color:#4a6185; line-height:1.7; }
-  .priv-box b { color:#1a2d4f; }
-  .priv-actions { display:flex; gap:12px; margin-top:18px; }
-  .priv-btn { flex:1; padding:12px; border-radius:999px; border:none; font-size:14px; font-weight:700; cursor:pointer; }
-  .priv-primary { background:linear-gradient(135deg,#4a9eff,#6bb5ff); color:#fff; box-shadow:0 4px 12px rgba(74,158,255,.3); }
-  .priv-ghost { background:#fff; border:2px solid #d8e9fb; color:#5b7396; }
-  .priv-note { font-size:11.5px; color:#8aa0bd; margin-top:14px; }
+  .field input:focus, .field select:focus { border-color: #4a9eff; }
+  .link { color: #2277cc; font-size: 12px; cursor: pointer; text-decoration: underline; }
+  .hint { font-size: 11.5px; color: #8aa0bd; margin-top: 5px; line-height: 1.5; }
+  .status { font-size: 12px; margin-top: 8px; padding: 8px 11px; border-radius: 9px; display: none; }
+  .status.ok { display: block; background: #e6f9ee; color: #1f9d55; }
+  .status.err { display: block; background: #ffecec; color: #d94848; }
+  .status.info { display: block; background: #eef4ff; color: #3a6bd8; }
+
+  /* 按钮 */
+  .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; gap: 10px; }
+  .btn { border: none; border-radius: 999px; font-size: 13.5px; font-weight: 700; cursor: pointer; padding: 11px 26px; transition: all .16s; }
+  .btn-primary { background: linear-gradient(135deg, #4a9eff, #6bb5ff); color: #fff; box-shadow: 0 4px 14px rgba(74,158,255,.3); }
+  .btn-primary:hover { transform: translateY(-1px); }
+  .btn-ghost { background: #fff; border: 2px solid #d8e9fb; color: #5b7396; }
+  .btn-ghost:hover { border-color: #7db8f0; color: #2277cc; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  .wm { position: fixed; right: 36px; bottom: 24px; font-size: 56px; font-weight: 900; color: rgba(74,158,255,0.06); pointer-events: none; letter-spacing: 4px; }
+  .done-check { font-size: 52px; text-align: center; margin: 10px 0 4px; }
 </style>
 </head>
 <body>
   <div class="top">
-    <span class="chip">初始人格选择</span>
-    <span class="logo" id="logo-btn">LUMINA</span>
+    <span class="chip" id="chip">首次启动引导</span>
+    <span class="logo" id="logo-btn" title="跳过引导">LUMINA</span>
   </div>
-  <h1>你想让我变成哪种陪着你的样子喵？</h1>
-  <div class="sub">先挑现在最喜欢的感觉就好喵，之后也能在设置里再改。</div>
-  <div class="sub">先挑一个最对味的气质喵，再听听我开口是不是你想要的感觉。</div>
+  <div class="steps" id="steps"></div>
 
-  <div class="grid">
-    <div class="card" data-persona="bingruo">
-      <span class="tag">病弱妹妹</span>
-      <h3>病弱妹妹</h3>
-      <div class="desc">想让你再陪一会儿，又怕自己太黏人</div>
-      <div class="quote">你先别走嘛……再陪我待一会儿，好不好？我会很安静的。</div>
-    </div>
-    <div class="card" data-persona="zhixin">
-      <span class="tag">知心姐姐</span>
-      <h3>知心姐姐</h3>
-      <div class="desc">温柔接管节奏，先让你停下来休息</div>
-      <div class="quote">先别逞强。水喝掉，休息十分钟；剩下的，等你缓过来我陪你排。</div>
-    </div>
-    <div class="card" data-persona="dushe">
-      <span class="tag">毒舌学妹</span>
-      <h3>毒舌学妹</h3>
-      <div class="desc">嘴上损得最狠，行动却总先一步偏向你</div>
-      <div class="quote">哟，怎么累成狗了？算了，本小姐今天大发慈悲——肩膀借你靠会儿。</div>
-    </div>
-    <div class="card" data-persona="shadiao">
-      <span class="tag">沙雕网友</span>
-      <h3>沙雕网友</h3>
-      <div class="desc">玩梗装傻，用最正经的语气胡说八道</div>
-      <div class="quote">经专家鉴定，你现在已经累成了国家二级保护废物。建议立即躺平，否…可能进化成办公椅。</div>
-    </div>
+  <!-- Step 1: 欢迎 -->
+  <div class="step" data-step="0">
+    <h1>欢迎来到 Lumina ✨</h1>
+    <div class="sub">你的 AI 桌面伙伴，有自己的情绪、记忆和工作团队。</div>
+    <div class="sub">整个引导大约 <b>3 分钟</b>：选一个模型 → 填个 Key（本地模型可跳过）→ 挑个人格，就能开始聊天。</div>
+    <div class="sub">🔒 你的记忆和 Key 只存在这台电脑上，不上传任何服务器。</div>
   </div>
 
-  <div class="foot"><button class="skip" id="skip">先跳过喵</button></div>
+  <!-- Step 2: 选 provider -->
+  <div class="step" data-step="1">
+    <h1>选一个模型来源</h1>
+    <div class="sub">不知道选哪个？推荐 <b>LM Studio（本地免费）</b> 或 <b>DeepSeek（便宜中文好）</b>。</div>
+    <div class="grid">
+      <div class="card" data-provider="lmstudio" data-kind="local">
+        <div class="emoji">🏠</div><h3>LM Studio</h3>
+        <div class="desc">本地运行，完全免费、隐私不出本机。有图形界面，下模型最省心。</div>
+        <span class="tag hot">推荐 · 免费</span>
+      </div>
+      <div class="card" data-provider="deepseek" data-kind="cloud">
+        <div class="emoji">☁️</div><h3>DeepSeek</h3>
+        <div class="desc">云端调用，超低价、中文和写代码都很强。新用户有免费额度。</div>
+        <span class="tag hot">推荐 · 便宜</span>
+      </div>
+      <div class="card" data-provider="ollama" data-kind="local">
+        <div class="emoji">🐑</div><h3>Ollama</h3>
+        <div class="desc">轻量命令行本地模型，适合喜欢折腾、不需要 GUI 的玩家。</div>
+        <span class="tag">本地 · 免费</span>
+      </div>
+      <div class="card" data-provider="other-cloud" data-kind="cloud">
+        <div class="emoji">🔧</div><h3>其他云端</h3>
+        <div class="desc">OpenAI / 通义千问 / 智谱 GLM / 硅基流动，下一步里选。</div>
+        <span class="tag">云端</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: 配置 Key / 本地探测 -->
+  <div class="step" data-step="2">
+    <h1 id="cfg-title">配置模型</h1>
+    <div class="sub" id="cfg-sub"></div>
+
+    <!-- 云端表单 -->
+    <div id="cloud-panel">
+      <div class="field" id="provider-pick-field" style="display:none">
+        <label>云端服务商</label>
+        <select id="cloud-provider">
+          <option value="deepseek">DeepSeek</option>
+          <option value="qwen">通义千问</option>
+          <option value="openai">OpenAI</option>
+          <option value="zhipu">智谱 GLM</option>
+          <option value="siliconflow">硅基流动</option>
+        </select>
+      </div>
+      <div class="field"><label>API Key</label><input id="api-key" type="password" placeholder="sk-..." /></div>
+      <div class="field"><label>模型名（可留空用默认）</label><input id="model-name" type="text" placeholder="如 deepseek-chat" /></div>
+      <div><span class="link" id="get-key-link">如何免费获取 Key？</span></div>
+      <button class="btn btn-primary" id="test-btn" style="margin-top:10px">测试连接</button>
+    </div>
+
+    <!-- 本地探测 -->
+    <div id="local-panel">
+      <button class="btn btn-primary" id="detect-btn">自动检测本地模型</button>
+      <div class="hint">将探测 LM Studio（1234）和 Ollama（11434），自动选中已运行的服务。</div>
+    </div>
+
+    <div class="status" id="cfg-status"></div>
+  </div>
+
+  <!-- Step 4: 可选 VLM -->
+  <div class="step" data-step="3">
+    <h1>视觉模型（可选）</h1>
+    <div class="sub">VLM 让 Lumina 能「看懂」你的屏幕（Computer Use 屏幕理解）。<b>不配也能正常聊天</b>。</div>
+    <div id="vlm-auto" class="status info"></div>
+    <div id="vlm-manual" style="display:none">
+      <div class="sub">你的主模型不带视觉能力。如果想让 Lumina 看屏幕，可以稍后在「设置 → LLM」里单独配一个视觉模型（如 gpt-4o / kimi / qwen-vl）。</div>
+      <div class="hint">👉 现在直接点「下一步」即可跳过，不影响基础对话。</div>
+    </div>
+  </div>
+
+  <!-- Step 5: 人格 -->
+  <div class="step" data-step="4">
+    <h1>挑一个陪着你的样子</h1>
+    <div class="sub">先选现在最对味的气质，之后在设置里随时能改。</div>
+    <div class="grid">
+      <div class="card" data-persona="bingruo"><div class="emoji">🌙</div><h3>病弱妹妹</h3><div class="desc">想让你再陪一会儿，又怕自己太黏人</div></div>
+      <div class="card" data-persona="zhixin"><div class="emoji">🌸</div><h3>知心姐姐</h3><div class="desc">温柔接管节奏，先让你停下来休息</div></div>
+      <div class="card" data-persona="dushe"><div class="emoji">😏</div><h3>毒舌学妹</h3><div class="desc">嘴上损得最狠，行动却总先一步偏向你</div></div>
+      <div class="card" data-persona="shadiao"><div class="emoji">🤪</div><h3>沙雕网友</h3><div class="desc">玩梗装傻，用最正经的语气胡说八道</div></div>
+    </div>
+  </div>
+
+  <!-- Step 6: 完成 -->
+  <div class="step" data-step="5">
+    <div class="done-check">🎉</div>
+    <h1 style="text-align:center">全部就绪！</h1>
+    <div class="sub" style="text-align:center">Lumina 已经准备好陪你了。启动后随时可以调整模型和人格。</div>
+  </div>
+
+  <div class="nav">
+    <button class="btn btn-ghost" id="prev-btn">上一步</button>
+    <button class="btn btn-primary" id="next-btn">下一步</button>
+  </div>
   <div class="wm">LUMINA</div>
 
-  <!-- I6 隐私页（选完人格后展示） -->
-  <div class="privacy-screen" id="privacy-screen">
-    <span class="chip">最后一步</span>
-    <h2>你的数据，只在这台电脑上 🔐</h2>
-    <p>关于你的所有记忆、人格文件、对话摘要，<b>只保存在本机</b>，不上传任何服务器。你的 API Key 也只在本机加密存放；离线时的语义回忆（TF-IDF）照样能用。</p>
-    <div class="priv-box">
-      🗂️ 数据目录：<b id="priv-path">本机（启动后显示）</b><br>
-      🗃️ 记忆库：lumina-memory.db（SQLite）<br>
-      ☁️ 模型推理：按你的配置走 —— 用云端模型时请求发给你填的服务商，用本地模型则完全不出本机。
-    </div>
-    <p style="font-size:12.5px;color:#8aa0bd">想带走或备份？随时可以一键导出/导入（设置 → 隐私与开关）。</p>
-    <div class="priv-actions">
-      <button class="priv-btn priv-primary" id="priv-start">开始使用喵</button>
-    </div>
-    <div class="priv-note">License: AGPL-3.0 OR Apache-2.0 — 核心永远开放，可自托管、可审计。</div>
-  </div>
 <script>
   const ipc = require('electron').ipcRenderer;
-  let selected = null;
-  document.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('mouseenter', () => {
-      if (selected) return;
+  const TOTAL = 6;
+  const state = {
+    step: 0,
+    provider: '', kind: '', apiKey: '', model: '', baseUrl: '',
+    localApplied: false, persona: '', cloudConfigured: false,
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const stepsEl = $('steps');
+  for (let i = 0; i < TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i === 0 ? ' active' : '');
+    stepsEl.appendChild(d);
+  }
+
+  function showStep(n) {
+    state.step = n;
+    document.querySelectorAll('.step').forEach(s => s.classList.toggle('active', +s.dataset.step === n));
+    document.querySelectorAll('.step-dot').forEach((d, i) => {
+      d.className = 'step-dot' + (i < n ? ' done' : i === n ? ' active' : '');
     });
+    $('prev-btn').style.visibility = n === 0 ? 'hidden' : 'visible';
+    $('next-btn').textContent = n === TOTAL - 1 ? '开始使用' : '下一步';
+    $('chip').textContent = '首次启动引导 · ' + (n + 1) + '/' + TOTAL;
+    if (n === 2) renderConfigStep();
+    if (n === 3) renderVlmStep();
+    ipc.invoke('onboarding:set-step', n).catch(() => {});
+  }
+
+  // Step 2: provider 选择
+  document.querySelectorAll('#step[data-step="1"] .card').forEach(card => {
     card.addEventListener('click', () => {
-      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      document.querySelectorAll('#step[data-step="1"] .card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
-      selected = card.dataset.persona;
-      // 短暂延迟显示选中态后关闭
-      setTimeout(() => {
-        ipc.invoke('pet:set-persona', { persona: selected }).then(() => window.close());
-      }, 280);
+      state.provider = card.dataset.provider;
+      state.kind = card.dataset.kind;
     });
   });
-  document.getElementById('skip').addEventListener('click', () => {
-    ipc.invoke('pet:set-persona', { skip: true }).then(() => window.close());
+
+  function renderConfigStep() {
+    const isLocal = state.kind === 'local';
+    $('cloud-panel').style.display = isLocal ? 'none' : 'block';
+    $('local-panel').style.display = isLocal ? 'block' : 'none';
+    $('cfg-status').className = 'status';
+    $('cfg-status').textContent = '';
+    $('cfg-title').textContent = isLocal ? '接入本地模型' : '配置云端 Key';
+    $('cfg-sub').textContent = isLocal
+      ? '无需 API Key，自动探测本机已运行的模型服务。'
+      : '填入 API Key 即可；新用户通常有免费额度。';
+    $('provider-pick-field').style.display = state.provider === 'other-cloud' ? 'block' : 'none';
+  }
+
+  // 云端：测试连接
+  $('test-btn').addEventListener('click', async () => {
+    const provider = state.provider === 'other-cloud' ? $('cloud-provider').value : state.provider;
+    const apiKey = $('api-key').value.trim();
+    const model = $('model-name').value.trim();
+    const st = $('cfg-status');
+    st.className = 'status info'; st.textContent = '正在测试连接…';
+    try {
+      const r = await ipc.invoke('onboarding:test-cloud', { provider, apiKey, model });
+      if (r.ok) {
+        st.className = 'status ok'; st.textContent = '连接成功 ✓ 正在保存配置…';
+        const s = await ipc.invoke('onboarding:save-cloud', { provider, apiKey, model });
+        if (s.ok) { state.cloudConfigured = true; state.provider = provider; state.kind = 'cloud'; }
+      } else {
+        st.className = 'status err'; st.textContent = '连接失败：' + (r.error || '未知错误');
+      }
+    } catch (e) {
+      st.className = 'status err'; st.textContent = '请求出错：' + (e.message || e);
+    }
   });
-  document.getElementById('logo-btn').addEventListener('click', () => {
-    ipc.invoke('pet:set-persona', { skip: true }).then(() => window.close());
+
+  $('get-key-link').addEventListener('click', () => {
+    const provider = state.provider === 'other-cloud' ? $('cloud-provider').value : state.provider;
+    const urls = {
+      deepseek: 'https://platform.deepseek.com/api_keys',
+      qwen: 'https://dashscope.console.aliyun.com/apiKey',
+      openai: 'https://platform.openai.com/api-keys',
+      zhipu: 'https://open.bigmodel.cn/usercenter/apikeys',
+      siliconflow: 'https://cloud.siliconflow.cn/account/ak',
+    };
+    require('electron').shell.openExternal(urls[provider] || 'https://platform.deepseek.com/');
   });
-  document.getElementById('priv-start').addEventListener('click', () => window.close());
+
+  // 本地：自动检测
+  $('detect-btn').addEventListener('click', async () => {
+    const st = $('cfg-status');
+    st.className = 'status info'; st.textContent = '正在探测 LM Studio / Ollama…';
+    try {
+      const r = await ipc.invoke('onboarding:detect-local');
+      if (r.ok && r.provider && r.models && r.models.length) {
+        const apply = await ipc.invoke('onboarding:apply-local', { id: r.provider, baseUrl: r.baseUrl, model: r.recommended });
+        if (apply.ok) {
+          state.localApplied = true;
+          st.className = 'status ok';
+          st.textContent = `已接入 ${r.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'}：${apply.model || '默认模型'} ✓`;
+        }
+      } else if (r.ok && r.provider) {
+        st.className = 'status info';
+        st.textContent = '检测到服务但还没有模型。请先下载模型，或改用云端。';
+      } else {
+        st.className = 'status err';
+        st.textContent = '没检测到本地模型服务。可先装 LM Studio（lmstudio.ai）或 Ollama（ollama.com），或改用云端。';
+      }
+    } catch (e) {
+      st.className = 'status err'; st.textContent = '探测出错：' + (e.message || e);
+    }
+  });
+
+  // Step 4: VLM 自动判断
+  async function renderVlmStep() {
+    const auto = $('vlm-auto'), manual = $('vlm-manual');
+    auto.className = 'status info';
+    const modelGuess = $('model-name').value.trim();
+    try {
+      const r = await ipc.invoke('onboarding:model-vision', modelGuess);
+      if (r.supportsVision) {
+        auto.className = 'status ok';
+        auto.textContent = '✓ 你的主模型自带视觉能力，已自动复用，无需额外配置 VLM。';
+        manual.style.display = 'none';
+      } else {
+        auto.className = 'status info';
+        auto.textContent = '你的主模型默认不带视觉能力（或未填模型名）。';
+        manual.style.display = 'block';
+      }
+    } catch {
+      auto.textContent = ''; manual.style.display = 'block';
+    }
+  }
+
+  // Step 5: 人格选择（点击即选中，不立即关闭）
+  document.querySelectorAll('#step[data-step="4"] .card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('#step[data-step="4"] .card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      state.persona = card.dataset.persona;
+    });
+  });
+
+  // 下一步 / 上一步
+  $('next-btn').addEventListener('click', async () => {
+    // 校验
+    if (state.step === 1 && !state.provider) { flash('cfg-status'); return; }
+    if (state.step === 2) {
+      if (state.kind === 'cloud' && !state.cloudConfigured) {
+        const st = $('cfg-status'); st.className = 'status err';
+        st.textContent = '请先填入 Key 并点「测试连接」，或改选本地模型。'; return;
+      }
+      if (state.kind === 'local' && !state.localApplied) {
+        const st = $('cfg-status'); st.className = 'status err';
+        st.textContent = '请点「自动检测本地模型」完成接入；若没有本地服务，请返回改选云端。'; return;
+      }
+    }
+    if (state.step === TOTAL - 1) {
+      await finish();
+      return;
+    }
+    showStep(state.step + 1);
+  });
+  $('prev-btn').addEventListener('click', () => { if (state.step > 0) showStep(state.step - 1); });
+
+  function flash(id) {
+    const st = $(id); st.className = 'status err'; st.textContent = '请先选择一个模型来源。';
+  }
+
+  async function finish() {
+    try {
+      await ipc.invoke('onboarding:complete', { persona: state.persona, vlmSkipped: true });
+      await ipc.invoke('pet:set-persona', { persona: state.persona, skip: !state.persona });
+    } catch {}
+    window.close();
+  }
+
+  // logo / 跳过：直接关闭并标记完成
+  $('logo-btn').addEventListener('click', async () => {
+    try {
+      await ipc.invoke('onboarding:complete', { vlmSkipped: true });
+      await ipc.invoke('pet:set-persona', { skip: true });
+    } catch {}
+    window.close();
+  });
+
+  showStep(0);
 </script>
 </body>
 </html>
