@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina Cat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  canvas { display: block; cursor: pointer; }
+  #bubble {
+    position: fixed; pointer-events: none;
+    background: rgba(255,255,255,0.95); border-radius: 12px;
+    padding: 6px 14px; font-size: 14px; font-family: "Microsoft YaHei", sans-serif;
+    color: #333; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    opacity: 0; transition: opacity 0.2s; white-space: nowrap;
+  }
+  #bubble.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="bubble"></div>
+<script>
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+const bubble = document.getElementById('bubble');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth * devicePixelRatio;
+  H = canvas.height = window.innerHeight * devicePixelRatio;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── 猫状态 ──
+const state = {
+  x: window.innerWidth / 2, y: window.innerHeight / 2 + 80,
+  dir: 1, // 1=right, -1=left
+  mood: 'idle', // idle | walking | sleeping | excited
+  breath: 0, blinkT: 0, isBlinking: false,
+  jumpY: 0, jumpT: 0,
+  eyeX: 0, eyeY: 0, // 视线偏移
+  tailWag: 0,
+  action: null, // grooming | stretch | yawn
+  actionT: 0,
+};
+
+const CAT_SIZE = 80;
+
+// ── IPC ──
+let ipc = null;
+try { ipc = require('electron').ipcRenderer; } catch (e) {}
+if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer; } catch (e) {} }
+const HAS_IPC = !!ipc;
+
+if (HAS_IPC) {
+  ipc.invoke('pet:startup-progress', { progress: 80, stage: '小猫起床中…' }).catch(()=>{});
+  // 双击复位
+  canvas.addEventListener('dblclick', () => {
+    ipc.invoke('pet:reset-position').catch(()=>{});
+  });
+}
+
+// ── 气泡 ──
+function say(text, x, y) {
+  bubble.textContent = text;
+  bubble.style.left = (x || state.x + 40) + 'px';
+  bubble.style.top = (y || state.y - 60) + 'px';
+  bubble.classList.add('show');
+  clearTimeout(bubble._t);
+  bubble._t = setTimeout(() => bubble.classList.remove('show'), 1500);
+}
+
+// ── 鼠标视线跟随 ──
+document.addEventListener('mousemove', (e) => {
+  const dx = e.clientX - state.x;
+  const dy = e.clientY - state.y;
+  const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+  const maxOff = 6;
+  state.eyeX = Math.max(-maxOff, Math.min(maxOff, (dx/dist) * maxOff));
+  state.eyeY = Math.max(-maxOff, Math.min(maxOff, (dy/dist) * maxOff));
+});
+
+// ── 点击交互 ──
+canvas.addEventListener('click', () => {
+  if (state.mood === 'sleeping') {
+    state.mood = 'idle';
+    say('喵~ 被吵醒了…', state.x, state.y - 60);
+    return;
+  }
+  state.mood = 'excited';
+  state.jumpT = 1;
+  say('喵~', state.x, state.y - 60);
+  setTimeout(() => { state.mood = 'idle'; }, 500);
+});
+
+// ── 随机小动作 ──
+setInterval(() => {
+  if (state.mood === 'sleeping' || state.mood === 'excited') return;
+  const r = Math.random();
+  if (r < 0.3) { state.action = 'grooming'; state.actionT = 2.5; say('舔舔毛…', state.x, state.y - 60); }
+  else if (r < 0.5) { state.action = 'stretch'; state.actionT = 2; }
+  else if (r < 0.65) { state.action = 'yawn'; state.actionT = 1.5; say('哈啊~', state.x, state.y - 60); }
+  else if (r < 0.85) {
+    state.mood = 'walking';
+    state.dir = Math.random() > 0.5 ? 1 : -1;
+    setTimeout(() => { state.mood = 'idle'; }, 2000);
+  }
+}, 15000 + Math.random() * 15000);
+
+// ── 定时睡觉 ──
+setInterval(() => {
+  if (state.mood === 'sleeping' || state.mood === 'excited') return;
+  if (Math.random() < 0.3) {
+    state.mood = 'sleeping';
+    setTimeout(() => { if (state.mood === 'sleeping') state.mood = 'idle'; }, 8000);
+  }
+}, 30000);
+
+// ── 绘制猫 ──
+function drawCat() {
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+  const cx = state.x;
+  const cy = state.y;
+  const s = CAT_SIZE / 80; // scale factor
+
+  // 呼吸
+  state.breath += 0.05;
+  const breathe = state.mood === 'sleeping' ? Math.sin(state.breath * 0.5) * 3 : Math.sin(state.breath) * 2;
+
+  // 跳跃
+  let jumpOffset = 0;
+  if (state.jumpT > 0) {
+    state.jumpT -= 0.04;
+    jumpOffset = Math.sin(state.jumpT * Math.PI) * -20;
+    if (state.jumpT <= 0) state.jumpT = 0;
+  }
+
+  const bodyY = cy + jumpOffset;
+  const bobY = Math.sin(state.breath * 0.8) * 1.5;
+
+  ctx.save();
+  ctx.translate(cx, bodyY + bobY);
+  ctx.scale(state.dir * s, s);
+
+  const furColor = '#f5cba7';
+  const furDark = '#e0a878';
+  const earColor = '#e8919a';
+
+  // 尾巴
+  state.tailWag += 0.1;
+  const tailAngle = Math.sin(state.tailWag * 2) * 0.3;
+  ctx.strokeStyle = furColor;
+  ctx.lineWidth = 6 * s;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-25 * s, 10 * s);
+  ctx.quadraticCurveTo(-40 * s, 0 * s + Math.sin(state.tailWag * 2) * 5, -35 * s, -15 * s + tailAngle * 10);
+  ctx.stroke();
+
+  // 身体（椭圆）
+  ctx.fillStyle = furColor;
+  ctx.beginPath();
+  ctx.ellipse(0, 10 * s + breathe, 28 * s, 22 * s + breathe * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 头
+  const headY = -15 * s + breathe * 0.5;
+  ctx.fillStyle = furColor;
+  ctx.beginPath();
+  ctx.arc(0, headY, 22 * s, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 耳朵
+  ctx.fillStyle = furColor;
+  // left ear
+  ctx.beginPath();
+  ctx.moveTo(-15 * s, headY - 12 * s);
+  ctx.lineTo(-20 * s, headY - 28 * s);
+  ctx.lineTo(-8 * s, headY - 20 * s);
+  ctx.closePath();
+  ctx.fill();
+  // right ear
+  ctx.beginPath();
+  ctx.moveTo(15 * s, headY - 12 * s);
+  ctx.lineTo(20 * s, headY - 28 * s);
+  ctx.lineTo(8 * s, headY - 20 * s);
+  ctx.closePath();
+  ctx.fill();
+  // inner ears
+  ctx.fillStyle = earColor;
+  ctx.beginPath();
+  ctx.moveTo(-14 * s, headY - 14 * s);
+  ctx.lineTo(-17 * s, headY - 24 * s);
+  ctx.lineTo(-10 * s, headY - 18 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(14 * s, headY - 14 * s);
+  ctx.lineTo(17 * s, headY - 24 * s);
+  ctx.lineTo(10 * s, headY - 18 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // 眼睛
+  state.blinkT += 0.016;
+  if (state.blinkT > 3 + Math.random() * 4) { state.isBlinking = true; state.blinkT = 0; }
+  if (state.isBlinking) {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.moveTo(-10 * s, headY); ctx.lineTo(-4 * s, headY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4 * s, headY); ctx.lineTo(10 * s, headY); ctx.stroke();
+    if (state.blinkT > 0.15) state.isBlinking = false;
+  } else if (state.mood === 'sleeping') {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.arc(-7 * s, headY, 3 * s, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(7 * s, headY, 3 * s, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
+  } else {
+    // 睁眼 + 视线跟随
+    const ex = state.eyeX * s, ey = state.eyeY * s;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(-7 * s, headY, 5 * s, 6 * s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(7 * s, headY, 5 * s, 6 * s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.arc(-7*s + ex, headY + ey, 2.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7*s + ex, headY + ey, 2.5*s, 0, Math.PI*2); ctx.fill();
+    // 高光
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-7*s + ex - 1*s, headY + ey - 1*s, 0.8*s, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7*s + ex - 1*s, headY + ey - 1*s, 0.8*s, 0, Math.PI*2); ctx.fill();
+  }
+
+  // 鼻子
+  ctx.fillStyle = '#e8919a';
+  ctx.beginPath();
+  ctx.moveTo(0, headY + 5 * s);
+  ctx.lineTo(-2 * s, headY + 3 * s);
+  ctx.lineTo(2 * s, headY + 3 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // 嘴
+  ctx.strokeStyle = '#c66';
+  ctx.lineWidth = 1 * s;
+  ctx.beginPath();
+  ctx.moveTo(0, headY + 5 * s);
+  ctx.lineTo(0, headY + 7 * s);
+  ctx.stroke();
+
+  // 胡须
+  ctx.strokeStyle = 'rgba(100,100,100,0.5)';
+  ctx.lineWidth = 0.8 * s;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath(); ctx.moveTo(-12 * s, headY + 4*s + i*3*s); ctx.lineTo(-22 * s, headY + 2*s + i*4*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(12 * s, headY + 4*s + i*3*s); ctx.lineTo(22 * s, headY + 2*s + i*4*s); ctx.stroke();
+  }
+
+  // 前爪
+  ctx.fillStyle = furDark;
+  ctx.beginPath(); ctx.ellipse(-8*s, 30*s, 6*s, 4*s, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(8*s, 30*s, 6*s, 4*s, 0, 0, Math.PI*2); ctx.fill();
+
+  // 睡觉 Zzz
+  if (state.mood === 'sleeping') {
+    ctx.fillStyle = 'rgba(150,150,200,0.7)';
+    ctx.font = `${12*s}px sans-serif`;
+    ctx.fillText('Z', 20*s, headY - 15*s - Math.sin(state.breath * 0.5) * 3);
+    ctx.font = `${9*s}px sans-serif`;
+    ctx.fillText('z', 25*s, headY - 8*s - Math.sin(state.breath * 0.5) * 3);
+  }
+
+  ctx.restore();
+
+  // 走路动画
+  if (state.mood === 'walking') {
+    state.x += state.dir * 1.5;
+    // 贴边转身
+    if (state.x < 40) state.dir = 1;
+    if (state.x > window.innerWidth - 40) state.dir = -1;
+  }
+
+  // 小动作计时
+  if (state.action) {
+    state.actionT -= 0.016;
+    if (state.actionT <= 0) state.action = null;
+  }
+}
+
+function loop() {
+  drawCat();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// 上报启动完成
+if (HAS_IPC) {
+  setTimeout(() => {
+    ipc.invoke('pet:startup-progress', { progress: 100, stage: '小猫醒啦~' }).catch(()=>{});
+    setTimeout(() => say('喵~ 我来啦', state.x, state.y - 60), 500);
+  }, 800);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Lumina PNGTuber 桌宠</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* 对话气泡（与 Live2D 页样式一致） */
+  .speech-bubble {
+    position: fixed; left: 0; top: 0;
+    padding: 6px 12px; border-radius: 12px;
+    background: rgba(0,0,0,0.78); color: #fff; font-size: 12px;
+    max-width: min(240px, calc(100vw - 24px)); min-width: 40px;
+    text-align: left; white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+    opacity: 0; transition: opacity .3s ease; pointer-events: none; z-index: 50; line-height: 1.45;
+  }
+  .speech-bubble::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: rgba(0,0,0,0.78); }
+  .speech-bubble.show { opacity: 1; }
+
+  /* 名称标签 */
+  .name-tag {
+    position: fixed; top: 0; left: 0;
+    padding: 2px 10px; border-radius: 10px; background: rgba(0,0,0,0.45);
+    font-size: 11px; color: #fff; white-space: nowrap; z-index: 50;
+    transition: opacity .5s; pointer-events: none;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 4px; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div class="speech-bubble" id="bubble"></div>
+<div class="name-tag" id="nametag"></div>
+
+<script>
+// ============================================================
+// PNGTuber 桌宠页（自包含实现，等价于 pngtuberRenderer.ts 的浏览器侧逻辑）
+//
+// 数据流：
+//   1. ipc 'pet:models:current' → { url }（指向 idle.png 的 file:// URL）；
+//   2. 从 idle.png 同目录推导 talking.png / blink.png / blink-talking.png；
+//   3. 预载帧 → 定时随机眨眼（若 blink 帧存在）→ 按说话状态切口型；
+//   4. 监听 'pet:command'：set-tooltip 显示气泡并切 talking，气泡消失后回 idle。
+// ============================================================
+(function () {
+  var ipc = null
+  try { ipc = require('electron').ipcRenderer } catch (e) {}
+  if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer } catch (e) {} }
+
+  var canvas = document.getElementById('stage')
+  var ctx = canvas.getContext('2d')
+  var bubble = document.getElementById('bubble')
+  var nametag = document.getElementById('nametag')
+  if (!ctx) { console.error('[PNGTuber] no 2d context'); return }
+
+  var frames = { idle: '', talking: '', blink: '', blinkTalking: '' }
+  var images = { idle: null, talking: null, blink: null, blinkTalking: null }
+  var hasBlink = false
+  var talking = false
+  var blinking = false
+  var bubbleTimer = null
+
+  var BLINK_MIN = 2200, BLINK_MAX = 6500, BLINK_HOLD = 140
+
+  function resize() {
+    canvas.width = canvas.clientWidth
+    canvas.height = canvas.clientHeight
+    draw()
+  }
+  window.addEventListener('resize', resize)
+
+  function dirOf(url) {
+    var i = Math.max(url.lastIndexOf('/'), url.lastIndexOf('\\'))
+    return i >= 0 ? url.slice(0, i + 1) : ''
+  }
+
+  function loadImage(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image()
+      img.onload = function () { resolve(img) }
+      img.onerror = function () { reject(new Error('load fail: ' + src)) }
+      img.src = src
+    })
+  }
+
+  function pickFrameKey() {
+    if (blinking && frames.blinkTalking && talking) { return 'blinkTalking' }
+    if (blinking && frames.blink) { return 'blink' }
+    return talking ? 'talking' : 'idle'
+  }
+
+  function draw() {
+    var w = canvas.width, h = canvas.height
+    ctx.clearRect(0, 0, w, h)
+    var key = pickFrameKey()
+    var img = images[key] || images.idle
+    if (!img || !img.naturalWidth) { return }
+    var targetH = h * 0.92
+    var scale = targetH / img.naturalHeight
+    var dw = img.naturalWidth * scale
+    var dh = img.naturalHeight * scale
+    ctx.drawImage(img, (w - dw) / 2, h - dh, dw, dh)
+  }
+
+  function scheduleBlink() {
+    if (!hasBlink) { return }
+    setTimeout(function () {
+      blinking = true
+      draw()
+      setTimeout(function () {
+        blinking = false
+        draw()
+        scheduleBlink()
+      }, BLINK_HOLD)
+    }, BLINK_MIN + Math.random() * (BLINK_MAX - BLINK_MIN))
+  }
+
+  function showSpeech(text) {
+    bubble.textContent = text
+    bubble.classList.add('show')
+    talking = true
+    draw()
+    if (bubbleTimer) { clearTimeout(bubbleTimer) }
+    bubbleTimer = setTimeout(function () {
+      bubble.classList.remove('show')
+      talking = false
+      draw()
+    }, 2600)
+  }
+
+  if (ipc) {
+    ipc.on('pet:command', function (_e, cmd) {
+      if (!cmd) { return }
+      if (cmd.type === 'set-tooltip' || cmd.type === 'set-text') { showSpeech(String(cmd.text || '')) }
+      if (cmd.type === 'set-opacity') { document.body.style.opacity = cmd.value }
+      if (cmd.type === 'set-click-through') { /* 与 Live2D 页一致，穿透模式提示由主进程处理 */ }
+    })
+    ipc.on('pet:name', function (_e, name) {
+      nametag.innerHTML = '<span class="status-dot"></span>' + String(name || 'Lumina')
+    })
+  }
+
+  async function boot() {
+    var current = null
+    if (ipc) { try { current = await ipc.invoke('pet:models:current') } catch (e) {} }
+    // 入口 url 指向 idle.png；同目录推导其余帧
+    var idleUrl = (current && current.url) || 'idle.png'
+    frames.idle = idleUrl
+    var dir = dirOf(idleUrl)
+    frames.talking = dir + 'talking.png'
+    frames.blink = dir + 'blink.png'
+    frames.blinkTalking = dir + 'blink-talking.png'
+
+    try { images.idle = await loadImage(frames.idle) }
+    catch (e) { console.error('[PNGTuber] idle 帧加载失败', e); return }
+    try { images.talking = await loadImage(frames.talking) }
+    catch (e) { console.warn('[PNGTuber] 缺 talking.png，保持 idle 帧', e); frames.talking = '' }
+
+    try {
+      images.blink = await loadImage(frames.blink)
+      images.blinkTalking = await loadImage(frames.blinkTalking)
+      hasBlink = true
+    } catch (e) {
+      hasBlink = false
+      frames.blink = ''; frames.blinkTalking = ''
+      console.info('[PNGTuber] 未提供眨眼帧，使用 2 态模式')
+    }
+
+    nametag.innerHTML = '<span class="status-dot"></span>' + String((current && current.name) || 'Lumina')
+    resize()
+    scheduleBlink()
+  }
+  boot()
+})()
+</script>
+</body>
+</html>
