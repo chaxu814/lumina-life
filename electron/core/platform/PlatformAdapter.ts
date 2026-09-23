@@ -80,6 +80,12 @@ export interface PlatformAdapter {
   screenshot(): Promise<ScreenCaptureResult>
 
   getActiveWindow(): Promise<ActiveWindowInfo | null>
+  /**
+   * 按标题子串查找窗口并使其前台 + 点击窗口中心聚焦内容区。
+   * 用于自主游玩闭环每轮确保键盘输入真正进入目标窗口（浏览器弹窗/翻译气泡会抢焦点）。
+   * 返回是否成功；平台未实现时由上层按 no-op 处理。
+   */
+  focusWindow?(titleSubstring: string): Promise<boolean>
   /** 可访问性元素树；Windows 有，其它平台返回空数组（说明见 capabilities.notes） */
   getUiaTree(): Promise<unknown[]>
 

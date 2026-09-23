@@ -220,6 +220,74 @@ export class WindowsAdapter implements PlatformAdapter {
     return { title, processName: proc, bounds: { x: x || 0, y: y || 0, w: w || 0, h: h || 0 } }
   }
 
+  async focusWindow(titleSubstring: string): Promise<boolean> {
+    if (!titleSubstring) {return false}
+    const needle = titleSubstring.replace(/'/g, "''")
+    const ps = [
+      "Add-Type @'",
+      'using System;using System.Runtime.InteropServices;using System.Text;',
+      'public class FW{',
+      'public delegate bool EnumProc(IntPtr h, IntPtr l);',
+      '[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);',
+      '[DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);',
+      '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+      '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r);',
+      '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);',
+      '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+      '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);',
+      '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);',
+      '[DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);',
+      '[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool on);',
+      '[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);',
+      '[DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, IntPtr e);',
+      '[StructLayout(LayoutKind.Sequential)] public struct R { public int L,T,Rr,B; }',
+      '}',
+      "'@",
+      `$needle='${needle}'`,
+      '$script:target=[IntPtr]::Zero',
+      '$script:rect=New-Object FW+R',
+      '$cb=[FW+EnumProc]{ param($h,$l)',
+      '  if ([FW]::IsWindowVisible($h)) {',
+      '    $sb=New-Object System.Text.StringBuilder 512',
+      '    $n=[FW]::GetWindowText($h,$sb,512)',
+      '    if ($n -gt 0 -and $sb.ToString().Contains($needle)) {',
+      '      $script:target=$h',
+      '      [void][FW]::GetWindowRect($h,[ref]$script:rect)',
+      '      return $false',
+      '    }',
+      '  }',
+      '  return $true',
+      '}',
+      '[void][FW]::EnumWindows($cb,[IntPtr]::Zero)',
+      'if ($script:target -eq [IntPtr]::Zero) { Write-Output "MISS"; exit }',
+      '$h=$script:target',
+      '# 最小化则先恢复（SW_RESTORE=9）',
+      '[void][FW]::ShowWindow($h,9)',
+      'if ([FW]::GetForegroundWindow() -ne $h) {',
+      '  $procId=[uint32]0',
+      '  $tid=[FW]::GetWindowThreadProcessId($h,[ref]$procId)',
+      '  $me=[uint32](Get-Process -Id $PID).Threads[0].Id',
+      '  [void][FW]::AttachThreadInput($me,$tid,$true)',
+      '  [void][FW]::BringWindowToTop($h)',
+      '  [void][FW]::SetForegroundWindow($h)',
+      '  [void][FW]::AttachThreadInput($me,$tid,$false)',
+      '}',
+      'Start-Sleep -Milliseconds 250',
+      '# 点击窗口中心聚焦内容区（浏览器游戏需要文档焦点）',
+      '$cx=[int](($script:rect.L+$script:rect.Rr)/2)',
+      '$cy=[int](($script:rect.T+$script:rect.B)/2)',
+      '[void][FW]::SetCursorPos($cx,$cy)',
+      'Start-Sleep -Milliseconds 120',
+      '[FW]::mouse_event(2,0,0,0,[IntPtr]::Zero)',
+      'Start-Sleep -Milliseconds 60',
+      '[FW]::mouse_event(4,0,0,0,[IntPtr]::Zero)',
+      'Start-Sleep -Milliseconds 250',
+      'Write-Output "OK"',
+    ]
+    const r = await runPS(ps, 12000)
+    return r.trim() === 'OK'
+  }
+
   async getUiaTree(): Promise<unknown[]> {
     // 真正的 UIA 元素扫描在 cuUia.ts（带缓存/ValuePattern）。
     // 这里仅作能力占位：Windows 上 uia=true，调用方应走 getUiaCache().scan()。
