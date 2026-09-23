@@ -273,6 +273,18 @@ const api = {
   dialogOpen: (options: any) =>
     ipcRenderer.invoke('dialog:open', options) as Promise<string | null>,
 
+  // ─── 任务工作区产物文件操作 ───────────────────────────────
+  artifactSave: (payload: { filename: string; content: string }) =>
+    ipcRenderer.invoke('artifact:save', payload) as Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }>,
+  artifactOpenInFolder: (filePath: string) =>
+    ipcRenderer.invoke('artifact:open-in-folder', filePath) as Promise<{ ok: boolean; error?: string }>,
+  artifactOpenExternal: (filePath: string) =>
+    ipcRenderer.invoke('artifact:open-external', filePath) as Promise<{ ok: boolean; error?: string }>,
+  artifactReadFile: (filePath: string) =>
+    ipcRenderer.invoke('artifact:read-file', filePath) as Promise<{
+      ok: boolean; dataUrl?: string; size?: number; mtime?: number; error?: string
+    }>,
+
   // ─── Agent API ──────────────────────────────────────────
   /** 发送消息给 Agent (多轮工具调用) */
   agentChat: (params: { text: string; config: AgentRunConfig; sessionId?: string; compactedContext?: string; conversationHistory?: Array<{ role: string; content: string }> }) =>
@@ -681,7 +693,6 @@ const api = {
 
   cuPolicyForeground: () =>
     ipcRenderer.invoke('cu-policy:foreground') as Promise<{ proc: string; title: string } | null>,
-
   // 跨平台能力矩阵：返回当前平台各功能是否可用 + 降级说明（platform:get-features）
   platformGetFeatures: () =>
     ipcRenderer.invoke('platform:get-features') as Promise<{ ok: boolean; matrix?: any; error?: string }>,
@@ -1182,6 +1193,23 @@ const api = {
   dataExportZip: () => ipcRenderer.invoke('data:export-zip') as Promise<any>,
   dataImportZip: () => ipcRenderer.invoke('data:import-zip') as Promise<any>,
   dataGetLocations: () => ipcRenderer.invoke('data:get-locations') as Promise<{ userData: string; memoryDb: string; flagsFile: string }>,
+  // ── 🤖 自定义 Agent (D5) ─────────────────────────────────
+  customAgentList: () =>
+    ipcRenderer.invoke('custom-agent:list') as Promise<{ ok: boolean; agents?: any[]; defaultLeaderId?: string; toolsets?: string[]; error?: string }>,
+  customAgentGet: (id: string) =>
+    ipcRenderer.invoke('custom-agent:get', id) as Promise<{ ok: boolean; agent?: any; soul?: string; error?: string }>,
+  customAgentCreate: (config: any) =>
+    ipcRenderer.invoke('custom-agent:create', config) as Promise<{ ok: boolean; agent?: any; error?: string }>,
+  customAgentUpdate: (id: string, updates: any) =>
+    ipcRenderer.invoke('custom-agent:update', id, updates) as Promise<{ ok: boolean; agent?: any; error?: string }>,
+  customAgentDelete: (id: string) =>
+    ipcRenderer.invoke('custom-agent:delete', id) as Promise<{ ok: boolean; error?: string }>,
+  customAgentReadSoul: (id: string) =>
+    ipcRenderer.invoke('custom-agent:read-soul', id) as Promise<{ ok: boolean; soul?: string; error?: string }>,
+  customAgentSetDefault: (id: string) =>
+    ipcRenderer.invoke('custom-agent:set-default', id) as Promise<{ ok: boolean; defaultLeaderId?: string; error?: string }>,
+  customAgentGetDefault: () =>
+    ipcRenderer.invoke('custom-agent:get-default') as Promise<{ ok: boolean; defaultLeaderId?: string }>,
 }
 
 contextBridge.exposeInMainWorld('luminaAPI', api)

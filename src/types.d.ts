@@ -472,6 +472,22 @@ declare global {
       dataExportZip: () => Promise<{ ok: boolean; zipPath?: string; bytes?: number; error?: string }>
       dataImportZip: () => Promise<{ ok: boolean; imported?: Record<string, number>; skipped?: Record<string, number>; error?: string }>
       dataGetLocations: () => Promise<{ userData?: string; memoryDb?: string; flagsFile?: string }>
+
+      // task workspace artifact file ops
+      artifactSave: (payload: { filename: string; content: string }) => Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }>
+      artifactOpenInFolder: (filePath: string) => Promise<{ ok: boolean; error?: string }>
+      artifactOpenExternal: (filePath: string) => Promise<{ ok: boolean; error?: string }>
+      artifactReadFile: (filePath: string) => Promise<{ ok: boolean; dataUrl?: string; size?: number; mtime?: number; error?: string }>
+      
+      // 🤖 自定义 Agent (D5)
+      customAgentList: () => Promise<{ ok: boolean; agents?: any[]; defaultLeaderId?: string; toolsets?: string[]; error?: string }>
+      customAgentGet: (id: string) => Promise<{ ok: boolean; agent?: any; soul?: string; error?: string }>
+      customAgentCreate: (config: any) => Promise<{ ok: boolean; agent?: any; error?: string }>
+      customAgentUpdate: (id: string, updates: any) => Promise<{ ok: boolean; agent?: any; error?: string }>
+      customAgentDelete: (id: string) => Promise<{ ok: boolean; error?: string }>
+      customAgentReadSoul: (id: string) => Promise<{ ok: boolean; soul?: string; error?: string }>
+      customAgentSetDefault: (id: string) => Promise<{ ok: boolean; defaultLeaderId?: string; error?: string }>
+      customAgentGetDefault: () => Promise<{ ok: boolean; defaultLeaderId?: string }>
     }
   }
 }

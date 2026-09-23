@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react'
 import AgentPanel from '../panels/AgentPanel'
+import CustomAgentPanel from '../panels/CustomAgentPanel'
 import SkillsPanel from '../panels/SkillsPanel'
 import UsagePanel from '../panels/UsagePanel'
 import DiagnosticsPanel from '../panels/DiagnosticsPanel'
@@ -19,6 +20,7 @@ import SettingsPanel from '../panels/SettingsPanel'
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
   { id: 'agent',       icon: '🤖', label: 'Agent 配置' },
+  { id: 'customAgent', icon: '🧩', label: '自定义 Agent' },
   { id: 'agentPool',   icon: '🏊', label: 'Agent' },
   { id: 'routing',     icon: '🧭', label: '路由' },
   { id: 'access',      icon: '🛡️', label: '权限' },
@@ -226,6 +228,7 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
           {/* 内容主体（可滚动） */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 20px' }}>
             {activeSection === 'agent'       && <AgentPanel embedded />}
+            {activeSection === 'customAgent' && <CustomAgentPanel embedded />}
             {activeSection === 'skills'      && <SkillsPanel embedded />}
             {activeSection === 'usage'       && <UsagePanel embedded />}
             {activeSection === 'diagnostics' && <DiagnosticsPanel />}

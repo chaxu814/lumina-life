@@ -69,6 +69,8 @@ import { initOrchestrator, getOrchestrator } from './core/agentOrchestrator'
 import { initAgentWorkspaceManager } from './agentWorkspaceManager'
 // ─── v10.0: 统一 LLM Provider 管理器 (QwenPaw 风格) ──────
 import { getProviderManager, registerProviderIpc } from './core/providerManager'
+import { registerOnboardingIpc } from './onboarding/onboardingIpc'
+import { registerCustomAgentIpc } from './ipc/customAgentIpc'
 // ─── v8.0: 真·多 Agent 独立 Runner ──────────────────────
 import { AgentRunner } from './agentRunner'
 import { TEAM_MEMBERS } from './agentTeamPersonas'
@@ -100,11 +102,13 @@ import { registerMCPIpc } from './ipc/mcpIpc'  // 🔌 v3.11
 import { registerDeepResearchIpc } from './ipc/deepResearchIpc'  // 🔬 v3.11
 import { registerCodingModeIpc } from './ipc/codingModeIpc'
 import { registerDiagnosticsIpc } from './ipc/diagnosticsIpc'
-import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'  // 🔍 I5: 沙箱透明审计
+import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'
+import { registerPlatformIpc } from './ipc/platformIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
 import { allFlags, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
 import { exportDataToZip, importDataFromZip, getDataLocations, defaultExportFileName } from './utils/dataExport'  // I6: 数据导出/导入
 import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系剧本
 import { registerLuckyModeIpc } from './ipc/luckyModeIpc'
+import { registerArtifactIpc } from './ipc/artifactIpc'  // task workspace artifact file ops
 import { initLuckyModeIntegration } from './luckyModeIntegration'
 import { initPanelRegistry, getPanelRegistry, listPanels } from './panelRegistry'
 import { startConfigWatcher, stopConfigWatcher } from './configWatcher'
@@ -359,6 +363,23 @@ const isAPIMode = process.env.LUMINA_API_ENABLED === '1'
 // 🔔 Windows Toast 通知身份（与 electron-builder appId 一致，否则打包后通知可能不显示）
 app.setAppUserModelId('com.lumina.desktop-pet')
 
+// ── 单实例锁：防止双击启动多个实例 ──────────────────────
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  console.log('[main] 已有实例在运行，退出当前实例')
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    // 第二个实例启动时，聚焦已有窗口
+    const wins = BrowserWindow.getAllWindows()
+    for (const w of wins) {
+      if (w.isMinimized()) { w.restore() }
+      w.show()
+      w.focus()
+    }
+  })
+}
+
 // ==================??// 应用生命周期
 // ==================??
 app.whenReady().then(async () => {
@@ -570,11 +591,15 @@ for (const { id } of orch.listRunners()) {
   registerBridgeIpc(mainWindow)
   registerSystemIpc(mainWindow)
   registerSttModelIpc(() => mainWindow)          // 🎙 离线语音模型（whisper-base 多语种/中文）
-  registerProviderIpc()                               // 📡 v10.0: 统一 Provider IPC
+  registerProviderIpc()
+  registerOnboardingIpc()                                 // 🧭 Setup Wizard: 首次启动引导
+  registerCustomAgentIpc()                                // 🤖 自定义 Agent 管理                               // 📡 v10.0: 统一 Provider IPC
   registerTeamIpc()                                   // 🆕 v2.6: AI 小团队系统 IPC
   registerTeamCollabIpc()                             // 🤝 v3.20: 信箱/任务板/动态 worker/CU 策略
   registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
+  registerPlatformIpc()
+  registerArtifactIpc(() => mainWindow)            // task workspace artifact file ops                                 // cross-platform feature matrix IPC
   ipcMain.handle('feature-flags:get-all', () => allFlags())  // I7: 全量功能开关
   ipcMain.handle('feature-flags:set', (_e, key: string, value: boolean) => { setFeatureFlag(key as any, !!value); return { ok: true, key, value } })  // I7: 写回开关
   ipcMain.handle('data:get-locations', () => getDataLocations())  // I6: 本机数据位置
