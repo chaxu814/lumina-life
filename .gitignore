@@ -113,6 +113,8 @@ dist-ts/
 
 # ── Screenshots / Images (user-generated) ────────────────────
 screenshots/
+# 本地验证/演示截图（可能含真实桌面、聊天与隐私，禁止提交；整目录忽略）
+shots/
 *.png
 *.jpg
 *.jpeg
@@ -175,10 +177,16 @@ docs/_shots/
 docs/_ref/
 
 # ── Internal analysis / audit artifacts (NOT for public repo) ──
+# 所有模式均限定仓库根目录（前导 /），避免误伤 docs/ 与正常源码
 artifacts/
-Lumina-发布前深度竞品评测-*.html
-Lumina-竞品对比分析-*.md
-Lumina竞品深度对比分析*.html
+/Lumina-*.html
+/Lumina-*.md
+/Lumina vs *.md
+/Lumina今日工作总结*.md
+/*报告-*.md
+/*总览-*.html
+/*总览-*.md
+/draft_*/
 
 # ── VitePress build output (regenerated on deploy) ──
 docs/.vitepress/dist/
