@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -847,6 +847,18 @@ function gazeFrame() {
   gazeState.nextIdle = now + 1600 + Math.random() * 2600;
 }
 function gazeCenter() { const fc = focusControllerOf(); if (fc) fc.focus(0, 0, false); }
+
+// 👀 v6.2 全屏注视（fullscreenTrack）：主进程每 100ms 推送全局鼠标坐标。
+// 桌宠窗口透明置顶、鼠标多数时间在别的应用上，document.mousemove 收不到；
+// 这里把主进程换算好的相对窗口坐标交给同一个 driveGaze，让她在任何应用上都"看着"鼠标。
+try {
+  ipc.on('pet:cursor', (_e, c) => {
+    try {
+      if (!c || !c.active || prefs.mouseTrack === false) { gazeCenter(); return; }
+      driveGaze(c.x, c.y);
+    } catch (err) { /* 模型未就绪时忽略 */ }
+  });
+} catch (err) { /* 非 Electron 环境（浏览器预览）无 ipc */ }
 
 let userScale = 1;
 function fitScale() {
@@ -1842,7 +1854,71 @@ function applyHoverFade() {
   document.body.style.opacity = '1';
 }
 
-/* ── 拖拽移动模型 ────────────────────────────────────────── */
+/* ── 🎯 身体部位命中交互（任务三）────────────────────────── */
+// 点击模型不同部位给不同表情/动作/气泡，让她有「被摸头」的生命体感。
+// 用 pixi 标准 model.hitAreaTest 做真实命中检测；模型没定义 HitAreas 时整体退回「点击开聊天窗」。
+const HIT_AREA_REACTIONS = {
+  Head:  { face: 'happy',    motion: 'TapBody', line: '摸头~好舒服~' },
+  Body:  { face: 'surprise', motion: 'TapBody', line: '干嘛啦~' },
+};
+const HIT_DEBOUNCE_MS = 3000;            // 同一部位 3 秒内重复点击不重复触发
+const _lastHitAt = {};
+
+/** 把客户坐标转成模型本地坐标（pixi 标准 toLocal） */
+function toModelLocal(x, y) {
+  try {
+    if (!model || !window.PIXI) return null;
+    return model.toLocal(new PIXI.Point(x, y));
+  } catch (e) { return null; }
+}
+
+/** 列出模型在 .model3.json 里定义的命中区名（Cubism4: settings.hitAreas），失败返回空 */
+function getModelHitAreaNames() {
+  const names = [];
+  try {
+    const settings = model && model.internalModel && model.internalModel.settings;
+    if (settings && Array.isArray(settings.hitAreas)) {
+      for (const h of settings.hitAreas) { if (h && h.name) names.push(h.name); }
+    }
+  } catch (e) {}
+  return names;
+}
+
+/** 测试点击落在哪个命中区，返回规范化名（Head/Body）或 null */
+function detectHitArea(x, y) {
+  if (!model || typeof model.hitAreaTest !== 'function') return null;
+  const local = toModelLocal(x, y);
+  if (!local) return null;
+  // 先试模型真实定义的命中区名，再退到常见别名（大小写都试）
+  const candidates = getModelHitAreaNames().concat(['Head', 'head', 'Body', 'body']);
+  for (const name of candidates) {
+    try { if (model.hitAreaTest(name, local.x, local.y)) return name; } catch (e) {}
+  }
+  return null;
+}
+
+/** 命中后给表情+动作+气泡；3 秒防抖。命中已知部位返回 true，否则 false */
+function reactToHitArea(area, x, y) {
+  const now = Date.now();
+  if (_lastHitAt[area] && now - _lastHitAt[area] < HIT_DEBOUNCE_MS) return true; // 防抖：已处理
+  _lastHitAt[area] = now;
+  const norm = /head/i.test(area) ? 'Head' : (/body/i.test(area) ? 'Body' : null);
+  const rx = norm ? HIT_AREA_REACTIONS[norm] : null;
+  if (!rx) return false;
+  // 表情持续 2.5s 后恢复平静
+  try { setFace(rx.face); } catch (e) {}
+  clearTimeout(window._hitFaceTimer);
+  window._hitFaceTimer = setTimeout(() => { try { setFace('calm'); } catch (e) {} }, 2500);
+  // 动作（模型无 TapBody 组时 playRandomMotion 返回 false，静默跳过）
+  try { playRandomMotion(rx.motion); } catch (e) {}
+  // 气泡台词
+  try { say(rx.line); } catch (e) {}
+  // IPC 通知主进程（本轮不做处理，只发事件留扩展接口）
+  if (HAS_IPC) { try { ipc.send('pet:hit-area', { area: norm, x, y }); } catch (e) {} }
+  return true;
+}
+
+/* ── 拖拽移动模型 ────────────────────────────────────────── *//* ── 拖拽移动模型 ────────────────────────────────────────── */
 let dragging = false, dragMoved = 0, dragOffX = 0, dragOffY = 0, winGrabX = 0, winGrabY = 0;
 function fromUi(e) { return !!(e.target && e.target.closest && (e.target.closest('#chat-panel') || e.target.closest('#pet-menu') || e.target.closest('#neko-toolbar') || e.target.closest('#tb-collapsed') || e.target.closest('.nk-panel'))); }
 document.getElementById('pet-container').addEventListener('mousedown', (e) => {
@@ -1851,6 +1927,7 @@ document.getElementById('pet-container').addEventListener('mousedown', (e) => {
   if (!overModel(e.clientX, e.clientY)) return;
   if (state.locked) { say('我被固定住啦喵~'); return; }  // 🔒 锁定时禁止拖拽
   dragging = true; dragMoved = 0;
+  try { setFace('surprise'); } catch (e) {}  // 🎯 任务三：被拎起来的表情
   dragOffX = e.clientX - model.x; dragOffY = e.clientY - model.y;
   winGrabX = e.clientX; winGrabY = e.clientY; // compact：抓取点在窗口内偏移
   state.walking = false;
@@ -1873,6 +1950,8 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
+  try { setFace('calm'); } catch (e) {}  // 🎯 任务三：放下后恢复表情
+  if (dragMoved > 100) { try { say('呀~被放下来啦'); } catch (e) {} }  // 大距离拖拽反应
   if (isCompactPet()) {
     if (HAS_IPC && dragMoved > 4) ipc.send('pet:window-move-end');
     if (dragMoved > 4) { state.lastPlaceAt = Date.now(); sendEvent('drag-end'); }
@@ -1892,6 +1971,12 @@ document.getElementById('pet-container').addEventListener('click', (e) => {
   if (dragMoved > 4) return;
   if (chatJustDragged) return;  // 刚拖完聊天框，不触发
   if (!overModel(e.clientX, e.clientY)) return;
+  // 🎯 任务三：先做身体部位命中检测；命中头/身体给生命体反应，不再开聊天窗
+  const hitArea = detectHitArea(e.clientX, e.clientY);
+  if (hitArea && reactToHitArea(hitArea, e.clientX, e.clientY)) {
+    sendEvent('click', { x: e.clientX, y: e.clientY, area: hitArea });
+    return;
+  }
   openChatWindow();
   sendEvent('click', { x: e.clientX, y: e.clientY });
 });
@@ -2358,7 +2443,13 @@ function bindAudioPanel() {
   $('ap-ss').onchange = e => livePref({ screenShare: e.target.checked });
   $('ap-vr').onchange = e => { livePref({ voiceRecognition: e.target.checked }); $('ap-vr-hint').textContent = e.target.checked ? '当前使用语音识别中…' : '点击开启'; };
   $('ap-spatial').onchange = e => livePref({ spatial: e.target.checked });
-  $('ap-voice').onchange = e => livePref({ voiceOn: e.target.checked });
+  $('ap-voice').onchange = e => {
+    livePref({ voiceOn: e.target.checked });
+    // v6.2 开 AI 语音时引导全双工（可随时打断她），但不自动开麦（隐私优先）
+    if (e.target.checked && !(prefs.life && prefs.life.fullDuplex)) {
+      try { say('想开全双工、随时打断我的话，打开下面「全双工实时对话」就好~'); } catch (err) {}
+    }
+  };
   const fd = $('ap-fullduplex');
   if (fd) fd.onchange = e => {
     setFullDuplex(e.target.checked);
@@ -3030,16 +3121,92 @@ setInterval(() => {
   if (prefs.naturalExpression !== false && Math.random() < 0.3) naturalMicroExpression();
 }, 6000);
 
+/* ── 模型加载（支持 ?model= query param + 运行时热切换）── */
+const MODEL_PATHS = { Mao: 'assets/Mao/mao_pro.model3.json' };
+
+/** 从 URL query 读取 ?model= 参数（由主进程 getRendererHtmlPath 注入） */
+function readModelQueryParam() {
+  try {
+    const params = new URLSearchParams(location.search)
+    const m = params.get('model')
+    return m ? decodeURIComponent(m) : null
+  } catch (e) { return null }
+}
+
+/** 销毁当前模型并释放 WebGL 资源 */
+async function destroyCurrentModel() {
+  try {
+    if (model && app) {
+      app.stage.removeChild(model)
+      model.destroy({ children: true, texture: true, baseTexture: true })
+    }
+  } catch (e) { console.warn('[Pet] 销毁旧模型失败:', e) }
+  model = null
+}
+
+/** 加载指定 URL 的 Live2D 模型到舞台 */
+async function loadModelByUrl(url, displayName) {
+  await destroyCurrentModel()
+  reportProgressLocal(50, '正在加载模型…')
+  try {
+    const m = await Live2DModel.from(url, { autoInteract: false, autoFocus: false })
+    model = m
+    state.name = displayName || 'Mao'
+    // N.E.K.O 遮罩修复
+    if (model.internalModel && model.internalModel.renderer && model.internalModel.renderer._clippingManager) {
+      model.internalModel.renderer._clippingManager._renderTextureCount = 3;
+      if (typeof model.internalModel.renderer._clippingManager.initialize === 'function') {
+        model.internalModel.renderer._clippingManager.initialize(
+          model.internalModel.coreModel, model.internalModel.coreModel.getDrawableCount(),
+          model.internalModel.coreModel.getDrawableMasks(), model.internalModel.coreModel.getDrawableMaskCounts(), 3
+        )
+      }
+    }
+    app.stage.addChild(model)
+    try { model.on('beforeModelUpdate', gazeFrame); } catch (e) {}
+    try { gazeState.lastMove = 0; gazeState.nextIdle = 0; } catch (e) {}
+    try { model.anchor.set(0.5, 0.5); } catch (e) {}
+    state.naturalW = model.width || 300; state.naturalH = model.height || 300;
+    applyScale()
+    model.x = innerWidth / 2; state.targetX = innerWidth / 2;
+    clampPosition()
+    positionOverlays()
+    try { window.__live2dModel = model; } catch (e) {}
+    initMotionSystem()
+    return true
+  } catch (e) {
+    console.warn('[Pet] 模型加载失败:', url, e)
+    return false
+  }
+}
+
+function reportProgressLocal(p, s) { if (HAS_IPC) try { ipc.send('pet:startup-progress', { progress: p, stage: s }); } catch(e){} }
+
 /* ── 启动 ────────────────────────────────────────────────── */
 async function boot() {
-  const reportProgress = (p, s) => { if (HAS_IPC) try { ipc.send('pet:startup-progress', { progress: p, stage: s }); } catch(e){} };
+  const reportProgress = (p, s) => reportProgressLocal(p, s);
   reportProgress(20, '正在初始化渲染引擎…');
   if (!initPixi()) { showPetError('渲染器初始化失败，请检查控制台'); return; }
   startRenderLoop();
   reportProgress(35, '正在读取配置…');
-  const MODEL_PATHS = { Mao: 'assets/Mao/mao_pro.model3.json' };
   let currentModel = { id: 'Mao', name: 'Mao', url: MODEL_PATHS.Mao };
+  // 优先从 query param 读取模型入口（主进程 getRendererHtmlPath 注入）
+  const qp = readModelQueryParam()
+  if (qp) {
+    // query param 是 entryRel，需要转成可加载 URL
+    if (qp === '__cat__') {
+      // 猫宠不该走 live2d 页，兜底 Mao
+      currentModel = { id: 'Mao', name: 'Mao', url: MODEL_PATHS.Mao }
+    } else if (qp.startsWith('Mao/')) {
+      currentModel = { id: 'Mao', name: 'Mao', url: 'assets/' + qp }
+    } else {
+      // 自定义模型：主进程会通过 pet:models:current 返回 file:// URL
+      currentModel = { id: 'custom', name: qp.split('/').pop() || 'custom', url: null }
+    }
+  }
   if (HAS_IPC) { try { const cm = await ipc.invoke('pet:models:current'); if (cm && cm.url) currentModel = cm; } catch (e) {} }
+  // 如果 query param 指定了模型但 IPC 返回了 URL，优先用 IPC 的 URL（更完整）
+  if (!currentModel.url) { currentModel.url = MODEL_PATHS.Mao }
   const candidates = [currentModel.url, MODEL_PATHS.Mao];
   let loaded = false;
   reportProgress(50, '正在加载 Live2D 模型…');
@@ -3051,7 +3218,13 @@ async function boot() {
       break;
     } catch (e) { console.warn('[Pet] 模型加载失败，尝试下一个:', src, e); }
   }
-  if (!loaded) { showPetError('模型加载失败，请检查 assets 目录'); reportProgress(0, '模型加载失败'); return; }
+  if (!loaded) {
+    showPetError('模型加载失败，回退内置 Mao');
+    reportProgress(0, '模型加载失败');
+    // 通知主进程回退
+    if (HAS_IPC) try { ipc.send('pet:model-load-failed', { error: '所有候选模型均加载失败' }); } catch(e){}
+    return;
+  }
   reportProgress(80, '正在初始化模型…');
 
   // N.E.K.O 遮罩修复
@@ -3097,6 +3270,22 @@ async function boot() {
   startAutoBehavior();
   reportProgress(100, '启动完成喵~');
 }
+  // 运行时热切换模型（同 kind 不重载窗口，更快）
+  if (HAS_IPC) {
+    ipc.on('pet:load-model', async (_e, info) => {
+      try {
+        if (!info || !info.url) { return }
+        console.log('[Pet] 热切换模型:', info.modelId, info.url)
+        const ok = await loadModelByUrl(info.url, info.modelId || 'Mao')
+        if (!ok) {
+          ipc.send('pet:model-load-failed', { modelId: info.modelId, error: '热切换加载失败' })
+        }
+      } catch (e) {
+        console.warn('[Pet] pet:load-model 处理异常:', e)
+      }
+    })
+  }
+
 setInterval(fetchEmotion, 15000);
 window.addEventListener('resize', () => {
   applyScale();

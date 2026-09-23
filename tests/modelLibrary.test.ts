@@ -91,15 +91,14 @@ describe('modelLibrary 模型库', () => {
 
 import { isRenderable, unsupportedReason, readyKinds } from '../electron/pet/avatarRenderer'
 describe('avatarRenderer 能力声明', () => {
-  it('live2d 与 vrm 可渲染，mmd/pngtuber 为 roadmap', () => {
-    expect(readyKinds()).toEqual(['live2d', 'vrm'])
+  it('所有五种形态均可渲染（mmd 为 beta）', () => {
+    expect(readyKinds().sort()).toEqual(['cat', 'live2d', 'mmd', 'pngtuber', 'vrm'].sort())
     expect(isRenderable('live2d')).toBe(true)
     expect(isRenderable('vrm')).toBe(true)
+    expect(isRenderable('pngtuber')).toBe(true)
+    expect(isRenderable('mmd')).toBe(true)
+    expect(isRenderable('cat')).toBe(true)
     expect(isRenderable(undefined)).toBe(true) // 向后兼容
-    for (const k of ['mmd', 'pngtuber'] as const) {
-      expect(isRenderable(k)).toBe(false)
-      expect(unsupportedReason(k)).toBeTruthy()
-    }
     expect(unsupportedReason('live2d')).toBeNull()
     expect(unsupportedReason('vrm')).toBeNull()
   })

@@ -10,8 +10,9 @@
 //   - 统一事件通道: pet:event / pet:command
 // ============================================================
 
-import { BrowserWindow, app, screen, ipcMain, desktopCapturer } from 'electron'
-import { registerLifeServicesIpc, decideScreenCapture, rememberScreenEpisode } from './lifeServices'
+import { BrowserWindow, app, screen, ipcMain, desktopCapturer, globalShortcut } from 'electron'
+import { registerLifeServicesIpc, decideScreenCapture, rememberScreenEpisode, loadLibrary } from './lifeServices'
+import { describeScreenViaVlm } from './vision/screenVision'
 import * as path from 'path'
 import * as fs from 'fs'
 import { getAgentConfig } from '../agentConfig'
@@ -20,6 +21,10 @@ import { detectScene } from '../sceneDetector'
 import { getProviderManager } from '../core/providerManager'
 import { currentPlatformCaps } from './platformCaps'
 import { isEnabled as isFlagEnabled, allFlags as allPetFlags } from '../core/featureFlags'
+import type { AvatarKind } from './modelLibrary'
+import { BUILTIN_MODELS, getActiveModel, setActiveModel } from './modelLibrary'
+import { getRendererForKind, fallbackToBuiltin, guessKindFromEntry } from './avatarRenderer'
+import { detectEdge, calcPeekPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig } from './edgeSnap'
 
 /**
  * 桌宠"大脑"LLM 配置解析：
@@ -178,7 +183,7 @@ export interface PetPrefs {
 const DEFAULT_PREFS: PetPrefs = {
   persona: '', onboardingDone: true,
   bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
-  mouseTrack: true, fullscreenTrack: false, fps: 30, quality: 'high',
+  mouseTrack: true, fullscreenTrack: true, fps: 30, quality: 'high',
   voiceOn: false, volume: 100, spatial: true,
   breathing: false, hoverFade: false, dropEffects: true, naturalExpression: true,
   autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
@@ -258,6 +263,46 @@ function persistPetModel(model: string): void {
 let restartAttempts = 0
 let crashRecoveryTimer: ReturnType<typeof setTimeout> | null = null
 let lastInteractionTime = Date.now()
+// 👀 v6.2 全屏注视（fullscreenTrack）：桌宠窗口透明置顶、鼠标绝大多数时间在别的应用上，
+// 仅靠窗口内 document.mousemove 拿不到坐标，她的眼睛只在鼠标划过角色时才动。
+// 主进程每 100ms 读一次全局鼠标（screen.getCursorScreenPoint），换算成相对桌宠窗口的
+// CSS 像素坐标推给渲染层 driveGaze，让她在 compact 小窗口里也能"一直看着"鼠标。
+let cursorFollowTimer: ReturnType<typeof setInterval> | null = null
+let lastCursor = { x: 0, y: 0, sent: false }
+
+/** 启动全局鼠标注视推送（幂等；窗口关闭时由 closed 清理） */
+function startCursorFollow(): void {
+  if (cursorFollowTimer) {return}
+  cursorFollowTimer = setInterval(() => {
+    try {
+      const win = petWindow
+      if (!win || win.isDestroyed()) {return}
+      const prefs = getPetPrefs()
+      const deactivate = () => {
+        if (lastCursor.sent) {win.webContents.send('pet:cursor', { x: 0, y: 0, inWindow: false, active: false }); lastCursor.sent = false}
+      }
+      // 鼠标追踪总开关关闭 → 回正并停推
+      if (prefs.mouseTrack === false) {deactivate(); return}
+      // 全屏追踪（默认开）；fullscreenTrack===false 时只跟窗口内（由 document.mousemove 负责）
+      if (prefs.fullscreenTrack === false) {deactivate(); return}
+      const pt = screen.getCursorScreenPoint()
+      const b = win.getBounds()
+      const cx = pt.x - b.x
+      const cy = pt.y - b.y
+      const inWindow = pt.x >= b.x && pt.x <= b.x + b.width && pt.y >= b.y && pt.y <= b.y + b.height
+      // 鼠标在窗口内时，渲染层 document.mousemove 已负责，避免重复
+      if (inWindow) {deactivate(); return}
+      win.webContents.send('pet:cursor', { x: cx, y: cy, inWindow: false, active: true })
+      lastCursor.sent = true
+    } catch { /* 窗口销毁瞬间忽略 */ }
+  }, 100)
+}
+
+/** 停止全局鼠标注视推送 */
+function stopCursorFollow(): void {
+  if (cursorFollowTimer) {clearInterval(cursorFollowTimer); cursorFollowTimer = null}
+  lastCursor.sent = false
+}
 
 // ── 互动历史（LLM 自主思考心跳的上下文）─────────────────────
 const recentEvents: Array<{ type: string; ts: number }> = []
@@ -773,29 +818,64 @@ function getPetHtmlPath(): string {
   return petHtmlPath
 }
 
-/** 读取当前选中模型的形态（内置 Mao / 旧清单均视为 live2d） */
-function currentModelKind(): 'live2d' | 'vrm' {
+/** 读取当前选中模型的形态（内置 Mao=live2d / Cat=cat；其余从库记录推断） */
+function currentModelKind(): AvatarKind {
   try {
+    const id = getActiveModel(app.getPath('userData'))
+    // 内置模型优先判断
+    const builtin = BUILTIN_MODELS.find(b => b.id === id)
+    if (builtin) {return (builtin.kind as AvatarKind) || 'live2d'}
     const libPath = path.join(app.getPath('userData'), 'pet-model-library.json')
     if (!fs.existsSync(libPath)) {return 'live2d'}
     const data = JSON.parse(fs.readFileSync(libPath, 'utf8'))
-    const id = data?.currentId
-    if (!id || id === 'Mao') {return 'live2d'}
     const entry = Array.isArray(data?.custom) ? data.custom.find((c: any) => c.id === id) : null
-    return entry?.kind === 'vrm' ? 'vrm' : 'live2d'
+    if (entry?.kind) {return entry.kind as AvatarKind}
+    if (entry?.entryRel) {return guessKindFromEntry(entry.entryRel)}
+    return 'live2d'
   } catch {
     return 'live2d'
   }
 }
 
-/** 按当前模型形态选择渲染页：VRM 用 pet-vrm.html，其余用 Live2D 的 pet.html */
+/** 获取当前模型的 entryRel（相对 pet-assets 或 pet-models 的入口路径） */
+function currentModelEntryRel(): string {
+  try {
+    const id = getActiveModel(app.getPath('userData'))
+    const builtin = BUILTIN_MODELS.find(b => b.id === id)
+    if (builtin) {return builtin.entryRel}
+    const libPath = path.join(app.getPath('userData'), 'pet-model-library.json')
+    if (!fs.existsSync(libPath)) {return 'Mao/mao_pro.model3.json'}
+    const data = JSON.parse(fs.readFileSync(libPath, 'utf8'))
+    const entry = Array.isArray(data?.custom) ? data.custom.find((c: any) => c.id === id) : null
+    return entry?.entryRel || 'Mao/mao_pro.model3.json'
+  } catch {
+    return 'Mao/mao_pro.model3.json'
+  }
+}
+
+/**
+ * 按当前模型形态选择渲染页。
+ * 对 live2d 页附加 ?model=entryRel 查询参数，让页面知道加载哪个模型（同 kind 切换无需重载窗口）。
+ */
 function getRendererHtmlPath(): string {
   const live2d = getPetHtmlPath() // 同时确保资源已复制
-  if (currentModelKind() === 'vrm') {
-    const vrm = path.join(path.dirname(live2d), 'pet-vrm.html')
-    if (fs.existsSync(vrm)) {return vrm}
+  const dir = path.dirname(live2d)
+  const kind = currentModelKind()
+  const entryRel = currentModelEntryRel()
+  const info = getRendererForKind(kind)
+  const htmlFile = info.htmlFile
+
+  // live2d 页拷贝到 userData 时固定命名为 pet.html；其余渲染页用原名
+  if (kind === 'live2d') {
+    // 附加 model query 参数
+    const sep = live2d.includes('?') ? '&' : '?'
+    return live2d + sep + 'model=' + encodeURIComponent(entryRel)
   }
-  return live2d
+  const candidate = path.join(dir, htmlFile)
+  if (fs.existsSync(candidate)) {return candidate}
+  console.warn('[PetWindow] 渲染页 ' + htmlFile + ' 未找到，回退 Live2D 页')
+  const sep2 = live2d.includes('?') ? '&' : '?'
+  return live2d + sep2 + 'model=' + encodeURIComponent(entryRel)
 }
 
 /**
@@ -847,10 +927,25 @@ function copyPetAssets(dir: string): void {
     if (fs.existsSync(vrmSrc)) {
       fs.copyFileSync(vrmSrc, path.join(dir, 'pet-vrm.html'))
     }
-    // 复制独立聊天窗口页（可拖到屏幕任意位置）
+    // 复制 PNGTuber 立绘渲染页（自包含 canvas，无需额外 JS 包）
+    const pngSrc = path.join(src, 'pet-pngtuber.html')
+    if (fs.existsSync(pngSrc)) {
+      fs.copyFileSync(pngSrc, path.join(dir, 'pet-pngtuber.html'))
+    }
+    // 独立聊天窗口页（可拖到屏幕任意位置）
     const chatSrc = path.join(src, 'pet-chat.html')
     if (fs.existsSync(chatSrc)) {
       fs.copyFileSync(chatSrc, path.join(dir, 'pet-chat.html'))
+    }
+    // MMD 3D 渲染页（beta，three.js MMDLoader）
+    const mmdSrc = path.join(src, 'pet-mmd.html')
+    if (fs.existsSync(mmdSrc)) {
+      fs.copyFileSync(mmdSrc, path.join(dir, 'pet-mmd.html'))
+    }
+    // 程序化猫宠渲染页（Canvas 2D，无外部素材）
+    const catSrc = path.join(src, 'pet-cat.html')
+    if (fs.existsSync(catSrc)) {
+      fs.copyFileSync(catSrc, path.join(dir, 'pet-cat.html'))
     }
   } catch (e: any) {
     console.error('[PetWindow] copyPetAssets error:', e)
@@ -920,6 +1015,88 @@ function clampWindowPos(x: number, y: number, w: number, h: number): { x: number
   }
 }
 
+/** 把模型 entryRel 转成渲染页可直接加载的 URL（builtin=相对路径，custom=file:// URL） */
+function resolveModelUrlForRenderer(modelId: string, entryRel: string): string {
+  const builtin = BUILTIN_MODELS.find(b => b.id === modelId)
+  if (builtin) {return 'assets/' + builtin.entryRel.replace(/^\/+/, '')}
+  const { pathToFileURL } = require('url')
+  const modelsRoot = path.join(app.getPath('userData'), 'pet-models')
+  return pathToFileURL(path.join(modelsRoot, entryRel)).href
+}
+
+// ── 屏幕边缘吸附 + 窥视状态 ──────────────────────────────────
+let edgeSnapConfig: EdgeSnapConfig = { ...DEFAULT_EDGE_SNAP }
+let peekState: { active: boolean; edge: string | null } = { active: false, edge: null }
+let edgeSnapTimer: ReturnType<typeof setInterval> | null = null
+
+/** 拖拽结束后检测边缘并吸附 */
+function handleEdgeSnapOnMoveEnd(): void {
+  if (!petWindow || petWindow.isDestroyed()) {return}
+  if (!edgeSnapConfig.enabled) {return}
+  // Wayland/Linux 受限环境检测（X11 下 screen API 可用）
+  const display = screen.getDisplayMatching(petWindow.getBounds())
+  const wa = display.workArea || display.bounds
+  const [w, h] = petWindow.getSize()
+  const [x, y] = petWindow.getPosition()
+  const edge = detectEdge(x, y, w, h, wa.width, wa.height, wa.x, wa.y)
+  if (edge) {
+    const pos = calcPeekPosition(edge, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
+    petWindow.setPosition(pos.x, pos.y)
+    peekState = { active: true, edge }
+    startEdgeSnapWatch()
+  } else {
+    peekState = { active: false, edge: null }
+    stopEdgeSnapWatch()
+  }
+}
+
+/** 鼠标靠近时滑出，离开时缩回窥视态 */
+function startEdgeSnapWatch(): void {
+  if (edgeSnapTimer) {return}
+  edgeSnapTimer = setInterval(() => {
+    if (!petWindow || petWindow.isDestroyed() || !peekState.active) {return}
+    try {
+      const pt = screen.getCursorScreenPoint()
+      const b = petWindow.getBounds()
+      const display = screen.getDisplayMatching(b)
+      const wa = display.workArea || display.bounds
+      const hovering = shouldSlideOut(pt.x, pt.y, b.x, b.y, b.width, b.height, edgeSnapConfig.mouseThreshold)
+      if (hovering && peekState.active) {
+        // 滑出到完整位置（屏幕中央偏侧边）
+        const fullX = peekState.edge === 'left' ? wa.x + 12
+          : peekState.edge === 'right' ? wa.x + wa.width - b.width - 12
+          : b.x
+        const fullY = peekState.edge === 'top' ? wa.y + 12
+          : peekState.edge === 'bottom' ? wa.y + wa.height - b.height - 12
+          : b.y
+        petWindow.setPosition(fullX, fullY)
+        peekState.active = false
+      } else if (!hovering && !peekState.active) {
+        // 鼠标远离，缩回窥视态
+        const [w, h] = petWindow.getSize()
+        const pos = calcPeekPosition(peekState.edge as any, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
+        petWindow.setPosition(pos.x, pos.y)
+        peekState.active = true
+      }
+    } catch { /* ignore */ }
+  }, 200)
+}
+function stopEdgeSnapWatch(): void {
+  if (edgeSnapTimer) {clearInterval(edgeSnapTimer); edgeSnapTimer = null}
+}
+
+/** 双击/快捷键复位到屏幕中央 */
+function resetPetToCenter(): void {
+  if (!petWindow || petWindow.isDestroyed()) {return}
+  const [w, h] = petWindow.getSize()
+  const display = screen.getDisplayMatching(petWindow.getBounds())
+  const wa = display.workArea || display.bounds
+  const pos = resetPosition(w, h, wa.width, wa.height, wa.x, wa.y)
+  petWindow.setPosition(pos.x, pos.y)
+  peekState = { active: false, edge: null }
+  stopEdgeSnapWatch()
+}
+
 export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow | null {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.show()
@@ -932,7 +1109,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   const display = screen.getPrimaryDisplay()
   // v6.4：Windows 默认 compact 物理小窗口（只包住角色，不压制 MPO，后方视频不黑屏）；其余平台仍是全屏舞台
   // compact 目前只适配 Live2D（pet-live2d.html）；自定义 VRM 形态暂回退全屏，避免小窗口布局错乱
-  const isCompact = compactPetWindowEnabled() && currentModelKind() !== 'vrm'
+  const isCompact = compactPetWindowEnabled() && currentModelKind() !== 'vrm' && currentModelKind() !== 'mmd'
   // 小屏（如 1366x768）保护：紧凑尺寸不超过工作区
   const _wa = display.workArea
   const winW = isCompact ? Math.min(PET_WINDOW_W, _wa.width - 20) : display.bounds.width
@@ -1003,6 +1180,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   // 加载生成的 HTML（按当前模型形态选择 Live2D / VRM 渲染页）
   petWindow.loadFile(getRendererHtmlPath()).then(() => {
     setWindowClickThrough(config.clickThrough)
+    startCursorFollow() // 👀 v6.2 全屏注视推送
   }).catch(err => {
     console.error('[PetWindow] loadFile failed:', err)
   })
@@ -1010,6 +1188,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   // ── 窗口事件 ──────────────────────────────────────
   petWindow.on('closed', () => {
     console.log('[PetWindow] 🐱 桌宠窗口已关闭')
+    stopCursorFollow()
     petWindow = null
     // 自动恢复
     if (petEnabled && config.autoRestart && restartAttempts < MAX_RESTART_ATTEMPTS) {
@@ -1180,12 +1359,28 @@ export function registerPetIpc(): void {
     const c = clampWindowPos(Math.round(sx - gx), Math.round(sy - gy), w, h)
     win.setPosition(c.x, c.y)
   })
-  // compact 拖拽结束：持久化窗口位置
+  // compact 拖拽结束：持久化窗口位置 + 边缘吸附检测
   ipcMain.on('pet:window-move-end', (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
     const [x, y] = win.getPosition()
     updatePetConfig({ x, y })
+    // 边缘吸附（拖拽结束时检测）
+    handleEdgeSnapOnMoveEnd()
+  })
+
+  // 边缘吸附配置开关
+  ipcMain.handle('pet:edge-snap', (_e, cfg?: Partial<EdgeSnapConfig>) => {
+    if (cfg) {
+      edgeSnapConfig = { ...edgeSnapConfig, ...cfg }
+    }
+    return { ok: true, config: { ...edgeSnapConfig } }
+  })
+
+  // 复位桌宠位置到屏幕中央
+  ipcMain.handle('pet:reset-position', () => {
+    resetPetToCenter()
+    return { ok: true }
   })
   // compact 小窗口：定期把窗口位置写回配置（走路/边缘钳制等非拖拽场景也能记住位置）
   ipcMain.on('pet:window-sync-pos', (e) => {
@@ -1385,19 +1580,70 @@ export function registerPetIpc(): void {
     }
   })
 
-  // ── 模型切换（持久化后由渲染页重载加载）─────────────
-  ipcMain.handle('pet:set-model', (_e, model: 'Mao') => {
+  // ── 模型切换（任意 modelId，持久化 + 同 kind 热切换 / 跨 kind 重载窗口）──
+  ipcMain.handle('pet:set-model', async (_e, modelId: string) => {
     try {
-      if (model === 'Mao') {
-        persistPetModel(model)
+      if (typeof modelId !== 'string' || !modelId.trim()) {
+        return { ok: false, error: 'modelId 不能为空' }
       }
-      return { ok: true }
+      modelId = modelId.trim()
+      const userDataDir = app.getPath('userData')
+      const prevKind = currentModelKind()
+      // 持久化当前模型选择
+      const ok = setActiveModel(userDataDir, modelId)
+      if (!ok) {
+        return { ok: false, error: '模型不存在于库中: ' + modelId }
+      }
+      persistPetModel(modelId) // 旧版配置同步
+      const newKind = currentModelKind()
+      const entryRel = currentModelEntryRel()
+      if (petWindow && !petWindow.isDestroyed()) {
+        if (newKind !== prevKind) {
+          // 跨形态：重载整个渲染页
+          const html = getRendererHtmlPath()
+          await petWindow.loadFile(html)
+          setWindowClickThrough(config.clickThrough)
+        } else {
+          // 同形态（如 live2d→live2d）：向渲染页发热切换命令
+          const modelUrl = resolveModelUrlForRenderer(modelId, entryRel)
+          petWindow.webContents.send('pet:load-model', { modelId, entryRel, url: modelUrl, kind: newKind })
+        }
+      }
+      return { ok: true, kind: newKind, modelId }
     } catch (e: any) {
       return { ok: false, error: String(e) }
     }
   })
 
-  // 切换到不同形态模型后，在同一桌宠窗口重载对应渲染页（Live2D ↔ VRM）
+  // 渲染页上报模型加载失败：主进程安全回退到内置 Mao
+  ipcMain.on('pet:model-load-failed', (_e, info: { modelId?: string; error?: string }) => {
+    try {
+      console.warn('[PetWindow] 模型加载失败，回退 Mao:', info?.modelId, info?.error)
+      setActiveModel(app.getPath('userData'), 'Mao')
+      persistPetModel('Mao')
+      if (petWindow && !petWindow.isDestroyed()) {
+        const html = getRendererHtmlPath()
+        petWindow.loadFile(html).then(() => setWindowClickThrough(config.clickThrough)).catch(() => {})
+      }
+    } catch (e) { console.warn('[PetWindow] 模型加载失败回退异常:', e) }
+  })
+
+  // 查询所有已安装模型（供设置面板模型管理 UI）
+  ipcMain.handle('pet:get-models', () => {
+    try {
+      const lib = loadLibrary()
+      const current = lib.current()
+      const models = lib.list().map(e => ({
+        id: e.id, name: e.name, kind: e.kind || 'live2d',
+        entryRel: e.entryRel, builtin: e.builtin, current: e.id === current.id,
+      }))
+      return { ok: true, models, current: current.id }
+    } catch (e: any) {
+      return { ok: false, error: String(e), models: [] }
+    }
+  })
+
+  // 切换到不同形态模型后，在同一桌宠窗口重载对应渲染页
   ipcMain.handle('pet:reopen', async () => {
     try {
       const html = getRendererHtmlPath()
@@ -1413,73 +1659,55 @@ export function registerPetIpc(): void {
     }
   })
 
-  // ── 屏幕感知 tick（桌宠 → 主进程，触发截屏+分析）─────────────
+  // ── 屏幕感知 tick（精彩瞬间快速通道，v6.2）─────────────
+  // 与主动秘书 secretary（45s 工作卡片）/ runScreenWatch（120s 编排表演）分工：
+  //   本条路径复用统一视觉模块 describeScreenViaVlm（截图→dHash 节流→VLM 看懂→安全降级），
+  //   只在她真看清画面、且 VLM 判定"很精彩"（worthComment≥0.7：游戏翻车/搞笑视频/报错卡住）
+  //   时立刻插一句带动作的即时反应，形成 N.E.K.O 式"哎？！这个！"的实时感；
+  //   普通画面交给另两条路径，不重复花 token、不抢话。
   ipcMain.handle('pet:perception:tick', async () => {
     try {
       const prefs = getPetPrefs()
       const cp = prefs.catpaw || {}
       if (prefs.privacyMode) {return { ok: true, skipped: true }}  // 隐私模式：不截屏
       if (cp.perception === false) {return { ok: true, skipped: true }}  // Pet Handling - 屏幕感知关闭
-      const wins = BrowserWindow.getAllWindows()
-      const target = wins.find(w => !w.isDestroyed() && w !== petWindow) || null
-      if (!target) {return { ok: true, skipped: true }}
-      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 800, height: 450 } })
-      const src = sources[0]
-      if (!src) {return { ok: true, skipped: true }}
-      // 🫀 v0.2 屏幕节流：先做纯图像 dHash 帧差判定（零进程开销）。画面稳定直接放行，
-      // 不启动 PowerShell、不做 base64 编码（这是周期性小卡顿来源之一）。
-      // 先读真实活动窗口（detectScene 内部有 30s 缓存，命中缓存开销极低），再喂给屏幕门控。
-      // 否则 noteWindow 一直拿到 null，场景被误判为 idle，「打游戏少打扰 / 隐私场景闭嘴」的门控会失效。
-      let sceneInfo: any = null
-      try { sceneInfo = await detectScene() } catch { sceneInfo = null }
-      const winTitle: string | null = sceneInfo?.windowTitle || null
-      const winProc: string | null = sceneInfo?.processName || null
-      let decision: any = null
-      if (getPetPrefs().life?.screenGate !== false) {
-        decision = decideScreenCapture(src.thumbnail, winTitle, winProc, Date.now())
-        if (!decision.capture) {return { ok: true, skipped: true, reason: 'stable', scene: decision.scene, change: decision.change }}
+
+      // 统一视觉：内含 dHash 节流，画面稳定时 captured=false，直接返回不花钱
+      const vision = await describeScreenViaVlm(false, Date.now())
+      if (!vision.captured) {
+        return { ok: true, skipped: true, reason: 'stable', scene: vision.scene, change: vision.change }
       }
-      // 画面确实变化、需要问 VLM 时，才做 base64 编码并读一次活动窗口（与场景检测共享 30s 缓存）
-      const dataUrl = src.thumbnail.toDataURL()
-      console.log('[Pet] perception tick: 已截屏，size=', src.thumbnail.getSize())
-      // 用已配置 LLM 做多模态分析；纯文本模型/调用失败时降级为"活动窗口标题文本观察"
+
+      // 高 worth 门槛：只对精彩瞬间立即插话（saw=false 表示没看清，交给秘书/编排器）
+      const WORTH_FAST_REACT = 0.7
+      if (!vision.saw || vision.worthComment < WORTH_FAST_REACT) {
+        return { ok: true, skipped: true, reason: 'low_worth', scene: vision.scene, worth: vision.worthComment }
+      }
+
+      const cfg = resolvePetBrainConfig()
+      if (!cfg) {return { ok: true, skipped: true, reason: 'no-llm' }}
+      const provider = createPetLLM(cfg)
+      let speech = ''
       try {
-        const cfg = resolvePetBrainConfig()
-        if (cfg) {
-          const provider = createPetLLM(cfg)
-          let res = await provider.call({
-            messages: [
-              { role: 'system', content: '你是桌宠 Lumina。根据屏幕截图，给出一句简短、可爱的反应（20字以内），只输出 JSON：{"speech":"..."}' },
-              { role: 'user', content: '这是用户当前屏幕截图，请用 JSON 回复。', images: [dataUrl] },
-            ],
-            temperature: 0.8,
-            maxTokens: 120,
-          } as any)
-          let speech = ''
-          try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') {speech = obj.speech} } catch {}
-          // 视觉失败 → 纯文本：用活动窗口标题做轻量观察，保证开了"屏幕感知"就一定有反应
-          if (!speech) {
-            let titleLine = ''
-            try { if (sceneInfo?.windowTitle) {titleLine = `用户当前活动窗口："${String(sceneInfo.windowTitle).slice(0, 80)}"（进程 ${sceneInfo.processName || '未知'}）。`} } catch {}
-            res = await provider.call({
-              messages: [
-                { role: 'system', content: '你是桌宠 Lumina。你看不到屏幕截图，只知道用户的活动窗口。用一句 20 字以内、可爱自然的话轻量搭话或关心，只输出 JSON：{"speech":"..."}' },
-                { role: 'user', content: titleLine || '读不到活动窗口信息，请轻轻问一句用户在忙什么。' },
-              ],
-              temperature: 0.85, maxTokens: 120,
-            } as any)
-            try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') {speech = obj.speech} } catch {}
-          }
-          if (speech) {
-          sendPetCommand({ type: 'say', text: speech })
-          if (decision) {rememberScreenEpisode(decision.scene, sceneInfo?.windowTitle || null, speech)}
-          return { ok: true, speech }
-        }
-        }
+        const res = await provider.call({
+          messages: [
+            { role: 'system', content: '你是桌宠 Lumina，刚偷瞄到主人屏幕上一个很精彩/有趣/翻车/卡住的瞬间。用一句 20 字以内、带情绪的可爱短句立刻反应（像"哎？！""这操作！""哈哈哈哈""等等！"这种即时感），不要复述画面，只输出 JSON：{"speech":"..."}' },
+            { role: 'user', content: `你看到的画面：${vision.detail}（场景：${vision.scene}）。请用 JSON 回一句即时反应。` },
+          ],
+          temperature: 0.95, maxTokens: 100,
+        } as any)
+        try { const obj = JSON.parse(res?.text || '{}'); if (obj && typeof obj.speech === 'string') {speech = obj.speech.trim()} } catch {}
       } catch (e) {
-        console.warn('[Pet] perception LLM 分析失败:', (e as Error)?.message || e)
+        console.warn('[Pet] 精彩瞬间反应生成失败:', (e as Error)?.message || e)
       }
-      return { ok: true, skipped: true }
+      if (!speech) {return { ok: true, skipped: true, reason: 'no-speech' }}
+
+      // 带动作：游戏精彩→开心，其他→惊讶；走 intent 让 Live2D 同时有表情/动作/口型
+      const action = vision.scene === 'game' ? 'happy' : 'surprised'
+      const mood = vision.scene === 'game' ? '兴奋 🤩' : '超开心 🎉'
+      sendPetCommand({ type: 'intent', intent: { action, speech, mood } })
+      rememberScreenEpisode(vision.scene, vision.windowTitle || null, speech)
+      return { ok: true, speech, worth: vision.worthComment, detail: vision.detail }
     } catch (e: any) {
       return { ok: false, error: String(e) }
     }
@@ -1698,6 +1926,13 @@ export function registerPetIpc(): void {
 
     return { ok: false, error: '未知操作' }
   })
+
+  // 快捷键 Ctrl+Shift+R 复位桌宠到屏幕中央
+  try {
+    globalShortcut.register('CommandOrControl+Shift+R', () => {
+      resetPetToCenter()
+    })
+  } catch (e) { console.warn('[PetWindow] 快捷键注册失败:', e) }
 
   // 注：pet:test-intent / pet:chat 由 intentDispatcher.ts 统一注册，避免重复注册抛错
 }

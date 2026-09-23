@@ -30625,6 +30625,11 @@ void main() {
     const cur = { happy: 0, sad: 0, angry: 0, surprised: 0, relaxed: 0 };
     const peak = { happy: 0, sad: 0, angry: 0, surprised: 0, relaxed: 0 };
     let breathPhase = 0;
+    const gazeTarget = new Object3D();
+    const gaze = { tx: 0, ty: 0, cx: 0, cy: 0, lastInput: 0, nextSaccade: 0 };
+    const VISEME_MAP = { A: "aa", I: "ih", U: "ou", E: "ee", O: "oh" };
+    let curViseme = null;
+    let visemeWeight = 0;
     function emotionToBlendTargets(s) {
       const v = Math.max(-1, Math.min(1, s.valence));
       const a = clamp01(s.arousal);
@@ -30657,6 +30662,33 @@ void main() {
         }
       }
       vrm.expressionManager.setValue("blink", blink);
+    }
+    function updateGaze(dt, t) {
+      if (!vrm?.lookAt) {
+        return;
+      }
+      const head = vrm.humanoid?.getNormalizedBoneNode?.("head");
+      if (!head) {
+        return;
+      }
+      if (t - gaze.lastInput > 0.8) {
+        if (t >= gaze.nextSaccade) {
+          if (Math.random() < 0.4) {
+            gaze.tx = (Math.random() * 2 - 1) * 0.3;
+            gaze.ty = (Math.random() * 2 - 1) * 0.2;
+          } else {
+            gaze.tx = 0;
+            gaze.ty = 0;
+          }
+          gaze.nextSaccade = t + 1.8 + Math.random() * 2.4;
+        }
+      }
+      const k = Math.min(1, dt * 6.5);
+      gaze.cx += (gaze.tx - gaze.cx) * k;
+      gaze.cy += (gaze.ty - gaze.cy) * k;
+      const hp = new Vector3();
+      head.getWorldPosition(hp);
+      gazeTarget.position.set(hp.x + gaze.cx * 0.9, hp.y + gaze.cy * 0.6 + 0.12, hp.z + 1.6);
     }
     function resize() {
       const w = window.innerWidth;
@@ -30715,6 +30747,19 @@ void main() {
           VRMUtils.rotateVRM0(vrm);
         }
         root.add(gltf.scene);
+        try {
+          scene.add(gazeTarget);
+          if (vrm.lookAt) {
+            ;
+            vrm.lookAt.target = gazeTarget;
+            if (typeof vrm.lookAt.refresh === "function") {
+              ;
+              vrm.lookAt.refresh();
+            }
+          }
+        } catch (e) {
+          console.warn("[VRM] lookAt 初始化失败:", e?.message || e);
+        }
         resize();
       },
       (ev) => {
@@ -30755,7 +30800,19 @@ void main() {
           head.rotation.x = Math.sin(breathPhase * 0.18 + 1) * 0.03 + fatigue * 0.12;
         }
         talkLevel = Math.max(0, talkLevel - dt * 2.2);
-        vrm.expressionManager?.setValue("aa", talkLevel);
+        if (curViseme) {
+          visemeWeight = Math.max(0, visemeWeight - dt * 3.4);
+          if (visemeWeight <= 0.01) {
+            curViseme = null;
+          }
+        }
+        const em = vrm.expressionManager;
+        if (em) {
+          em.setValue("aa", curViseme ? talkLevel * (1 - visemeWeight) * 0.4 : talkLevel);
+          for (const v of ["ih", "ou", "ee", "oh"]) {
+            em.setValue(v, curViseme === v ? visemeWeight * talkLevel : 0);
+          }
+        }
         const step = Math.min(1, dt * 3);
         for (const k of ["happy", "sad", "angry", "surprised", "relaxed"]) {
           peak[k] = Math.max(0, peak[k] - dt * 1.4);
@@ -30767,6 +30824,7 @@ void main() {
           vrm.expressionManager?.setValue(emotionOverride, 0.9);
         }
         updateBlink(dt, t);
+        updateGaze(dt, t);
         vrm.update(dt);
       }
       renderer.render(scene, camera);
@@ -30778,6 +30836,20 @@ void main() {
       setTalkLevel(v) {
         talkLevel = Math.max(0, Math.min(1, v));
       },
+      // 五元音（Live2D 同源 A/I/U/E/O → VRM aa/ih/ou/ee/oh）
+      setViseme(phoneme, weight = 1) {
+        const mapped = VISEME_MAP[String(phoneme || "").toUpperCase()];
+        if (mapped) {
+          curViseme = mapped;
+          visemeWeight = Math.max(0, Math.min(1, weight));
+        }
+      },
+      // 👀 视线跟随：归一化 -1~1
+      setGaze(nx, ny) {
+        gaze.tx = Math.max(-1, Math.min(1, nx));
+        gaze.ty = Math.max(-1, Math.min(1, ny));
+        gaze.lastInput = clock.elapsedTime;
+      },
       setExpression(name) {
         emotionOverride = ["happy", "sad", "angry", "surprised", "relaxed"].includes(name) ? name : "";
         emotionUntil = emotionOverride ? clock.elapsedTime + 2.2 : 0;
@@ -30785,11 +30857,9 @@ void main() {
           peak[emotionOverride] = 1;
         }
       },
-      // TODO: VRM parity with Live2D — 已做到：连续五维情绪→5 个标准 blendShape 平滑过渡、
-      //       疲劳/精力→呼吸频率与幅度、头微垂、待机摇摆幅度；一次性 setExpression 保留为峰值。
-      //       还差：Live2D 的五元音口型(A/I/U/E/O)、视线跟随(focus/gaze)、分层动作混合器
-      //       (gaze/action 层)、brow/cheek 等细粒度面部通道。VRM 模型自带的表情就这 5 个预设，
-      //       细粒度只能靠模型自带 blendShape，暂不做自动发现。
+      // v6.2 已补齐：五元音口型(A/I/U/E/O→aa/ih/ou/ee/oh)、视线跟随 lookAt（平滑插值+空闲飘眼）、
+      // 连续五维情绪、疲劳/精力→呼吸/头垂/摇摆。仍差：分层动作混合器、brow/cheek 等细粒度通道
+      // （依赖模型自带 blendShape，暂不做自动发现）。
       setEmotionCore(s) {
         const tgt = emotionToBlendTargets(s);
         target.happy = tgt.happy;

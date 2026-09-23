@@ -70,6 +70,17 @@ describe('collectReferencedFiles', () => {
 
 function makeFs(entryJson: Record<string, unknown>) {
   const mem: Record<string, string> = { '/src/cat/cat.model3.json': JSON.stringify(entryJson) }
+  // 把 model3.json 中引用的资源也放入 mock，使新增的 fileExists() 存在性检查通过
+  const refs = (entryJson.FileReferences as Record<string, unknown>) || {}
+  const pushRef = (v: unknown) => { if (typeof v === 'string') { mem['/src/cat/' + v.replace(/\\/g, '/')] = '' } }
+  pushRef(refs.Moc); pushRef(refs.Physics); pushRef(refs.Pose); pushRef(refs.DisplayInfo)
+  if (Array.isArray(refs.Textures)) { refs.Textures.forEach(pushRef) }
+  if (Array.isArray(refs.Expressions)) { refs.Expressions.forEach((e: any) => pushRef(e?.File)) }
+  if (refs.Motions && typeof refs.Motions === 'object') {
+    for (const group of Object.values(refs.Motions as Record<string, any[]>)) {
+      if (Array.isArray(group)) { group.forEach((m: any) => pushRef(m?.File)) }
+    }
+  }
   const copied: Array<[string, string]> = []
   const fs: ModelImporterFs = {
     readText: async p => {

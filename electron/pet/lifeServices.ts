@@ -68,7 +68,7 @@ function libraryJsonPath(): string {
   return path.join(app.getPath('userData'), 'pet-model-library.json')
 }
 
-function loadLibrary(): ModelLibrary {
+export function loadLibrary(): ModelLibrary {
   if (library) {return library}
   let data: unknown = null
   try {
@@ -253,6 +253,38 @@ export function registerLifeServicesIpc(): void {
       const entryRel = (safeName + '/' + baseName + '.vrm').replace(/\\/g, '/')
       const lib = loadLibrary()
       const reg = lib.register({ name: baseName, entryRel, kind: 'vrm' }, Date.now())
+      if (!reg.ok) {return { ok: false, error: reg.error || '模型注册失败' }}
+      saveLibrary()
+      return { ok: true, model: modelDto(lib.get(reg.id!)!) }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  // 从本地导入一个 MMD 模型（.pmx 单个文件 → 复制进 userData → 注册 kind=mmd）
+  ipcMain.handle('pet:models:import-mmd', async () => {
+    try {
+      const parent = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || undefined
+      const dlg = await dialog.showOpenDialog(parent as BrowserWindow, {
+        title: '选择 MMD 模型（.pmx，beta）',
+        filters: [{ name: 'MMD PMX', extensions: ['pmx'] }],
+        properties: ['openFile'],
+      })
+      if (dlg.canceled || !dlg.filePaths[0]) {return { ok: false, canceled: true }}
+      const file = dlg.filePaths[0]
+      if (!/\.pmx$/i.test(file)) {return { ok: false, error: '请选择 *.pmx 模型文件（.pmd 暂不支持）' }}
+
+      const baseName = path.basename(file).replace(/\.pmx$/i, '')
+      const safeName = (baseName.replace(/[^w一-龥-]+/g, '_') || 'mmd_model').slice(0, 48)
+      const destRoot = modelsRoot()
+      const destDir = path.join(destRoot, safeName)
+      await fsp.mkdir(destDir, { recursive: true })
+      const destFile = path.join(destDir, baseName + '.pmx')
+      await fsp.copyFile(file, destFile)
+
+      const entryRel = (safeName + '/' + baseName + '.pmx').replace(/\\/g, '/')
+      const lib = loadLibrary()
+      const reg = lib.register({ name: baseName, entryRel, kind: 'mmd' }, Date.now())
       if (!reg.ok) {return { ok: false, error: reg.error || '模型注册失败' }}
       saveLibrary()
       return { ok: true, model: modelDto(lib.get(reg.id!)!) }

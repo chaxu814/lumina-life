@@ -42,6 +42,10 @@ export interface VrmEmotionInput {
 
 export interface VrmHandle {
   setTalkLevel: (v: number) => void
+  /** 五元音口型（Live2D 同源 A/I/U/E/O；VRM 内部映射到标准 viseme aa/ih/ou/ee/oh） */
+  setViseme: (phoneme: string, weight?: number) => void
+  /** 视线跟随：归一化屏幕坐标 nx,ny ∈ [-1,1]（鼠标在左/右、上/下）；超过一段时间不更新则回中并偶尔飘眼 */
+  setGaze: (nx: number, ny: number) => void
   setExpression: (name: string) => void
   /** F3：连续情绪驱动（平滑过渡到目标表情 + 疲劳/精力影响身体动作） */
   setEmotionCore: (s: VrmEmotionInput) => void
@@ -99,6 +103,14 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
   // 一次性表情的「峰值」衰减：setExpression 抬到 1，随时间衰减回连续值
   const peak = { happy: 0, sad: 0, angry: 0, surprised: 0, relaxed: 0 }
   let breathPhase = 0
+  // ── 👀 视线跟随（v6.2，对齐 Live2D focusController）──
+  // three-vrm 用一个世界坐标 target 驱动 lookAt；这里把归一化鼠标坐标插值后放在头部前上方。
+  const gazeTarget = new THREE.Object3D()
+  const gaze = { tx: 0, ty: 0, cx: 0, cy: 0, lastInput: 0, nextSaccade: 0 }
+  // ── 五元音口型（VRM 标准 viseme：aa/ih/ou/ee/oh）──
+  const VISEME_MAP: Record<string, string> = { A: 'aa', I: 'ih', U: 'ou', E: 'ee', O: 'oh' }
+  let curViseme: string | null = null
+  let visemeWeight = 0
 
   /** 五维情绪 → 五个 VRM 标准 blendShape 目标（happy/sad/angry/surprised/relaxed） */
   function emotionToBlendTargets(s: VrmEmotionInput) {
@@ -130,6 +142,31 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
       if (into > dur) { blink = 0; blinkTimer = 0; nextBlink = 2.2 + Math.random() * 3.4 }
     }
     vrm.expressionManager.setValue('blink', blink)
+  }
+
+  // ── 👀 视线跟随（v6.2）：平滑插值鼠标方向 + 静止时偶尔飘眼、回中 ──
+  function updateGaze(dt: number, t: number) {
+    if (!vrm?.lookAt) {return}
+    const head = vrm.humanoid?.getNormalizedBoneNode?.('head')
+    if (!head) {return}
+    // 鼠标 0.8s 没动 → 进入空闲：偶尔轻飘一眼（saccade）再回中，像活人
+    if (t - gaze.lastInput > 0.8) {
+      if (t >= gaze.nextSaccade) {
+        if (Math.random() < 0.4) {
+          gaze.tx = (Math.random() * 2 - 1) * 0.3
+          gaze.ty = (Math.random() * 2 - 1) * 0.2
+        } else {gaze.tx = 0; gaze.ty = 0}
+        gaze.nextSaccade = t + 1.8 + Math.random() * 2.4
+      }
+    }
+    // 帧率无关的平滑（约 0.15s 收敛）
+    const k = Math.min(1, dt * 6.5)
+    gaze.cx += (gaze.tx - gaze.cx) * k
+    gaze.cy += (gaze.ty - gaze.cy) * k
+    // 注视目标放在头部前上方的世界坐标
+    const hp = new THREE.Vector3()
+    head.getWorldPosition(hp)
+    gazeTarget.position.set(hp.x + gaze.cx * 0.9, hp.y + gaze.cy * 0.6 + 0.12, hp.z + 1.6)
   }
 
   function resize() {
@@ -178,6 +215,15 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
       // VRM 0.x 朝向修正；VRM 1.0 加载器已转正
       if ((vrm as any).meta?.specVersion?.startsWith?.('0')) {VRMUtils.rotateVRM0(vrm)}
       root.add(gltf.scene)
+      // 👀 视线跟随：把世界坐标 target 交给 three-vrm 的 lookAt（VRM 需带 LookAt 组件）
+      try {
+        scene.add(gazeTarget)
+        if (vrm.lookAt) {
+          ;(vrm.lookAt as any).target = gazeTarget
+          // 若模型用 expression 驱动眼动，确保默认姿态里不缺失（three-vrm 会自动处理）
+          if (typeof (vrm.lookAt as any).refresh === 'function') {;(vrm.lookAt as any).refresh()}
+        }
+      } catch (e) { console.warn('[VRM] lookAt 初始化失败:', (e as Error)?.message || e) }
       resize()
     },
     (ev) => {
@@ -216,9 +262,20 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
         head.rotation.y = Math.sin(breathPhase * 0.25) * 0.12 * (0.5 + energy * 0.5)
         head.rotation.x = Math.sin(breathPhase * 0.18 + 1) * 0.03 + fatigue * 0.12 // 累了低头
       }
-      // 说话口型（aa），带衰减
+      // 说话口型：基线 aa，叠加五元音（v6.2，对齐 Live2D）
       talkLevel = Math.max(0, talkLevel - dt * 2.2)
-      vrm.expressionManager?.setValue('aa', talkLevel)
+      if (curViseme) {
+        visemeWeight = Math.max(0, visemeWeight - dt * 3.4)
+        if (visemeWeight <= 0.01) {curViseme = null}
+      }
+      const em = vrm.expressionManager
+      if (em) {
+        // 有具体元音时压低 aa，避免两个口型打架
+        em.setValue('aa', curViseme ? talkLevel * (1 - visemeWeight) * 0.4 : talkLevel)
+        for (const v of ['ih', 'ou', 'ee', 'oh'] as const) {
+          em.setValue(v, curViseme === v ? visemeWeight * talkLevel : 0)
+        }
+      }
 
       // ── F3：连续表情平滑逼近目标 + 一次性峰值衰减 ──
       const step = Math.min(1, dt * 3.0) // 约 0.3s 收敛，自然不僵
@@ -233,6 +290,7 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
         vrm.expressionManager?.setValue(emotionOverride, 0.9)
       }
       updateBlink(dt, t)
+      updateGaze(dt, t) // 👀 v6.2 视线跟随（在 vrm.update 前更新 target 位置）
       vrm.update(dt)
     }
     renderer.render(scene, camera)
@@ -244,17 +302,26 @@ export function mountVrm(opts: VrmMountOptions): VrmHandle {
 
   const handle: VrmHandle = {
     setTalkLevel(v: number) { talkLevel = Math.max(0, Math.min(1, v)) },
+    // 五元音（Live2D 同源 A/I/U/E/O → VRM aa/ih/ou/ee/oh）
+    setViseme(phoneme: string, weight = 1) {
+      const mapped = VISEME_MAP[String(phoneme || '').toUpperCase()]
+      if (mapped) {curViseme = mapped; visemeWeight = Math.max(0, Math.min(1, weight))}
+    },
+    // 👀 视线跟随：归一化 -1~1
+    setGaze(nx: number, ny: number) {
+      gaze.tx = Math.max(-1, Math.min(1, nx))
+      gaze.ty = Math.max(-1, Math.min(1, ny))
+      gaze.lastInput = clock.elapsedTime
+    },
     setExpression(name: string) {
       emotionOverride = ['happy', 'sad', 'angry', 'surprised', 'relaxed'].includes(name) ? name : ''
       emotionUntil = emotionOverride ? clock.elapsedTime + 2.2 : 0
       // 同时把对应表情的一次性峰值抬起来（连续路径开着时也能立刻看到反应）
       if (emotionOverride) { peak[emotionOverride as keyof typeof peak] = 1 }
     },
-    // TODO: VRM parity with Live2D — 已做到：连续五维情绪→5 个标准 blendShape 平滑过渡、
-    //       疲劳/精力→呼吸频率与幅度、头微垂、待机摇摆幅度；一次性 setExpression 保留为峰值。
-    //       还差：Live2D 的五元音口型(A/I/U/E/O)、视线跟随(focus/gaze)、分层动作混合器
-    //       (gaze/action 层)、brow/cheek 等细粒度面部通道。VRM 模型自带的表情就这 5 个预设，
-    //       细粒度只能靠模型自带 blendShape，暂不做自动发现。
+    // v6.2 已补齐：五元音口型(A/I/U/E/O→aa/ih/ou/ee/oh)、视线跟随 lookAt（平滑插值+空闲飘眼）、
+    // 连续五维情绪、疲劳/精力→呼吸/头垂/摇摆。仍差：分层动作混合器、brow/cheek 等细粒度通道
+    // （依赖模型自带 blendShape，暂不做自动发现）。
     setEmotionCore(s: VrmEmotionInput) {
       const tgt = emotionToBlendTargets(s)
       target.happy = tgt.happy

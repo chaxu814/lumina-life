@@ -104,7 +104,8 @@
       clearTimeout(bubbleTimer)
       bubbleTimer = setTimeout(() => bubbleEl.classList.remove('show'), ms || 6000)
     }
-    // 说话：口型开合 + 气泡
+    // 说话：口型开合（五元音随机切换）+ 气泡
+    const VOWELS = ['A', 'I', 'U', 'E', 'O']
     function speak(text) {
       if (!handle) return
       let n = 26
@@ -112,8 +113,11 @@
       if (text) showBubble(text, Math.min(9000, 1800 + text.length * 90))
       talkTimer = setInterval(() => {
         n--
-        if (n <= 0) { clearInterval(talkTimer); handle.setTalkLevel(0); return }
-        handle.setTalkLevel(0.25 + Math.random() * 0.65)
+        if (n <= 0) { clearInterval(talkTimer); handle.setTalkLevel(0); if (handle.setViseme) handle.setViseme('A', 0); return }
+        const lvl = 0.25 + Math.random() * 0.65
+        handle.setTalkLevel(lvl)
+        // v6.2 五元音随机切换，3D 嘴型不再只是单调的 ah
+        if (handle.setViseme) handle.setViseme(VOWELS[Math.floor(Math.random() * VOWELS.length)], lvl)
       }, 90)
     }
     const EMOTION_MAP = {
@@ -166,9 +170,14 @@
         },
       })
 
-      // 鼠标穿透：仅在角色矩形内接管
+      // 鼠标穿透：仅在角色矩形内接管；窗口内鼠标同时驱动视线
       document.addEventListener('mousemove', (ev) => {
         if (ipc) ipc.send('pet:set-ignore-mouse', !inBounds(ev))
+        if (handle && handle.setGaze) {
+          const nx = (ev.clientX / window.innerWidth - 0.5) * 2
+          const ny = -(ev.clientY / window.innerHeight - 0.5) * 2
+          handle.setGaze(nx, ny)
+        }
       })
       document.addEventListener('click', () => { if (ipc) ipc.send('pet:event', { type: 'click' }) })
       document.addEventListener('dblclick', () => {
@@ -207,6 +216,13 @@
         })
         ipc.on('pet:sync-reply', (_e, data) => { if (data && data.role !== 'user' && data.text) speak(data.text) })
         ipc.on('pet:live-speech', (_e, data) => { if (data && data.speaking) handle.setTalkLevel(data.level || 0.6) })
+        // 👀 v6.2 全屏注视：主进程每 100ms 推送鼠标位置（窗口外也能追踪）
+        ipc.on('pet:cursor', (_e, c) => {
+          if (!handle || !handle.setGaze || !c || !c.active) return
+          const nx = (c.x / window.innerWidth - 0.5) * 2
+          const ny = -(c.y / window.innerHeight - 0.5) * 2
+          handle.setGaze(nx, ny)
+        })
       }
     }
     function inBoundsCenter() { return !!bounds }
