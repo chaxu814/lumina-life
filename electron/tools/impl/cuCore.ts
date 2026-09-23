@@ -30,9 +30,13 @@ import {
 } from './cuPermissions'
 import { computeDhashFromImage, verifyChange } from './cuVerify'
 import { classifyModelError, describeLimitation, looksLikeVisionModel, isLocalEndpoint } from '../../core/modelCompat'
+import { getPlatformAdapter } from '../../core/platform'
 
 // 安全策略对外仍可从 cuCore 引用
 export { destructiveReason, isDestructive } from './cuSafety'
+
+// 组合键 → SendKeys 记号（纯函数，抽到 cuKeyTokens 供 WindowsAdapter 共用，避免循环依赖）
+export { buildSendKeysToken, SENDKEY_NAMED } from './cuKeyTokens'
 
 // ──────────────────────────────────────────────────────────
 // 0. 类型
@@ -316,6 +320,16 @@ export function virtualDesktopBounds(): { x: number; y: number; w: number; h: nu
 
 export async function captureScreenBuffer(): Promise<Buffer> {
   const policy = getCuPolicy()
+  // 非 Windows：走平台适配器（macOS screencapture / Linux grim·scrot）。
+  // Windows 仍优先 screenshot-desktop + PowerShell 虚拟桌面（性能更好、行为不变）。
+  if (process.platform !== 'win32') {
+    try {
+      const { buffer } = await getPlatformAdapter().screenshot()
+      if (buffer && buffer.length > 0) {return buffer}
+    } catch (e: any) {
+      console.warn('[cuCore] 适配器截屏失败，回退 screenshot-desktop:', e?.message || e)
+    }
+  }
   // v3.30 多显示器：PowerShell 直接截虚拟桌面（screenshot-desktop 只截主屏）
   if (policy.multiMonitor && process.platform === 'win32') {
     try {
@@ -334,6 +348,11 @@ export async function captureScreenBuffer(): Promise<Buffer> {
     if (buf && buf.length > 0) {return buf}
     throw new Error('empty_capture')
   } catch (e: any) {
+    // PowerShell 截图回退仅在 Windows 存在 powershell 可执行文件；
+    // 非 Windows 此处只应作为「适配器截屏已失败」后的兜底，绝不能再去 exec powershell（mac/Linux 无此二进制，会抛晦涩 ENOENT）。
+    if (process.platform !== 'win32') {
+      throw new Error(`截屏失败：当前平台(${process.platform})适配器与 screenshot-desktop 均不可用。${e?.message || e}`)
+    }
     console.warn('[cuCore] screenshot-desktop failed, fallback PowerShell:', e?.message || e)
     const p = path.join(os.tmpdir(), `lu-sc-${Date.now()}.png`)
     await screenshotFallbackPS(p)
@@ -372,16 +391,9 @@ export async function captureScreen(_opts?: { sessionId?: string }): Promise<CuS
 // ──────────────────────────────────────────────────────────
 // 4. 命令执行辅助
 // ──────────────────────────────────────────────────────────
-
-function execCmd(cmd: string, args: string[], timeout = 15000): Promise<string> {
-  return new Promise<string>(resolve => {
-    const child = cp.execFile(cmd, args, { timeout, windowsHide: true }, (err, stdout, stderr) => {
-      if (err) {resolve(`ERR:${err.message}|${String(stderr).slice(0, 100)}`)}
-      else {resolve(String(stdout).trim())}
-    })
-    if (child.stdin) {child.stdin.end()}
-  })
-}
+// 注：早期的本地 execCmd 已删除——键鼠/打开应用全部委托 PlatformAdapter，
+// 跨平台统一的 execCmd 见 electron/core/platform/PlatformAdapter.ts。
+// 本文件仅剩 Windows 专用的 runPS（仅被 applyPrivacyMask 调用，win32 门控）。
 
 function runPS(lines: string[], timeout = 15000): Promise<string> {
   const ps1 = path.join(os.tmpdir(), `lu-ps-${Date.now()}-${Math.round(Math.random() * 1e6)}.ps1`)
@@ -404,208 +416,36 @@ function runPS(lines: string[], timeout = 15000): Promise<string> {
 // ──────────────────────────────────────────────────────────
 
 export async function cuClick(x: number, y: number, btn: 'left' | 'right', dbl: boolean): Promise<string> {
-  const plat = process.platform
-  const rx = Math.round(x), ry = Math.round(y)
-
-  if (plat === 'win32') {
-    const click = dbl ? '[MO]::DoubleClickLeft()'
-      : btn === 'right' ? '[MO]::ClickRight()' : '[MO]::ClickLeft()'
-    const r = await runPS([
-      "Add-Type @'",
-      'using System;using System.Runtime.InteropServices;',
-      'public class MO{',
-      '[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);',
-      'public const uint L=0x0002;public const uint LU=0x0004;',
-      'public const uint R=0x0008;public const uint RU=0x0010;',
-      'public static void ClickLeft(){mouse_event(L,0,0,0,0);System.Threading.Thread.Sleep(50);mouse_event(LU,0,0,0,0);}',
-      'public static void ClickRight(){mouse_event(R,0,0,0,0);System.Threading.Thread.Sleep(50);mouse_event(RU,0,0,0,0);}',
-      'public static void DoubleClickLeft(){ClickLeft();System.Threading.Thread.Sleep(100);ClickLeft();}',
-      '}',
-      "'@",
-      'Add-Type -AssemblyName System.Windows.Forms',
-      `[System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point(${rx},${ry})`,
-      'Start-Sleep -Milliseconds 80',
-      click,
-      "Write-Output 'OK'",
-    ])
-    return r.startsWith('ERR:') ? `点击失败:${r.slice(4)}` : '点击完成'
-  }
-
-  if (plat === 'darwin') {
-    const osaCmd = dbl
-      ? `tell application "System Events" to click at {${rx},${ry}}; delay 0.1; tell application "System Events" to click at {${rx},${ry}}`
-      : `tell application "System Events" to click at {${rx},${ry}}`
-    const r = await execCmd('osascript', ['-e', osaCmd])
-    return r.startsWith('ERR:') ? `点击失败:${r.slice(4)}` : '点击完成'
-  }
-
-  const btnCode = btn === 'right' ? '3' : '1'
-  const r = await execCmd('xdotool', ['mousemove', String(rx), String(ry), 'click', '--repeat', String(dbl ? 2 : 1), '--delay', '100', btnCode])
-  return r.startsWith('ERR:') ? `点击失败:${r.slice(4)}` : '点击完成'
+  // 委托平台适配器：Windows 走 PowerShell(user32)，macOS 走 AppleScript，Linux 走 xdotool
+  return getPlatformAdapter().mouseClick(x, y, btn, dbl)
 }
 
 /** v3.30 悬停（只移动光标不点击，用于展开 hover 菜单/工具提示） */
 export async function cuHover(x: number, y: number, holdMs = 400): Promise<string> {
-  const plat = process.platform
-  const rx = Math.round(x), ry = Math.round(y), hold = Math.round(holdMs)
-  if (plat === 'win32') {
-    const r = await runPS([
-      'Add-Type -AssemblyName System.Windows.Forms',
-      `[System.Windows.Forms.Cursor]::Position=New-Object System.Drawing.Point(${rx},${ry})`,
-      `Start-Sleep -Milliseconds ${hold}`,
-      "Write-Output 'OK'",
-    ])
-    return r.startsWith('ERR:') ? `悬停失败:${r.slice(4)}` : '悬停完成'
-  }
-  if (plat === 'darwin') {
-    const r = await execCmd('osascript', ['-e', `tell application "System Events" to set mousePosition to {${rx},${ry}}`])
-    return r.startsWith('ERR:') ? `悬停失败:${r.slice(4)}` : '悬停完成'
-  }
-  const r = await execCmd('xdotool', ['mousemove', String(rx), String(ry)])
-  return r.startsWith('ERR:') ? `悬停失败:${r.slice(4)}` : '悬停完成'
+  return getPlatformAdapter().mouseHover(x, y, holdMs)
 }
 
 /** v3.30 长按（左键按下保持，默认 800ms，用于右键/长按手势/拖拽排序） */
 export async function cuLongPress(x: number, y: number, holdMs = 800): Promise<string> {
-  const plat = process.platform
-  const rx = Math.round(x), ry = Math.round(y), hold = Math.round(holdMs)
-  if (plat === 'win32') {
-    const r = await runPS([
-      "Add-Type @'",
-      'using System;using System.Runtime.InteropServices;',
-      'public class ML{',
-      '[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);',
-      '[DllImport("user32.dll")]public static extern bool SetCursorPos(int X,int Y);',
-      '}',
-      "'@",
-      `[ML]::SetCursorPos(${rx},${ry})`,
-      'Start-Sleep -Milliseconds 80',
-      '[ML]::mouse_event(0x0002,0,0,0,0)',
-      `Start-Sleep -Milliseconds ${hold}`,
-      '[ML]::mouse_event(0x0004,0,0,0,0)',
-      "Write-Output 'OK'",
-    ])
-    return r.startsWith('ERR:') ? `长按失败:${r.slice(4)}` : '长按完成'
-  }
-  if (plat === 'darwin') {
-    const r = await execCmd('bash', ['-c',
-      `cliclick m:${rx},${ry} md:${rx},${ry} && sleep ${(hold / 1000).toFixed(2)} && cliclick mu:${rx},${ry}`])
-    return r.startsWith('ERR:') ? `长按失败:${r.slice(4)}` : '长按完成'
-  }
-  const r = await execCmd('bash', ['-c',
-    `xdotool mousemove ${rx} ${ry} mousedown 1 && sleep ${(hold / 1000).toFixed(2)} && xdotool mouseup 1`])
-  return r.startsWith('ERR:') ? `长按失败:${r.slice(4)}` : '长按完成'
+  return getPlatformAdapter().mouseLongPress(x, y, holdMs)
 }
 
 /** 键盘输入文本：Windows 走剪贴板粘贴（支持中文/长文本），并备份恢复原剪贴板 */
 export async function cuType(text: string): Promise<string> {
-  const plat = process.platform
-  if (plat === 'win32') {
-    if (!text) {return '输入完成'}
-    let backup = ''
-    try { backup = clipboard.readText() } catch { /* 忽略 */ }
-    try { clipboard.writeText(text) } catch (e: any) { return `输入失败:剪贴板${e?.message || e}` }
-    const r = await runPS([
-      'Add-Type -AssemblyName System.Windows.Forms',
-      "[System.Windows.Forms.SendKeys]::SendWait('^v')",
-      "Write-Output 'OK'",
-    ])
-    await new Promise(res => setTimeout(res, 120))
-    try { clipboard.writeText(backup) } catch { /* 还原失败不影响结果 */ }
-    return r.startsWith('ERR:') ? `输入失败:${r.slice(4)}` : '输入完成'
-  }
-  if (plat === 'darwin') {
-    const escaped = text.replace(/"/g, '\\"')
-    const r = await execCmd('osascript', ['-e', `tell application "System Events" to keystroke "${escaped}"`])
-    return r.startsWith('ERR:') ? `输入失败:${r.slice(4)}` : '输入完成'
-  }
-  const r = await execCmd('xdotool', ['type', '--delay', '50', text])
-  return r.startsWith('ERR:') ? `输入失败:${r.slice(4)}` : '输入完成'
-}
-
-/** 命名键 → SendKeys 记号 */
-const SENDKEY_NAMED: Record<string, string> = {
-  enter: '{ENTER}', return: '{ENTER}', tab: '{TAB}', esc: '{ESC}', escape: '{ESC}',
-  backspace: '{BACKSPACE}', delete: '{DELETE}', del: '{DELETE}', space: ' ',
-  up: '{UP}', down: '{DOWN}', left: '{LEFT}', right: '{RIGHT}',
-  home: '{HOME}', end: '{END}', pageup: '{PGUP}', pagedown: '{PGDN}',
-  insert: '{INSERT}', capslock: '{CAPSLOCK}',
-  f1: '{F1}', f2: '{F2}', f3: '{F3}', f4: '{F4}', f5: '{F5}', f6: '{F6}',
-  f7: '{F7}', f8: '{F8}', f9: '{F9}', f10: '{F10}', f11: '{F11}', f12: '{F12}',
-}
-
-/**
- * v3.30 把任意修饰键组合（ctrl_shift_a / alt_s / ctrl_shift_esc / win_r）
- * 编译为 SendKeys 记号串。纯函数，可单测。
- * 约定：下划线/加号/空格分隔，最后一段是主键，其余为修饰键。
- */
-export function buildSendKeysToken(key: string): string | null {
-  const k = (key || '').toLowerCase().replace(/\s+/g, '').replace(/[+]/g, '_')
-  if (!k) {return null}
-  if (SENDKEY_NAMED[k]) {return SENDKEY_NAMED[k]}
-  // 单字符直接按
-  if (k.length === 1) {return k}
-  const parts = k.split('_').filter(Boolean)
-  const modMap: Record<string, string> = { ctrl: '^', control: '^', alt: '%', shift: '+' }
-  let prefix = ''
-  for (const p of parts.slice(0, -1)) {
-    if (modMap[p]) {prefix += modMap[p]}
-    else {
-      // 不认识的修饰段，交给保守失败
-      return null
-    }
-  }
-  const main = parts[parts.length - 1]
-  if (!main) {return null}
-  const mainToken = SENDKEY_NAMED[main] || (main.length === 1 ? main : `{${main.toUpperCase()}}`)
-  return prefix ? `${prefix}${mainToken}` : mainToken
+  return getPlatformAdapter().keyboardType(text)
 }
 
 /** 单个按键 / 组合键（enter、esc、tab、ctrl_c、ctrl_v、alt_f4、ctrl_shift_a…） */
 export async function cuPressKey(key: string): Promise<string> {
-  const plat = process.platform
-  const k = (key || '').toLowerCase()
-  if (!k) {return '按键失败:空按键'}
-
-  if (plat === 'win32') {
-    const legacyMap: Record<string, string> = {
-      win: '^{ESC}',
-    }
-    const token = legacyMap[k] || buildSendKeysToken(k)
-    if (!token) {return `按键失败:不支持的按键组合「${key}」`}
-    // SendKeys 记号里的单引号需转义
-    const safe = token.replace(/'/g, "''")
-    const r = await runPS([
-      'Add-Type -AssemblyName System.Windows.Forms',
-      `[System.Windows.Forms.SendKeys]::SendWait('${safe}')`,
-      "Write-Output 'OK'",
-    ])
-    return r.startsWith('ERR:') ? `按键失败:${r.slice(4)}` : '按键完成'
-  }
-  if (plat === 'darwin') {
-    const r = await execCmd('osascript', ['-e', `tell application "System Events" to key code ${key}`])
-    return r.startsWith('ERR:') ? `按键失败:${r.slice(4)}` : '按键完成'
-  }
-  const r = await execCmd('xdotool', ['key', k])
-  return r.startsWith('ERR:') ? `按键失败:${r.slice(4)}` : '按键完成'
+  return getPlatformAdapter().keyPress(key)
 }
 
 /** 打开应用（按名称或路径） */
 export async function cuOpenApp(app: string): Promise<string> {
   const name = (app || '').trim()
   if (!name) {return '打开应用失败:空名称'}
-  const plat = process.platform
   try {
-    if (plat === 'win32') {
-      const r = await execCmd('cmd', ['/c', 'start', '', name])
-      return r.startsWith('ERR:') ? `打开应用失败:${r.slice(4)}` : '已尝试打开应用'
-    }
-    if (plat === 'darwin') {
-      const r = await execCmd('open', ['-a', name])
-      return r.startsWith('ERR:') ? `打开应用失败:${r.slice(4)}` : '已尝试打开应用'
-    }
-    const r = await execCmd('xdg-open', [name])
-    return r.startsWith('ERR:') ? `打开应用失败:${r.slice(4)}` : '已尝试打开应用'
+    return await getPlatformAdapter().openApp(name)
   } catch (e: any) {
     return `打开应用失败:${e?.message || e}`
   }
@@ -618,64 +458,11 @@ export function cuSetClipboard(text: string): string {
 }
 
 export async function cuScroll(amount: number): Promise<string> {
-  const plat = process.platform
-  const n = Math.abs(amount)
-  if (plat === 'win32') {
-    const dirHex = amount > 0 ? '0x0800' : '0x0078'
-    const reps = Array(Math.min(20, Math.max(1, n))).fill(`[MS]::mouse_event(${dirHex},0,0,0,0);Start-Sleep -Milliseconds 20`).join(';')
-    const r = await runPS([
-      "Add-Type @'",
-      'using System;using System.Runtime.InteropServices;',
-      'public class MS{[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);}',
-      "'@",
-      reps,
-      "Write-Output 'OK'",
-    ])
-    return r.startsWith('ERR:') ? `滚动失败:${r.slice(4)}` : '滚动完成'
-  }
-  if (plat === 'darwin') {
-    const r = await execCmd('osascript', ['-e',
-      `tell application "System Events" to repeat ${n} times\n  key code 124 using {control down}\n  delay 0.02\nend repeat`])
-    return r.startsWith('ERR:') ? `滚动失败:${r.slice(4)}` : '滚动完成'
-  }
-  const btnCode = amount > 0 ? '5' : '4'
-  const r = await execCmd('xdotool', ['click', '--repeat', String(n), '--delay', '50', btnCode])
-  return r.startsWith('ERR:') ? `滚动失败:${r.slice(4)}` : '滚动完成'
+  return getPlatformAdapter().mouseScroll(amount)
 }
 
 export async function cuDrag(x1: number, y1: number, x2: number, y2: number): Promise<string> {
-  const plat = process.platform
-  const rx1 = Math.round(x1), ry1 = Math.round(y1), rx2 = Math.round(x2), ry2 = Math.round(y2)
-
-  if (plat === 'win32') {
-    const r = await runPS([
-      "Add-Type @'",
-      'using System;using System.Runtime.InteropServices;',
-      'public class MD{',
-      '[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);',
-      '[DllImport("user32.dll")]public static extern bool SetCursorPos(int X,int Y);',
-      '}',
-      "'@",
-      `[MD]::SetCursorPos(${rx1},${ry1})`,
-      'Start-Sleep -Milliseconds 80',
-      '[MD]::mouse_event(0x0002,0,0,0,0)',
-      'Start-Sleep -Milliseconds 50',
-      `$steps=20;for($i=1;$i -le $steps;$i++){$nx=[int](${rx1}+(${rx2}-${rx1})*$i/$steps);$ny=[int](${ry1}+(${ry2}-${ry1})*$i/$steps);[MD]::SetCursorPos($nx,$ny);Start-Sleep -Milliseconds 15}`,
-      `[MD]::SetCursorPos(${rx2},${ry2})`,
-      'Start-Sleep -Milliseconds 50',
-      '[MD]::mouse_event(0x0004,0,0,0,0)',
-      "Write-Output 'OK'",
-    ])
-    return r.startsWith('ERR:') ? `拖拽失败:${r.slice(4)}` : '拖拽完成'
-  }
-  if (plat === 'darwin') {
-    const r = await execCmd('osascript', ['-e',
-      `tell application "System Events"\n  set mousePosition to {${rx1},${ry1}}\n  perform action "AXPress" at mousePosition\n  delay 0.05\n  set mousePosition to {${rx2},${ry2}}\n  perform action "AXPress" at mousePosition\nend tell`])
-    return r.startsWith('ERR:') ? `拖拽失败:${r.slice(4)}` : '拖拽完成'
-  }
-  const r = await execCmd('bash', ['-c',
-    `xdotool mousemove ${rx1} ${ry1} && xdotool mousedown 1 && xdotool mousemove ${rx2} ${ry2} && xdotool mouseup 1`])
-  return r.startsWith('ERR:') ? `拖拽失败:${r.slice(4)}` : '拖拽完成'
+  return getPlatformAdapter().mouseDrag(x1, y1, x2, y2)
 }
 
 // ──────────────────────────────────────────────────────────
@@ -822,6 +609,32 @@ export async function executeCuAction(
   opts?: { sessionId?: string | null },
 ): Promise<CuExecResult> {
   resetCuAbort()
+
+  // ⓪ 平台能力门：当前平台/会话不支持桌面操控时，返回明确错误（含平台与原因），不抛异常。
+  // Windows 上 mouse/keyboard 恒为 true，此处不改变任何既有行为。
+  {
+    const cap = getPlatformAdapter().capabilities
+    const NEEDS_MOUSE = new Set([
+      'click', 'double_click', 'right_click', 'hover', 'mouse_move', 'long_press',
+      'drag', 'select_text', 'set_value', 'scroll',
+    ])
+    const NEEDS_KEYBOARD = new Set(['type', 'keypress', 'key', 'set_value', 'close_window'])
+    const NEEDS_OPENAPP = new Set(['open_app'])
+    const needMouse = NEEDS_MOUSE.has(act.action_type)
+    const needKeyboard = NEEDS_KEYBOARD.has(act.action_type)
+    const needOpenApp = NEEDS_OPENAPP.has(act.action_type)
+    if ((needMouse && !cap.mouse)
+      || (needKeyboard && !cap.keyboard)
+      || (needOpenApp && !cap.openApp)) {
+      const reason = cap.notes.join('；') || '当前平台不支持该桌面操控能力'
+      return {
+        ok: false,
+        msg: `❌ 当前平台(${cap.platform})不支持「${act.action_type}」：${reason}`,
+        denied: true,
+        denyReason: 'policy',
+      }
+    }
+  }
 
   // ① 权限门
   try {
