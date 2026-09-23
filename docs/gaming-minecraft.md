@@ -1,6 +1,10 @@
 # 🎮 Minecraft 游戏集成模块
 
-Lumina 的游戏集成模块让 Agent 能**感知并操作 Minecraft**，对标 AIRI 的游戏能力，但基于 Lumina 既有的 Computer Use + VLM 架构，提供**视觉**与**程序化**双路线。
+> 📖 多游戏总览见 [gaming-overview.md](./gaming-overview.md) · 🛡️ 安全说明见 [game-safety.md](./game-safety.md)
+
+Lumina 的游戏集成模块让 Agent 能**感知并操作 Minecraft**，基于 Lumina 既有的 Computer Use + VLM 架构，提供**视觉**与**程序化**双路线。
+
+> v2 起，Minecraft 逻辑已提取为一个 GameProfile（`electron/gaming/profiles/minecraft.ts`），行为与重构前完全一致；新增游戏见 [game-profiles-guide.md](./game-profiles-guide.md)。
 
 ## 功能概览
 
