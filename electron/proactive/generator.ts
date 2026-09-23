@@ -81,6 +81,24 @@ const SYSTEM_PROMPT = `你是 Lumina 桌宠的灵魂（住在用户桌面上的�
 - 不要重复 recentSpeeches 里说过的话
 - 如果有 unfinishedQuestion，必须自然接续那个问题（不要另起新话题）`
 
+/** 🩺 健康关怀专属 system 片段（任务一）：提醒要像朋友，不像闹钟 */
+function healthSystemFragment(healthType: string): string {
+  const guide: Record<string, string> = {
+    water: '你在自然地关心主人喝水：语气温柔随意，像朋友随手提一句，不要像闹钟/提醒 App 那样生硬；可以调侃他盯着屏幕太久了。',
+    eye: '你在提醒主人护眼（20-20-20 法则：看 20 英尺外 20 秒）：语气宠溺但不唠叨，可以让他看看窗外远处，不要说教。',
+    posture: '你在关心主人久坐/坐姿：语气轻松，像催他起来伸个懒腰、活动一下，不要像健康课代表念课文。',
+  }
+  const g = guide[healthType] || guide.water
+  return `\n【这次是健康关怀】${g}\n硬规则：这是关心不是任务播报，禁止"该喝水了"/"到点了"这种闹钟句式；一次只轻轻点一下，别长篇大论。`
+}
+
+/** 健康关怀兜底台词（LLM 不可用时也自然不生硬） */
+const HEALTH_FALLBACK: Record<string, { speech: string; action: string; mood: string }> = {
+  water: { speech: "杯子空了吧？去喝口水呀~", action: 'say', mood: '开心 😊' },
+  eye: { speech: '看看远处嘛，眼睛会累的~', action: 'say', mood: '开心 😊' },
+  posture: { speech: '坐太久啦，起来伸个懒腰？', action: 'nod', mood: '开心 😊' },
+}
+
 /** 从 LLM 原始输出里抠出 JSON */
 function parseDecisionJson(raw: string): Partial<{ shouldSpeak: boolean; action: string; mood: string; speech: string; reason: string }> | null {
   if (!raw) {return null}
@@ -127,22 +145,40 @@ export async function generateProactive(
   const parts: string[] = []
   parts.push(`现在是${timeOfDay} ${hour}点。`)
   parts.push(`事件来源：${event.source}；屏幕场景：${event.scene || '未知'}。`)
-  if (event.screenSummary) {parts.push(`屏幕上在：${event.screenSummary}`)}
+  if (event.screenSummary) {
+    const saw = event.payload?.saw === true
+    const worth = typeof event.payload?.worthComment === 'number' ? event.payload.worthComment : 0.4
+    parts.push(`你亲眼看到屏幕上：${event.screenSummary}`)
+    if (saw) {
+      parts.push('请就这个具体内容（游戏/应用/视频/网页/代码）说一句有信息量的反应，不要空泛地说"又在玩/又在看"。')
+    } else {
+      parts.push('（这次没看清画面细节，只知道活动窗口，反应要更轻、更短。）')
+    }
+    if (worth >= 0.7) {parts.push('这个画面很有意思（精彩/翻车/有趣/卡住），值得主动凑过去说。')}
+    else if (worth <= 0.25) {parts.push('画面平淡或重复，除非有特别自然的话，否则倾向沉默。')}
+  }
   if (event.externalTopics?.length) {parts.push(`外部话题：${event.externalTopics.slice(0, 3).join('、')}`)}
   if (ctx.gapMinutes !== undefined) {parts.push(`距上次互动/离线 ${ctx.gapMinutes} 分钟。`)}
   if (ctx.innerThought) {parts.push(`你刚才在心里想：${ctx.innerThought}（据此选语气，但不要直接念出来）`)}
   if (ctx.unfinishedQuestion) {parts.push(`【必须接续】你上次问了：「${ctx.unfinishedQuestion}」`)}
   if (ctx.followups.length) {parts.push(`可以自然提起的旧事：${ctx.followups.slice(0, 3).join('；')}`)}
+  // ── 健康关怀（任务一）：把健康类型+屏幕场景+记忆一起交给 LLM 现场生成，不硬编码唠叨 ──
+  const healthType: string = event.source === 'health' ? (event.payload?.healthType || '') : ''
+  if (healthType) {
+    const label: Record<string, string> = { water: '喝水', eye: '护眼（看远处放松眼睛）', posture: '坐姿/起来伸展' }
+    parts.push(`【健康关怀】这次该关心主人的：${label[healthType] || healthType}。结合现在是${timeOfDay}、他在「${event.scene || '忙别的'}」，自然地关心一句。`)
+  }
   if (ctx.memorySnippet) {parts.push(`记忆：${ctx.memorySnippet.slice(0, 300)}`)}
   if (ctx.recentSpeeches.length) {parts.push(`最近说过（别重复）：${ctx.recentSpeeches.slice(-6).join(' / ')}`)}
   parts.push(`你的内驱力：精力${ctx.drives.energy.toFixed(2)} 社交${ctx.drives.social.toFixed(2)}。`)
   parts.push('请决定这一句话（或沉默）。')
 
   // ── 调 LLM ─────────────────────────────────────
+  const system = healthType ? SYSTEM_PROMPT + healthSystemFragment(healthType) : SYSTEM_PROMPT
   let raw = ''
   try {
     raw = await chatComplete({
-      system: SYSTEM_PROMPT,
+      system,
       user: parts.join('\n'),
       maxTokens: 150,
       temperature: 0.9,
@@ -172,6 +208,35 @@ export async function generateProactive(
   }
 
   // ── 兜底：模板 ─────────────────────────────────
+  // screen 来源优先用她真正看到的内容兜底，避免 LLM 挂了就只说"又在玩"
+  if (event.source === 'screen' && event.screenSummary) {
+    const sceneLines: Record<string, string> = {
+      game: '哇，在玩游戏呀，带上我嘛~',
+      video: '看什么呢这么投入？',
+      code: '认真敲代码的样子真帅~',
+      doc: '在看什么呀？要不要我帮你？',
+      social: '跟谁聊得这么开心呀~',
+    }
+    const line = sceneLines[event.scene || ''] || '让我看看你在干嘛~'
+    return {
+      shouldSpeak: true,
+      action: enrichAction(event.scene === 'game' ? 'happy' : 'say', finalMood, hour),
+      speech: line,
+      mood: finalMood,
+      reason: `fallback:screen:${event.scene}`,
+    }
+  }
+  // ── 兜底：健康关怀专用（LLM 挂了也说一句自然的关心，而不是通用闲聊）──
+  if (healthType && HEALTH_FALLBACK[healthType]) {
+    const fb = HEALTH_FALLBACK[healthType]
+    return {
+      shouldSpeak: true,
+      action: enrichAction(fb.action, fb.mood, hour),
+      speech: fb.speech,
+      mood: fb.mood,
+      reason: `fallback:health:${healthType}`,
+    }
+  }
   const fb = fallbackSpeech(event.source, hour)
   return {
     shouldSpeak: true,

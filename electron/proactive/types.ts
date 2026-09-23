@@ -22,6 +22,7 @@ export type ProactiveEventSource =
   | 'unfinished_thread' // 上次她问了问题、用户还没答
   | 'startup'         // 应用启动重逢
   | 'autonomy_tick'   // 渲染页自主心跳（旧 petAutonomyTick 统一入口）
+  | 'health'          // 🩺 健康关怀（喝水/护眼/姿势提醒）
   | 'external'        // 外部注入（IPC/其他模块主动喂事件）
 
 /** 屏幕场景（与 pet/vision/screenAwareness 的 SceneKind 对齐） */

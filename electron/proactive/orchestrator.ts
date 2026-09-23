@@ -23,7 +23,7 @@ import { createMemoryStoreAdapter } from '../memory/layeredMemoryAdapter'
 import { buildPetMemoryContext } from '../pet/petMemoryBridge'
 import type { ProactiveEvent, ProactiveDecision } from './types'
 import { BackoffState } from './backoff'
-import { decideGate, type GateInput } from './gate'
+import { decideGate, type GateInput, isNightTime } from './gate'
 import { UnfinishedThreadStore, isQuestion } from './unfinishedThread'
 import { shouldForceSpeak, shouldSleepMode } from './driveHardTrigger'
 import { generateInnerThoughts } from './innerThoughts'
@@ -60,8 +60,11 @@ function buildMemorySnippet(query?: string): string {
 }
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
-  maxDaily: 20,
-  minIntervalMs: 600_000,
+  // v6.2 体感升级（N.E.K.O 对齐）：原来的 10 分钟/20 次过于保守，
+  // 一局 30 分钟游戏她理论上只说 3 次、还要过 50% 概率闸门。
+  // 现在主动间隔 2 分钟、日上限 80 次，配合 gate 的场景概率，体感从"木"变"活"。
+  maxDaily: 80,
+  minIntervalMs: 120_000,
   cooldownMs: 0,
   driveHardTriggerEnabled: true,
   innerThoughtsEnabled: true,
@@ -135,6 +138,7 @@ export class ProactiveOrchestrator {
       cooldownMs: this.config.cooldownMs,
       petEnabled: isPetEnabled(),
       userSpeaking: this.userSpeaking,
+      isNightMode: isNightTime(),
     }
     const gateResult = decideGate(gateInput)
     if (!gateResult.allowed) {

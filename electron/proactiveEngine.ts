@@ -10,10 +10,12 @@
 //   6. hot_topic — 🆕 社交媒体热搜感知
 //   7. personal_rhythm — 🆕 用户作息规律学习
 //
-// 屏幕感知流程:
-//   截图 → VLM分析 → 评估是否值得搭话 → 生成自然搭话内容
-//   "哇你在写React组件啊，这个useEffect的依赖数组是不是少了个变量？"
-//   "看到你在看B站视频！是什么有趣的视频呀？"
+// 屏幕感知流程（v6.2 恢复真·视觉）:
+//   截图 → dHash 帧差节流（稳定画面不花钱）→ VLM 看懂屏幕具体内容
+//   → 编排器评估是否值得搭话 → 现场生成台词与表情
+//   "哇你在玩《原神》啊，这个胡桃的大招放早了！"
+//   "看到你在 B 站看新番！是什么番呀？"
+//   （v6.1 曾一度只保留窗口标题粗分类，v6.2 把眼睛接回来）
 //
 // 热搜感知流程:
 //   获取B站/微博热搜 → LLM评估与用户相关性 → 生成搭话
@@ -42,13 +44,45 @@ import { getUsageStats } from './usageStats'  // 📊 v3.0: 使用数据统计
 import { getAgentConfig } from './agentConfig'  // 配置访问
 import { collectAll, type NewsItem } from './tools/impl/newsCollector'  // 🆕 Daily Paper
 import { getProactiveOrchestrator } from './proactive/orchestrator'  // 🧭 v6.1 统一编排器
-import { getScreenGate } from './pet/lifeServices'  // 👁 v6.1 事件化屏幕场景
+import { isNightTime } from './proactive/gate'  // 🌙 任务二：夜间勿扰（健康触发器双层保险）
+import { describeScreenViaVlm } from './pet/vision/screenVision'  // 👁 v6.2 真·屏幕视觉（截图→dHash节流→VLM）
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
 // ═══════════════════════════════════════════════════════════
 
 export type TriggerType = 'time' | 'idle' | 'event' | 'opportunity' | 'screen_watch' | 'hot_topic' | 'personal_rhythm' | 'daily_paper'
+
+// ═══════════════════════════════════════════════════════════
+// 🩺 健康关怀触发器（任务一）
+//   water / eye / posture：独立 setInterval 调度，触发后统一汇入
+//   orchestrator.onTrigger({ source:'health', payload:{healthType} })，
+//   走现有 gate（场景概率/userSpeaking/privacy/夜间勿扰）+ maxDaily=80
+//   + minInterval=120s + 7 级退避，不新增骚扰通道。
+// ═══════════════════════════════════════════════════════════
+export type HealthSubtype = 'water' | 'eye' | 'posture'
+
+export interface HealthTriggerConfig {
+  enabled: boolean
+  /** 触发间隔（分钟） */
+  intervalMinutes: number
+  /** 上次触发时间戳 */
+  lastTriggered?: number
+}
+
+export const HEALTH_DEFAULTS: Record<HealthSubtype, Omit<HealthTriggerConfig, 'lastTriggered'>> = {
+  water: { enabled: true, intervalMinutes: 90 },
+  eye: { enabled: true, intervalMinutes: 45 },
+  posture: { enabled: true, intervalMinutes: 60 },
+}
+
+/** 健康类型 → 触发器 id（与 orchestrator triggerId 对齐） */
+export const HEALTH_TRIGGER_IDS: Record<HealthSubtype, string> = {
+  water: 'health-water',
+  eye: 'health-eye',
+  posture: 'health-posture',
+}
+
 
 export interface ProactiveTrigger {
   id: string
@@ -126,13 +160,13 @@ function safeNotify(title: string, body: string, icon?: string): void {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 屏幕感知（v6.1 改造）
+// 屏幕感知（v6.2）
 //
-// 旧实现：截图 → VLM 分析 → 硬编码搭话（已删除）。
-// 新实现：直接读 pet/lifeServices 的 ScreenAwareness.scene（事件化 dHash + 窗口分类，
-// 稳定画面不花钱问 VLM），把场景作为 ProactiveEvent.scene 交给编排器现场生成。
-// 这里只保留一个轻量的「最近场景」快照供 getLastScreenContext 查询。
-// ============================================================
+// 由 pet/vision/screenVision.describeScreenViaVlm 统一完成：
+//   截图 → dHash 帧差节流（稳定画面不花钱）→ VLM 看懂屏幕具体内容 → 安全降级。
+// 本模块只保留一个「最近一次看到的屏幕」快照，供 getLastScreenContext 查询。
+// v6.1 曾一度只读 ScreenAwareness.scene 粗分类；v6.2 已恢复真·视觉理解。
+// ════════════════════════════════════════════════════════════
 
 interface ScreenContext {
   activity: string
@@ -359,14 +393,14 @@ const DEFAULT_TRIGGERS: ProactiveTrigger[] = [
     priority: 7,
   },
 
-  // ── 🆕 屏幕感知 ──────────────────────────────
+  // ── 👁 屏幕感知 ──────────────────────────────
   {
     id: 'screen-watch',
     type: 'screen_watch',
-    condition: 'interval:600',  // 🔧 v3.9: 10分钟间隔（原300s，避免过于频繁）
+    condition: 'interval:120',  // v6.2: 600→120（每 2 分钟看一眼屏幕）
     template: '',
-    enabled: true,              // 🔧 v3.9: 默认开启
-    cooldown: 600,
+    enabled: true,
+    cooldown: 120,
     priority: 6,
   },
 
@@ -463,6 +497,14 @@ export class ProactiveEngine extends EventEmitter {
   private dailyPaperTimer: ReturnType<typeof setInterval> | null = null
   private rhythmTimer: ReturnType<typeof setInterval> | null = null
 
+  // 🩺 健康关怀触发器（任务一）
+  private healthTimers: Partial<Record<HealthSubtype, ReturnType<typeof setInterval>>> = {}
+  private healthConfig: Record<HealthSubtype, HealthTriggerConfig> = {
+    water: { ...HEALTH_DEFAULTS.water },
+    eye: { ...HEALTH_DEFAULTS.eye },
+    posture: { ...HEALTH_DEFAULTS.posture },
+  }
+
   // 作息学习 + 机会感知
   private activityLog: number[] = []
   private lastUserMessageTime: number = 0
@@ -478,10 +520,10 @@ export class ProactiveEngine extends EventEmitter {
     this.config = {
       enabled: true,
       minIdleSeconds: 300,
-      minIntervalSeconds: 600,
-      maxDailyProactive: 20,
+      minIntervalSeconds: 120,   // v6.2: 600→120（主动发言最小间隔 2 分钟）
+      maxDailyProactive: 80,     // v6.2: 20→80（日上限）
       useLlmPolish: false,
-      screenWatchIntervalSeconds: 600,  // 🔧 v3.9: 10分钟间隔
+      screenWatchIntervalSeconds: 120, // v6.2: 600→120（每 2 分钟感知一次屏幕）
       hotTopicIntervalSeconds: 1800,
       screenWatchEnabled: true,         // 🔧 v3.9: 默认开启
       hotTopicEnabled: true,            // 🔧 v3.9: 默认开启
@@ -567,8 +609,8 @@ export class ProactiveEngine extends EventEmitter {
         () => this.runScreenWatch(),
         this.config.screenWatchIntervalSeconds * 1000
       )
-      // 首次延迟30秒执行
-      setTimeout(() => this.runScreenWatch(), 30000)
+      // 首次延迟 15 秒执行（v6.2: 30s→15s，开机后更快进入"她在看"的状态）
+      setTimeout(() => this.runScreenWatch(), 15000)
     }
 
     // 🆕 热搜监控
@@ -606,6 +648,9 @@ export class ProactiveEngine extends EventEmitter {
     // 机会感知 (监听聊天间隙)
     this.startOpportunityCheck()
 
+    // 🩺 健康关怀（任务一）：water/eye/posture 独立 setInterval，触发后走统一编排器 gate
+    this.startHealthTimers()
+
     // 🧭 v6.1：配置并启动统一编排器（内驱力硬触发/退避/未答话头）
     // 新行为开关默认开启；沿用现有 config 结构，未配置时全部 true。
     const orch = getProactiveOrchestrator()
@@ -638,6 +683,11 @@ export class ProactiveEngine extends EventEmitter {
     if (this.dailyResetTimer) {clearInterval(this.dailyResetTimer)}
     if (this.rhythmTimer) {clearInterval(this.rhythmTimer)}
     if (this.dailyPaperTimer) {clearInterval(this.dailyPaperTimer)}
+    // 🩺 健康关怀定时器
+    for (const k of Object.keys(this.healthTimers) as HealthSubtype[]) {
+      if (this.healthTimers[k]) {clearInterval(this.healthTimers[k] as ReturnType<typeof setInterval>)}
+    }
+    this.healthTimers = {}
     this.stopOpportunityCheck()
     this.checkTimer = null
     this.screenWatchTimer = null
@@ -671,8 +721,12 @@ export class ProactiveEngine extends EventEmitter {
     this.start()
   }
 
-  // ── 🆕 屏幕感知（v6.1：读 ScreenAwareness.scene，不再截图问 VLM）──
-
+  // ── 👁 屏幕感知（v6.2：恢复真·VLM 视觉理解）──────────────
+  //
+  // 流程：dHash 节流判定 → 画面真的变了才截图问 VLM（描述屏幕具体内容 + 值不值得搭话）
+  //       → 把"她看到了什么"作为 screenSummary 喂给编排器现场生成台词和表情。
+  // 稳定画面（captured=false）只更新缓存、不消耗主动配额、不打扰；
+  // 纯文本模型 / 无 Key / 截图失败 → screenVision 内部安全降级为窗口标题。
   private async runScreenWatch(): Promise<void> {
     if (this.isScreenWatchRunning) {return}
     if (this.dailyCount >= this.config.maxDailyProactive) {return}
@@ -681,15 +735,36 @@ export class ProactiveEngine extends EventEmitter {
 
     this.isScreenWatchRunning = true
     try {
-      // 旧实现：截图 → VLM 分析（已废弃）。新实现：直接读事件化屏幕场景。
-      const scene = getScreenGate().scene || 'idle'
+      const vision = await describeScreenViaVlm(false, Date.now())
+
+      // 无论是否触发，都缓存最近一次"看到"的快照，供 getLastScreenContext / 聊天上下文查询
       lastScreenContext = {
-        activity: scene, apps: [], summary: `屏幕场景：${scene}`,
-        shouldComment: true, commentSuggestions: [], timestamp: Date.now(),
+        activity: vision.scene,
+        apps: vision.processName ? [vision.processName] : [],
+        summary: vision.detail,
+        shouldComment: vision.worthComment >= 0.4,
+        commentSuggestions: [],
+        timestamp: Date.now(),
       }
+
+      // 画面稳定（没新内容）→ 不花钱、不打扰、不消耗主动配额，本轮静默
+      if (!vision.captured) {return}
+
       const trigger = this.triggers.find(t => t.id === 'screen-watch')
       if (trigger) {this.markTriggerFired(trigger)}
-      await getProactiveOrchestrator().onTrigger({ source: 'screen', triggerId: 'screen-watch', scene })
+      await getProactiveOrchestrator().onTrigger({
+        source: 'screen',
+        triggerId: 'screen-watch',
+        scene: vision.scene,
+        // 🆕 真·屏幕内容：她现在知道主人在玩《原神》、在看哪个视频、在写什么代码
+        screenSummary: vision.detail,
+        payload: {
+          saw: vision.saw,
+          worthComment: vision.worthComment,
+          windowTitle: vision.windowTitle || '',
+          change: vision.change,
+        },
+      })
     } catch (err) {
       console.error('[ProactiveEngine] 屏幕监控异常:', err)
     } finally {
@@ -829,6 +904,86 @@ export class ProactiveEngine extends EventEmitter {
       clearInterval(this.opportunityCheckTimer)
       this.opportunityCheckTimer = null
     }
+  }
+
+  // ── 🩺 健康关怀（任务一）──────────────────────────────
+
+  /** 启动三类健康定时器（已启用的才起；间隔可由配置覆盖） */
+  private startHealthTimers(): void {
+    for (const type of ['water', 'eye', 'posture'] as HealthSubtype[]) {
+      if (this.healthTimers[type]) {continue}
+      const cfg = this.healthConfig[type]
+      if (!cfg.enabled) {continue}
+      const ms = Math.max(1, cfg.intervalMinutes) * 60_000
+      const timer = setInterval(() => { try { this.runHealthReminder(type) } catch { /* 不阻塞 */ } }, ms)
+      if (typeof (timer as any)?.unref === 'function') {(timer as any).unref()}
+      this.healthTimers[type] = timer
+    }
+  }
+
+  /** 重新调度某一类健康定时器（配置变更后调用） */
+  private rescheduleHealthTimer(type: HealthSubtype): void {
+    if (this.healthTimers[type]) {
+      clearInterval(this.healthTimers[type] as ReturnType<typeof setInterval>)
+      this.healthTimers[type] = undefined
+    }
+    // 仅在引擎已启动（checkTimer 非空）时重建，避免未启动就起定时器
+    if (this.checkTimer && this.healthConfig[type].enabled) {
+      const ms = Math.max(1, this.healthConfig[type].intervalMinutes) * 60_000
+      const timer = setInterval(() => { try { this.runHealthReminder(type) } catch { /* 不阻塞 */ } }, ms)
+      if (typeof (timer as any)?.unref === 'function') {(timer as any).unref()}
+      this.healthTimers[type] = timer
+    }
+  }
+
+  /**
+   * 跑一次健康提醒：先做廉价前置过滤（夜间/配额/最小间隔），
+   * 再交给统一编排器走完整 gate（场景概率/userSpeaking/退避）。
+   */
+  private runHealthReminder(type: HealthSubtype): void {
+    const cfg = this.healthConfig[type]
+    if (!cfg || !cfg.enabled) {return}
+    // 夜间勿扰双层保险（gate 也会拦，这里提前短路不白叫编排器）
+    if (isNightTime()) {return}
+    if (this.dailyCount >= this.config.maxDailyProactive) {return}
+    if (Date.now() - this.lastProactive < this.config.minIntervalSeconds * 1000) {return}
+    this.triggerHealth(type)
+  }
+
+  /**
+   * 手动触发一次健康关怀（测试按钮/缩短间隔验证用）。
+   * 不走夜间/前置过滤，直接进编排器 gate（gate 仍会按场景/退避决定说不说）。
+   */
+  triggerHealth(type: HealthSubtype): void {
+    const now = Date.now()
+    this.healthConfig[type].lastTriggered = now
+    // 同步引擎旧簿记（与 screen_watch 一致，供设置面板 getStatus 查询）
+    this.lastProactive = now
+    this.dailyCount++
+    void getProactiveOrchestrator().onTrigger({
+      source: 'health',
+      triggerId: HEALTH_TRIGGER_IDS[type],
+      // 编排器会自动从 screenGate 拿当前场景；记忆由 orchestrator.buildMemorySnippet 组装
+      payload: { healthType: type },
+    })
+  }
+
+  /** 查询某类健康触发器当前配置 */
+  getHealthTriggerConfig(type: HealthSubtype): HealthTriggerConfig {
+    return { ...this.healthConfig[type] }
+  }
+
+  /**
+   * 更新某类健康触发器配置（enabled / intervalMinutes）。
+   * 变更后自动重排定时器；不持久化到文件（与现有触发器文件解耦，配置接口留好）。
+   */
+  setHealthTriggerConfig(type: HealthSubtype, patch: Partial<Pick<HealthTriggerConfig, 'enabled' | 'intervalMinutes'>>): void {
+    if (patch.enabled !== undefined) {this.healthConfig[type].enabled = !!patch.enabled}
+    if (patch.intervalMinutes !== undefined) {
+      const mins = Number(patch.intervalMinutes)
+      this.healthConfig[type].intervalMinutes = Number.isFinite(mins) && mins > 0 ? mins : HEALTH_DEFAULTS[type].intervalMinutes
+    }
+    this.rescheduleHealthTimer(type)
   }
 
   private runOpportunityCheck(): void {

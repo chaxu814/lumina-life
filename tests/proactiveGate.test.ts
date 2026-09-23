@@ -21,7 +21,7 @@ function baseInput(overrides: Partial<GateInput> = {}): GateInput {
 }
 
 describe('gate 门控规则', () => {
-  it('基线输入全部放行（idle 场景 70%，rand=0 必过）', () => {
+  it('基线输入全部放行（idle 场景 90%，rand=0 必过）', () => {
     const r = decideGate(baseInput())
     expect(r.allowed).toBe(true)
     expect(r.reason).toBe('scene_idle')
@@ -59,8 +59,9 @@ describe('gate 门控规则', () => {
     expect(r.reason).toBe('min_interval')
   })
 
-  it('g. 游戏场景 rand=0 放行、rand=1 拒绝（50%）', () => {
-    expect(decideGate(baseInput({ scene: 'game', rand: () => 0 })).allowed).toBe(true)
+  it('g. 游戏场景 85% 放行（v6.2 上调，观战吐槽是核心体感）', () => {
+    expect(decideGate(baseInput({ scene: 'game', rand: () => 0.84 })).allowed).toBe(true)
+    expect(decideGate(baseInput({ scene: 'game', rand: () => 0.86 })).allowed).toBe(false)
     expect(decideGate(baseInput({ scene: 'game', rand: () => 1 })).allowed).toBe(false)
   })
 
@@ -69,13 +70,20 @@ describe('gate 门控规则', () => {
     expect(r.allowed).toBe(false)
   })
 
-  it('i. idle/other 场景 70% 放行', () => {
-    expect(decideGate(baseInput({ scene: 'other', rand: () => 0.69 })).allowed).toBe(true)
-    expect(decideGate(baseInput({ scene: 'other', rand: () => 0.71 })).allowed).toBe(false)
+  it('i. idle/other 场景 90% 放行（v6.2，发呆时最需要陪伴）', () => {
+    expect(decideGate(baseInput({ scene: 'other', rand: () => 0.89 })).allowed).toBe(true)
+    expect(decideGate(baseInput({ scene: 'other', rand: () => 0.91 })).allowed).toBe(false)
   })
 
-  it('j. code/video 等其余场景 50%', () => {
-    expect(decideGate(baseInput({ scene: 'code', rand: () => 0 })).allowed).toBe(true)
-    expect(decideGate(baseInput({ scene: 'code', rand: () => 1 })).allowed).toBe(false)
+  it('j. code 场景 55%、视频 75%（专注时少打扰）', () => {
+    expect(decideGate(baseInput({ scene: 'code', rand: () => 0.54 })).allowed).toBe(true)
+    expect(decideGate(baseInput({ scene: 'code', rand: () => 0.56 })).allowed).toBe(false)
+    expect(decideGate(baseInput({ scene: 'video', rand: () => 0.74 })).allowed).toBe(true)
+    expect(decideGate(baseInput({ scene: 'video', rand: () => 0.76 })).allowed).toBe(false)
+  })
+
+  it('k. social 场景 40%（你在跟别人聊，她少插嘴）', () => {
+    expect(decideGate(baseInput({ scene: 'social', rand: () => 0.39 })).allowed).toBe(true)
+    expect(decideGate(baseInput({ scene: 'social', rand: () => 0.41 })).allowed).toBe(false)
   })
 })
