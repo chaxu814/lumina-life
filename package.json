@@ -197,4 +197,8 @@
     "xlsx": "^0.18.5",
     "zustand": "^5.0.8"
   }
+  },
+  "optionalDependencies": {
+    "mineflayer": "^4.20.0"
+  }
 }

@@ -90,6 +90,24 @@ import { keyboardPressDef, keyboardPress, keyboardTypeDef, keyboardType } from '
 import { weatherDef, weather } from './impl/weather'
 // 网页抓取
 import { webFetchDef, webFetch } from './impl/webFetch'
+// 官方示例技能（冷启动）: B站热搜 / 天气简报 / 代码日报 / 番茄钟
+import {
+  bilibiliHotSearchDef, bilibiliHotSearch,
+  bilibiliHotPushDef, bilibiliHotPush,
+} from './impl/bilibiliHot'
+import {
+  weatherGetDef, weatherGet,
+  weatherBriefDef, weatherBrief,
+} from './impl/weatherBrief'
+import {
+  codeDailyGenerateDef, codeDailyGenerate,
+  codeDailyWeeklyDef, codeDailyWeekly,
+} from './impl/codeDaily'
+import {
+  pomodoroStartDef, pomodoroStart,
+  pomodoroStatusDef, pomodoroStatus,
+  pomodoroStopDef, pomodoroStop,
+} from './impl/pomodoro'
 // 听觉系统工具
 import { hearingDefs } from './impl/hearingTools'
 // 主动对话工具
@@ -103,6 +121,8 @@ import {
   desktopElementsDef, desktopElements,
   desktopElementActDef, desktopElementAct,
 } from './impl/computerUse'
+// 🎮 Minecraft 游戏集成（双路线：视觉 VLM / Mineflayer 程序化）
+import { registerGamingTools } from '../gaming'
 // 🔬 Phase C: Deep Research 工具
 import { deepResearchDef, deepResearch } from './impl/deepResearch'
 // 📡 Phase C: 渠道消息工具
@@ -262,6 +282,21 @@ export function registerAllTools(): void {
   registerTool(webFetchDef, webFetch)
   // contentCollector 已合并到 webFetch
 
+  // ── 官方示例技能（冷启动）──────────────────────────
+  // B站热搜
+  registerTool(bilibiliHotSearchDef, bilibiliHotSearch)
+  registerTool(bilibiliHotPushDef, bilibiliHotPush)
+  // 每日天气简报
+  registerTool(weatherGetDef, weatherGet)
+  registerTool(weatherBriefDef, weatherBrief)
+  // 代码日报/周报
+  registerTool(codeDailyGenerateDef, codeDailyGenerate)
+  registerTool(codeDailyWeeklyDef, codeDailyWeekly)
+  // 番茄钟
+  registerTool(pomodoroStartDef, pomodoroStart)
+  registerTool(pomodoroStatusDef, pomodoroStatus)
+  registerTool(pomodoroStopDef, pomodoroStop)
+
   // 听觉系统 (4 工具)
   for (const def of hearingDefs) {
     registerTool(def.def, def.handler)
@@ -284,6 +319,9 @@ export function registerAllTools(): void {
   // v3.30 UIA 元素树（按元素序号精确操作）
   registerTool(desktopElementsDef, desktopElements)
   registerTool(desktopElementActDef, desktopElementAct)
+
+  // 🎮 Minecraft 游戏集成（视觉 + 程序化双路线）
+  registerGamingTools()
 
   // 📬 Agent 邮件 (v2.6)
   registerTool(mailSendDef, mailSendHandler)

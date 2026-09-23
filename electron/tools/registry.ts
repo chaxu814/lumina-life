@@ -30,9 +30,11 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   // ═══════════════════════════════════════════════════════════
   // 精简三层工具架构（方案B — 按模式分档加载）
   //   设计原则：
-  //     - chat: 纯对话 + 基础查询（10 工具）
-  //     - agent: 日常使用（~25 工具，精简自原 60+）
-  //     - developer: agent + git（~28 工具）
+  //     - chat: 纯对话（0 工具，最安全）
+  //     - agent: 日常使用（约 32 工具：文件+终端+搜索+记忆+任务+系统+团队）
+  //     - developer: agent + git（约 36 工具）
+  //   全量注册工具 100+（含 Computer Use/新闻/创作者/LSP/MCP/邮件等，按需启用），
+  //   启动日志会打印实际注册数 getToolNames().size。
   //   旧有 TOOLSETS 保留在下方，保证 resolveToolset 向下兼容。
   // ═══════════════════════════════════════════════════════════
 
@@ -44,7 +46,7 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   /*** 🟡 L2 — Agent 日常模式：文件+搜索+记忆+团队 */
   agent: {
-    description: 'Agent 模式 — 日常使用工具（精简版 ~25 工具）',
+    description: 'Agent 模式 — 日常使用工具（约 32 个）',
     includes: ['files_core', 'shell', 'web_search', 'memory', 'tasks_core', 'system_core', 'team'],
     tools: [],
   },
@@ -97,6 +99,28 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
     description: '团队协作 — 委托/流水线/通知板/共享上下文/模式切换',
     tools: ['delegate_to', 'mode_switch', 'mode_status', 'team_context',
             'delegate_chain', 'write_notice', 'read_notices', 'save_context', 'load_context'],
+  },
+
+  // ── 官方示例技能（冷启动）──────────────────────────
+  // 与 electron/skills/<name>/SKILL.md 对应，工具实现见 electron/tools/impl/
+  bilibili_hot: {
+    description: 'B站热搜/热门榜推送',
+    tools: ['bilibili_hot_search', 'bilibili_hot_push'],
+  },
+
+  weather_brief: {
+    description: '每日天气简报（Open-Meteo，无需 Key）',
+    tools: ['weather_get', 'weather_brief'],
+  },
+
+  code_daily: {
+    description: '代码日报/周报（Git 仓库提交统计）',
+    tools: ['code_daily_generate', 'code_daily_weekly'],
+  },
+
+  pomodoro: {
+    description: '番茄钟提醒（工作+休息计时+系统通知）',
+    tools: ['pomodoro_start', 'pomodoro_status', 'pomodoro_stop'],
   },
 
   // ── 旧有子集（保留以供向后兼容）────────────────────
@@ -189,6 +213,12 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   computer_use: {
     description: 'Computer Use — 屏幕理解 + 自动操作鼠标键盘 + 桌面扫描',
     tools: ['desktop_see', 'desktop_act', 'desktop_screen_size', 'desktop_scan'],
+  },
+
+  // ── 🎮 Minecraft 游戏集成（双路线：视觉 / Mineflayer 程序化）─────────
+  gaming: {
+    description: 'Minecraft 游戏集成 — 感知游戏状态并执行移动/攻击/聊天等动作',
+    tools: ['game_status', 'game_action', 'game_look', 'game_chat'],
   },
 
   mail: {
