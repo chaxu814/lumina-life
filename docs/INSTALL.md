@@ -13,6 +13,18 @@
 
 ---
 
+## ⚡ 3 分钟上手（按你的系统选一条）
+
+| 系统 | 安装后要做的唯一一件事 | Computer Use 开箱？ |
+|------|------------------------|---------------------|
+| **Windows 10/11** | 装完即用，无需任何授权 | ✅ 开箱即用 |
+| **macOS** | 装完后去「系统设置 → 隐私与安全性」勾 **辅助功能** + **屏幕录制**，重启 App | ⚠️ 授权后可用 |
+| **Linux** | 登录用 **X11 会话**，`sudo apt install xdotool`（截屏工具一般已带） | ⚠️ X11 可用；Wayland 不能移动/点击 |
+
+> 下面是分平台的详细步骤。
+
+---
+
 ## Windows
 
 ### 方式一：下载安装包（推荐）
@@ -78,12 +90,14 @@ npm run dev
   sudo apt install xdotool        # Debian/Ubuntu
   sudo dnf install xdotool        # Fedora
   ```
-- 截屏需要 `grim`(Wayland) 或 `scrot` / `gnome-screenshot` / ImageMagick(`import`) 之一，发行版一般已带。
+- 截屏会自动按顺序尝试 `gnome-screenshot → scrot → import(ImageMagick)`，发行版一般已带其一。
+- 可选增强：`sudo apt install cliclick` 不适用 Linux；长按时长/拖拽由 xdotool 直接完成。
 
 ### Wayland 用户注意
 - Wayland 出于安全模型**禁止任意应用全局注入鼠标/键盘**，Lumina 会自动禁用桌面操控并提示。
 - 如确需 Computer Use，请在登录界面的齿轮处选择 **「Ubuntu on Xorg」/ X11 会话**后重新登录。
-- Wayland 下截屏仍可用（走 grim），只是不能移动/点击。
+- Wayland 下截屏仍可用（走 `grim`，需 `sudo apt install grim`；GNOME 可用 `gnome-screenshot`），只是不能移动/点击。
+- 实在要留在 Wayland，可评估 **ydotool**（通过 `/dev/uinput` 注入，需把用户加入 input 组），但兼容性因合成器而异，非官方支持路径。
 
 ---
 
