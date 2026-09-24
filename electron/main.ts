@@ -106,7 +106,8 @@ import { registerDeepResearchIpc } from './ipc/deepResearchIpc'  // 🔬 v3.11
 import { registerCodingModeIpc } from './ipc/codingModeIpc'
 import { registerDiagnosticsIpc } from './ipc/diagnosticsIpc'
 import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'
-import { registerPlatformIpc } from './ipc/platformIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
+import { registerPlatformIpc } from './ipc/platformIpc'
+import { registerPushIpc } from './ipc/pushIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
 import { allFlags, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
 import { exportDataToZip, importDataFromZip, getDataLocations, defaultExportFileName } from './utils/dataExport'  // I6: 数据导出/导入
 import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系剧本
@@ -635,6 +636,7 @@ for (const { id } of orch.listRunners()) {
   registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
   registerPlatformIpc()
+  registerPushIpc()
   registerArtifactIpc(() => mainWindow)            // task workspace artifact file ops                                 // cross-platform feature matrix IPC
   ipcMain.handle('feature-flags:get-all', () => allFlags())  // I7: 全量功能开关
   ipcMain.handle('feature-flags:set', (_e, key: string, value: boolean) => { setFeatureFlag(key as any, !!value); return { ok: true, key, value } })  // I7: 写回开关

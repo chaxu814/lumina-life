@@ -716,6 +716,20 @@ const api = {
   platformGetFeatures: () =>
     ipcRenderer.invoke('platform:get-features') as Promise<{ ok: boolean; matrix?: any; error?: string }>,
 
+  // AI 主动推送（proactive:*）
+  proactiveGetState: () =>
+    ipcRenderer.invoke('proactive:get-state') as Promise<any>,
+  proactiveGetSettings: () =>
+    ipcRenderer.invoke('proactive:get-settings') as Promise<any>,
+  proactiveUpdateSettings: (settings: any) =>
+    ipcRenderer.invoke('proactive:update-settings', settings) as Promise<any>,
+  proactivePushNow: () =>
+    ipcRenderer.invoke('proactive:push-now') as Promise<{ should_speak: boolean; reason: string }>,
+  proactiveToggle: (enabled: boolean) =>
+    ipcRenderer.invoke('proactive:toggle', enabled) as Promise<{ enabled: boolean }>,
+  proactiveUserActivity: () =>
+    ipcRenderer.invoke('proactive:user-activity') as Promise<{ ok: boolean }>,
+
   // ─── v3.33 绩效画像 / 任务追踪 / 自治 / 检查点 / 团队日记 ───
   collabStatsProfiles: () =>
     ipcRenderer.invoke('team-collab:stats-profiles') as Promise<any>,
