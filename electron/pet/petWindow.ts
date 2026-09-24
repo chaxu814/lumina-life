@@ -854,28 +854,85 @@ function currentModelEntryRel(): string {
 }
 
 /**
- * 按当前模型形态选择渲染页。
- * 对 live2d 页附加 ?model=entryRel 查询参数，让页面知道加载哪个模型（同 kind 切换无需重载窗口）。
+ * 返回桌宠渲染页的**纯文件路径**（不含 query string）。
+ * live2d 页拷贝到 userData 时固定命名为 pet.html；其余渲染页用原名。
+ * 注意：不要再往这个路径上拼 `?model=...` —— Electron 的 loadFile() 会把整个
+ * 字符串当文件路径，内部转 file URL 时把 `?` 编码成 %3F，导致 ERR_FAILED 白屏。
+ * 加载请统一用 loadPetHtml()，它通过 loadFile 的 options.query 正确传 model 参数。
  */
-function getRendererHtmlPath(): string {
+function getRendererHtmlFilePath(): string {
   const live2d = getPetHtmlPath() // 同时确保资源已复制
   const dir = path.dirname(live2d)
   const kind = currentModelKind()
-  const entryRel = currentModelEntryRel()
   const info = getRendererForKind(kind)
   const htmlFile = info.htmlFile
 
-  // live2d 页拷贝到 userData 时固定命名为 pet.html；其余渲染页用原名
   if (kind === 'live2d') {
-    // 附加 model query 参数
-    const sep = live2d.includes('?') ? '&' : '?'
-    return live2d + sep + 'model=' + encodeURIComponent(entryRel)
+    return live2d
   }
   const candidate = path.join(dir, htmlFile)
   if (fs.existsSync(candidate)) {return candidate}
   console.warn('[PetWindow] 渲染页 ' + htmlFile + ' 未找到，回退 Live2D 页')
-  const sep2 = live2d.includes('?') ? '&' : '?'
-  return live2d + sep2 + 'model=' + encodeURIComponent(entryRel)
+  return live2d
+}
+
+/** 当前模型的 entryRel（live2d 渲染页通过 query 读取，如 Mao/mao_pro.model3.json） */
+function getRendererModelParam(): string {
+  return currentModelEntryRel()
+}
+
+/**
+ * 正确地把渲染页加载进 petWindow。
+ *
+ * Electron 的 loadFile(filePath, options) 会自己把 options.query 拼成
+ * `file:///.../pet.html?model=Mao%2Fmao_pro.model3.json`（正确编码 `/`），
+ * 而不是把整个带 `?` 的字符串当路径再二次编码成 %3F。
+ *
+ * 只有 live2d 渲染页（文件名 pet.html）需要 model query；
+ * 其余形态（vrm/pngtuber/mmd/cat）不读这个参数，直接 loadFile 纯路径。
+ */
+/**
+ * 纯函数：决定 loadFile 的参数（纯文件路径 + 可选 query）。
+ * 抽出便于单测——测试无需构造真实 BrowserWindow 即可断言"路径不含 ?、query 正确"。
+ * live2d 页（pet.html）带 query.model；其余形态不带 query。
+ */
+export function resolvePetLoadTarget(): { filePath: string; query?: { model: string } } {
+  const filePath = getRendererHtmlFilePath()
+  if (path.basename(filePath) === 'pet.html') {
+    return { filePath, query: { model: getRendererModelParam() } }
+  }
+  return { filePath }
+}
+
+export async function loadPetHtml(): Promise<void> {
+  if (!petWindow || petWindow.isDestroyed()) {
+    throw new Error('[PetWindow] petWindow 不存在或已销毁')
+  }
+  const { filePath, query } = resolvePetLoadTarget()
+  if (query) {
+    await petWindow.loadFile(filePath, { query })
+  } else {
+    await petWindow.loadFile(filePath)
+  }
+}
+
+/** 测试钩子：注入 mock BrowserWindow，验证 loadFile 的实参。 */
+export function __setPetWindowForTest(win: BrowserWindow | null): void {
+  petWindow = win
+}
+
+/**
+ * @deprecated 旧实现把 `?model=entryRel` 直接拼进文件路径再传给 loadFile()，
+ * 导致 Electron 把 `?` 编码成 %3F、Live2D 页面 ERR_FAILED 白屏。
+ * 现已拆分为 getRendererHtmlFilePath()（纯路径）+ getRendererModelParam()（query 值），
+ * 加载请统一用 loadPetHtml()。本函数仅保留以防外部残留引用断裂，不要再使用。
+ */
+function getRendererHtmlPath(): string {
+  const filePath = getRendererHtmlFilePath()
+  if (path.basename(filePath) === 'pet.html') {
+    return filePath + '?model=' + encodeURIComponent(getRendererModelParam())
+  }
+  return filePath
 }
 
 /**
@@ -1178,7 +1235,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   } catch (e) { console.warn('[PetWindow] 媒体权限处理器设置失败:', e) }
 
   // 加载生成的 HTML（按当前模型形态选择 Live2D / VRM 渲染页）
-  petWindow.loadFile(getRendererHtmlPath()).then(() => {
+  loadPetHtml().then(() => {
     setWindowClickThrough(config.clickThrough)
     startCursorFollow() // 👀 v6.2 全屏注视推送
   }).catch(err => {
@@ -1600,8 +1657,7 @@ export function registerPetIpc(): void {
       if (petWindow && !petWindow.isDestroyed()) {
         if (newKind !== prevKind) {
           // 跨形态：重载整个渲染页
-          const html = getRendererHtmlPath()
-          await petWindow.loadFile(html)
+          await loadPetHtml()
           setWindowClickThrough(config.clickThrough)
         } else {
           // 同形态（如 live2d→live2d）：向渲染页发热切换命令
@@ -1622,8 +1678,7 @@ export function registerPetIpc(): void {
       setActiveModel(app.getPath('userData'), 'Mao')
       persistPetModel('Mao')
       if (petWindow && !petWindow.isDestroyed()) {
-        const html = getRendererHtmlPath()
-        petWindow.loadFile(html).then(() => setWindowClickThrough(config.clickThrough)).catch(() => {})
+        loadPetHtml().then(() => setWindowClickThrough(config.clickThrough)).catch(() => {})
       }
     } catch (e) { console.warn('[PetWindow] 模型加载失败回退异常:', e) }
   })
@@ -1646,9 +1701,8 @@ export function registerPetIpc(): void {
   // 切换到不同形态模型后，在同一桌宠窗口重载对应渲染页
   ipcMain.handle('pet:reopen', async () => {
     try {
-      const html = getRendererHtmlPath()
       if (petWindow && !petWindow.isDestroyed()) {
-        await petWindow.loadFile(html)
+        await loadPetHtml()
         setWindowClickThrough(config.clickThrough)
       } else {
         createPetWindow(petMainWindow)
