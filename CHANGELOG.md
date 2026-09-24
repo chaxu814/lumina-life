@@ -36,8 +36,16 @@
 ### 💡 8 创新提案（H）
 - `docs/innovation-proposals-20260924.md`（744 行），推荐 P0 主动推送→P1 主题/云同步/安全治理→P2 商城/无障碍→P3 分成/联邦
 
+### 🐛 透明窗口修复（P0 追加）
+- **根因**：getPetHtmlPath() 只比 mtime，git checkout/分支切换后源码 mtime 变旧，导致含实色渐变的旧 pet.html 副本永不刷新 → 深色不透明盒子
+- **复制逻辑**：加文件大小比对（dstStat.size !== srcStat.size 即强制复制）+ dev 模式强制刷新，保证 git 回退后旧副本也能更新
+- **条件实色底**：body 默认透明；仅当平台能力判定透明被关闭时，
+esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
+- **compact toolbar**：小窗模式下工具栏 3 秒自动收起，悬停展开，离开再收起
+- **已立即刷新用户副本**：pet-assets/pet.html 189055→183263 字节，body 恢复透明
+
 ### 📊 验证
-- tsc 0 错误 / 107 文件 1279 测试通过 / build 成功 / 20 commits
+- tsc 0 错误 / 107 文件 1279 测试通过 / build 成功 / 22 commits
 
 ### ⚠️ 未实机验证
 - Live2D 白屏、VLM 真实画面、焦点 AttachThreadInput、团队委托端到端、任务工作区 UI 滚动、mac/Linux 实机、dmg/AppImage 打包
