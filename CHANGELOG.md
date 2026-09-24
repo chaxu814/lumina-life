@@ -44,8 +44,26 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 - **compact toolbar**：小窗模式下工具栏 3 秒自动收起，悬停展开，离开再收起
 - **已立即刷新用户副本**：pet-assets/pet.html 189055→183263 字节，body 恢复透明
 
+### 🖱️ 拟人化鼠标移动（v0.2 追加）
+- **根因**：cuCore/PlatformAdapter 的 click/hover 直接 SetCursorPos 瞬移，光标从 A 跳到 B，不像人操作
+- **实现**：humanMouse.ts — buildHumanPath(easeOutCubic 缓动 + ±1.5px 随机抖动 + 8-15 步自适应)、humanMoveTo/humanClick/humanHover/humanDrag
+- **点击前停顿**：60-140ms 随机停顿后再按下；拖拽走 mousedown→路径→mouseup 分步原语
+- **极速模式**：LUMINA_CU_INSTANT_MOUSE=1 退回原瞬移；适配器无 getCursorPos/mouseDown 时自动降级
+- **接入**：cuCore 的 cuClick/cuHover/cuDrag 默认走拟人化路径
+- **测试**：18 例覆盖路径生成/instant模式/光标回退/拖拽原语/降级
+
+### 🔌 LM Studio 实测发现（v0.2 追加）
+- LM Studio 服务器开启了 LM_API_TOKEN 认证（/v1/models 返回 401），非"任意占位 key"
+- lms chat CLI 可绕过 HTTP 认证直连模型（QwenPaw Flash 4B Q4 正常响应）
+- onboarding 探测器已优化：401 时给出"关闭 API Key 认证或填入 Key"的友好提示
+- Minecraft 已安装（26.1.2-Fabric，PCL2 启动器，LittleSkin 认证），但 VLM HTTP API 因认证阻断，完整视觉路线待用户关闭 LM Studio 认证后实测
+
+### 🔬 6 项目对比新增（v0.2 追加）
+- **LobsterAI**（网易有道，6068★）：Electron 桌面办公 Agent，外包 OpenClaw runtime，11 渠道 IM 远程控制，28 技能含 skin-creator 桌宠皮肤生成；无游戏/无 VLM 桌面操控/无社交引擎
+- **minimax-code**（MiniMax，1815★）：纯终端 TUI coding agent，fork pi-mono，沙箱执行+BYOK 三协议+ACP；桌面 App 不开源，外部 PR 通道关闭
+
 ### 📊 验证
-- tsc 0 错误 / 107 文件 1279 测试通过 / build 成功 / 22 commits
+- tsc 0 错误 / 108 文件 1297 测试通过（autoPlay 时序测试偶发波动，重跑通过）/ build 成功 / 25 commits
 
 ### ⚠️ 未实机验证
 - Live2D 白屏、VLM 真实画面、焦点 AttachThreadInput、团队委托端到端、任务工作区 UI 滚动、mac/Linux 实机、dmg/AppImage 打包
