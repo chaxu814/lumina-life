@@ -20,6 +20,8 @@ import {
   captureScreen,
   callVisionModel,
   cuPressKey,
+  cuType,
+  executeCuAction,
   type CuView,
 } from '../tools/impl/cuCore'
 import { getPlatformAdapter } from '../core/platform'
@@ -174,7 +176,6 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 /** 执行鼠标左键/右键（准星 = 屏幕中心 nx=50, ny=50） */
 async function clickAtCenter(kind: 'left' | 'right'): Promise<GameActionResult> {
   const view: CuView = { imgW: 100, imgH: 100 }
-  const { executeCuAction } = await import('../tools/impl/cuCore')
   const r = await executeCuAction(
     { action_type: kind === 'left' ? 'click' : 'right_click', nx: 50, ny: 50 },
     view,
@@ -219,7 +220,6 @@ export async function visualAct(
     const text = (req.text || '').trim()
     await cuPressKey(entry.keys[0])
     await sleep(120)
-    const { cuType } = await import('../tools/impl/cuCore')
     await cuType(text)
     await sleep(80)
     await cuPressKey('enter')

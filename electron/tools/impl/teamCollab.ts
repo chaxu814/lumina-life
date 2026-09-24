@@ -31,6 +31,7 @@ import { eventsToActions, type ConvertedAction } from '../../team/teachRecorder'
 import { captureScreen, executeCuAction, type CuScreen } from './cuCore'
 import { acquireCuSession, releaseCuSession } from './cuPermissions'
 import { runAdversarialReview, formatReviewReport, DEFAULT_PERSPECTIVES } from '../../team/adversarialReview'
+import { getTeamAutonomy } from '../../team/teamAutonomy'
 import {
   createWorktree, listWorktrees, removeWorktree, mergeWorktree,
 } from '../../team/gitWorktree'
@@ -916,7 +917,6 @@ export async function teamStats(args: Record<string, any>): Promise<ToolResult> 
       return ok(`🔎 任务追踪（累计 ${s.total} 完成，${s.ok} 成功 / ${s.fail} 失败，在飞 ${s.running}，长任务 ${s.longRunning}，均时 ${Math.round(s.avgDurationMs / 1000)}s）：\n${lines.join('\n')}`)
     }
     if (action === 'autonomy') {
-      const { getTeamAutonomy } = await import('../../team/teamAutonomy')
       const st = getTeamAutonomy().status()
       if (!st.running) {return ok('🧭 内驱力自领取未运行（留场 worker 只等显式派活）')}
       return ok(`🧭 自领取运行中：在飞 ${st.inFlight}/${st.maxConcurrent}，累计自领取 ${st.totalClaims} 次，轮询周期 ${Math.round(st.intervalMs / 1000)}s`)
@@ -947,7 +947,6 @@ export const teamAutonomyDef: ToolDef = {
 
 export async function teamAutonomy(args: Record<string, any>): Promise<ToolResult> {
   const action = String(args.action || 'start')
-  const { getTeamAutonomy } = await import('../../team/teamAutonomy')
   const auto = getTeamAutonomy()
   if (action === 'stop') {
     auto.stop()
@@ -1010,7 +1009,6 @@ export async function teamLog(args: Record<string, any>): Promise<ToolResult> {
     // 现算：任务板历史 + trace + 画像 + 自治计数
     const events = getSharedBoard().getHistory()
     const traces = getTaskTrace().list(5000).slice().reverse()
-    const { getTeamAutonomy } = await import('../../team/teamAutonomy')
     const autonomyCount = getTeamAutonomy().status().totalClaims
     const digest = buildDigest(
       { events, traces, stats: getWorkerStats().getState(), autonomousClaims: autonomyCount },

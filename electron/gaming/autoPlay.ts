@@ -16,6 +16,7 @@ import type {
 import type { GameProfile } from './profiles'
 import { reviewGameAction } from './security'
 import { getGameState, executeGameAction } from './gameActions'
+import { callVisionModel } from '../tools/impl/cuCore'
 
 export interface AutoPlayOptions {
   profile: GameProfile
@@ -72,8 +73,6 @@ async function defaultDecide(
   state: GameState,
   round: number,
 ): Promise<GameActionRequest | null> {
-  // 延迟 import，避免测试环境强依赖 VLM
-  const { callVisionModel } = await import('../tools/impl/cuCore')
   const prompt = `你正在操控 ${profile.displayName}。
 ${profile.vlmPrompt}
 

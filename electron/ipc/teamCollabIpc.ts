@@ -22,6 +22,7 @@ import {
 import { getWorkerStats, rankRolesForKind } from '../team/workerStats'
 import { getTaskTrace } from '../team/llmTrace'
 import { getTeamAutonomy, recoverOnStartup } from '../team/teamAutonomy'
+import { replayLesson } from '../tools/impl/teamCollab'
 import { getCheckpointStore, rollbackCheckpoint } from '../team/teamCheckpoint'
 import { getDailyLog, buildDigest } from '../team/teamDailyLog'
 
@@ -184,7 +185,6 @@ export function registerTeamCollabIpc(): void {
   ipcMain.handle('teach:replay', async (_e, id: string) => {
     const lesson = getLessonStore().get(String(id))
     if (!lesson) {throw new Error(`课程 ${id} 不存在`)}
-    const { replayLesson } = await import('../tools/impl/teamCollab')
     return replayLesson(lesson)
   })
 

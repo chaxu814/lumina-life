@@ -25,6 +25,7 @@ import type { AvatarKind } from './modelLibrary'
 import { BUILTIN_MODELS, getActiveModel, setActiveModel } from './modelLibrary'
 import { getRendererForKind, fallbackToBuiltin, guessKindFromEntry } from './avatarRenderer'
 import { detectEdge, calcPeekPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig } from './edgeSnap'
+import { getComputerUse } from '../computerUse'  // 已在主 bundle，静态引用消除 vite 重复 import 告警
 
 /**
  * 桌宠"大脑"LLM 配置解析：
@@ -2296,7 +2297,6 @@ export async function tryPetOperate(cu: { type?: string; params?: Record<string,
     return { ok: false, error: '浏览器控制未开启' }
   }
   try {
-    const { getComputerUse } = await import('../computerUse')
     const ok = await getComputerUse().executeAction({ type: t as any, params: (cu.params || {}) as Record<string, string | number> })
     return { ok }
   } catch (e: any) {

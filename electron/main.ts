@@ -34,6 +34,8 @@ import { initMomentsStore } from './moments/momentsStore'  // 🌸 v2.10
 import * as momentsStore from './moments/momentsStore'     // 🌸 v2.10 IPC
 import { initKnowledgeBase, getKnowledgeBase } from './knowledgeBase'  // 🧠 v3.9: 知识库
 import { initComputerUse } from './computerUse'  // 🖥️ v3.10: 桌面操控
+import * as petWindowNs from './pet/petWindow'  // 已被 orchestrator 静态拉入主 bundle，直接静态引用
+import { registerPetIntentIpc, initPetLifeState } from './pet/intentDispatcher'
 import { initSkillMarket } from './skillMarket'  // 📦 v3.10: Skill 市场
 import { initGitAgent } from './gitAgent'  // 📝 v3.11: Git 自动集成
 import { initMCPClient } from './mcpServer'  // 🔌 v3.11: MCP 协议
@@ -127,10 +129,9 @@ let petModule: Awaited<typeof import('./pet/petWindow')> | null = null
 
 // 梦境/真人秀共用 LLM 调用：复用桌宠大脑配置（团队/全局 Provider），未配置则抛错→各自回退模板
 async function lifeLLMCall(system: string, user: string): Promise<string> {
-  const { resolvePetBrainConfig, createPetLLM } = await import('./pet/petWindow')
-  const cfg = resolvePetBrainConfig()
+  const cfg = petWindowNs.resolvePetBrainConfig()
   if (!cfg) {throw new Error('LLM not configured for dream/reality')}
-  const provider = createPetLLM(cfg)
+  const provider = petWindowNs.createPetLLM(cfg)
   const res = await provider.call({
     messages: [
       { role: 'system', content: system },
@@ -737,7 +738,7 @@ try {
   cloudSync.init().catch(() => {})  // 异步初始??
   // ── 💻 v4.0 Plan C: 桌宠模块（独立进程）─────────────
   try {
-    petModule = await import('./pet/petWindow')
+    petModule = petWindowNs
     petModule.registerPetIpc()
     petModule.maybeShowOnboarding()   // 首次使用：N.E.K.O 风格初始人格引导
     // 随 Lumina 启动：如果 autoRestart=true，自动开启桌宠
@@ -755,7 +756,6 @@ try {
 
   // ──  Phase 1 Week 1: 桌宠意图调度器（LLM → 动作标签 → Live2D）──
   try {
-    const { registerPetIntentIpc, initPetLifeState } = await import('./pet/intentDispatcher')
     registerPetIntentIpc()
     initPetLifeState() // 启动即恢复内驱力/情绪并周期落盘，重启不回基线
   } catch (e: any) {
