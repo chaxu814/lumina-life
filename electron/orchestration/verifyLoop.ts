@@ -252,14 +252,17 @@ export async function autoFixLoop(
   verifyConfig: VerifyConfig,
   originalTask: string,
   delegateFn: (fixTask: string, opts?: DelegateFnOptions) => Promise<{ success: boolean; content: string }>,
+  /** 🆕 v02: 可注入验证函数（测试用）；缺省走真实 runVerification */
+  options?: { runVerify?: (cfg: VerifyConfig) => VerifyResult | Promise<VerifyResult> },
 ): Promise<AutoFixResult> {
   const start = Date.now()
   const attempts: FixAttempt[] = []
   const maxRounds = verifyConfig.maxFixRounds
+  const runVerify = options?.runVerify ?? runVerification
 
   // 步骤 1：首次验证
   console.log(`[VerifyLoop] 🔍 首次验证... (${verifyConfig.commands.join(', ')})`)
-  let verifyResult = runVerification(verifyConfig)
+  let verifyResult = await runVerify(verifyConfig)
 
   if (verifyResult.passed) {
     console.log(`[VerifyLoop] ✅ 首次验证通过 (${verifyResult.elapsedMs}ms)`)
@@ -293,7 +296,7 @@ export async function autoFixLoop(
 
     // 验证修复结果
     console.log(`[VerifyLoop] 🔍 第 ${round} 轮修复后验证...`)
-    verifyResult = runVerification(verifyConfig)
+    verifyResult = await runVerify(verifyConfig)
 
     if (verifyResult.passed) {
       console.log(`[VerifyLoop] ✅ 第 ${round} 轮修复后验证通过 (${verifyResult.elapsedMs}ms)`)

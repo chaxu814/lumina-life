@@ -1044,14 +1044,26 @@ ${currentVerify.errors.join('\n').slice(0, 3000)}
         const targetProfile = workspace.profiles.get(to)
         const asyncManager = getAsyncTaskManager()
         
+        // v02: 自动修复 Worker 也注入完整上下文（项目根目录+可用工具），
+        //   不再只给一句"请修复"，否则它和首轮 Worker 一样两眼一抹黑。
+        let fixTools: string[] = []
+        try { fixTools = resolveToolset('agent', new Set(), true) } catch { /* ignore */ }
+        const fixCtx: WorkerPromptContext = {
+          to, from, taskType: 'code_debug',
+          task: fixTask,
+          taskGoal: task,
+          availableTools: fixTools,
+          projectContext: { cwd: projectRoot },
+        }
         const fixChildConfig = workspace.config.buildRunConfig(to as any, targetProfile, {
-          systemPrompt: '你正在执行自动修复任务，请仔细阅读错误信息并修复问题。',
+          systemPrompt: buildWorkerSystemPrompt(fixCtx),
+          personaId: to,
         })
-        
+
         const fixTaskId = asyncManager.submit(
-          `[自动修复] ${fixTask.slice(0, 50)}`,
+          fixTask,
           fixChildConfig,
-          { title: `AutoFix: ${to}` }
+          { title: `AutoFix[${round}/${verifyConfig.maxFixRounds}]: ${to}`, tags: ['autofix', `${to}`] }
         )
         
         const fixResult = await this._waitForTaskCompletion(asyncManager, fixTaskId, 120_000)
