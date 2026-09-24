@@ -488,6 +488,19 @@ declare global {
       customAgentReadSoul: (id: string) => Promise<{ ok: boolean; soul?: string; error?: string }>
       customAgentSetDefault: (id: string) => Promise<{ ok: boolean; defaultLeaderId?: string; error?: string }>
       customAgentGetDefault: () => Promise<{ ok: boolean; defaultLeaderId?: string }>
+      // proposal3: team memory federation
+      federationExport: (opts?: { source?: string; memoryRoot?: string }) => Promise<{ ok: boolean; package?: any; error?: string }>
+      federationImport: (pkg: any, options?: any) => Promise<any>
+      federationList: () => Promise<{ ok: boolean; sources?: any[]; error?: string }>
+      federationSetConfidence: (source: string, confidence: number) => Promise<{ ok: boolean; error?: string }>
+
+      // proposal4: cross-device WebDAV sync
+      webdavGetConfig: () => Promise<{ ok: boolean; config?: any; hasEncryption?: boolean }>
+      webdavSaveSettings: (input: any) => Promise<{ ok: boolean; config?: any; error?: string }>
+      webdavSetEncryptionPassword: (password: string) => Promise<{ ok: boolean; error?: string }>
+      webdavTestConnection: () => Promise<{ ok: boolean; status?: number; error?: string }>
+      webdavRun: () => Promise<{ ok: boolean; report?: any; error?: string }>
+      webdavResolveConflict: (relPath: string, choice: 'local' | 'remote' | 'merge') => Promise<{ ok: boolean; error?: string }>
     }
   }
 }

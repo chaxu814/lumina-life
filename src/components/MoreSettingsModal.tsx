@@ -16,6 +16,8 @@ import TestCoveragePanel from '../panels/TestCoveragePanel'
 import SkillDevPanel from '../panels/SkillDevPanel'
 import PluginPanelContainer from './PluginPanelContainer'
 import SettingsPanel from '../panels/SettingsPanel'
+import MemoryFederationPanel from '../panels/MemoryFederationPanel'
+import WebDavSyncPanel from '../panels/WebDavSyncPanel'
 
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
@@ -32,6 +34,8 @@ const SIDEBAR_ITEMS = [
   { id: 'test',        icon: '🧪', label: '测试覆盖' },
   { id: 'skilldev',    icon: '🔧', label: '技能开发' },
   { id: 'plugins',     icon: '📦', label: '插件面板' },
+  { id: 'federation', icon: '🤝', label: '记忆共享' },
+  { id: 'webdav',      icon: '☁️', label: '云同步' },
 ] as const
 
 type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']
@@ -235,6 +239,8 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             {activeSection === 'test'        && <TestCoveragePanel />}
             {activeSection === 'skilldev'    && <SkillDevPanel />}
             {activeSection === 'plugins'    && <PluginPanelContainer />}
+{activeSection === 'federation' && <MemoryFederationPanel embedded />}
+{activeSection === 'webdav'      && <WebDavSyncPanel embedded />}
             {(activeSection === 'agentPool' || activeSection === 'routing' || activeSection === 'access' || activeSection === 'modes' || activeSection === 'workflow') && (
               <SettingsPanel embedded activeTab={activeSection} onNotice={null} />
             )}

@@ -113,6 +113,8 @@ import { exportDataToZip, importDataFromZip, getDataLocations, defaultExportFile
 import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系剧本
 import { registerLuckyModeIpc } from './ipc/luckyModeIpc'
 import { registerArtifactIpc } from './ipc/artifactIpc'  // task workspace artifact file ops
+import { registerMemoryFederationIpc } from './ipc/memoryFederationIpc'  // proposal3: memory federation
+import { registerWebdavSyncIpc } from './ipc/webdavSyncIpc'  // proposal4: webdav sync
 import { initLuckyModeIntegration } from './luckyModeIntegration'
 import { initPanelRegistry, getPanelRegistry, listPanels } from './panelRegistry'
 import { startConfigWatcher, stopConfigWatcher } from './configWatcher'
@@ -637,7 +639,9 @@ for (const { id } of orch.listRunners()) {
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
   registerPlatformIpc()
   registerPushIpc()
-  registerArtifactIpc(() => mainWindow)            // task workspace artifact file ops                                 // cross-platform feature matrix IPC
+  registerArtifactIpc(() => mainWindow)            // task workspace artifact file ops
+  registerMemoryFederationIpc()                       // proposal3: memory federation
+  registerWebdavSyncIpc()                            // proposal4: webdav sync                                 // cross-platform feature matrix IPC
   ipcMain.handle('feature-flags:get-all', () => allFlags())  // I7: 全量功能开关
   ipcMain.handle('feature-flags:set', (_e, key: string, value: boolean) => { setFeatureFlag(key as any, !!value); return { ok: true, key, value } })  // I7: 写回开关
   ipcMain.handle('data:get-locations', () => getDataLocations())  // I6: 本机数据位置

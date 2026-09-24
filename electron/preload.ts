@@ -1243,7 +1243,30 @@ const api = {
     ipcRenderer.invoke('custom-agent:set-default', id) as Promise<{ ok: boolean; defaultLeaderId?: string; error?: string }>,
   customAgentGetDefault: () =>
     ipcRenderer.invoke('custom-agent:get-default') as Promise<{ ok: boolean; defaultLeaderId?: string }>,
-}
+
+  // -- proposal3: team memory federation --
+  federationExport: (opts?: { source?: string; memoryRoot?: string }) =>
+    ipcRenderer.invoke('federation:export', opts) as Promise<{ ok: boolean; package?: any; error?: string }>,
+  federationImport: (pkg: any, options?: any) =>
+    ipcRenderer.invoke('federation:import', pkg, options) as Promise<any>,
+  federationList: () =>
+    ipcRenderer.invoke('federation:list') as Promise<{ ok: boolean; sources?: any[]; error?: string }>,
+  federationSetConfidence: (source: string, confidence: number) =>
+    ipcRenderer.invoke('federation:set-confidence', source, confidence) as Promise<{ ok: boolean; error?: string }>,
+
+  // -- proposal4: cross-device WebDAV sync --
+  webdavGetConfig: () =>
+    ipcRenderer.invoke('webdav-sync:get-config') as Promise<{ ok: boolean; config?: any; hasEncryption?: boolean }>,
+  webdavSaveSettings: (input: any) =>
+    ipcRenderer.invoke('webdav-sync:save-settings', input) as Promise<{ ok: boolean; config?: any; error?: string }>,
+  webdavSetEncryptionPassword: (password: string) =>
+    ipcRenderer.invoke('webdav-sync:set-encryption-password', password) as Promise<{ ok: boolean; error?: string }>,
+  webdavTestConnection: () =>
+    ipcRenderer.invoke('webdav-sync:test-connection') as Promise<{ ok: boolean; status?: number; error?: string }>,
+  webdavRun: () =>
+    ipcRenderer.invoke('webdav-sync:run') as Promise<{ ok: boolean; report?: any; error?: string }>,
+  webdavResolveConflict: (relPath: string, choice: 'local' | 'remote' | 'merge') =>
+    ipcRenderer.invoke('webdav-sync:resolve-conflict', relPath, choice) as Promise<{ ok: boolean; error?: string }>,}
 
 contextBridge.exposeInMainWorld('luminaAPI', api)
 
