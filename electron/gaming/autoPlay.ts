@@ -1,12 +1,14 @@
 // ============================================================
 // electron/gaming/autoPlay.ts — 自主游玩闭环
 //
-// 感知 → 决策 → 安全审查 → 执行 → 间隔 → 循环，直到满足停止条件。
+// 感知 → 决策 → 安全审查 → 反作弊检测 → 执行 → 间隔 → 循环，直到满足停止条件。
 // 设计为可注入 decide / onRound / stopSignal，便于单测与 UI 集成。
 //
 // 安全护栏：
 //   - 危险动作被拦时计数，连续 3 轮被拦自动停止
-//   - 决策返回 null 表示 VLM 判断应停
+//   - 命中反作弊竞技网游黑名单 → 立即硬停（anti_cheat_detected）
+//   - 决策返回 null 表示 VLM 判断应停；开局 minRoundsBeforeStop 内不误停
+//   - 连续 N 轮无成功动作（空转）→ 停止
 //   - stopSignal 外部可紧急中断
 // ============================================================
 
@@ -16,6 +18,8 @@ import type {
 import type { GameProfile } from './profiles'
 import { reviewGameAction } from './security'
 import { getGameState, executeGameAction } from './gameActions'
+import { focusWindowRobust } from './focus'
+import { detectAntiCheatGame } from './antiCheat'
 import { callVisionModel } from '../tools/impl/cuCore'
 
 export interface AutoPlayOptions {
@@ -33,7 +37,7 @@ export interface AutoPlayOptions {
   onRound?: (info: AutoPlayRoundInfo) => void
   /**
    * 每轮执行动作前聚焦目标游戏窗口（关闭弹窗/翻译气泡造成的焦点丢失）。
-   * 默认通过平台适配器 focusWindow(config.windowTitle) 实现。
+   * 默认通过 focusWindowRobust() 实现（适配器聚焦 + 标题校验 + AppActivate 兜底 + 关弹窗）。
    */
   focusTarget?: () => Promise<boolean>
   /**
@@ -41,6 +45,20 @@ export interface AutoPlayOptions {
    * 前 N 次先重新聚焦并继续，超过才停止。默认 2。
    */
   nullDecideGrace?: number
+  /**
+   * 至少跑够 N 轮才允许因 VLM 主动要求停止（should_stop / null）而结束，
+   * 避免开局误判立刻停。默认 0（不限制，向后兼容）。
+   */
+  minRoundsBeforeStop?: number
+  /**
+   * 连续 N 轮没有成功动作（空转）则停止，避免对着静止画面空跑。默认 5。
+   */
+  consecutiveNoOpLimit?: number
+  /**
+   * 每轮读取当前前台窗口标题的来源（用于反作弊黑名单检测）。
+   * 默认走平台适配器 getActiveWindow。
+   */
+  getWindowTitle?: () => Promise<string | undefined>
   /** 停止信号（外部可设置为 true 来紧急中断） */
   stopSignal?: { stopped: boolean }
 }
@@ -65,14 +83,17 @@ export interface AutoPlayResult {
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 /**
- * 默认决策：把 GameState 摘要交给 VLM，让它输出下一步动作 JSON。
- * 解析失败或 VLM 建议停止（stop:true）时返回 null。
+ * 默认决策：把当前 GameState + 最近历史动作 + profile.vlmPrompt 一起交给 VLM，
+ * 要求输出 JSON {"action":"...","reason":"...","should_stop":bool}。
+ * 解析失败 / VLM 要求停止时返回 null。
  */
 async function defaultDecide(
   profile: GameProfile,
   state: GameState,
   round: number,
+  history: string[],
 ): Promise<GameActionRequest | null> {
+  const recent = history.slice(-8).join(' → ') || '（刚开始，还没有动作）'
   const prompt = `你正在操控 ${profile.displayName}。
 ${profile.vlmPrompt}
 
@@ -86,11 +107,13 @@ ${JSON.stringify({
   summary: state.raw,
 }, null, 2)}
 
+最近动作历史（按时间顺序）：${recent}
+
 请选择下一步动作。只输出 JSON：
-{"action":"动作名","duration_ms":500,"reason":"一句话理由","stop":false}
+{"action":"动作名","duration_ms":500,"reason":"一句话理由","should_stop":false}
 action 必须是以下之一：${Object.keys(profile.actionMap).join('、')}
 注意：click 只会点击屏幕正中心；若游戏不在屏幕中心，请改用方向键等键盘动作。
-如果局面平稳无事可做或需要用户介入，输出 {"stop":true,"reason":"..."}`
+如果局面平稳无事可做、需要用户介入、或你觉得该停了，输出 {"should_stop":true,"reason":"..."}。`
 
   try {
     const raw = await callVisionModel(prompt, `第 ${round} 轮决策`, '', true)
@@ -100,7 +123,8 @@ action 必须是以下之一：${Object.keys(profile.actionMap).join('、')}
     const end = s.lastIndexOf('}')
     if (start < 0 || end <= start) {return null}
     const j = JSON.parse(s.slice(start, end + 1))
-    if (j.stop === true || !j.action) {return null}
+    // 兼容旧字段 stop / should_stop
+    if (j.should_stop === true || j.stop === true || !j.action) {return null}
     const req: GameActionRequest = {
       action: j.action,
       durationMs: typeof j.duration_ms === 'number' ? j.duration_ms : undefined,
@@ -128,6 +152,9 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
     onRound,
     focusTarget,
     nullDecideGrace = 2,
+    minRoundsBeforeStop = 0,
+    consecutiveNoOpLimit = 5,
+    getWindowTitle,
     stopSignal,
   } = options
 
@@ -142,20 +169,27 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
     }
   }
 
-  const decideFn = decide || ((state, round) => defaultDecide(profile, state, round))
+  // 历史动作（喂给 VLM 决策，避免重复同一个动作）
+  const history: string[] = []
+  const decideFn = decide || ((state, round) => defaultDecide(profile, state, round, history))
 
-  // 默认聚焦：走平台适配器按窗口标题找窗并前台 + 点中心聚焦内容区
+  // 默认聚焦：focusWindowRobust（适配器聚焦 + 标题校验 + AppActivate 兜底 + 关弹窗）
+  const targetTitle = config.windowTitle || profile.displayName
   const defaultFocus = async (): Promise<boolean> => {
-    try {
-      const { getPlatformAdapter } = await import('../core/platform')
-      const adapter = getPlatformAdapter()
-      if (typeof adapter.focusWindow !== 'function') {return true}
-      return await adapter.focusWindow(config.windowTitle || profile.displayName)
-    } catch {
-      return true // 聚焦失败不阻断闭环（动作执行层仍会尝试）
-    }
+    try {return await focusWindowRobust(targetTitle)}
+    catch {return true /* 聚焦失败不阻断闭环 */}
   }
   const focusFn = focusTarget || defaultFocus
+
+  // 默认读取前台窗口标题（反作弊检测用）：best-effort
+  const defaultGetWindowTitle = async (): Promise<string | undefined> => {
+    try {
+      const { getPlatformAdapter } = await import('../core/platform')
+      const aw = await getPlatformAdapter().getActiveWindow?.()
+      return aw?.title
+    } catch {return undefined}
+  }
+  const readTitle = getWindowTitle || defaultGetWindowTitle
 
   // 启动前先聚焦一次，避免首轮感知到的是其他窗口
   try {await focusFn()} catch { /* 忽略 */ }
@@ -166,6 +200,7 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
   let dangerousBlocked = 0
   let consecutiveBlocked = 0
   let consecutiveNull = 0
+  let consecutiveNoOp = 0
   let stopReason = ''
 
   while (roundsPlayed < maxRounds) {
@@ -181,6 +216,20 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
     }
 
     roundsPlayed++
+
+    // 0. 反作弊黑名单检测：命中带反作弊的竞技网游 → 立即硬停
+    try {
+      const title = await readTitle()
+      const ac = detectAntiCheatGame(title)
+      if (ac) {
+        stopReason = `anti_cheat_detected:${ac}`
+        onRound?.({
+          round: roundsPlayed, state: { detected: false, hotbar: [] }, action: null, result: null,
+          stopped: true, stopReason,
+        })
+        break
+      }
+    } catch { /* 读窗口失败不阻断 */ }
 
     // 1. 感知
     let state: GameState
@@ -199,10 +248,13 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
       action = null
     }
 
-    // 决策返回 null → 容错：未超 grace 先重新聚焦继续，否则停止
+    // 决策返回 null → 容错
     if (!action) {
       consecutiveNull++
-      if (consecutiveNull <= nullDecideGrace) {
+      consecutiveNoOp++
+      // 开局保护：还没跑够 minRoundsBeforeStop 轮，先继续（不误停）
+      const warmup = roundsPlayed < minRoundsBeforeStop
+      if (warmup || consecutiveNull <= nullDecideGrace) {
         onRound?.({
           round: roundsPlayed, state, action: null, result: null, stopped: false,
         })
@@ -224,6 +276,7 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
     if (!guard.allowed) {
       dangerousBlocked++
       consecutiveBlocked++
+      consecutiveNoOp++
       const result: GameActionResult = {
         ok: false,
         content: guard.reason || '被安全护栏拦截',
@@ -250,14 +303,27 @@ export async function runAutoPlay(options: AutoPlayOptions): Promise<AutoPlayRes
     let result: GameActionResult
     try {
       result = await executeGameAction(action, config)
-      if (result.ok) {actionsExecuted++}
+      if (result.ok) {
+        actionsExecuted++
+        consecutiveNoOp = 0 // 成功动作重置空转计数
+        history.push(action.action)
+      } else {
+        consecutiveNoOp++
+      }
     } catch (e: any) {
       result = { ok: false, content: `执行异常: ${e?.message || e}`, error: 'exec_error' }
+      consecutiveNoOp++
     }
 
     onRound?.({
       round: roundsPlayed, state, action, result, stopped: false,
     })
+
+    // 连续空转过多 → 停止（动作执行了但都失败）
+    if (consecutiveNoOp >= consecutiveNoOpLimit && roundsPlayed >= minRoundsBeforeStop) {
+      stopReason = `consecutive_no_op:连续 ${consecutiveNoOp} 轮无成功动作`
+      break
+    }
 
     // 6. 间隔
     await sleep(minIntervalMs)
