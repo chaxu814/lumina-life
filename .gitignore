@@ -194,3 +194,6 @@ docs/_ref/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 
+
+# 运行时状态
+.lumina-recovery.json
