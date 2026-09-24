@@ -94,13 +94,13 @@ export function decidePush(
 
   // 4. 冷却
   const sinceLastPushMin = (now - s.lastPushAt) / (1000 * 60)
-  if (s.lastPushAt > 0 && sinceLastPushMin < settings.cooldownMinutes) {
+  if (s.lastPushAt > 0 && sinceLastPushMin >= 0 && sinceLastPushMin < settings.cooldownMinutes) {
     return { should_speak: false, intensity: 'low', speech: '', type: 'chat', reason: `冷却中（还需${Math.ceil(settings.cooldownMinutes - sinceLastPushMin)}分钟）` }
   }
 
   // 5. 用户刚活跃（5分钟内），不打扰
   const sinceActiveMin = (now - s.lastActiveAt) / (1000 * 60)
-  if (sinceActiveMin < 5) {
+  if (sinceActiveMin >= 0 && sinceActiveMin < 5) {
     return { should_speak: false, intensity: 'low', speech: '', type: 'chat', reason: '用户刚活跃，不打扰' }
   }
 

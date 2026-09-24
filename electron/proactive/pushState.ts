@@ -134,17 +134,17 @@ export function tickState(state: PushState, now = Date.now()): PushState {
 
   const idleMin = (now - state.lastActiveAt) / (1000 * 60)
 
-  // 疲劳度：空闲超过30分钟开始恢复，否则缓慢累积
+  // 深夜（23:00-06:00）
+  const hour = new Date(now).getHours()
+  const isLateNight = hour >= 23 || hour < 6
+  // 疲劳度：
+  //  - 空闲超过 30 分钟（在休息）→ 净恢复；深夜恢复稍慢但仍是净下降
+  //  - 清醒/活跃 → 缓慢累积；深夜熬着累积更快
   let fatigue = state.fatigue
   if (idleMin > 30) {
-    fatigue = clamp(fatigue - 0.05 * elapsedH)
+    fatigue = clamp(fatigue - (isLateNight ? 0.03 : 0.05) * elapsedH)
   } else {
-    fatigue = clamp(fatigue + 0.02 * elapsedH)
-  }
-  // 深夜（23:00-06:00）疲劳度自然升高
-  const hour = new Date(now).getHours()
-  if (hour >= 23 || hour < 6) {
-    fatigue = clamp(fatigue + 0.1 * elapsedH)
+    fatigue = clamp(fatigue + (isLateNight ? 0.1 : 0.02) * elapsedH)
   }
 
   // 亲密度：每天自然衰减 0.02

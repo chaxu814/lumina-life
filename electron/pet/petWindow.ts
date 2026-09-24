@@ -25,7 +25,7 @@ import { isEnabled as isFlagEnabled, allFlags as allPetFlags } from '../core/fea
 import type { AvatarKind } from './modelLibrary'
 import { BUILTIN_MODELS, getActiveModel, setActiveModel } from './modelLibrary'
 import { getRendererForKind, fallbackToBuiltin, guessKindFromEntry } from './avatarRenderer'
-import { detectEdge, calcPeekPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig, type EdgeSide } from './edgeSnap'
+import { detectEdge, calcPeekPosition, calcDockPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig, type EdgeSide } from './edgeSnap'
 import { getComputerUse } from '../computerUse'  // 已在主 bundle，静态引用消除 vite 重复 import 告警
 
 /**
@@ -1086,8 +1086,8 @@ function clampWindowPos(x: number, y: number, w: number, h: number): { x: number
   const d = screen.getDisplayMatching({ x, y, width: w, height: h })
   const a = d.workArea || d.bounds
   return {
-    x: Math.round(Math.min(a.x + a.width - 120, Math.max(a.x - w + 120, x))),
-    y: Math.round(Math.min(a.y + a.height - 120, Math.max(a.y, y))),
+    x: Math.round(Math.min(a.x + a.width - w, Math.max(a.x, x))),
+    y: Math.round(Math.min(a.y + a.height - h, Math.max(a.y, y))),
   }
 }
 
@@ -1139,10 +1139,19 @@ function handleEdgeSnapOnMoveEnd(): void {
   const [x, y] = petWindow.getPosition()
   const edge = detectEdge(x, y, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.sensitivity)
   if (edge) {
-    const pos = calcPeekPosition(edge, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
-    petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
-    peekState = { active: true, edge }
-    startEdgeSnapWatch()
+    if (edgeSnapConfig.autoHideAtEdges) {
+      // 可选：自动隐藏成窥视窄条，鼠标靠近再滑出
+      const pos = calcPeekPosition(edge, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
+      petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
+      peekState = { active: true, edge }
+      startEdgeSnapWatch()
+    } else {
+      // 默认：完整停靠在边缘，人物整个可见，绝不“消失”
+      const pos = calcDockPosition(edge, x, y, w, h, wa.width, wa.height, wa.x, wa.y)
+      petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
+      peekState = { active: false, edge: null }
+      stopEdgeSnapWatch()
+    }
     nudgeRepaint(petWindow)
   } else {
     peekState = { active: false, edge: null }

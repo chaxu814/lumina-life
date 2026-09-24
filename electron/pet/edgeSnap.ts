@@ -15,6 +15,12 @@ export interface EdgeSnapConfig {
   peekWidth: number
   /** 鼠标距离窥视区多远内滑出（px） */
   mouseThreshold: number
+  /**
+   * 松手贴边时是否自动隐藏成窥视窄条（peek）。
+   * false（默认）：完整停靠在边缘，人物始终全部可见，不会"消失"。
+   * true：旧行为，自动缩成 peekWidth 窄条，鼠标靠近再滑出。
+   */
+  autoHideAtEdges: boolean
 }
 
 export const DEFAULT_EDGE_SNAP: EdgeSnapConfig = {
@@ -22,6 +28,7 @@ export const DEFAULT_EDGE_SNAP: EdgeSnapConfig = {
   sensitivity: 20,
   peekWidth: 84,
   mouseThreshold: 96,
+  autoHideAtEdges: false,
 }
 
 /**
@@ -76,6 +83,29 @@ export function calcPeekPosition(
     case 'bottom':
       return { x: Math.round(workX + (screenW - windowW) / 2), y: Math.round(workY + screenH - peekWidth) }
   }
+}
+
+/**
+ * 计算"完整停靠"位置：人物整个留在屏幕内、贴在指定边缘（不隐藏）。
+ * 沿边方向贴齐工作区，另一方向保留用户松手时的位置（并钳制回工作区）。
+ * 返回窗口左上角坐标。
+ */
+export function calcDockPosition(
+  edge: EdgeSide,
+  windowX: number, windowY: number, windowW: number, windowH: number,
+  screenW: number, screenH: number,
+  workX: number, workY: number,
+): { x: number; y: number } {
+  let x = windowX
+  let y = windowY
+  if (edge === 'left') { x = workX }
+  else if (edge === 'right') { x = workX + screenW - windowW }
+  else if (edge === 'top') { y = workY }
+  else if (edge === 'bottom') { y = workY + screenH - windowH }
+  // 另一方向（以及贴边方向本身）钳制回工作区，保证整窗可见
+  x = Math.min(Math.max(x, workX), workX + screenW - windowW)
+  y = Math.min(Math.max(y, workY), workY + screenH - windowH)
+  return { x: Math.round(x), y: Math.round(y) }
 }
 
 /**
