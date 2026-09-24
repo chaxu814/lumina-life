@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import SettingsPanel from '../panels/SettingsPanel'
 import SettingsLLM from '../panels/settings/SettingsLLM'
 import SettingsTTS from '../panels/settings/SettingsTTS'
@@ -7,17 +8,17 @@ import SettingsAppearance from '../panels/settings/SettingsAppearance'
 import SettingsPush from '../panels/settings/SettingsPush'
 import SettingsPet from '../panels/settings/SettingsPet'
 
-/* ── 侧边栏导航项 ── */
+/* ── 侧边栏导航项（label 走 i18n） ── */
 const SIDEBAR_ITEMS = [
-  { id: 'llm', icon: '🤖', label: 'LLM 模型' },
-  { id: 'tts', icon: '🔊', label: 'TTS 语音' },
-  { id: 'notifications', icon: '🔔', label: '通知' },
-  { id: 'appearance', icon: '🎨', label: '外观' },
-  { id: 'push', icon: '📱', label: '推送' },
-  { id: 'channels', icon: '🔗', label: '渠道' },
-  { id: 'security', icon: '🛡️', label: '安全中心' },
-  { id: 'tasks', icon: '⏰', label: '定时任务' },
-  { id: 'pet', icon: '🐱', label: '桌宠' },
+  { id: 'llm', icon: '🤖', labelKey: 'settings.nav_llm' },
+  { id: 'tts', icon: '🔊', labelKey: 'settings.nav_tts' },
+  { id: 'notifications', icon: '🔔', labelKey: 'settings.nav_notifications' },
+  { id: 'appearance', icon: '🎨', labelKey: 'settings.nav_appearance' },
+  { id: 'push', icon: '📱', labelKey: 'settings.nav_push' },
+  { id: 'channels', icon: '🔗', labelKey: 'settings.nav_channels' },
+  { id: 'security', icon: '🛡️', labelKey: 'settings.nav_security' },
+  { id: 'tasks', icon: '⏰', labelKey: 'settings.nav_tasks' },
+  { id: 'pet', icon: '🐱', labelKey: 'settings.nav_pet' },
 ] as const
 
 type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']
@@ -29,6 +30,7 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ open, onClose, initialTab }: SettingsModalProps) {
+  const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SidebarId>((initialTab as SidebarId) || 'llm')
 
   // 当 initialTab 变化时同步
@@ -94,7 +96,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               fontFamily: '"Microsoft YaHei", "微软雅黑", sans-serif',
             }}
           >
-            ⚙️ 设置
+            {t('settings.title')}
           </div>
 
           {/* 导航项列表 */}
@@ -139,7 +141,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
                   <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>
                     {item.icon}
                   </span>
-                  <span style={{ lineHeight: 1.3 }}>{item.label}</span>
+                  <span style={{ lineHeight: 1.3 }}>{t(item.labelKey)}</span>
                 </button>
               )
             })}
@@ -185,7 +187,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
           >
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
               {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.icon}{' '}
-              {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.label}
+              {t(SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.labelKey ?? 'settings.title')}
             </div>
             <button
               onClick={onClose}
@@ -211,7 +213,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
                 e.currentTarget.style.background = 'transparent'
                 e.currentTarget.style.color = 'var(--text-secondary)'
               }}
-              title="关闭设置"
+              title={t('settings.close')}
             >
               ✕
             </button>

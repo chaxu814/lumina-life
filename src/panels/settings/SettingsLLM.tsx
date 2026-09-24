@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useStore } from '../../stores/appStore'
 import { SettingSection, SettingRow, SettingRowLast, SettingBtn, SettingInput, ButtonGroup, StatusBadge } from '../../components/SettingsUI'
 import ModelPickerModal from './ModelPickerModal'
@@ -30,6 +31,7 @@ function ProviderBtn({ p, active, onClick }: {
   p: { id: string; name: string; free?: boolean }
   active: boolean; onClick: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <button onClick={onClick} style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -44,7 +46,7 @@ function ProviderBtn({ p, active, onClick }: {
       {p.name}
       {p.free && (
         <span style={{ fontSize: 9, fontWeight: 700, background: '#22c55e', color: '#fff', borderRadius: 4, padding: '0 5px', lineHeight: '16px', marginLeft: 2 }}>
-          免费
+          {t('llm.free_badge')}
         </span>
       )}
     </button>
@@ -73,6 +75,7 @@ function NoticeBar({ notice }: { notice: string | null }) {
    SettingsLLM — LLM 模型配置
    ═══════════════════════════════════════════════════ */
 export default function SettingsLLM() {
+  const { t } = useTranslation()
   const llmConfig = useStore(s => s.llmConfig)
   const setLLMConfig = useStore(s => s.setLLMConfig)
   const switchLLMProvider = useStore(s => s.switchLLMProvider)
@@ -329,12 +332,12 @@ export default function SettingsLLM() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>🧠</span>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Agent LLM</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>普通模式使用（聊天 / AI智能体 / 快速 / 修复）</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('llm.agent_llm_title')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('llm.agent_llm_subtitle')}</div>
             </div>
           </div>
           {llmStatus === 'ok' && (
-            <StatusBadge status="ok" label={`已连接`} />
+            <StatusBadge status="ok" label={t('llm.connected')} />
           )}
         </div>
 
@@ -343,7 +346,7 @@ export default function SettingsLLM() {
           {/* 免费模型 */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>🎯</span> 免费模型（无需配置，开箱即用）
+              <span style={{ fontSize: 12 }}>🎯</span> {t('llm.free_models_title')}
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.free).map(p => (
@@ -352,14 +355,14 @@ export default function SettingsLLM() {
               ))}
             </div>
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
-              免费 API 由 OpenCode Zen 提供，无需注册即可使用。适合快速体验和轻度使用。
+              {t('llm.free_models_desc')}
             </div>
           </div>
 
           {/* 本地模型 */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>🖥️</span> 本地模型（免费·隐私不出本机）
+              <span style={{ fontSize: 12 }}>🖥️</span> {t('llm.local_models_title')}
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.id === 'lmstudio' || p.id === 'ollama').map(p => (
@@ -372,7 +375,7 @@ export default function SettingsLLM() {
                   fontSize: 11, fontWeight: 600, border: '1.5px dashed #3b82f6', background: 'var(--accent-50)',
                   color: '#2563eb', cursor: localDetecting ? 'wait' : 'pointer',
                 }}>
-                {localDetecting ? '⏳ 检测中…' : '🔎 一键检测本地模型'}
+                {localDetecting ? t('llm.detecting_local') : t('llm.detect_local')}
               </button>
             </div>
             {localHint && (
@@ -383,10 +386,10 @@ export default function SettingsLLM() {
                     {localFound.map((f) => (
                       <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <StatusBadge status="running" label={f.label} />
-                        <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>推荐：{f.recommendedModel}（共 {f.models.length} 个）</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{t('llm.local_recommend')}{f.recommendedModel}{t('llm.local_models_count', { count: f.models.length })}</span>
                         <button onClick={() => applyLocal(f)} disabled={!!applyingLocal}
                           style={{ padding: '2px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer' }}>
-                          {applyingLocal === f.id ? '接入中…' : '使用'}
+                          {applyingLocal === f.id ? t('llm.local_applying') : t('llm.local_use')}
                         </button>
                       </div>
                     ))}
@@ -406,7 +409,7 @@ export default function SettingsLLM() {
           {/* 云端模型 */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>☁️</span> 云端模型
+              <span style={{ fontSize: 12 }}>☁️</span> {t('llm.cloud_models_title')}
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.id !== 'lmstudio' && !p.free).map(p => (
@@ -424,13 +427,13 @@ export default function SettingsLLM() {
             {/* 第一行：API 地址 + API Key */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>API 地址</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>{t('llm.base_url')}</label>
                 <input style={inputS} value={llmConfig.baseUrl}
                   onChange={e => setLLMConfig({ baseUrl: e.target.value })}
                   placeholder="https://api.openai.com/v1" />
               </div>
               <div style={{ flex: '0 0 200px' }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>API 密钥</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>{t('llm.api_key')}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
                   <input style={{ ...inputS, paddingRight: 35 }}
                     type={showApiKey ? "text" : "password"} value={llmConfig.apiKey}
@@ -438,7 +441,7 @@ export default function SettingsLLM() {
                     placeholder="sk-..." />
                   <button onClick={() => setShowApiKey(!showApiKey)}
                     style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 14, width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    title={showApiKey ? "隐藏密钥" : "显示密钥"}>
+                    title={showApiKey ? t('llm.hide_key') : t('llm.show_key')}>
                     {showApiKey ? "👁️" : "👁️‍🗨️"}
                   </button>
                 </div>
@@ -448,7 +451,7 @@ export default function SettingsLLM() {
             {/* 第二行：模型 + 温度 */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <div style={{ flex: 1, position: 'relative' }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>模型</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>{t('llm.model')}</label>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
                   <input style={{ flex: 1, ...inputS }} value={llmConfig.model}
                     onChange={e => setLLMConfig({ model: e.target.value })}
@@ -463,7 +466,7 @@ export default function SettingsLLM() {
                         color: 'var(--text-secondary)', whiteSpace: 'nowrap',
                         animation: fetchingModels ? 'pulse 1.5s infinite' : 'none',
                       }}>
-                      {fetchingModels ? '⏳' : '📋 获取列表'}
+                      {fetchingModels ? '⏳' : `📋 ${t('llm.fetch_models')}`}
                     </button>
                   )}
                 </div>
@@ -484,7 +487,7 @@ export default function SettingsLLM() {
                 />
               </div>
               <div style={{ flex: '0 0 110px' }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>温度</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>{t('llm.temperature')}</label>
                 <input style={{ ...inputS }} type="number" min="0" max="2" step="0.1"
                   value={llmConfig.temperature ?? 0.7}
                   onChange={e => setLLMConfig({ temperature: parseFloat(e.target.value) || 0.7 })} />
@@ -493,23 +496,23 @@ export default function SettingsLLM() {
 
             {/* 高级选项 */}
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>⚙️ 高级选项</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>{t('llm.advanced')}</div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>最大输出 (tokens)</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>{t('llm.max_tokens')}</label>
                   <input style={{ ...inputS }} value={maxTokensDisplay}
                     onChange={e => setMaxTokensDraft(e.target.value)}
                     onBlur={commitMaxTokens}
                     onKeyDown={e => { if (e.key === 'Enter') {(e.target as HTMLInputElement).blur()} }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>上下文窗口 (0=自动)</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'block' }}>{t('llm.context_window')} (0={t('llm.context_window_auto')})</label>
                   <input style={{ ...inputS }} value={ctxDisplay}
                     onChange={e => setCtxDraft(e.target.value)}
                     onBlur={commitContextWindow}
                     onKeyDown={e => { if (e.key === 'Enter') {(e.target as HTMLInputElement).blur()} }} />
                   <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>
-                    0=自动检测 · 常用: 131072(128K) / 262144(256K) / 1048576(1M)
+                    {t('llm.ctx_hint')}
                   </div>
                 </div>
               </div>
@@ -519,10 +522,10 @@ export default function SettingsLLM() {
           {/* 操作栏 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <SettingBtn variant="success" onClick={saveProviderToBackend} disabled={savingProvider} loading={savingProvider}>
-              💾 保存配置
+              {t('llm.save_config')}
             </SettingBtn>
             <SettingBtn variant="primary" onClick={testLLM} disabled={llmStatus === 'testing'} loading={llmStatus === 'testing'}>
-              ⚡ 测试连接
+              {t('llm.test_conn')}
             </SettingBtn>
             {llmMsg && (
               <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, background: llmStatus === 'ok' ? '#ecfdf5' : 'var(--red-100)', color: llmStatus === 'ok' ? '#065f46' : '#991b1b' }}>
@@ -540,8 +543,8 @@ export default function SettingsLLM() {
                 }
                 const r = await window.luminaAPI.agentLlmGetAllConfigs?.()
                 if (r?.configs) {setAgentLlmConfigs(r.configs)}
-                setNotice('✅ 已同步到 Team！Lumina、Yak、热茶 都使用了此配置。')
-              } catch (e: any) { setNotice('❌ 同步失败: ' + (e.message || e)) }
+                setNotice(t('llm.sync_team_done'))
+              } catch (e: any) { setNotice('❌ ' + t('common.save_failed') + ': ' + (e.message || e)) }
             }}
               disabled={!llmConfig.model || !llmConfig.baseUrl}
               style={{
@@ -551,7 +554,7 @@ export default function SettingsLLM() {
                 opacity: (!llmConfig.model || !llmConfig.baseUrl) ? 0.4 : 1,
                 display: 'flex', alignItems: 'center', gap: 4,
               }}>
-              🔄 同步到所有 Team Agent
+              {t('llm.sync_team')}
             </button>
           </div>
 
@@ -581,7 +584,7 @@ export default function SettingsLLM() {
           <span style={{ fontSize: 18 }}>🤖</span>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Team Agent LLM</div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>团队群聊模式，每个 Agent 可独立配置不同的模型</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('llm.team_subtitle')}</div>
           </div>
         </div>
 
@@ -592,7 +595,7 @@ export default function SettingsLLM() {
             background: '#ecfdf5', border: '1px solid #a7f3d0',
             fontSize: 11, color: '#166534', display: 'flex', alignItems: 'center', gap: 6,
           }}>
-            💡 在上方「Agent LLM」配置好后，点击 <strong style={{ margin: '0 4px' }}>🔄 同步到所有 Team Agent</strong> 一键同步
+            {t('llm.team_sync_hint')}
           </div>
 
           {/* Agent 卡片列表 */}
@@ -633,7 +636,7 @@ export default function SettingsLLM() {
                       background: isConfigured ? '#ecfdf5' : '#fef3c7',
                       color: isConfigured ? '#065f46' : '#92400e',
                     }}>
-                      {isConfigured ? '✅ 已配置' : '⚠️ 未配置'}
+                      {isConfigured ? t('llm.configured') : t('llm.unconfigured')}
                     </span>
                   </div>
 

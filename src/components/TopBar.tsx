@@ -161,7 +161,7 @@ export default function TopBar() {
         <button onClick={() => {
           const next = i18n.language?.startsWith('zh') ? 'en-US' : 'zh-CN'
           i18n.changeLanguage(next)
-        }} title={i18n.language?.startsWith('zh') ? 'Switch to English' : '切换到中文'}
+        }} title={i18n.language?.startsWith('zh') ? t('topbar.lang_switch_to_en') : t('topbar.lang_switch_to_zh')}
           style={{
             background: 'none', border: '1px solid var(--border-light)', borderRadius: 4,
             cursor: 'pointer', fontSize: 10, fontWeight: 600, padding: '1px 6px',
@@ -200,12 +200,12 @@ export default function TopBar() {
             border: '1px solid #86efac',
             transition: 'all 0.2s ease',
           }}
-          title="沙箱防护已开启 — 点击查看安全中心"
+          title={t('topbar.sandbox_title')}
           onMouseEnter={e => { e.currentTarget.style.background = '#dcfce7' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'var(--green-100)' }}
         >
           <span style={{ fontSize: 12, lineHeight: 1 }}>🛡️</span>
-          <span>沙箱</span>
+          <span>{t('topbar.sandbox')}</span>
         </div>}
         {!compact && <div className="topbar-stat" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
           <span style={{ fontSize: 12 }}>{personaLabel}</span>
@@ -276,7 +276,7 @@ export default function TopBar() {
                     }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${label.color}30` }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${label.color}18` }}
-                    title={`${meta.name}：点击自定义情绪`}
+                    title={`${meta.name}${t('topbar.emotion_click_hint')}`}
                   >
                     {label.icon} {label.label}
                   </span>
@@ -362,13 +362,13 @@ export default function TopBar() {
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
-              🎭 设置 {AGENT_META[emotionPickerAgent]?.name ?? 'Agent'} 的情绪
+              {t('topbar.emotion_title', { name: AGENT_META[emotionPickerAgent]?.name ?? 'Agent' })}
             </div>
             {(['mood', 'energy', 'affinity'] as const).map(dim => {
               const labels: Record<string, { name: string; min: string; max: string }> = {
-                mood: { name: '心情', min: '😢 很糟', max: '😄 很棒' },
-                energy: { name: '精力', min: '😴 累趴', max: '⚡ 超精神' },
-                affinity: { name: '亲近度', min: '😶 冷漠', max: '🥰 超亲近' },
+                mood: { name: t('topbar.dim_mood'), min: t('topbar.mood_min'), max: t('topbar.mood_max') },
+                energy: { name: t('topbar.dim_energy'), min: t('topbar.energy_min'), max: t('topbar.energy_max') },
+                affinity: { name: t('topbar.dim_affinity'), min: t('topbar.affinity_min'), max: t('topbar.affinity_max') },
               }
               const meta = labels[dim]
               const emotion = getEmotion(emotionPickerAgent)

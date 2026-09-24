@@ -4,6 +4,7 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import { EMOJI_GROUPS, AGENT_VOICES } from '../chat/chatShared'
 import { showToast } from './Toast'
@@ -33,13 +34,14 @@ export default function ChatInputBar({
   onSend,
   onAbort,
   isProcessing = false,
-  placeholder = '发消息...（Shift+Enter 换行）',
+  placeholder = '',
   showMentionHint = false,
   onKeyDown,
   fileInputRef: externalFileInputRef,
   onFileSelect,
   attachments = [],
 }: ChatInputBarProps) {
+  const { t } = useTranslation()
   const internalFileInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = externalFileInputRef || internalFileInputRef
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -90,14 +92,14 @@ export default function ChatInputBar({
     if (realtimeVoiceActive) {
       try {
         const r = await window.luminaAPI?.agentStopRealtimeVoice?.()
-        if (r?.success) { setRealtimeVoiceActive(false); showToast('🎙️ 实时语音对话已停止', 'info') }
-        else { showToast(`⚠️ ${r?.error || '停止失败'}`, 'warning') }
+        if (r?.success) { setRealtimeVoiceActive(false); showToast(t('chat.voice_stopped'), 'info') }
+        else { showToast(`⚠️ ${r?.error || t('chat.stop_failed')}`, 'warning') }
       } catch (e: any) { showToast(`⚠️ ${e.message}`, 'warning') }
     } else {
       try {
         const r = await window.luminaAPI?.agentStartRealtimeVoice?.()
-        if (r?.success) { setRealtimeVoiceActive(true); showToast(r.message || '🎙️ 实时语音对话已启动', 'info') }
-        else { showToast(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+        if (r?.success) { setRealtimeVoiceActive(true); showToast(r.message || t('chat.voice_started'), 'info') }
+        else { showToast(`⚠️ ${r?.error || t('chat.start_failed')}`, 'warning') }
       } catch (e: any) { showToast(`⚠️ ${e.message}`, 'warning') }
     }
   }, [realtimeVoiceActive])
@@ -107,12 +109,12 @@ export default function ChatInputBar({
     if (computerUseActive) {
       try { await window.luminaAPI?.agentStopComputerUse?.() } catch {}
       setComputerUseActive(false)
-      showToast('💻 AI操作电脑已停止', 'info')
+      showToast(t('chat.computer_stopped'), 'info')
     } else {
       try {
         const r = await window.luminaAPI?.agentStartComputerUse?.()
-        if (r?.success) { setComputerUseActive(true); showToast(r.message || '💻 AI操作电脑已就绪', 'info') }
-        else { showToast(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+        if (r?.success) { setComputerUseActive(true); showToast(r.message || t('chat.computer_ready'), 'info') }
+        else { showToast(`⚠️ ${r?.error || t('chat.start_failed')}`, 'warning') }
       } catch (e: any) { showToast(`⚠️ ${e.message}`, 'warning') }
     }
   }, [computerUseActive])
@@ -120,7 +122,7 @@ export default function ChatInputBar({
   // Time capsule
   const handleTimeCapsule = useCallback(() => {
     const text = input.trim()
-    if (!text) { alert('输入你想对未来的自己说的话，然后点击 ⏳ 埋下时光胶囊'); return }
+    if (!text) { alert(t('chat.capsule_empty')); return }
     if (window.confirm(`⏳ 埋一颗时光胶囊给未来的自己？\n\n内容: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"\n\n默认 30 天后开启`)) {
       setInput(`帮我埋一颗时光胶囊，内容是：${text}，30天后开启`)
       setTimeout(() => { onSend(); setInput('') }, 80)
@@ -150,7 +152,7 @@ export default function ChatInputBar({
             value={input}
             onChange={e => { setInput(e.target.value); autoResize() }}
             onKeyDown={handleKeyDown}
-            placeholder={isProcessing ? '正在回复中...' : placeholder}
+            placeholder={isProcessing ? t('chat.replying') : (placeholder || t('chat.placeholder'))}
             rows={1}
             style={{
               flex: 1, padding: '8px 12px', borderRadius: 8,
@@ -164,7 +166,7 @@ export default function ChatInputBar({
           {/* 🎤 语音输入 */}
           <button
             onClick={toggleMic}
-            title={sttListening ? '停止语音输入' : '语音输入'}
+            title={sttListening ? t('chat.mic_stop_title') : t('chat.mic_title')}
             style={{
               width: 36, height: 36, borderRadius: 8,
               border: `1.5px solid ${sttListening ? '#ef4444' : 'var(--border-light)'}`,
@@ -180,7 +182,7 @@ export default function ChatInputBar({
           {isProcessing ? (
             <button
               onClick={onAbort}
-              title="停止生成"
+              title={t('chat.stop_generating')}
               style={{
                 width: 36, height: 36, borderRadius: 8,
                 border: '1.5px solid #ef4444',
@@ -194,7 +196,7 @@ export default function ChatInputBar({
             <button
               onClick={onSend}
               disabled={!input.trim()}
-              title="发送消息"
+              title={t('chat.send')}
               style={{
                 width: 36, height: 36, borderRadius: 8,
                 border: 'none',
@@ -215,10 +217,10 @@ export default function ChatInputBar({
           marginTop: 4, fontSize: 10, color: 'var(--text-secondary)',
         }}>
           <span>
-            {showMentionHint && input.includes('@') ? '💡 @Lumina / @热茶 / @Yak 指定回复者' : ''}
+            {showMentionHint && input.includes('@') ? t('chat.mention_hint') : ''}
           </span>
           <span style={{ opacity: 0.6 }}>
-            Shift+Enter 换行 · /help 查看命令
+            {t('chat.kbd_hint')}
           </span>
         </div>
       </div>
@@ -253,14 +255,14 @@ export default function ChatInputBar({
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
               color: '#dc2626',
             }}>
-            ▶️ 继续
+            {t('chat.continue')}
           </button>
         )}
 
         {/* ── 🧠 思考 ── */}
         <button
           onClick={() => setThinkingMode(v => !v)}
-          title={thinkingMode ? '🧠 思考过程已开启 — 点击关闭' : '🧠 思考过程已关闭 — 点击开启'}
+          title={thinkingMode ? t('chat.thinking_on') : t('chat.thinking_off')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${thinkingMode ? '#f59e0b' : 'var(--border-light)'}`,
@@ -270,14 +272,14 @@ export default function ChatInputBar({
             opacity: thinkingMode ? 1 : 0.6,
             transition: 'all .2s',
           }}>
-          🧠 思考
+          {t('chat.thinking')}
         </button>
 
         {/* ── 😊 表情 ── */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
             onClick={() => setShowEmoji(!showEmoji)}
-            title="表情符号"
+            title={t('chat.emoji_title')}
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: `1.5px solid ${showEmoji ? '#93c5fd' : 'var(--border-light)'}`,
@@ -286,7 +288,7 @@ export default function ChatInputBar({
               alignItems: 'center', gap: 3, fontFamily: 'inherit',
               transition: 'all .15s',
             }}>
-            😊 表情
+            {t('chat.emoji')}
           </button>
           {showEmoji && (
             <>
@@ -341,7 +343,7 @@ export default function ChatInputBar({
         {/* ── 📎 文件 ── */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          title="上传文件"
+          title={t('chat.file_title')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${attachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
@@ -349,12 +351,12 @@ export default function ChatInputBar({
             cursor: 'pointer', fontSize: 12, display: 'flex',
             alignItems: 'center', gap: 3, fontFamily: 'inherit',
           }}>
-          📎 文件{attachments.length > 0 ? <sup style={{ fontSize: 9, color: '#3b82f6', marginLeft: 1 }}>{attachments.length}</sup> : null}
+          {t('chat.file')}{attachments.length > 0 ? <sup style={{ fontSize: 9, color: '#3b82f6', marginLeft: 1 }}>{attachments.length}</sup> : null}
         </button>
 
         {/* ── 🎙️ 实时语音对话 ── */}
         <button onClick={toggleRealtimeVoice}
-          title={realtimeVoiceActive ? '停止实时语音对话' : '实时语音对话'}
+          title={realtimeVoiceActive ? t('chat.voice_on_title') : t('chat.voice_off_title')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${realtimeVoiceActive ? '#22c55e' : 'var(--border-light)'}`,
@@ -363,12 +365,12 @@ export default function ChatInputBar({
             alignItems: 'center', gap: 3, fontFamily: 'inherit',
             boxShadow: realtimeVoiceActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
           }}>
-          {realtimeVoiceActive ? '🔊 实时语音对话' : '🎙️ 实时语音对话'}
+          {realtimeVoiceActive ? t('chat.voice_on') : t('chat.voice_off')}
         </button>
 
         {/* ── 💻 AI操作电脑 ── */}
         <button onClick={toggleComputerUse}
-          title={computerUseActive ? '停止 AI操作电脑' : '让 AI 操作你的电脑'}
+          title={computerUseActive ? t('chat.computer_on_title') : t('chat.computer_off_title')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${computerUseActive ? '#a855f7' : 'var(--border-light)'}`,
@@ -377,12 +379,12 @@ export default function ChatInputBar({
             alignItems: 'center', gap: 3, fontFamily: 'inherit',
             boxShadow: computerUseActive ? '0 0 6px rgba(168,85,247,0.35)' : 'none',
           }}>
-          {computerUseActive ? '💻 AI操作电脑' : '💻 AI操作电脑'}
+          {t('chat.computer')}
         </button>
 
         {/* ── ⏳ 胶囊 ── */}
         <button onClick={handleTimeCapsule}
-          title="埋时光胶囊 ⏳"
+          title={t('chat.capsule_title')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: '1.5px solid var(--border-light)',
@@ -390,7 +392,7 @@ export default function ChatInputBar({
             cursor: 'pointer', fontSize: 12, display: 'flex',
             alignItems: 'center', gap: 3, fontFamily: 'inherit',
           }}>
-          ⏳ 胶囊
+          {t('chat.capsule')}
         </button>
 
         {/* ── 弹性空间 ── */}
