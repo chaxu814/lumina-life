@@ -63,7 +63,70 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 - **minimax-code**（MiniMax，1815★）：纯终端 TUI coding agent，fork pi-mono，沙箱执行+BYOK 三协议+ACP；桌面 App 不开源，外部 PR 通道关闭
 
 ### 📊 验证
-- tsc 0 错误 / 108 文件 1297 测试通过（autoPlay 时序测试偶发波动，重跑通过）/ build 成功 / 25 commits
+- tsc 0 错误 / 108 文件 1297 测试通过
+---
+
+## v0.2.0 — 8 创新提案全量落地（2026-09-24）
+
+> 分支 feature/v02-comprehensive-upgrade，约 20 个 commit，新增 114 个单测
+
+### 1. Live2D 配件商城
+- 本地模型库扫描+热切换+model3.json 校验+恶意脚本扫描
+- ModelStorePanel 卡片列表+导入+离线模式
+- 后端模板 docs/templates/live2d-store-worker.js（Workers+R2）
+- 支付预留 501 占位
+
+### 2. 技能创作者运行时
+- .lumina-skill 包格式（zip: skill.json+SKILL.md+index.js）
+- vm 沙箱+白名单 API+越权拦截+路径防穿越
+- 安装审批+动态注册工具+示例技能
+- 支付/分成预留 pricing 字段
+
+### 3. 团队记忆共享 Federation
+- Level 1：手动导出/导入 JSON，来源标签+可信度 0-1
+- Level 2：memory-pool-worker.js 模板（Workers+KV）
+- Level 3：E2EE/P2P 仅架构文档（隐私红线，未实现）
+
+### 4. 跨设备云同步 WebDAV
+- 纯 fetch WebDAV 客户端（PROPFIND/PUT/GET/DELETE/MKCOL）
+- SHA-256+mtime 增量同步+AES-256-GCM 客户端加密
+- SQLite VACUUM 备份+冲突检测（本机/云端/合并）
+- safeStorage 加密存储密码+设置 UI
+
+### 5. 插件 Marketplace 治理
+- @babel/parser AST 静态扫描（6 类规则，block/warn/pass 三级）
+- RSA+SHA256 签名校验+离线威胁情报+typosquatting 检测
+- 接入技能安装和模型导入流程
+
+### 6. AI 主动推送（P0）
+- 三维状态：fatigue/intimacy/luminaEnergy，衰减恢复曲线
+- 欲望值决策（亲密度35%+精力25%+抗疲劳25%+时段15%）
+- 冷却30min+每日上限5次+未响应降频+静默时段
+- 只走桌宠气泡+侧边栏，不弹系统通知
+- 设置 UI：开关/状态可视化/频率/时段/类型/立即触发
+
+### 7. 无障碍语音交互
+- PTT 语音闭环状态机（idle→recording→recognizing→speaking），支持打断
+- Ctrl+Space 快捷键+冲突检测
+- ARIA 标签+焦点陷阱+高对比度主题(≥7:1)+字号缩放(100/125/150%)
+- Porcupine 唤醒词接入占位
+
+### 8. 主题皮肤生态
+- CSS 变量体系（bg/text/accent/border/shadow/bubble）
+- .lumina-theme 格式+5 个内置预设
+- 可视化主题编辑器（原生色盘+实时预览+保存导出）
+- 桌宠气泡+托盘菜单跟随主题
+
+### 📊 验证
+- tsc 0 错误 / 121 文件 1410 测试通过（autoPlay 时序偶发波动，重跑通过）/ build 成功无告警
+- 新增 114 个单测：推送20 + 数据同步22 + 无障碍19 + 市场生态38 + 主题15
+
+### 诚实披露
+- WebDAV/语音/麦克风真实环境未实机验证（mock+静态检查）
+- 在线商城/记忆池需部署 Workers 模板
+- 支付/签名需用户提供资质和密钥
+- 部分边缘组件硬编码颜色未逐一迁移
+（autoPlay 时序测试偶发波动，重跑通过）/ build 成功 / 25 commits
 
 ### ⚠️ 未实机验证
 - Live2D 白屏、VLM 真实画面、焦点 AttachThreadInput、团队委托端到端、任务工作区 UI 滚动、mac/Linux 实机、dmg/AppImage 打包
