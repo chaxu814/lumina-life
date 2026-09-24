@@ -128,7 +128,7 @@ describe('LinuxAdapter X11 无 xdotool（键鼠禁用）', () => {
 
 // ── ③ Wayland ────────────────────────────────────────────
 describe('LinuxAdapter Wayland（键鼠禁用，截屏走 grim）', () => {
-  const a = new LinuxAdapter({ sessionType: 'wayland', xdotoolAvailable: true })
+  const a = new LinuxAdapter({ sessionType: 'wayland', xdotoolAvailable: true, grimAvailable: true })
 
   it('鼠标/键盘禁用，截屏仍可用，提示切 X11', () => {
     const c = a.capabilities
@@ -136,6 +136,7 @@ describe('LinuxAdapter Wayland（键鼠禁用，截屏走 grim）', () => {
     expect(c.keyboard).toBe(false)
     expect(c.screenshot).toBe(true)
     expect(c.notes.join(' ')).toMatch(/Wayland/)
+    expect(a.displayServer).toBe('wayland')
   })
 
   it('Wayland 截屏只尝试 grim', async () => {
@@ -153,6 +154,38 @@ describe('LinuxAdapter Wayland（键鼠禁用，截屏走 grim）', () => {
     expect(msg).toContain('点击失败')
     expect(msg).toMatch(/Wayland|X11/)
     expect(execCmdMock).not.toHaveBeenCalled()
+  })
+
+  it('Wayland getActiveWindow 直接返回 null，不调 xdotool', async () => {
+    execCmdMock.mockClear()
+    await expect(a.getActiveWindow()).resolves.toBeNull()
+    expect(execCmdMock).not.toHaveBeenCalled()
+  })
+})
+
+// ── ③b Wayland 但无 grim ─────────────────────────────────
+describe('LinuxAdapter Wayland 无 grim（截屏给安装指引）', () => {
+  const a = new LinuxAdapter({ sessionType: 'wayland', xdotoolAvailable: true, grimAvailable: false })
+
+  it('截屏不尝试任何命令，抛 sudo apt install grim 指引', async () => {
+    execCmdMock.mockClear()
+    await expect(a.screenshot()).rejects.toThrow(/grim/)
+    expect(execCmdMock).not.toHaveBeenCalled()
+  })
+
+  it('notes 含 grim 安装提示', () => {
+    expect(a.capabilities.notes.join(' ')).toMatch(/grim/)
+  })
+})
+
+// ── ③c aquamarine（KDE Plasma 6 Wayland 后端）按 Wayland 处理 ──
+describe('LinuxAdapter aquamarine 会话', () => {
+  const a = new LinuxAdapter({ sessionType: 'aquamarine', xdotoolAvailable: true, grimAvailable: true })
+
+  it('键鼠禁用、displayServer 识别为 aquamarine', () => {
+    expect(a.displayServer).toBe('aquamarine')
+    expect(a.capabilities.mouse).toBe(false)
+    expect(a.capabilities.keyboard).toBe(false)
   })
 })
 

@@ -8,6 +8,7 @@
 // 检测项可在构造时注入（便于单测 mock，不实际调用系统命令）：
 //   sessionType        ← $XDG_SESSION_TYPE
 //   xdotoolAvailable   ← commandExists('xdotool')
+//   grimAvailable      ← commandExists('grim')（Wayland 截屏）
 // ============================================================
 
 import * as path from 'path'
@@ -19,30 +20,42 @@ import {
 } from './PlatformAdapter'
 
 export interface LinuxAdapterOptions {
-  /** 'wayland' | 'x11' | undefined */
+  /** 'wayland' | 'x11' | 'aquamarine' | undefined */
   sessionType?: string
   /** 注入 xdotool 是否可用（默认运行时探测） */
   xdotoolAvailable?: boolean
+  /** 注入 grim 是否可用（默认运行时探测；Wayland 截屏依赖） */
+  grimAvailable?: boolean
 }
 
 export class LinuxAdapter implements PlatformAdapter {
   readonly capabilities: PlatformCapabilities
   private readonly sessionType: string
   private readonly xdotoolAvailable: boolean
+  private readonly grimAvailable: boolean
 
   constructor(opts: LinuxAdapterOptions = {}) {
     this.sessionType = (opts.sessionType ?? process.env.XDG_SESSION_TYPE ?? '').toLowerCase()
     this.xdotoolAvailable = opts.xdotoolAvailable ?? commandExists('xdotool')
-    const isWayland = this.sessionType === 'wayland'
+    // aquamarine 是 KDE Plasma 6 新 Wayland 后端，对全局注入同样受限，按 Wayland 处理
+    const isWayland = this.sessionType === 'wayland' || this.sessionType === 'aquamarine'
+    this.grimAvailable = isWayland
+      ? (opts.grimAvailable ?? commandExists('grim'))
+      : true
 
     const notes: string[] = []
     if (isWayland) {
       notes.push('Wayland 出于安全限制不支持全局桌面键鼠注入，Computer Use 已禁用鼠标/键盘。')
-      notes.push('如需桌面操控，请注销并切换到 X11 会话（部分发行版在登录齿轮处选择）。')
+      notes.push('如需桌面操控，请注销并切换到 X11 会话（部分发行版在登录齿轮处选择）；或评估 ydotool（需 uinput 权限）。')
+      if (!this.grimAvailable) {
+        notes.push('Wayland 截屏需安装 grim：sudo apt install grim（wlroots）/ GNOME 可用 gnome-screenshot。')
+      }
       this.capabilities = {
         platform: 'linux',
         mouse: false,
         keyboard: false,
+        // 能力位恒为 true（Wayland 截屏走 grim 是既定路径）；
+        // grim 实际缺失时在 screenshot() 调用时抛清晰安装指引，见下。
         screenshot: true,
         windowInfo: false,
         uia: false,
@@ -80,6 +93,19 @@ export class LinuxAdapter implements PlatformAdapter {
       installedApps: false,
       notes: ['Linux 无 Windows UIA 元素树，Computer Use 以截屏+坐标为主。'],
     }
+  }
+
+  /** 当前显示服务器（对外只读） */
+  get displayServer(): 'x11' | 'wayland' | 'aquamarine' | undefined {
+    if (this.sessionType === 'wayland' || this.sessionType === 'aquamarine') {
+      return this.sessionType
+    }
+    if (this.sessionType === 'x11') {return 'x11'}
+    return undefined
+  }
+
+  private isWayland(): boolean {
+    return this.sessionType === 'wayland' || this.sessionType === 'aquamarine'
   }
 
   private requireMouse(): string | null {
@@ -154,14 +180,24 @@ export class LinuxAdapter implements PlatformAdapter {
   async screenshot(): Promise<ScreenCaptureResult> {
     const tmp = path.join(os.tmpdir(), `lu-lx-sc-${Date.now()}.png`)
     try {
-      // Wayland 优先 grim；X11 尝试 gnome-screenshot / scrot / import
-      const candidates: Array<[string, string[]]> = this.sessionType === 'wayland'
-        ? [['grim', [tmp]]]
-        : [
-            ['gnome-screenshot', ['-f', tmp]],
-            ['scrot', [tmp]],
-            ['import', ['-window', 'root', tmp]],
-          ]
+      // Wayland 优先 grim（需预先探测到）；X11 尝试 gnome-screenshot / scrot / import
+      let candidates: Array<[string, string[]]>
+      if (this.isWayland()) {
+        candidates = this.grimAvailable
+          ? [['grim', [tmp]]]
+          : []
+      } else {
+        candidates = [
+          ['gnome-screenshot', ['-f', tmp]],
+          ['scrot', [tmp]],
+          ['import', ['-window', 'root', tmp]],
+        ]
+      }
+
+      if (candidates.length === 0) {
+        throw new Error('截屏失败：Wayland 下未检测到 grim。请安装：sudo apt install grim（wlroots）；GNOME 可用 gnome-screenshot。')
+      }
+
       let lastErr = ''
       for (const [bin, args] of candidates) {
         const r = await execCmd(bin, args, 10000)
@@ -184,6 +220,9 @@ export class LinuxAdapter implements PlatformAdapter {
   }
 
   async getActiveWindow(): Promise<ActiveWindowInfo | null> {
+    // Wayland/aquamarine：合成器不暴露全局窗口枚举，xdotool 在此会话本就无效，
+    // 直接返回 null（能力矩阵 windowInfo=false），不浪费一次注定失败的 xdotool 调用。
+    if (this.isWayland()) {return null}
     if (!this.xdotoolAvailable) {return null}
     const r = await execCmd('xdotool', ['getactivewindow', 'getwindowname'], 8000)
     if (r.startsWith('ERR:')) {return null}
