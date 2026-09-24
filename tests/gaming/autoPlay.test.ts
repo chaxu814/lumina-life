@@ -52,6 +52,10 @@ const disabledCfg: GameConfig = { ...enabledCfg, enabled: false }
 
 const okState: GameState = { detected: true, hotbar: [] }
 
+// 单元测试只验证闭环逻辑：聚焦与窗口标题读取注入空实现，避免跑真实 Windows 聚焦（含多秒等待）导致超时
+const noopFocus = async (): Promise<boolean> => true
+const noopTitle = async (): Promise<string | undefined> => undefined
+
 beforeEach(() => {
   vi.clearAllMocks()
   gameMocks.getGameState.mockResolvedValue({ state: okState, route: 'visual', text: '', profile: minecraftProfile })
@@ -75,6 +79,8 @@ describe('runAutoPlay', () => {
       maxRounds: 3,
       maxDurationMs: 60000,
       minIntervalMs: 0,
+      focusTarget: noopFocus,
+      getWindowTitle: noopTitle,
       decide,
     })
     expect(r.roundsPlayed).toBe(3)
@@ -97,6 +103,8 @@ describe('runAutoPlay', () => {
       maxRounds: 10,
       maxDurationMs: 60000,
       minIntervalMs: 0,
+      focusTarget: noopFocus,
+      getWindowTitle: noopTitle,
       decide,
       stopSignal,
     })
@@ -113,6 +121,8 @@ describe('runAutoPlay', () => {
       maxRounds: 10,
       maxDurationMs: 60000,
       minIntervalMs: 0,
+      focusTarget: noopFocus,
+      getWindowTitle: noopTitle,
       decide,
     })
     expect(r.dangerousBlocked).toBeGreaterThanOrEqual(3)
@@ -128,6 +138,8 @@ describe('runAutoPlay', () => {
       maxRounds: 10,
       minIntervalMs: 0,
       nullDecideGrace: 0,
+      focusTarget: noopFocus,
+      getWindowTitle: noopTitle,
       decide,
     })
     expect(r.roundsPlayed).toBe(1)
@@ -145,6 +157,7 @@ describe('runAutoPlay', () => {
       minIntervalMs: 0,
       nullDecideGrace: 2,
       focusTarget,
+      getWindowTitle: noopTitle,
       decide,
     })
     expect(r.roundsPlayed).toBe(3) // grace 2 次重试 + 第 3 次停止
@@ -161,6 +174,8 @@ describe('runAutoPlay', () => {
       maxRounds: 10,
       maxDurationMs: 1, // 极短，第一轮检查时已超时
       minIntervalMs: 0,
+      focusTarget: noopFocus,
+      getWindowTitle: noopTitle,
       decide,
     })
     expect(r.stopReason).toContain('时长')
