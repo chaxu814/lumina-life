@@ -708,3 +708,65 @@ describe('taskWorkspaceStore — 持久化异常值保护', () => {
     expect(useTaskWorkspace.getState().collapsedSections.tools).toBe(true)
   })
 })
+
+// ============================================================
+// 🆕 v02: 后台任务（委托 Yak/热茶）真实对象 + IPC 摄入
+// ============================================================
+import { mapAsyncStatus, mapAsyncTaskToWorkspace } from '../src/stores/taskWorkspaceStore'
+
+describe('mapAsyncStatus — 后台任务状态映射（问题 E）', () => {
+  it('running/done/error 直通', () => {
+    expect(mapAsyncStatus('running')).toBe('running')
+    expect(mapAsyncStatus('done')).toBe('done')
+    expect(mapAsyncStatus('error')).toBe('error')
+  })
+  it('queued/cancelled/paused → idle', () => {
+    expect(mapAsyncStatus('queued')).toBe('idle')
+    expect(mapAsyncStatus('cancelled')).toBe('idle')
+    expect(mapAsyncStatus('paused')).toBe('idle')
+  })
+})
+
+describe('mapAsyncTaskToWorkspace — 后台任务→工作区任务', () => {
+  it('带 assignee 和进度文案，id 加 remote: 前缀', () => {
+    const t = mapAsyncTaskToWorkspace({
+      id: 'task-1', title: '修 bug', status: 'running', assignee: 'yak', progress: '🔧 file_edit...',
+    })
+    expect(t.id).toBe('remote:task-1')
+    expect(t.assignee).toBe('yak')
+    expect(t.status).toBe('running')
+    expect(t.progressText).toBe('🔧 file_edit...')
+  })
+})
+
+describe('taskWorkspaceStore — 远程任务摄入流转', () => {
+  beforeEach(() => {
+    useTaskWorkspace.setState({ tasks: [], timeline: [], activeTaskId: null })
+  })
+
+  it('upsertRemoteTask 创建卡片；重复 upsert 更新而非新建', () => {
+    const id = useTaskWorkspace.getState().upsertRemoteTask({
+      id: 'task-100', title: '修 foo.ts', status: 'running', assignee: 'yak',
+    })
+    expect(id).toBe('remote:task-100')
+    expect(useTaskWorkspace.getState().tasks).toHaveLength(1)
+
+    useTaskWorkspace.getState().upsertRemoteTask({
+      id: 'task-100', title: '修 foo.ts', status: 'running', assignee: 'yak', progress: '编辑中',
+    })
+    const s = useTaskWorkspace.getState()
+    expect(s.tasks).toHaveLength(1)
+    expect(s.tasks[0].progressText).toBe('编辑中')
+  })
+
+  it('setRemoteTaskStatus: running → done / error', () => {
+    useTaskWorkspace.getState().upsertRemoteTask({ id: 'task-100', title: 'x', status: 'running', assignee: 'yak' })
+    useTaskWorkspace.getState().setRemoteTaskStatus('task-100', 'done', '✅ 完成')
+    expect(useTaskWorkspace.getState().tasks[0].status).toBe('done')
+    expect(useTaskWorkspace.getState().tasks[0].progressText).toBe('✅ 完成')
+
+    useTaskWorkspace.getState().upsertRemoteTask({ id: 'task-101', title: 'y', status: 'running', assignee: 'recha' })
+    useTaskWorkspace.getState().setRemoteTaskStatus('task-101', 'error', '编译失败')
+    expect(useTaskWorkspace.getState().tasks.find(t => t.id === 'remote:task-101')!.status).toBe('error')
+  })
+})
