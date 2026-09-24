@@ -162,6 +162,7 @@ export default function TopBar() {
           const next = i18n.language?.startsWith('zh') ? 'en-US' : 'zh-CN'
           i18n.changeLanguage(next)
         }} title={i18n.language?.startsWith('zh') ? t('topbar.lang_switch_to_en') : t('topbar.lang_switch_to_zh')}
+          aria-label={i18n.language?.startsWith('zh') ? t('topbar.lang_switch_to_en') : t('topbar.lang_switch_to_zh')}
           style={{
             background: 'none', border: '1px solid var(--border-light)', borderRadius: 4,
             cursor: 'pointer', fontSize: 10, fontWeight: 600, padding: '1px 6px',
@@ -173,7 +174,9 @@ export default function TopBar() {
 
       <div className="topbar-center">
         {/* LLM 在线状态 — 手动点击检测 */}
-        <div className="topbar-stat" style={{
+        <div className="topbar-stat" role="button" tabIndex={0}
+          aria-label={t('topbar.health_title')}
+          style={{
           background: llmChecked ? (llmOnline ? 'var(--green-100)' : 'var(--red-100)') : 'var(--surface-100)',
           color: llmChecked ? (llmOnline ? '#006644' : 'var(--red-500)') : 'var(--text-tertiary)',
           cursor: 'pointer',
@@ -328,13 +331,13 @@ export default function TopBar() {
             )}
           </div>
         )}
-        <button className="window-btn" onClick={handleMinimize} title={t('topbar.minimize')}>
+        <button className="window-btn" onClick={handleMinimize} title={t('topbar.minimize')} aria-label={t('topbar.minimize')}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="1" y="5" width="10" height="1.5" rx="0.75" /></svg>
         </button>
-        <button className="window-btn" onClick={handleMaximize} title={t('topbar.maximize')}>
+        <button className="window-btn" onClick={handleMaximize} title={t('topbar.maximize')} aria-label={t('topbar.maximize')}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="1.5" y="1.5" width="9" height="9" rx="1.5" /></svg>
         </button>
-        <button className="window-btn window-btn-close" onClick={handleClose} title={t('topbar.close')}>
+        <button className="window-btn window-btn-close" onClick={handleClose} title={t('topbar.close')} aria-label={t('topbar.close')}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" /></svg>
         </button>
       </div>

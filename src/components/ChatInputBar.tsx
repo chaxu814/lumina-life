@@ -152,6 +152,7 @@ export default function ChatInputBar({
             value={input}
             onChange={e => { setInput(e.target.value); autoResize() }}
             onKeyDown={handleKeyDown}
+            aria-label="消息输入框"
             placeholder={isProcessing ? t('chat.replying') : (placeholder || t('chat.placeholder'))}
             rows={1}
             style={{
@@ -167,6 +168,8 @@ export default function ChatInputBar({
           <button
             onClick={toggleMic}
             title={sttListening ? t('chat.mic_stop_title') : t('chat.mic_title')}
+            aria-label={sttListening ? t('chat.mic_stop_title') : t('chat.mic_title')}
+            aria-pressed={sttListening}
             style={{
               width: 36, height: 36, borderRadius: 8,
               border: `1.5px solid ${sttListening ? '#ef4444' : 'var(--border-light)'}`,
@@ -183,6 +186,7 @@ export default function ChatInputBar({
             <button
               onClick={onAbort}
               title={t('chat.stop_generating')}
+              aria-label={t('chat.stop_generating')}
               style={{
                 width: 36, height: 36, borderRadius: 8,
                 border: '1.5px solid #ef4444',
@@ -197,6 +201,7 @@ export default function ChatInputBar({
               onClick={onSend}
               disabled={!input.trim()}
               title={t('chat.send')}
+              aria-label={t('chat.send')}
               style={{
                 width: 36, height: 36, borderRadius: 8,
                 border: 'none',
@@ -263,6 +268,8 @@ export default function ChatInputBar({
         <button
           onClick={() => setThinkingMode(v => !v)}
           title={thinkingMode ? t('chat.thinking_on') : t('chat.thinking_off')}
+          aria-label={thinkingMode ? t('chat.thinking_on') : t('chat.thinking_off')}
+          aria-pressed={thinkingMode}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${thinkingMode ? '#f59e0b' : 'var(--border-light)'}`,
@@ -280,6 +287,8 @@ export default function ChatInputBar({
           <button
             onClick={() => setShowEmoji(!showEmoji)}
             title={t('chat.emoji_title')}
+            aria-label={t('chat.emoji_title')}
+            aria-expanded={showEmoji}
             style={{
               padding: '4px 10px', borderRadius: 6,
               border: `1.5px solid ${showEmoji ? '#93c5fd' : 'var(--border-light)'}`,
@@ -344,6 +353,7 @@ export default function ChatInputBar({
         <button
           onClick={() => fileInputRef.current?.click()}
           title={t('chat.file_title')}
+          aria-label={t('chat.file_title')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${attachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
@@ -357,6 +367,8 @@ export default function ChatInputBar({
         {/* ── 🎙️ 实时语音对话 ── */}
         <button onClick={toggleRealtimeVoice}
           title={realtimeVoiceActive ? t('chat.voice_on_title') : t('chat.voice_off_title')}
+          aria-label={realtimeVoiceActive ? t('chat.voice_on_title') : t('chat.voice_off_title')}
+          aria-pressed={realtimeVoiceActive}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${realtimeVoiceActive ? '#22c55e' : 'var(--border-light)'}`,
@@ -371,6 +383,8 @@ export default function ChatInputBar({
         {/* ── 💻 AI操作电脑 ── */}
         <button onClick={toggleComputerUse}
           title={computerUseActive ? t('chat.computer_on_title') : t('chat.computer_off_title')}
+          aria-label={computerUseActive ? t('chat.computer_on_title') : t('chat.computer_off_title')}
+          aria-pressed={computerUseActive}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: `1.5px solid ${computerUseActive ? '#a855f7' : 'var(--border-light)'}`,
@@ -385,6 +399,7 @@ export default function ChatInputBar({
         {/* ── ⏳ 胶囊 ── */}
         <button onClick={handleTimeCapsule}
           title={t('chat.capsule_title')}
+          aria-label={t('chat.capsule_title')}
           style={{
             padding: '4px 10px', borderRadius: 6,
             border: '1.5px solid var(--border-light)',

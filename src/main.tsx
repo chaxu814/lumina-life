@@ -4,6 +4,8 @@ import App from './App'
 import './styles/global.css'
 import './styles/app.css'
 import './styles/task-workspace.css'  // task workspace panel
+import './styles/theme-vars.css'       // 🎨 主题皮肤生态：语义化 CSS 变量
+import './styles/a11y-high-contrast.css' // ♿ 高对比度主题 + 字号缩放（创新提案 7）
 import './i18n'  // 🌐 i18n 初始化
 import 'uno.css' // ⚡ UnoCSS
 import './stores/loopStore' // 🔁 Loop 引擎自启动（Phase 1）

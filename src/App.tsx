@@ -20,6 +20,7 @@ import TeamCommunityModal from './components/TeamCommunityModal'  // 👥 v1.0: 
 import PersonalModal from './components/PersonalModal'  // 👤 v1.0: 个性化弹窗
 import NewsPanel from './panels/NewsPanel'  // 🆕 v1.1: 新闻早报
 import SandboxPanel from './panels/SandboxPanel'  // 🔍 I5: 沙箱透明玻璃房
+import { initThemeClient } from './services/themeClient'  // 🎨 主题皮肤生态
 
 import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8.1: 插件面板
 import Toast from './components/Toast'
@@ -278,6 +279,9 @@ export default function App() {
     return () => cleanups.forEach((fn) => fn?.())
   }, [])
 
+  // 🎨 主题皮肤生态：拉取并注入持久化主题
+  useEffect(() => { initThemeClient() }, [])
+
   // 主题切换 — 应用 data-theme 到 <html>
   const theme = useStore((s) => s.theme)
   useEffect(() => {
@@ -299,6 +303,16 @@ export default function App() {
       return () => mq.removeEventListener('change', handler)
     }
   }, [theme])
+
+  // ♿ 无障碍：高对比度 + 字号缩放（创新提案 7）
+  const a11y = useStore((s) => s.a11y)
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute('data-a11y-hc', a11y.highContrast ? 'on' : 'off')
+    root.style.setProperty('--font-scale', String(a11y.fontScale))
+    // Electron/Chromium 下用 zoom 让 inline px 也跟随缩放（桌宠气泡/托盘菜单读同一变量）
+    root.style.zoom = String(a11y.fontScale)
+  }, [a11y.highContrast, a11y.fontScale])
 
   // 启动时同步 cron 任务到主进程
   const cronTasksForSync = useStore((s) => s.cronTasks)

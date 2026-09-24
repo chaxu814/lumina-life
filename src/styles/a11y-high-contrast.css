@@ -1,0 +1,90 @@
+/* ============================================================
+   a11y-high-contrast.css — ♿ 高对比度主题（WCAG AAA ≥ 7:1）
+   创新提案 7：无障碍语音交互
+   ------------------------------------------------------------
+   启用方式：<html data-a11y-hc="on">（由 App.tsx 根据设置写入）。
+   本文件用 --a11y- 前缀变量，避免与主题系统子代理正在做的
+   CSS 变量化冲突；后续主题系统可直接接管这些变量。
+   焦点框 2px 实线、按钮边框加粗，保证低视力用户可辨识。
+   ============================================================ */
+
+/* 高对比配色（浅色底，文字/背景对比度 ≥ 7:1） */
+[data-a11y-hc="on"] {
+  --a11y-bg: #ffffff;
+  --a11y-fg: #000000;
+  --a11y-fg-secondary: #1a1a1a;
+  --a11y-border: #000000;
+  --a11y-accent: #0033cc;
+  --a11y-focus: #0000ff;
+
+  /* 覆盖设计系统变量到高对比值 */
+  --surface-0: #ffffff;
+  --surface-50: #f4f4f4;
+  --surface-100: #e8e8e8;
+  --surface-200: #d6d6d6;
+  --surface-300: #b8b8b8;
+
+  --text-primary: #000000;
+  --text-secondary: #1a1a1a;
+  --text-tertiary: #333333;
+  --text-disabled: #555555;
+
+  --border-light: #000000;
+  --border-medium: #000000;
+  --border-heavy: #000000;
+
+  --accent-50: #e6ecff;
+  --accent-100: #c4d4ff;
+  --accent-400: #2b5cff;
+  --accent-500: #0033cc;
+  --accent-600: #002699;
+  --accent-700: #001a66;
+}
+
+/* 深色高对比（若同时开启深色主题） */
+[data-a11y-hc="on"][data-theme="dark"] {
+  --a11y-bg: #000000;
+  --a11y-fg: #ffffff;
+  --surface-0: #000000;
+  --surface-50: #141414;
+  --surface-100: #1f1f1f;
+  --surface-200: #2e2e2e;
+  --surface-300: #444444;
+  --text-primary: #ffffff;
+  --text-secondary: #eaeaea;
+  --text-tertiary: #cccccc;
+  --border-light: #ffffff;
+  --border-medium: #ffffff;
+  --border-heavy: #ffffff;
+  --accent-50: #001a66;
+  --accent-100: #002699;
+  --accent-500: #6699ff;
+  --accent-600: #99bbff;
+}
+
+/* 全局：可见焦点框（2px 实线，不依赖 :hover） */
+[data-a11y-hc="on"] :focus-visible {
+  outline: 2px solid var(--a11y-focus) !important;
+  outline-offset: 2px;
+}
+
+/* 按钮边框清晰化 */
+[data-a11y-hc="on"] button {
+  border: 1px solid var(--a11y-border) !important;
+}
+[data-a11y-hc="on"] button[disabled] {
+  opacity: 0.6;
+}
+
+/* 输入框边框加粗 */
+[data-a11y-hc="on"] input,
+[data-a11y-hc="on"] textarea,
+[data-a11y-hc="on"] select {
+  border: 2px solid var(--a11y-border) !important;
+}
+
+/* 字号缩放根变量（100% / 125% / 150%） */
+:root {
+  --font-scale: 1;
+  font-size: calc(13px * var(--font-scale));
+}

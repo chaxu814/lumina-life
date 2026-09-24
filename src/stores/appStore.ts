@@ -125,6 +125,20 @@ export interface AuditLog {
   id: string; time: string; action: string; type: 'llm' | 'tts' | 'skill' | 'security' | 'system' | 'agent' | 'tool'
 }
 
+/** ♿ 无障碍设置（创新提案 7：无障碍语音交互） */
+export interface A11yConfig {
+  /** PTT 全局快捷键（Electron accelerator），默认 Ctrl+Space */
+  pttShortcut: string
+  /** 语音交互闭环总开关 */
+  voiceLoopEnabled: boolean
+  /** 高对比度模式（WCAG AAA ≥7:1） */
+  highContrast: boolean
+  /** 字号缩放 1 / 1.25 / 1.5 */
+  fontScale: 1 | 1.25 | 1.5
+  /** 唤醒词开关（预留 Porcupine 接入） */
+  wakeWordEnabled: boolean
+}
+
 // ═══ Memory v2 (Hermes 双层) ═══
 export interface MemoryUserProfile { name?: string; preferences: string[]; habits: string[]; communicationStyle: string; personality: string }
 export interface MemoryConfig { systemInfo: string[]; toolExperience: string[]; projectConventions: string[]; lessons: string[]; paths: Record<string, string> }
@@ -258,6 +272,10 @@ interface AppStore {
   // 🆕 简约模式（紧凑 UI）
   compactMode: boolean
   setCompactMode: (v: boolean) => void
+
+  // ♿ 无障碍设置
+  a11y: A11yConfig
+  setA11y: (patch: Partial<A11yConfig>) => void
 
   // 是否显示实验功能（梦境 / 真人秀等实验彩蛋）
   showExperimental: boolean
@@ -769,6 +787,16 @@ export const useStore = create<AppStore>()(
       compactMode: (() => { try { return localStorage.getItem('lumina_compact') === 'true' } catch { return false } })(),
       setCompactMode: (v) => { try { localStorage.setItem('lumina_compact', String(v)) } catch {} ; set({ compactMode: v }) },
 
+      // ♿ 无障碍
+      a11y: {
+        pttShortcut: 'Ctrl+Space',
+        voiceLoopEnabled: false,
+        highContrast: false,
+        fontScale: 1,
+        wakeWordEnabled: false,
+      },
+      setA11y: (patch) => set((s) => ({ a11y: { ...s.a11y, ...patch } })),
+
       // 实验功能开关（默认开启；关闭后隐藏梦境/真人秀等彩蛋）
       showExperimental: (() => {
         try { return localStorage.getItem('lumina_show_experimental') !== 'false' } catch { return true }
@@ -938,6 +966,7 @@ export const useStore = create<AppStore>()(
         firstRun: state.firstRun,  // 🆕 v1.0: 持久化引导完成状态
         theme: state.theme,        // 🆕 v1.1: 持久化主题偏好
         gamification: state.gamification, // 🆕 v3.0: 持久化游戏化状态
+        a11y: state.a11y,          // ♿ 无障碍偏好（PTT 快捷键/高对比/字号）
       }),
     }
   )

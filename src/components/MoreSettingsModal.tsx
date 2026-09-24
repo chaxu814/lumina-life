@@ -6,7 +6,7 @@
 // 与 SettingsModal / TeamCommunityModal 风格一致。
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import AgentPanel from '../panels/AgentPanel'
 import CustomAgentPanel from '../panels/CustomAgentPanel'
 import SkillsPanel from '../panels/SkillsPanel'
@@ -16,6 +16,9 @@ import TestCoveragePanel from '../panels/TestCoveragePanel'
 import SkillDevPanel from '../panels/SkillDevPanel'
 import PluginPanelContainer from './PluginPanelContainer'
 import SettingsPanel from '../panels/SettingsPanel'
+import AppearancePanel from '../panels/AppearancePanel'  // 🎨 外观主题
+import ModelStorePanel from '../panels/ModelStorePanel'
+import SettingsA11y from '../panels/settings/SettingsA11y'
 import MemoryFederationPanel from '../panels/MemoryFederationPanel'
 import WebDavSyncPanel from '../panels/WebDavSyncPanel'
 
@@ -28,12 +31,15 @@ const SIDEBAR_ITEMS = [
   { id: 'access',      icon: '🛡️', label: '权限' },
   { id: 'modes',       icon: '🎭', label: '模式' },
   { id: 'workflow',    icon: '📋', label: '工作流' },
+  { id: 'modelStore',  icon: '🪆', label: '配件商城' },
   { id: 'skills',      icon: '⚡',  label: '技能管理' },
   { id: 'usage',       icon: '📊', label: '用量限额' },
   { id: 'diagnostics', icon: '🔍', label: '诊断工具' },
   { id: 'test',        icon: '🧪', label: '测试覆盖' },
   { id: 'skilldev',    icon: '🔧', label: '技能开发' },
   { id: 'plugins',     icon: '📦', label: '插件面板' },
+  { id: 'appearance',  icon: '🎨', label: '外观' },
+  { id: 'a11y',        icon: '♿', label: '无障碍' },
   { id: 'federation', icon: '🤝', label: '记忆共享' },
   { id: 'webdav',      icon: '☁️', label: '云同步' },
 ] as const
@@ -47,6 +53,38 @@ interface MoreSettingsModalProps {
 
 export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SidebarId>('agent')
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  // ♿ 焦点陷阱：打开时聚焦弹窗、Tab 循环、Esc 关闭、关闭后焦点归还
+  useEffect(() => {
+    if (!open) {return}
+    previousFocusRef.current = document.activeElement as HTMLElement
+    // 初始聚焦到弹窗容器
+    dialogRef.current?.focus()
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {e.stopPropagation(); onClose(); return}
+      if (e.key !== 'Tab' || !dialogRef.current) {return}
+      // 收集可聚焦元素，循环 Tab
+      const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) {return}
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      // 关闭后焦点还给触发元素
+      previousFocusRef.current?.focus?.()
+    }
+  }, [open, onClose])
 
   if (!open) {return null}
 
@@ -68,6 +106,11 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
     >
       {/* ── 弹窗主体 ── */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="更多设置"
+        tabIndex={-1}
         style={{
           display: 'flex',
           width: 960,
@@ -79,6 +122,7 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
           boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
           overflow: 'hidden',
           animation: 'fadeInDown 0.2s ease-out',
+          outline: 'none',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -117,6 +161,8 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
                 <button
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
+                  aria-label={item.label}
+                  aria-current={active ? 'page' : undefined}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -201,6 +247,7 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             </div>
             <button
               onClick={onClose}
+              aria-label="关闭设置弹窗"
               style={{
                 width: 30,
                 height: 30,
@@ -238,7 +285,10 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             {activeSection === 'diagnostics' && <DiagnosticsPanel />}
             {activeSection === 'test'        && <TestCoveragePanel />}
             {activeSection === 'skilldev'    && <SkillDevPanel />}
+            {activeSection === 'modelStore'  && <ModelStorePanel />}
             {activeSection === 'plugins'    && <PluginPanelContainer />}
+            {activeSection === 'appearance' && <AppearancePanel />}
+            {activeSection === 'a11y'        && <SettingsA11y />}
 {activeSection === 'federation' && <MemoryFederationPanel embedded />}
 {activeSection === 'webdav'      && <WebDavSyncPanel embedded />}
             {(activeSection === 'agentPool' || activeSection === 'routing' || activeSection === 'access' || activeSection === 'modes' || activeSection === 'workflow') && (
