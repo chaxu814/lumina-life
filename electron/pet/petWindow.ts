@@ -11,6 +11,7 @@
 // ============================================================
 
 import { BrowserWindow, app, screen, ipcMain, desktopCapturer, globalShortcut } from 'electron'
+import { pushThemeToWindow } from '../ipc/themeIpc'
 import { registerLifeServicesIpc, decideScreenCapture, rememberScreenEpisode, loadLibrary } from './lifeServices'
 import { describeScreenViaVlm } from './vision/screenVision'
 import * as path from 'path'
@@ -393,9 +394,9 @@ body {
   transform: translateX(-50%);
   padding: 3px 10px;
   border-radius: 12px;
-  background: rgba(0,0,0,0.6);
+  background: var(--bubble-bg, rgba(0,0,0,0.6));
   backdrop-filter: blur(4px);
-  color: #fff;
+  color: var(--bubble-text, #fff);
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
@@ -416,9 +417,9 @@ body {
   margin-bottom: 8px;
   padding: 6px 12px;
   border-radius: 12px;
-  background: rgba(0,0,0,0.75);
+  background: var(--bubble-bg, rgba(0,0,0,0.75));
   backdrop-filter: blur(6px);
-  color: #fff; font-size: 11px;
+  color: var(--bubble-text, #fff); font-size: 11px;
   max-width: 140px;
   text-align: center;
   white-space: nowrap;
@@ -433,7 +434,7 @@ body {
   top: 100%; left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(0,0,0,0.75);
+  border-top-color: var(--bubble-bg, rgba(0,0,0,0.75));
 }
 .speech-bubble.show {
   opacity: 1;
@@ -930,6 +931,8 @@ export async function loadPetHtml(): Promise<void> {
   } else {
     await petWindow.loadFile(filePath)
   }
+  // theme skin: inject current theme vars into pet window (bubbles follow theme)
+  try { pushThemeToWindow(petWindow) } catch { /* ignore */ }
 }
 
 /** 测试钩子：注入 mock BrowserWindow，验证 loadFile 的实参。 */

@@ -285,7 +285,10 @@ export function showTrayMenu(): void {
   menuWindow.focus()
 }
 
+import { pushThemeToWindow } from '../ipc/themeIpc'
+
 function pushState(win: BrowserWindow | null): void {
+  if (win && !win.isDestroyed()) { try { pushThemeToWindow(win) } catch { /* ignore */ } }
   if (!win || win.isDestroyed()) { return }
   const state = options ? options.getState() : defaultState()
   win.webContents.send('trayMenu:state', state)
