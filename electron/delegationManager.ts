@@ -29,6 +29,9 @@ import { AgentRunner } from './agentRunner'
 import { autoFixLoop, runVerification, detectProjectRoot, detectProjectProfile, taskMayNeedVerification } from './orchestration/verifyLoop'
 import { assessComplexity } from './orchestration/complexityAnalyzer'
 import { PhaseGate, getPhasesFromComplexity } from './orchestration/phaseGate'
+// v02: Worker 委托 Prompt 构建（传递完整上下文）
+import { buildWorkerSystemPrompt, buildWorkerFirstMessage, type WorkerPromptContext } from './orchestration/delegationPrompt'
+import { resolveToolset } from './tools/registry'
 // v0.1.1: 委托结果驱动 Agent 间动态关系
 import { getRelationshipStore } from './agentRelationships'
 import { getTaskBoard } from './orchestration/taskBoard'
@@ -463,18 +466,23 @@ ${lastError.slice(0, 1000)}
         const workspace = getAgentWorkspaceManager()
         const targetProfile = workspace.profiles.get(to)
         
-        // 构建子任务配置
+        // v02(问题D): 组装完整上下文 —— 任务目标+对话历史+可用工具+项目上下文
+        const workerCtx = this._buildWorkerPromptContext(request, currentTask, taskType, from, to)
         const childConfig = workspace.config.buildRunConfig(to as any, targetProfile, {
-          systemPrompt: this._buildWorkerSystemPrompt(currentTask, taskType, from, to),
+          systemPrompt: buildWorkerSystemPrompt(workerCtx),
           personaId: to,
         })
         
-        // 提交到 asyncTaskManager 作为后台任务
+        // v02 修复：之前只提交前50字标题，Worker 看不到完整任务；现在提交完整首轮消息
         const asyncManager = getAsyncTaskManager()
+        const firstMessage = buildWorkerFirstMessage(workerCtx)
         const taskId = asyncManager.submit(
-          `[${from} → ${to}] ${currentTask.slice(0, 50)}`,
+          firstMessage,
           childConfig,
-          { title: `Delegation: ${from} → ${to}` }
+          {
+            title: `[${from}→${to}] ${currentTask.slice(0, 40)}`,
+            tags: ['delegation', `${to}`],
+          }
         )
         
         console.log(`[DelegationManager] 🧬 spawn_subagent fork: ${from} → ${to}, taskId=${taskId}`)
@@ -683,6 +691,54 @@ ${lastError.slice(0, 1000)}
     }
     
     return { error: '任务超时' }
+  }
+
+  /**
+   * v02(问题 D): 组装 Worker 委托上下文。
+   * 把 DelegationRequest 里的对话历史/任务目标/可用工具/项目上下文
+   * 全部喂给 Worker，避免它"只看到孤零零一条消息"。
+   */
+  private _buildWorkerPromptContext(
+    request: DelegationRequest,
+    task: string,
+    taskType: string,
+    from: string,
+    to: string,
+  ): WorkerPromptContext {
+    // Worker 实际可用工具：agent toolset 过滤 child-blocked 与黑名单
+    let availableTools: string[] = []
+    try {
+      availableTools = resolveToolset('agent', new Set(), true)
+      const blacklist = (request as any).disabledTools as string[] | undefined
+      if (blacklist && blacklist.length > 0) {
+        const set = new Set(blacklist)
+        availableTools = availableTools.filter(t => !set.has(t))
+      }
+    } catch {
+      availableTools = []
+    }
+
+    // 兼容旧字段 request.context（agentRunner.delegate 传入的"用户/Lumina"摘要）
+    let conversationHistory = request.conversationHistory
+    if ((!conversationHistory || conversationHistory.length === 0) && request.context) {
+      conversationHistory = [{ role: 'system' as const, content: request.context }]
+    }
+
+    return {
+      to,
+      from,
+      taskType,
+      task,
+      taskGoal: request.taskGoal || task,
+      availableTools,
+      conversationHistory,
+      projectContext: request.projectContext || {
+        cwd: process.cwd(),
+        relevantFiles: request.filePaths,
+        techStack: 'TypeScript/Electron',
+      },
+      legacyContext: request.context,
+    }
   }
 
   /** 构建子任务系统提示词（继承父任务上下文） */

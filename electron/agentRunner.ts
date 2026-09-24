@@ -880,12 +880,26 @@ private summarizer: ConversationSummarizer | null = null
           return `${prefix}: ${text.slice(0, 1200)}`
         })
         .join('\n')
+      // v02(问题 D): 同时传结构化对话历史 + 任务目标 + 项目上下文，
+      //   Worker 不再只收到一段摘要文字。
+      const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = this.messages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-12)
+        .map(m => {
+          const text = Array.isArray(m.content)
+            ? (m.content as any[]).filter(x => x.type === 'text').map(x => x.text || '').join(' ')
+            : (m.content || '')
+          return { role: m.role as 'user' | 'assistant', content: String(text).slice(0, 1500) }
+        })
       const result = await dm.delegate(fromId, {
         to,
         task,
         taskType: taskType as any,
         context: context || defaultContext || this._compressedSummary || undefined,
-      })
+        taskGoal: task,
+        conversationHistory: history,
+        projectContext: { cwd: process.cwd() },
+      } as any)
 
       return {
         success: result.success,

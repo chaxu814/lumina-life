@@ -101,6 +101,29 @@ export interface DelegationRequest {
   loopConfig?: Partial<AgentLoopConfig>
   /** 循环阶段的用户批准节点 */
   approvalGates?: LoopPhase[]
+
+  // ═══ v02: 委托上下文传递（修复"Worker 看不到对话历史/任务目标/工具"） ═══
+  /**
+   * 完整对话历史（用户说了什么、Lumina 之前回复了什么）。
+   * Worker 据此理解任务来龙去脉，不再只看到孤零零一条任务。
+   */
+  conversationHistory?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
+  /**
+   * 用户原始请求 / 任务目标。与 task 可能相同，
+   * 但当 task 是拆出的子任务时，taskGoal 保留上层原始意图。
+   */
+  taskGoal?: string
+  /**
+   * 该 Worker 实际可用的工具名列表。
+   * 注入 system prompt，让 Worker 知道自己能调哪些工具。
+   */
+  availableTools?: string[]
+  /** 项目上下文 — Worker 工作时需要知道的根目录/相关文件/技术栈 */
+  projectContext?: {
+    cwd: string
+    relevantFiles?: string[]
+    techStack?: string
+  }
 }
 
 /** 委托结果 — Yak/热茶返回给 Lumina */
