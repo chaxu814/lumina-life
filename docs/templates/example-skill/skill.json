@@ -1,0 +1,9 @@
+{
+  "name": "daily-quote",
+  "version": "1.0.0",
+  "description": "每日一言：根据日期返回一句简短的格言/提醒。演示 .lumina-skill 包格式。",
+  "author": "Lumina Example",
+  "permissions": [],
+  "tools": ["daily_quote"],
+  "pricing": { "model": "free", "priceCents": 0, "currency": "CNY" }
+}
