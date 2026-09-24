@@ -7,10 +7,11 @@ import {
 describe('edgeSnap 状态机 / 灵敏度（拖拽消失修复）', () => {
   const W = 1920, H = 1080, w = 460, h = 720
 
-  it('默认：灵敏度 20、peek 84、且 autoHideAtEdges=false（不自动藏）', () => {
+  it('默认：灵敏度 20、peek 84，autoHide/dock 均 false（自由放置，不自动挪）', () => {
     expect(DEFAULT_EDGE_SNAP.sensitivity).toBe(20)
     expect(DEFAULT_EDGE_SNAP.peekWidth).toBeGreaterThanOrEqual(84)
     expect(DEFAULT_EDGE_SNAP.autoHideAtEdges).toBe(false)
+    expect(DEFAULT_EDGE_SNAP.dockAtEdges).toBe(false)
   })
 
   it('detectEdge 尊重自定义灵敏度：距边 15px，阈值 20→right，阈值 10→null', () => {

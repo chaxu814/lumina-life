@@ -17,10 +17,16 @@ export interface EdgeSnapConfig {
   mouseThreshold: number
   /**
    * 松手贴边时是否自动隐藏成窥视窄条（peek）。
-   * false（默认）：完整停靠在边缘，人物始终全部可见，不会"消失"。
-   * true：旧行为，自动缩成 peekWidth 窄条，鼠标靠近再滑出。
+   * false（默认）：不自动隐藏。
+   * true：自动缩成 peekWidth 窄条，鼠标靠近再滑出。
    */
   autoHideAtEdges: boolean
+  /**
+   * 松手贴边时是否自动完整停靠（整窗贴边、全部可见）。
+   * false（默认）：自由放置，松手后窗口停在哪就是哪，不做任何重新定位。
+   * true：贴边时自动整窗停靠。
+   */
+  dockAtEdges: boolean
 }
 
 export const DEFAULT_EDGE_SNAP: EdgeSnapConfig = {
@@ -29,6 +35,7 @@ export const DEFAULT_EDGE_SNAP: EdgeSnapConfig = {
   peekWidth: 84,
   mouseThreshold: 96,
   autoHideAtEdges: false,
+  dockAtEdges: false,
 }
 
 /**

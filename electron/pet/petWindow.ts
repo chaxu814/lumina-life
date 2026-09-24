@@ -1081,13 +1081,14 @@ export function compactPetWindowEnabled(): boolean {
   return process.platform === 'win32'
 }
 
-/** 小窗口模式下把目标左上角钳制到显示器工作区内（避免拖出屏幕找不回），坐标为 DIP */
+/** 自由放置：可拖到屏幕任意处（含任务栏上方/角落/大半探出边缘），仅保证至少 KEEP px 可见以便抓回，DIP */
 function clampWindowPos(x: number, y: number, w: number, h: number): { x: number; y: number } {
   const d = screen.getDisplayMatching({ x, y, width: w, height: h })
-  const a = d.workArea || d.bounds
+  const b = d.bounds // 整块屏幕（含任务栏区域），允许压在任务栏上
+  const KEEP = 48    // 至少保留 48px 在屏内，避免完全拖出找不回
   return {
-    x: Math.round(Math.min(a.x + a.width - w, Math.max(a.x, x))),
-    y: Math.round(Math.min(a.y + a.height - h, Math.max(a.y, y))),
+    x: Math.round(Math.min(b.x + b.width - KEEP, Math.max(b.x - w + KEEP, x))),
+    y: Math.round(Math.min(b.y + b.height - KEEP, Math.max(b.y - h + KEEP, y))),
   }
 }
 
@@ -1128,25 +1129,32 @@ function disarmEdgeSnap(): void {
   stopEdgeSnapWatch()
 }
 
-/** 拖拽结束后检测边缘并吸附 */
+/** 拖拽结束：默认自由放置（松手停哪是哪，不重新定位）；仅开启 dock/autoHide 时才做边缘处理 */
 function handleEdgeSnapOnMoveEnd(): void {
   if (!petWindow || petWindow.isDestroyed()) {return}
+  const wantPeek = edgeSnapConfig.autoHideAtEdges
+  const wantDock = edgeSnapConfig.dockAtEdges
+  // 默认：自由放置，仅解除可能残留的吸附
+  if (!wantPeek && !wantDock) {
+    peekState = { active: false, edge: null }
+    stopEdgeSnapWatch()
+    return
+  }
   if (!edgeSnapConfig.enabled) {return}
-  // Wayland/Linux 受限环境检测（X11 下 screen API 可用）
   const display = screen.getDisplayMatching(petWindow.getBounds())
   const wa = display.workArea || display.bounds
   const [w, h] = petWindow.getSize()
   const [x, y] = petWindow.getPosition()
   const edge = detectEdge(x, y, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.sensitivity)
   if (edge) {
-    if (edgeSnapConfig.autoHideAtEdges) {
-      // 可选：自动隐藏成窥视窄条，鼠标靠近再滑出
+    if (wantPeek) {
+      // 自动隐藏成窥视窄条，鼠标靠近再滑出
       const pos = calcPeekPosition(edge, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
       petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
       peekState = { active: true, edge }
       startEdgeSnapWatch()
     } else {
-      // 默认：完整停靠在边缘，人物整个可见，绝不“消失”
+      // 完整停靠在边缘，人物整个可见
       const pos = calcDockPosition(edge, x, y, w, h, wa.width, wa.height, wa.x, wa.y)
       petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
       peekState = { active: false, edge: null }
