@@ -43,6 +43,15 @@ export const SAFETY_PROMPT_AUTO_PLAY = `🤖 即将进入自动游玩模式～
 
 放心交给我吧，点「我知道了」开始～`
 
+/** 检测到反作弊游戏时的专门提示（{gameName} 由 detectAntiCheatGame 填入） */
+export const SAFETY_PROMPT_ANTI_CHEAT = `🚫 检测到你可能在玩带反作弊的竞技网游（{gameName}）。
+
+自动化键鼠输入 + 截图识别很可能被它的反作弊系统判定为外挂，后果往往是账号永久封禁，申诉基本无效。
+
+Lumina 的游戏陪伴只适合单机 / 合作游戏（Minecraft 单机、Factorio、星露谷物语、文明系列……），不适合任何带 BattlEye / EAC / VAC 的竞技网游。
+
+已自动停止本轮自动操作，不会再继续输入。想让我陪你玩的话，换个单机游戏窗口就好～`
+
 /** 默认未确认状态 */
 function defaultState(): SafetyPromptState {
   return { gameCapabilityAcknowledged: false, autoPlayAcknowledged: false }

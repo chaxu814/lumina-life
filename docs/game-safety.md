@@ -10,6 +10,34 @@ Lumina 的游戏集成让 AI 能看画面、操作键鼠、发送聊天。能力
 - 自动化键鼠输入、截图识别、脚本移动都可能被判定为外挂
 - 后果：账号永久封禁，申诉基本无效
 
+代码层硬拦截见 `electron/gaming/antiCheat.ts`：`ANTI_CHEAT_GAMES` 黑名单按窗口标题匹配
+（CS2 / Valorant / PUBG / Fortnite / Apex / CoD / R6 / Overwatch / Rust / Tarkov 等）。
+自动游玩每轮读取前台窗口标题，命中即硬停（`stopReason=anti_cheat_detected`）并展示
+`SAFETY_PROMPT_ANTI_CHEAT` 温馨提示。
+
+### ✅ 适合（慢节奏单机 / 合作）
+- Minecraft（单机 / 自己开的服务器）
+- Factorio（单机）
+- 星露谷物语 Stardew Valley
+- 文明系列 Civilization（文明6）
+- 模拟城市 / 城市天际线
+- 单机 RPG、视觉小说、回合制策略
+- Terraria
+
+### ⚠️ 谨慎（带在线模式的单机）
+- Elden Ring / 只狼等带联机入侵的单机（在线模式可能触发反作弊/被举报）
+- 任何有"线上模式"的游戏：建议只在离线 / 单机档使用
+
+### ❌ 不适合（带反作弊的竞技网游）
+- CS2 / Call of Duty: Warzone / Valorant
+- PUBG / Fortnite / Apex Legends
+- Rainbow Six Siege / Overwatch 2
+- Rust / DayZ / Escape from Tarkov / Destiny 2
+- 任何带 BattlEye / EAC / VAC / Vanguard / Ricochet 的竞技网游
+
+> 注：黑名单为窗口标题匹配，可能漏检（游戏窗口标题不含游戏名）也可能误报。
+> 拿不准时，默认不要在该游戏上开自动游玩。
+
 **安全的游戏：**
 - 单机沙盒：Minecraft（单机/自己开的服务器）、Factorio（单机）、Terraria
 - 单机 RPG、模拟经营、回合制策略
