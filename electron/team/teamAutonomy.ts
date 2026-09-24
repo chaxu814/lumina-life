@@ -27,6 +27,8 @@ import { getRelationshipStore } from '../agentRelationships'
 import { roleActorId } from './teamPolicy'
 import { getTeamMailbox } from './teamMailbox'
 import { listWorktrees } from './gitWorktree'
+import * as fs from 'fs'
+import * as path from 'path'
 
 /** 工种 → 任务板 kind 映射（自定义工种不自动揽活，需显式派单） */
 export const ROLE_KINDS: Record<string, BoardTaskKind[]> = {
@@ -246,6 +248,33 @@ export function getTeamAutonomy(): TeamAutonomy {
 // 启动崩溃恢复
 // ═══════════════════════════════════════════════════════════
 
+/** 崩溃恢复冷却：30s 内不重复触发（registerTeamCollabIpc 被多次调用/热重载时防刷屏） */
+const RECOVERY_COOLDOWN_MS = 30_000
+let _lastRecoveryRunAt = 0
+
+/** 持久化恢复计数文件（避免重启后计数器归零导致反复把"正常启动"当崩溃报） */
+function recoveryStateFile(basePath: string): string {
+  return path.join(basePath, '.lumina-recovery.json')
+}
+function readRecoveryState(basePath: string): { lastRecoveryAtMs: number; totalRecovered: number } {
+  try {
+    const p = recoveryStateFile(basePath)
+    if (fs.existsSync(p)) {
+      const s = JSON.parse(fs.readFileSync(p, 'utf8'))
+      return {
+        lastRecoveryAtMs: Number(s.lastRecoveryAtMs) || 0,
+        totalRecovered: Number(s.totalRecovered) || 0,
+      }
+    }
+  } catch { /* ignore */ }
+  return { lastRecoveryAtMs: 0, totalRecovered: 0 }
+}
+function writeRecoveryState(basePath: string, next: { lastRecoveryAtMs: number; totalRecovered: number }): void {
+  try {
+    fs.writeFileSync(recoveryStateFile(basePath), JSON.stringify(next, null, 2), 'utf8')
+  } catch { /* 数据目录不可写不阻塞 */ }
+}
+
 export interface RecoveryReport {
   /** 被回收回 pending 的任务 id */
   reapedTasks: string[]
@@ -260,8 +289,22 @@ export interface RecoveryReport {
  * 应用启动时调用：
  *   1. 任务板上 claimed/running 但进程已不存在 → 强制回收回 pending
  *   2. 对账 git worktree，遗留现场只报告不自动删（保护用户改动）
+ *
+ * 降噪：
+ *   - 30s 冷却：同一会话内重复调用直接返回空报告，不再 reap/打印
+ *   - 真实崩溃检测：只有真有中断任务或遗留 worktree 时才 console.log + 发信箱；
+ *     干净启动（无崩溃现场）走 console.debug，不刷控制台
+ *   - 恢复计数持久化：跨重启累加，不让计数器归零把每次正常启动当崩溃重复报
  */
 export async function recoverOnStartup(basePath = process.cwd()): Promise<RecoveryReport> {
+  const now = Date.now()
+  // 冷却：30s 内不重复触发
+  if (now - _lastRecoveryRunAt < RECOVERY_COOLDOWN_MS) {
+    return { reapedTasks: [], orphanWorktrees: 0, worktreePaths: [], notice: '团队崩溃恢复：冷却中，跳过。' }
+  }
+  _lastRecoveryRunAt = now
+
+  const prev = readRecoveryState(basePath)
   const board = getSharedBoard()
   const reapedTasks = await board.reapOrphans(true)
 
@@ -280,10 +323,19 @@ export async function recoverOnStartup(basePath = process.cwd()): Promise<Recove
   const bits: string[] = []
   if (reapedTasks.length) {bits.push(`回收 ${reapedTasks.length} 个中断任务（${reapedTasks.join(', ')}）回待认领池`)}
   if (orphanWorktrees) {bits.push(`发现 ${orphanWorktrees} 个遗留隔离工作区（保留未删，可用 git_worktree 检查）`)}
-  const notice = bits.length
+  const hadRealCrash = bits.length > 0
+  const notice = hadRealCrash
     ? `团队崩溃恢复：${bits.join('；')}。`
     : '团队崩溃恢复：无中断任务，无遗留工作区。'
-  if (reapedTasks.length || orphanWorktrees) {
+
+  // 持久化恢复计数（仅在真有恢复动作时累加）
+  const recoveredNow = reapedTasks.length + orphanWorktrees
+  writeRecoveryState(basePath, {
+    lastRecoveryAtMs: now,
+    totalRecovered: prev.totalRecovered + recoveredNow,
+  })
+
+  if (hadRealCrash) {
     try {
       await getTeamMailbox().send({
         from: 'lumina', to: 'lumina',
@@ -292,7 +344,10 @@ export async function recoverOnStartup(basePath = process.cwd()): Promise<Recove
         kind: 'system',
       })
     } catch { /* ignore */ }
+    console.log(`[teamAutonomy] ${notice}`)
+  } else if (process.env.DEBUG) {
+    // 干净启动：不刷控制台，仅 DEBUG 守卫下可见
+    console.debug(`[teamAutonomy] ${notice}`)
   }
-  console.log(`[teamAutonomy] ${notice}`)
   return { reapedTasks, orphanWorktrees, worktreePaths, notice }
 }
