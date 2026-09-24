@@ -15,16 +15,21 @@ export interface AdapterEnv {
   sessionType?: string
   /** 注入 xdotool 是否可用（仅 Linux 用，便于单测） */
   xdotoolAvailable?: boolean
+  /** 注入 grim 是否可用（仅 Linux Wayland 截屏用，便于单测） */
+  grimAvailable?: boolean
+  /** 注入 cliclick 是否可用（仅 macOS 用，便于单测） */
+  cliclickAvailable?: boolean
 }
 
 /** 按平台构造适配器（纯函数，可单测，不触碰全局单例） */
 export function createAdapter(platform: string, env: AdapterEnv = {}): PlatformAdapter {
   if (platform === 'win32') {return new WindowsAdapter()}
-  if (platform === 'darwin') {return new MacAdapter()}
+  if (platform === 'darwin') {return new MacAdapter({ cliclickAvailable: env.cliclickAvailable })}
   if (platform === 'linux') {
     const opts: LinuxAdapterOptions = {
       sessionType: env.sessionType,
       xdotoolAvailable: env.xdotoolAvailable,
+      grimAvailable: env.grimAvailable,
     }
     return new LinuxAdapter(opts)
   }

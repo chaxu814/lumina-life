@@ -60,6 +60,33 @@ export interface PlatformCapabilities {
   notes: string[]
 }
 
+/** 单个子能力的详细描述（method + 所需权限），供前端设置页逐项展示 */
+export interface SubCapabilityDetail {
+  /** 是否可用 */
+  supported: boolean
+  /** 实现方式（命令/技术栈，前端展示用） */
+  method: string
+  /** 需要授予的系统权限/依赖（不可为空时给引导） */
+  requiresPermission?: string
+}
+
+/**
+ * 平台能力详细矩阵（与上方布尔 PlatformCapabilities 互补）。
+ * 布尔位给「能不能用」，这里给「用什么命令实现 / 需要什么权限 / 什么限制」，
+ * 由 platformCapabilities.getDetailedCapabilityMatrix() 统一产出，前端可直接渲染。
+ */
+export interface DetailedPlatformCapabilities {
+  platform: 'win32' | 'darwin' | 'linux'
+  /** 显示服务器（macOS 恒为 cocoa；Linux 为 x11/wayland/aquamarine；Windows 为 win32） */
+  displayServer?: 'x11' | 'wayland' | 'aquamarine' | 'cocoa' | 'win32'
+  screenshot: SubCapabilityDetail
+  mouse: SubCapabilityDetail
+  keyboard: SubCapabilityDetail
+  windowManagement: { supported: boolean; method: string }
+  /** 该平台的限制/授权说明 */
+  notes: string[]
+}
+
 /** 平台适配器统一接口（由 WindowsAdapter / MacAdapter / LinuxAdapter 实现） */
 export interface PlatformAdapter {
   readonly capabilities: PlatformCapabilities

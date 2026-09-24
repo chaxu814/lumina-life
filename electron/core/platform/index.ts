@@ -13,7 +13,8 @@ export {
 export type { AdapterEnv } from './platformFactory'
 export {
   getPlatformFeatureMatrix,
+  getDetailedCapabilityMatrix,
 } from './platformCapabilities'
 export type {
-  PlatformFeatureEntry, PlatformFeatureMatrix,
+  PlatformFeatureEntry, PlatformFeatureMatrix, DetailedMatrixDriver,
 } from './platformCapabilities'
