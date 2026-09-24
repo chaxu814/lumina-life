@@ -805,15 +805,27 @@ ipcRenderer.on('pet:command', (_event, command) => {
 function getPetHtmlPath(): string {
   const dir = path.join(app.getPath('userData'), 'pet-assets')
   if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
-  // 只在 pet.html 不存在或源文件更新时才复制，避免每次都复制
   const petHtmlPath = path.join(dir, 'pet.html')
   const src = findPetSourceDir()
   if (src) {
     const srcHtml = path.join(src, 'pet-live2d.html')
-    const srcMtime = fs.existsSync(srcHtml) ? fs.statSync(srcHtml).mtimeMs : 0
-    const dstMtime = fs.existsSync(petHtmlPath) ? fs.statSync(petHtmlPath).mtimeMs : 0
-    if (dstMtime < srcMtime) {
-      copyPetAssets(dir)
+    const srcExists = fs.existsSync(srcHtml)
+    const dstExists = fs.existsSync(petHtmlPath)
+    // dev 模式强制刷新：git checkout/分支切换会重置源码 mtime，导致旧副本永不更新
+    const isDev = !app.isPackaged || !!process.env.ELECTRON_RENDERER_URL
+    let needCopy = isDev
+    if (!needCopy && srcExists && dstExists) {
+      const srcStat = fs.statSync(srcHtml)
+      const dstStat = fs.statSync(petHtmlPath)
+      // 不仅比 mtime：文件大小不同说明内容一定变了（git 回退后 mtime 可能更旧但内容不同）
+      needCopy = dstStat.mtimeMs < srcStat.mtimeMs || dstStat.size !== srcStat.size
+    } else if (!dstExists) {
+      needCopy = true
+    }
+    if (needCopy) {
+      try { copyPetAssets(dir) } catch (e: any) {
+        console.warn('[PetWindow] 复制 pet-assets 失败:', e?.message || e)
+      }
     }
   }
   return petHtmlPath
@@ -897,10 +909,13 @@ function getRendererModelParam(): string {
  * 抽出便于单测——测试无需构造真实 BrowserWindow 即可断言"路径不含 ?、query 正确"。
  * live2d 页（pet.html）带 query.model；其余形态不带 query。
  */
-export function resolvePetLoadTarget(): { filePath: string; query?: { model: string } } {
+export function resolvePetLoadTarget(): { filePath: string; query?: { model: string; solid?: string } } {
   const filePath = getRendererHtmlFilePath()
   if (path.basename(filePath) === 'pet.html') {
-    return { filePath, query: { model: getRendererModelParam() } }
+    const query: { model: string; solid?: string } = { model: getRendererModelParam() }
+    // 仅当平台能力判定透明被关闭时，才让渲染层施加实色兜底（正常透明路径零底色）
+    if (!currentPlatformCaps().transparent) { query.solid = '1' }
+    return { filePath, query }
   }
   return { filePath }
 }

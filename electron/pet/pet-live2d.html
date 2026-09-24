@@ -460,6 +460,17 @@
 <script src="assets/pet-voice.js"></script>
 </head>
 <body>
+<script>
+// 透明兜底：仅当主进程判定当前平台无法透明（?solid=1）时才给 body 施实色底，
+// 正常透明路径零底色，桌宠真正浮在桌面上。
+(function(){
+  var p = new URLSearchParams(location.search);
+  if (p.get('solid') === '1') {
+    document.body.style.backgroundColor = '#15101f';
+    document.body.style.backgroundImage = 'linear-gradient(135deg,#1a1428 0%,#15101f 100%)';
+  }
+})();
+</script>
 <div id="pet-container">
   <canvas id="stage"></canvas>
   <div class="emotion-bubble" id="emotion-bubble"></div>
@@ -3257,6 +3268,18 @@ async function boot() {
     ipc.invoke('pet:window-mode').then(m => {
       PET_WINDOW_MODE = (m === 'compact') ? 'compact' : 'fullscreen';
       if (PET_WINDOW_MODE === 'compact' && model) { applyScale(); state.targetX = model.x = innerWidth / 2; clampPosition(); }
+      // compact 小窗：工具栏 3 秒后自动收起，悬停展开，离开再收起（保持浮在桌面的干净观感）
+      if (PET_WINDOW_MODE === 'compact') {
+        var _tb = document.getElementById('neko-toolbar');
+        var _tbCollapsed = document.getElementById('tb-collapsed');
+        var _autoCollapseTimer = null;
+        function _collapseTb() { _tb.classList.add('collapsed'); closeAllPanels(); positionToolbar(); }
+        function _scheduleCollapse() { clearTimeout(_autoCollapseTimer); _autoCollapseTimer = setTimeout(_collapseTb, 3000); }
+        setTimeout(_collapseTb, 3000);
+        _tb.addEventListener('mouseenter', function() { clearTimeout(_autoCollapseTimer); _tb.classList.remove('collapsed'); positionToolbar(); });
+        _tb.addEventListener('mouseleave', _scheduleCollapse);
+        if (_tbCollapsed) { _tbCollapsed.addEventListener('mouseenter', function() { clearTimeout(_autoCollapseTimer); }); }
+      }
     }).catch(() => {});
     ipc.invoke('pet:config').then(cfg => {
       if (cfg && typeof cfg.scale === 'number') setUserScale(cfg.scale, false);
