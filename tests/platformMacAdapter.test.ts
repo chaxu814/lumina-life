@@ -2,7 +2,10 @@
 // tests/platformMacAdapter.test.ts — macOS 适配器命令构造单测
 //
 // 不实际执行任何系统命令：mock child_process 包装层 execCmd，
-// 仅断言 MacAdapter 各方法拼出的 osascript / screencapture / open 命令与参数。
+// 仅断言 MacAdapter 各方法拼出的 osascript / cliclick / screencapture / open 命令与参数。
+// 覆盖两条路径：
+//   • cliclickAvailable=true  → 键鼠优先 cliclick，长按/拖拽用 cliclick
+//   • cliclickAvailable=false → 退化为 AppleScript(System Events)，长按给安装指引
 // 同时验证辅助功能 / 屏幕录制授权提示出现在 capabilities.notes。
 // ============================================================
 
@@ -24,7 +27,7 @@ vi.mock('fs', async (importOriginal) => {
   return { ...actual, readFileSync: readFileSyncMock, unlinkSync: unlinkSyncMock }
 })
 
-import { MacAdapter } from '../electron/core/platform/MacAdapter'
+import { MacAdapter, buildMacKeyScript } from '../electron/core/platform/MacAdapter'
 
 /** 构造一个含合法 IHDR 的 PNG 头（宽 1920 高 1080），供 screenshot 读取宽高 */
 function makePngBuf(w = 1920, h = 1080): Buffer {
@@ -35,7 +38,9 @@ function makePngBuf(w = 1920, h = 1080): Buffer {
   return buf
 }
 
-const adapter = new MacAdapter()
+// 两个适配器：一个有 cliclick，一个没有，分别断言两条实现路径
+const clic = new MacAdapter({ cliclickAvailable: true })
+const noCli = new MacAdapter({ cliclickAvailable: false })
 
 beforeEach(() => {
   execCmdMock.mockClear().mockResolvedValue('')
@@ -46,7 +51,7 @@ beforeEach(() => {
 // ── 能力与授权提示 ────────────────────────────────────────
 describe('MacAdapter capabilities', () => {
   it('鼠标/键盘/截屏/窗口可用，UIA 关闭', () => {
-    const c = adapter.capabilities
+    const c = clic.capabilities
     expect(c.platform).toBe('darwin')
     expect(c.mouse).toBe(true)
     expect(c.keyboard).toBe(true)
@@ -57,51 +62,39 @@ describe('MacAdapter capabilities', () => {
   })
 
   it('notes 含辅助功能 + 屏幕录制授权指引', () => {
-    const joined = adapter.capabilities.notes.join('\n')
+    const joined = clic.capabilities.notes.join('\n')
     expect(joined).toMatch(/辅助功能|Accessibility/)
     expect(joined).toMatch(/屏幕录制|Screen Recording/)
   })
+
+  it('无 cliclick 时 notes 给出 brew install cliclick 指引', () => {
+    expect(noCli.capabilities.notes.join('\n')).toMatch(/brew install cliclick/)
+  })
 })
 
-// ── 鼠标：AppleScript 命令构造 ────────────────────────────
-describe('MacAdapter 鼠标命令', () => {
-  it('mouseMove 用 osascript set mousePosition', async () => {
-    await adapter.mouseMove(120.4, 240.6)
-    expect(execCmdMock).toHaveBeenCalledWith('osascript', [
-      '-e',
-      'tell application "System Events" to set mousePosition to {120,241}',
-    ])
+// ── 鼠标：有 cliclick 时优先 cliclick ─────────────────────
+describe('MacAdapter 鼠标命令（cliclick 可用）', () => {
+  it('mouseMove 走 cliclick m:x,y', async () => {
+    await clic.mouseMove(120.4, 240.6)
+    expect(execCmdMock).toHaveBeenCalledWith('cliclick', ['m:120,241'])
   })
 
-  it('mouseClick 左键：click at 坐标', async () => {
-    await adapter.mouseClick(100, 200, 'left', false)
-    const [, args] = execCmdMock.mock.calls[0]
-    expect(args[1]).toContain('click at {100,200}')
+  it('mouseClick 左键 → cliclick c:x,y；右键 → rc:；双击 → dc:', async () => {
+    await clic.mouseClick(100, 200, 'left', false)
+    expect(execCmdMock).toHaveBeenLastCalledWith('cliclick', ['c:100,200'])
+    await clic.mouseClick(50, 60, 'right', false)
+    expect(execCmdMock).toHaveBeenLastCalledWith('cliclick', ['rc:50,60'])
+    await clic.mouseClick(10, 20, 'left', true)
+    expect(execCmdMock).toHaveBeenLastCalledWith('cliclick', ['dc:10,20'])
   })
 
-  it('mouseClick 右键：使用 command down', async () => {
-    await adapter.mouseClick(50, 60, 'right', false)
-    const [, args] = execCmdMock.mock.calls[0]
-    expect(args[1]).toContain('using {command down}')
-  })
-
-  it('mouseClick 双击：两次 click at', async () => {
-    await adapter.mouseClick(10, 20, 'left', true)
-    const [, args] = execCmdMock.mock.calls[0]
-    // 脚本串里应出现两次 click at（分号分隔的两段）
-    expect(args[1].split(/;\s*/).filter((s: string) => s.includes('click at {10,20}')).length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('mouseHover 复用 set mousePosition', async () => {
-    await adapter.mouseHover(77, 88, 400)
-    expect(execCmdMock).toHaveBeenCalledWith('osascript', [
-      '-e',
-      'tell application "System Events" to set mousePosition to {77,88}',
-    ])
+  it('mouseHover 复用 cliclick m:x,y', async () => {
+    await clic.mouseHover(77, 88, 400)
+    expect(execCmdMock).toHaveBeenCalledWith('cliclick', ['m:77,88'])
   })
 
   it('mouseLongPress 走 bash 调 cliclick md/mu', async () => {
-    await adapter.mouseLongPress(30, 40, 800)
+    await clic.mouseLongPress(30, 40, 800)
     const [cmd, args] = execCmdMock.mock.calls[0]
     expect(cmd).toBe('bash')
     const script = args.join(' ')
@@ -110,8 +103,53 @@ describe('MacAdapter 鼠标命令', () => {
     expect(script).toContain('mu:30,40')
   })
 
+  it('mouseDrag 走 cliclick md/mu 起终点', async () => {
+    await clic.mouseDrag(10, 20, 300, 400)
+    const [, args] = execCmdMock.mock.calls[0]
+    const script = args.join(' ')
+    expect(script).toContain('cliclick m:10,20 md:10,20')
+    expect(script).toContain('m:300,400 mu:300,400')
+  })
+})
+
+// ── 鼠标：无 cliclick 退化为 AppleScript ───────────────────
+describe('MacAdapter 鼠标命令（无 cliclick，AppleScript 降级）', () => {
+  it('mouseMove 用 osascript set mousePosition', async () => {
+    await noCli.mouseMove(120.4, 240.6)
+    expect(execCmdMock).toHaveBeenCalledWith('osascript', [
+      '-e',
+      'tell application "System Events" to set mousePosition to {120,241}',
+    ])
+  })
+
+  it('mouseClick 左键：click at 坐标', async () => {
+    await noCli.mouseClick(100, 200, 'left', false)
+    const [, args] = execCmdMock.mock.calls[0]
+    expect(args[1]).toContain('click at {100,200}')
+  })
+
+  it('mouseClick 右键：ctrl+click（control down）', async () => {
+    await noCli.mouseClick(50, 60, 'right', false)
+    const [, args] = execCmdMock.mock.calls[0]
+    expect(args[1]).toContain('using {control down}')
+  })
+
+  it('mouseClick 双击：两次 click at', async () => {
+    await noCli.mouseClick(10, 20, 'left', true)
+    const [, args] = execCmdMock.mock.calls[0]
+    expect(args[1].split(/;\s*/).filter((s: string) => s.includes('click at {10,20}')).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('mouseLongPress 无 cliclick 时不发命令，返回安装指引', async () => {
+    execCmdMock.mockClear()
+    const r = await noCli.mouseLongPress(30, 40, 800)
+    expect(r).toMatch(/长按失败/)
+    expect(r).toMatch(/brew install cliclick/)
+    expect(execCmdMock).not.toHaveBeenCalled()
+  })
+
   it('mouseDrag：set mousePosition 起终点 + AXPress', async () => {
-    await adapter.mouseDrag(10, 20, 300, 400)
+    await noCli.mouseDrag(10, 20, 300, 400)
     const [, args] = execCmdMock.mock.calls[0]
     expect(args[1]).toContain('set mousePosition to {10,20}')
     expect(args[1]).toContain('set mousePosition to {300,400}')
@@ -119,56 +157,80 @@ describe('MacAdapter 鼠标命令', () => {
   })
 
   it('mouseScroll：按次数 repeat 方向键', async () => {
-    await adapter.mouseScroll(3)
+    await noCli.mouseScroll(3)
     const [, args] = execCmdMock.mock.calls[0]
     expect(args[1]).toContain('repeat 3 times')
     expect(args[1]).toContain('control down')
   })
 })
 
-// ── 键盘 ─────────────────────────────────────────────────
+// ── 键盘：键码映射 ────────────────────────────────────────
 describe('MacAdapter 键盘命令', () => {
   it('keyboardType 走 osascript keystroke 并转义引号', async () => {
-    await adapter.keyboardType('say "hi"')
+    await clic.keyboardType('say "hi"')
     const [, args] = execCmdMock.mock.calls[0]
     expect(args[1]).toContain('keystroke "say \\"hi\\""')
   })
 
   it('keyboardType 空串直接返回，不发命令', async () => {
     execCmdMock.mockClear()
-    const r = await adapter.keyboardType('')
+    const r = await clic.keyboardType('')
     expect(r).toBe('输入完成')
     expect(execCmdMock).not.toHaveBeenCalled()
   })
 
-  it('keyPress 走 osascript key code', async () => {
-    await adapter.keyPress('return')
+  it('keyPress 把键名映射成数字 key code（return→36）', async () => {
+    await clic.keyPress('return')
     const [, args] = execCmdMock.mock.calls[0]
-    expect(args[1]).toContain('key code return')
+    expect(args[1]).toContain('key code 36')
+  })
+
+  it('组合键 ctrl_c → key code 8 using control down', () => {
+    expect(buildMacKeyScript('ctrl_c')).toBe(
+      'tell application "System Events" to key code 8 using {control down}')
+  })
+
+  it('组合键 alt_f4 → key code 118 using option down', () => {
+    expect(buildMacKeyScript('alt_f4')).toBe(
+      'tell application "System Events" to key code 118 using {option down}')
+  })
+
+  it('方向键上 → key code 126', () => {
+    expect(buildMacKeyScript('up')).toBe('tell application "System Events" to key code 126')
   })
 
   it('keyPress 空键直接失败', async () => {
     execCmdMock.mockClear()
-    const r = await adapter.keyPress('')
+    const r = await clic.keyPress('')
     expect(r).toContain('按键失败')
     expect(execCmdMock).not.toHaveBeenCalled()
+  })
+
+  it('辅助功能被拒（-1743）时返回权限引导', async () => {
+    execCmdMock.mockResolvedValue('ERR:EnvError: osascript failed: -1743|')
+    const r = await clic.keyPress('return')
+    expect(r).toMatch(/辅助功能/)
   })
 })
 
 // ── 截屏 / 窗口 / 应用 ────────────────────────────────────
 describe('MacAdapter 截屏与应用', () => {
   it('screenshot 调 screencapture -x -t png', async () => {
-    const res = await adapter.screenshot()
+    const res = await clic.screenshot()
     expect(execCmdMock).toHaveBeenCalledWith('screencapture', ['-x', '-t', 'png', expect.any(String)], 10000)
     expect(res.w).toBe(1920)
     expect(res.h).toBe(1080)
-    // 临时文件用完即删
     expect(unlinkSyncMock).toHaveBeenCalled()
+  })
+
+  it('屏幕录制被拒时抛权限引导', async () => {
+    execCmdMock.mockResolvedValue('ERR:tccERR 123|')
+    await expect(clic.screenshot()).rejects.toThrow(/屏幕录制/)
   })
 
   it('getActiveWindow 用两段 osascript 取前台进程名/标题', async () => {
     execCmdMock.mockResolvedValue('Finder|Untitled')
-    const w = await adapter.getActiveWindow()
+    const w = await clic.getActiveWindow()
     const [cmd, args] = execCmdMock.mock.calls[0]
     expect(cmd).toBe('osascript')
     expect(args.length).toBeGreaterThanOrEqual(3)
@@ -177,18 +239,18 @@ describe('MacAdapter 截屏与应用', () => {
   })
 
   it('openApp 用 open -a', async () => {
-    await adapter.openApp('Safari')
+    await clic.openApp('Safari')
     expect(execCmdMock).toHaveBeenCalledWith('open', ['-a', 'Safari'])
   })
 
   it('getInstalledApps 列 /Applications', async () => {
     execCmdMock.mockResolvedValue('Safari\nMail\n')
-    const apps = await adapter.getInstalledApps()
+    const apps = await clic.getInstalledApps()
     expect(execCmdMock).toHaveBeenCalledWith('bash', expect.arrayContaining([expect.stringContaining('ls /Applications')]), 8000)
     expect(apps.map(a => a.name)).toEqual(['Safari', 'Mail'])
   })
 
   it('getUiaTree 优雅降级为空数组', async () => {
-    await expect(adapter.getUiaTree()).resolves.toEqual([])
+    await expect(clic.getUiaTree()).resolves.toEqual([])
   })
 })
