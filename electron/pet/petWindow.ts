@@ -25,7 +25,7 @@ import { isEnabled as isFlagEnabled, allFlags as allPetFlags } from '../core/fea
 import type { AvatarKind } from './modelLibrary'
 import { BUILTIN_MODELS, getActiveModel, setActiveModel } from './modelLibrary'
 import { getRendererForKind, fallbackToBuiltin, guessKindFromEntry } from './avatarRenderer'
-import { detectEdge, calcPeekPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig } from './edgeSnap'
+import { detectEdge, calcPeekPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig, type EdgeSide } from './edgeSnap'
 import { getComputerUse } from '../computerUse'  // 已在主 bundle，静态引用消除 vite 重复 import 告警
 
 /**
@@ -1086,8 +1086,8 @@ function clampWindowPos(x: number, y: number, w: number, h: number): { x: number
   const d = screen.getDisplayMatching({ x, y, width: w, height: h })
   const a = d.workArea || d.bounds
   return {
-    x: Math.round(Math.min(a.x + a.width - 60, Math.max(a.x - w + 60, x))),
-    y: Math.round(Math.min(a.y + a.height - 60, Math.max(a.y, y))),
+    x: Math.round(Math.min(a.x + a.width - 120, Math.max(a.x - w + 120, x))),
+    y: Math.round(Math.min(a.y + a.height - 120, Math.max(a.y, y))),
   }
 }
 
@@ -1095,9 +1095,16 @@ function clampWindowPos(x: number, y: number, w: number, h: number): { x: number
 function nudgeRepaint(win: BrowserWindow): void {
   try {
     if (!win || win.isDestroyed()) return
+    // 1) 渲染层重建 WebGL 绘图缓冲，强制 DWM 重新挂接 DirectComposition 呈现面（移动后空白的根因修复）
+    try { win.webContents.send('pet:force-repaint') } catch { /* noop */ }
+    // 2) 1px 轻推再归位（双保险，触发 DComp 重新合成）
     const b = win.getBounds()
     win.setBounds({ x: b.x, y: b.y + 1, width: b.width, height: b.height })
-    setTimeout(() => { if (!win.isDestroyed()) win.setBounds(b) }, 30)
+    setTimeout(() => {
+      if (win.isDestroyed()) return
+      win.setBounds(b)
+      try { win.webContents.send('pet:force-repaint') } catch { /* noop */ }
+    }, 60)
   } catch { /* noop */ }
 }
 
@@ -1115,6 +1122,12 @@ let edgeSnapConfig: EdgeSnapConfig = { ...DEFAULT_EDGE_SNAP }
 let peekState: { active: boolean; edge: string | null } = { active: false, edge: null }
 let edgeSnapTimer: ReturnType<typeof setInterval> | null = null
 
+/** 解除边缘吸附：清状态 + 停 watch（拖拽开始 / 用户手动移远时调用） */
+function disarmEdgeSnap(): void {
+  peekState = { active: false, edge: null }
+  stopEdgeSnapWatch()
+}
+
 /** 拖拽结束后检测边缘并吸附 */
 function handleEdgeSnapOnMoveEnd(): void {
   if (!petWindow || petWindow.isDestroyed()) {return}
@@ -1124,7 +1137,7 @@ function handleEdgeSnapOnMoveEnd(): void {
   const wa = display.workArea || display.bounds
   const [w, h] = petWindow.getSize()
   const [x, y] = petWindow.getPosition()
-  const edge = detectEdge(x, y, w, h, wa.width, wa.height, wa.x, wa.y)
+  const edge = detectEdge(x, y, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.sensitivity)
   if (edge) {
     const pos = calcPeekPosition(edge, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
     petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
@@ -1147,6 +1160,19 @@ function startEdgeSnapWatch(): void {
       const b = petWindow.getBounds()
       const display = screen.getDisplayMatching(b)
       const wa = display.workArea || display.bounds
+      // 非粘滞：窗口被手动移到 peek/full 两个位置都够不着的地方 → 自动解除吸附
+      if (peekState.edge) {
+        const pk = calcPeekPosition(peekState.edge as EdgeSide, b.width, b.height, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
+        const fxx = peekState.edge === 'left' ? wa.x + 12 : peekState.edge === 'right' ? wa.x + wa.width - b.width - 12 : b.x
+        const fyy = peekState.edge === 'top' ? wa.y + 12 : peekState.edge === 'bottom' ? wa.y + wa.height - b.height - 12 : b.y
+        const dPk = Math.abs(b.x - pk.x) + Math.abs(b.y - pk.y)
+        const dFull = Math.abs(b.x - fxx) + Math.abs(b.y - fyy)
+        if (dPk > edgeSnapConfig.mouseThreshold + 140 && dFull > edgeSnapConfig.mouseThreshold + 140) {
+          peekState = { active: false, edge: null }
+          stopEdgeSnapWatch()
+          return
+        }
+      }
       const hovering = shouldSlideOut(pt.x, pt.y, b.x, b.y, b.width, b.height, edgeSnapConfig.mouseThreshold)
       if (hovering && peekState.active) {
         // 滑出到完整位置（屏幕中央偏侧边）
@@ -1240,9 +1266,6 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
       spellcheck: false,
     },
   })
-  // 调试用：自动打开开发者工具（正式发布前注释掉）
-  // petWindow.webContents.openDevTools({ mode: 'detach' })
-
   // 🎙 全双工语音需要麦克风权限：桌宠页是本地可信内容，自动授予媒体采集。
   try {
     const petSession = petWindow.webContents.session
@@ -1268,6 +1291,8 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
   loadPetHtml().then(() => {
     setWindowClickThrough(config.clickThrough)
     startCursorFollow() // 👀 v6.2 全屏注视推送
+    // 首次加载完成后强制重绘一次（部分机器首帧 DComp 呈现面未挂接 → 开局即空白）
+    setTimeout(() => { if (petWindow && !petWindow.isDestroyed()) nudgeRepaint(petWindow) }, 500)
   }).catch(err => {
     console.error('[PetWindow] loadFile failed:', err)
   })
@@ -1448,6 +1473,8 @@ export function registerPetIpc(): void {
   ipcMain.on('pet:window-move', (e, payload: { screenX?: number; screenY?: number; grabX?: number; grabY?: number }) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    // 拖拽一开始就解除旧吸附，edge-watch 绝不能与用户拖拽打架
+    disarmEdgeSnap()
     const sx = Number(payload?.screenX), sy = Number(payload?.screenY)
     const gx = Number(payload?.grabX) || 0, gy = Number(payload?.grabY) || 0
     if (!Number.isFinite(sx) || !Number.isFinite(sy)) return

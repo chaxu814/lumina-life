@@ -19,9 +19,9 @@ export interface EdgeSnapConfig {
 
 export const DEFAULT_EDGE_SNAP: EdgeSnapConfig = {
   enabled: true,
-  sensitivity: 16,
-  peekWidth: 48,
-  mouseThreshold: 80,
+  sensitivity: 20,
+  peekWidth: 84,
+  mouseThreshold: 96,
 }
 
 /**
@@ -33,6 +33,8 @@ export function detectEdge(
   screenW: number, screenH: number,
   /** 工作区起点（任务栏/Dock 偏移），通常 = workArea.x/y */
   workX: number, workY: number,
+  /** 触发吸附的距离阈值（= EdgeSnapConfig.sensitivity），默认 20 */
+  sensitivity = 20,
 ): EdgeSide | null {
   // 与各边缘的距离（负值=窗口超出工作区，不应视为贴边，用 Infinity 排除）
   const distLeft = Math.max(0, windowX - workX)
@@ -49,7 +51,7 @@ export function detectEdge(
   ]
   candidates.sort((a, b) => a.dist - b.dist)
   const nearest = candidates[0]
-  if (nearest.dist <= 16) {return nearest.side}
+  if (nearest.dist <= sensitivity) {return nearest.side}
   return null
 }
 

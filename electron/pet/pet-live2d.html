@@ -869,7 +869,19 @@ try {
       driveGaze(c.x, c.y);
     } catch (err) { /* 模型未就绪时忽略 */ }
   });
-} catch (err) { /* 非 Electron 环境（浏览器预览）无 ipc */ }
+} catch (err) { /* 非 Electron 环境（浏览器预览）无 ipc */ }
+// 透明置顶窗在 Windows setBounds/移动后 DWM 可能丢弃 WebGL 的 DirectComposition 呈现面（窗口在、角色空白）。
+// 收到主进程请求后重建绘图缓冲，强制 DWM 重新挂接呈现面并补画一帧。
+try {
+  ipc.on('pet:force-repaint', () => {
+    try {
+      if (typeof app !== 'undefined' && app.renderer) {
+        app.renderer.resize(innerWidth, innerHeight)
+        if (typeof app.render === 'function') app.render()
+      }
+    } catch (e) {}
+  });
+} catch (err) { /* 浏览器预览无 ipc */ }
 
 let userScale = 1;
 function fitScale() {
