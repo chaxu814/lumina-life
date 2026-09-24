@@ -111,6 +111,16 @@ export async function detectLMStudio(timeoutMs = 3000, fetcher: HttpGet = defaul
     }
     return { available: true, models, recommended: pickRecommendedModel(models) }
   } catch (err: any) {
+    const msg = err?.message || ''
+    // LM Studio 开启了 API Key 认证：端口通但 /v1/models 返回 401
+    if (msg.includes('401') || msg.includes('Unauthorized')) {
+      return {
+        available: false,
+        models: [],
+        recommended: '',
+        error: 'LM Studio 已启动但开启了 API Key 认证。请在 LM Studio → 服务器(Server) 标签页中删除 API Key（留空即关闭认证），或在下一步填入你的 Key。',
+      }
+    }
     return {
       available: false,
       models: [],
