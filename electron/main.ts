@@ -10,6 +10,7 @@ import 'dotenv/config'
 import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification, dialog } from 'electron'
 import { join } from 'path'
 import { getAppIconPath, getTrayIcon } from './appIcon'
+import { createTrayMenu, showTrayMenu } from './tray/trayMenu'
 
 // ── 必须在 app.whenReady 前设置 ──────────────────────
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -224,15 +225,49 @@ function createTray(): void {
   const trayIcon = getTrayIcon()
   tray = new Tray(trayIcon.isEmpty() ? nativeImage.createEmpty() : trayIcon)
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: '显示 Lumina', click: () => mainWindow?.show() },
-    { label: '隐藏 Lumina', click: () => mainWindow?.hide() },
-    { type: 'separator' },
-    { label: '退出', click: () => { isQuitting = true; app.quit() } },
-  ])
-
   tray.setToolTip('Lumina Life 1.0')
-  tray.setContextMenu(contextMenu)
+
+  // 自定义圆角浮层托盘菜单（替代原生 setContextMenu）
+  let gameEnabled = process.env.LUMINA_GAME_ENABLED === '1' || process.env.LUMINA_GAME_ENABLED === 'true'
+  createTrayMenu(tray, {
+    actions: {
+      toggleMainWindow: () => {
+        if (!mainWindow) { return }
+        if (mainWindow.isVisible()) { mainWindow.hide() } else { mainWindow.show() }
+      },
+      openSettings: () => {
+        mainWindow?.show()
+        mainWindow?.focus()
+        mainWindow?.webContents.send('tray:open-settings')
+      },
+      openTaskWorkspace: () => {
+        mainWindow?.show()
+        mainWindow?.focus()
+        mainWindow?.webContents.send('tray:open-task-workspace')
+      },
+      toggleGame: () => {
+        gameEnabled = !gameEnabled
+        process.env.LUMINA_GAME_ENABLED = gameEnabled ? '1' : '0'
+        return gameEnabled
+      },
+      quit: () => {
+        isQuitting = true
+        app.quit()
+      },
+    },
+    getState: () => ({
+      online: true,
+      mood: '在线',
+      moodColor: '#4ade80',
+      statusText: mainWindow?.isVisible() ? '在线' : '已隐藏',
+      gameEnabled,
+      windowVisible: !!mainWindow?.isVisible(),
+    }),
+  })
+
+  // 左键 / 右键都弹出自定义浮层；双击直接显示主窗口
+  tray.on('click', () => showTrayMenu())
+  tray.on('right-click', () => showTrayMenu())
   tray.on('double-click', () => mainWindow?.show())
 }
 

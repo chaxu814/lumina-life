@@ -33,6 +33,11 @@ function copyPetAssets() {
         if (existsSync(resolve(srcDir, 'plugins'))) {
           cpSync(resolve(srcDir, 'plugins'), resolve(destDir, 'plugins'), { recursive: true })
         }
+        // 托盘浮层菜单（自定义圆角卡片 HTML）
+        const trayHtml = resolve(__dirname, 'electron', 'tray', 'trayMenu.html')
+        if (existsSync(trayHtml)) {
+          copyFileSync(trayHtml, resolve(destDir, 'trayMenu.html'))
+        }
         // 拷贝 IndexTTS 服务脚本
         const pyDir = resolve(__dirname, 'python')
         if (existsSync(resolve(pyDir, 'indextts_server.py'))) {
@@ -70,7 +75,8 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/preload.ts')
+          index: resolve(__dirname, 'electron/preload.ts'),
+          trayMenu: resolve(__dirname, 'electron/tray/trayMenuPreload.ts'),
         }
       }
     }
