@@ -482,6 +482,7 @@ ${lastError.slice(0, 1000)}
           {
             title: `[${from}→${to}] ${currentTask.slice(0, 40)}`,
             tags: ['delegation', `${to}`],
+            assignee: to,
           }
         )
         
@@ -1063,7 +1064,7 @@ ${currentVerify.errors.join('\n').slice(0, 3000)}
         const fixTaskId = asyncManager.submit(
           fixTask,
           fixChildConfig,
-          { title: `AutoFix[${round}/${verifyConfig.maxFixRounds}]: ${to}`, tags: ['autofix', `${to}`] }
+          { title: `AutoFix[${round}/${verifyConfig.maxFixRounds}]: ${to}`, tags: ['autofix', `${to}`], assignee: to }
         )
         
         const fixResult = await this._waitForTaskCompletion(asyncManager, fixTaskId, 120_000)

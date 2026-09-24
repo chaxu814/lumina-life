@@ -336,6 +336,25 @@ const api = {
     }
   },
 
+  // 🆕 v02: 任务工作区实时事件
+  onTaskCreated: (callback: (task: any) => void) => {
+    const handler = (_event: any, task: any) => callback(task)
+    ipcRenderer.on('task:created', handler)
+    return () => { ipcRenderer.removeListener('task:created', handler) }
+  },
+
+  onTaskError: (callback: (task: any) => void) => {
+    const handler = (_event: any, task: any) => callback(task)
+    ipcRenderer.on('task:error', handler)
+    return () => { ipcRenderer.removeListener('task:error', handler) }
+  },
+
+  onTaskRunnerEvent: (callback: (payload: { taskId: string; assignee?: string; event: any }) => void) => {
+    const handler = (_event: any, payload: any) => callback(payload)
+    ipcRenderer.on('task:runner-event', handler)
+    return () => { ipcRenderer.removeListener('task:runner-event', handler) }
+  },
+
   // ─── Skill 安装 API ───────────────────────────────────
   skillInstall: (zipPath: string) =>
     ipcRenderer.invoke('skill:install', zipPath) as Promise<{ success: boolean; skillId?: string; error?: string }>,

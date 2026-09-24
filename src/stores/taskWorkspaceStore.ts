@@ -32,6 +32,12 @@ export interface TaskWorkspaceTask {
   /** 所属 Agent：'lumina' | 'recha' | 'yak' | 'loop:<loopId>' */
   agentId: string
   status: TaskStatus
+  /** 🆕 v02: 执行该任务的 Agent（委托任务的 assignee） */
+  assignee?: string
+  /** 🆕 v02: 最近更新时间 */
+  updatedAt?: number
+  /** 🆕 v02: 进度文案（来自主进程 task:progress） */
+  progressText?: string
   /** 子任务列表（存在时该任务渲染为父级分组卡片） */
   subtasks?: SubtaskItem[]
   /** 父任务 ID（无子任务的任务不设此字段；层级最多两层） */
@@ -259,6 +265,31 @@ export function mapLoopTaskToWorkspace(loop: LoopTaskShape): TaskWorkspaceTask {
     createdAt: Date.now(),
     agentId: `loop:${loop.id}`,
     status,
+  }
+}
+
+/** 🆕 v02: 后台 AsyncTask 状态 → 工作区 TaskStatus */
+export function mapAsyncStatus(s: string): TaskStatus {
+  if (s === 'running') return 'running'
+  if (s === 'done') return 'done'
+  if (s === 'error') return 'error'
+  return 'idle' // queued / cancelled / paused
+}
+
+/** 🆕 v02: 后台 AsyncTask → 工作区任务对象（纯函数，便于测试） */
+export function mapAsyncTaskToWorkspace(t: {
+  id: string; title: string; status: string; assignee?: string;
+  createdAt?: number; progress?: string;
+}): TaskWorkspaceTask {
+  return {
+    id: `remote:${t.id}`,
+    title: t.title || '后台任务',
+    createdAt: t.createdAt || Date.now(),
+    updatedAt: Date.now(),
+    agentId: t.assignee || 'remote',
+    assignee: t.assignee,
+    status: mapAsyncStatus(t.status),
+    progressText: t.progress,
   }
 }
 
@@ -510,6 +541,14 @@ interface TaskWorkspaceState {
   /** 同步 Loop 任务（由组件在 effect 中调用） */
   syncLoopTasks: (loops: LoopTaskShape[]) => void
 
+  /** 🆕 v02: 摄入后台 AsyncTask（创建或更新），返回工作区任务 id */
+  upsertRemoteTask: (remote: {
+    id: string; title: string; status: string; assignee?: string;
+    createdAt?: number; progress?: string;
+  }) => string
+  /** 🆕 v02: 更新后台任务状态/进度 */
+  setRemoteTaskStatus: (remoteId: string, status: string, progress?: string) => void
+
   /** 已隐藏的 Loop 任务原始 ID（持久化到 localStorage） */
   dismissedLoopIds: string[]
   /** 隐藏单个 Loop 任务（写入 dismissedLoopIds + 持久化） */
@@ -665,6 +704,32 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
       const loopTasks = visibleLoops.map(mapLoopTaskToWorkspace)
       return { tasks: [...userTasks, ...loopTasks] }
     })
+  },
+
+  upsertRemoteTask: (remote) => {
+    const mapped = mapAsyncTaskToWorkspace(remote)
+    let assignedId = mapped.id
+    set((s) => {
+      const idx = s.tasks.findIndex((t) => t.id === mapped.id)
+      if (idx >= 0) {
+        const tasks = [...s.tasks]
+        tasks[idx] = { ...tasks[idx], ...mapped, updatedAt: Date.now() }
+        return { tasks }
+      }
+      return { tasks: [...s.tasks, mapped] }
+    })
+    return assignedId
+  },
+
+  setRemoteTaskStatus: (remoteId, status, progress) => {
+    const wid = `remote:${remoteId}`
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id === wid
+          ? { ...t, status: mapAsyncStatus(status), progressText: progress ?? t.progressText, updatedAt: Date.now() }
+          : t,
+      ),
+    }))
   },
 
   // ── 子任务层级分组 ──

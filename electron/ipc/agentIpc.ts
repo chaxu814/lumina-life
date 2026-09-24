@@ -116,6 +116,24 @@ function registerAgentIpcHandlers(): void {
 }
 
 export function registerAgentIpc(mainWindow: BrowserWindow): void {
+  // ─── v02: 后台任务事件 → 任务工作区（修复问题 E：之前无人转发，前端永远空白） ──
+  taskManager.on('task:created', (task: any) => {
+    try { mainWindow.webContents.send('task:created', task) } catch { /* 窗口已关 */ }
+  })
+  taskManager.on('task:progress', (ev: any) => {
+    try { mainWindow.webContents.send('task:progress', ev) } catch { /* 窗口已关 */ }
+  })
+  taskManager.on('task:done', (task: any) => {
+    try { mainWindow.webContents.send('task:done', task) } catch { /* 窗口已关 */ }
+  })
+  taskManager.on('task:error', (task: any) => {
+    try { mainWindow.webContents.send('task:error', task) } catch { /* 窗口已关 */ }
+  })
+  // Worker 实时事件（tool_start/tool_end/thinking/error）→ 工具时间线
+  taskManager.on('task:runner-event', (payload: any) => {
+    try { mainWindow.webContents.send('task:runner-event', payload) } catch { /* 窗口已关 */ }
+  })
+
   // ─── Agent ──────────────────────────────────────────
 
   ipcMain.handle('agent:chat', async (event, params: {

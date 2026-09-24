@@ -38,6 +38,8 @@ export interface AsyncTask {
   preservedWorkspace?: string
   /** 任务标签（用于分类） */
   tags?: string[]
+  /** 🆕 v02: 执行该任务的 Agent（'yak'|'recha'|...），供任务工作区展示 */
+  assignee?: string
 }
 
 export interface TaskProgressEvent {
@@ -55,6 +57,8 @@ export interface TaskSubmitOptions {
   tags?: string[]
   preserveWorkspaceOnError?: boolean
   workspacePath?: string
+  /** 🆕 v02: 执行 Agent ID */
+  assignee?: string
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -109,6 +113,7 @@ export class AsyncTaskManager extends EventEmitter {
       config,
       tags: options.tags,
       preservedWorkspace: options.workspacePath,
+      assignee: options.assignee,
     }
 
     this.tasks.set(id, task)
@@ -323,6 +328,8 @@ export class AsyncTaskManager extends EventEmitter {
 
     // 监听工具执行事件，更新进度
     runner.setEventCallback((ev) => {
+      // v02: 原样转发 runner 事件给任务工作区（工具调用/思考/错误实时可见）
+      this.emit('task:runner-event', { taskId: task.id, assignee: task.assignee, event: ev })
       if (ev.type === 'tool_start') {
         this._notify(task, `🔧 ${ev.tool}...`, 30)
       } else if (ev.type === 'tool_end') {
