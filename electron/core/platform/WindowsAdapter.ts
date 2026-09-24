@@ -60,6 +60,56 @@ export class WindowsAdapter implements PlatformAdapter {
     return wrapCmdResult(r, '移动')
   }
 
+  async getCursorPos(): Promise<{ x: number; y: number } | null> {
+    const r = await runPS([
+      'Add-Type -AssemblyName System.Windows.Forms',
+      '$p=[System.Windows.Forms.Cursor]::Position',
+      "Write-Output ($p.X.ToString()+','+$p.Y.ToString())",
+    ], 5000)
+    if (r.startsWith('ERR:') || !r.includes(',')) {return null}
+    const [x, y] = r.split(',').map(Number)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {return null}
+    return { x, y }
+  }
+
+  async mouseDown(x: number, y: number, button: 'left' | 'right' = 'left'): Promise<string> {
+    const rx = Math.round(x), ry = Math.round(y)
+    // left down=0x0002, right down=0x0008
+    const down = button === 'right' ? '0x0008' : '0x0002'
+    const r = await runPS([
+      "Add-Type @'",
+      'using System;using System.Runtime.InteropServices;',
+      'public class MDn{',
+      '[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);',
+      '[DllImport("user32.dll")]public static extern bool SetCursorPos(int X,int Y);',
+      '}',
+      "'@",
+      `[MDn]::SetCursorPos(${rx},${ry})`,
+      `[MDn]::mouse_event(${down},0,0,0,0)`,
+      "Write-Output 'OK'",
+    ])
+    return wrapCmdResult(r, '按下')
+  }
+
+  async mouseUp(x: number, y: number, button: 'left' | 'right' = 'left'): Promise<string> {
+    const rx = Math.round(x), ry = Math.round(y)
+    // left up=0x0004, right up=0x0010
+    const up = button === 'right' ? '0x0010' : '0x0004'
+    const r = await runPS([
+      "Add-Type @'",
+      'using System;using System.Runtime.InteropServices;',
+      'public class MUp{',
+      '[DllImport("user32.dll")]public static extern void mouse_event(uint f,uint dx,uint dy,uint d,int e);',
+      '[DllImport("user32.dll")]public static extern bool SetCursorPos(int X,int Y);',
+      '}',
+      "'@",
+      `[MUp]::SetCursorPos(${rx},${ry})`,
+      `[MUp]::mouse_event(${up},0,0,0,0)`,
+      "Write-Output 'OK'",
+    ])
+    return wrapCmdResult(r, '抬起')
+  }
+
   async mouseClick(x: number, y: number, button: 'left' | 'right', dbl: boolean): Promise<string> {
     const rx = Math.round(x), ry = Math.round(y)
     const click = dbl ? '[MO]::DoubleClickLeft()'

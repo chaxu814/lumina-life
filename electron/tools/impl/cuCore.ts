@@ -28,6 +28,7 @@ import { destructiveReason } from './cuSafety'
 import {
   gateCuAction, getCuPolicy, expectsVisualChange,
 } from './cuPermissions'
+import { humanClick, humanHover, humanDrag } from './humanMouse'
 import { computeDhashFromImage, verifyChange } from './cuVerify'
 import { classifyModelError, describeLimitation, looksLikeVisionModel, isLocalEndpoint } from '../../core/modelCompat'
 import { getPlatformAdapter } from '../../core/platform'
@@ -419,13 +420,13 @@ function runPS(lines: string[], timeout = 15000): Promise<string> {
 // ──────────────────────────────────────────────────────────
 
 export async function cuClick(x: number, y: number, btn: 'left' | 'right', dbl: boolean): Promise<string> {
-  // 委托平台适配器：Windows 走 PowerShell(user32)，macOS 走 AppleScript，Linux 走 xdotool
-  return getPlatformAdapter().mouseClick(x, y, btn, dbl)
+  // 拟人化移动：缓动+随机抖动+点击前停顿；instant 模式退回原瞬移
+  return humanClick(getPlatformAdapter(), x, y, btn, dbl)
 }
 
 /** v3.30 悬停（只移动光标不点击，用于展开 hover 菜单/工具提示） */
 export async function cuHover(x: number, y: number, holdMs = 400): Promise<string> {
-  return getPlatformAdapter().mouseHover(x, y, holdMs)
+  return humanHover(getPlatformAdapter(), x, y, holdMs)
 }
 
 /** v3.30 长按（左键按下保持，默认 800ms，用于右键/长按手势/拖拽排序） */
@@ -465,7 +466,7 @@ export async function cuScroll(amount: number): Promise<string> {
 }
 
 export async function cuDrag(x1: number, y1: number, x2: number, y2: number): Promise<string> {
-  return getPlatformAdapter().mouseDrag(x1, y1, x2, y2)
+  return humanDrag(getPlatformAdapter(), x1, y1, x2, y2)
 }
 
 // ──────────────────────────────────────────────────────────

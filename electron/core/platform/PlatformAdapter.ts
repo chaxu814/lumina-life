@@ -99,6 +99,16 @@ export interface PlatformAdapter {
   mouseDrag(x1: number, y1: number, x2: number, y2: number): Promise<string>
   mouseScroll(amount: number): Promise<string>
 
+  /**
+   * 可选：读取当前光标位置（拟人化移动用，用于知道起点）。
+   * 返回 null / 抛错时上层会用「偏移起点」兜底，不影响功能。
+   */
+  getCursorPos?(): Promise<{ x: number; y: number } | null>
+  /** 可选：在指定位置按下鼠标（拟人化拖拽用）；未实现时退回整体 mouseDrag */
+  mouseDown?(x: number, y: number, button?: 'left' | 'right'): Promise<string>
+  /** 可选：在指定位置抬起鼠标（拟人化拖拽用） */
+  mouseUp?(x: number, y: number, button?: 'left' | 'right'): Promise<string>
+
   /** 输入文本（Windows 走剪贴板粘贴以支持中文） */
   keyboardType(text: string): Promise<string>
   /** 单个按键 / 组合键（enter/esc/ctrl_c/alt_f4…） */
