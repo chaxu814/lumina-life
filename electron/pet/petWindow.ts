@@ -1088,6 +1088,16 @@ function clampWindowPos(x: number, y: number, w: number, h: number): { x: number
   }
 }
 
+/** 透明窗在高频移动后可能停止呈现：用 1px 的 setBounds 轻推 DComp 重新合成（30ms 后归位，肉眼几乎无感） */
+function nudgeRepaint(win: BrowserWindow): void {
+  try {
+    if (!win || win.isDestroyed()) return
+    const b = win.getBounds()
+    win.setBounds({ x: b.x, y: b.y + 1, width: b.width, height: b.height })
+    setTimeout(() => { if (!win.isDestroyed()) win.setBounds(b) }, 30)
+  } catch { /* noop */ }
+}
+
 /** 把模型 entryRel 转成渲染页可直接加载的 URL（builtin=相对路径，custom=file:// URL） */
 function resolveModelUrlForRenderer(modelId: string, entryRel: string): string {
   const builtin = BUILTIN_MODELS.find(b => b.id === modelId)
@@ -1114,9 +1124,10 @@ function handleEdgeSnapOnMoveEnd(): void {
   const edge = detectEdge(x, y, w, h, wa.width, wa.height, wa.x, wa.y)
   if (edge) {
     const pos = calcPeekPosition(edge, w, h, wa.width, wa.height, wa.x, wa.y, edgeSnapConfig.peekWidth)
-    petWindow.setPosition(pos.x, pos.y)
+    petWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h })
     peekState = { active: true, edge }
     startEdgeSnapWatch()
+    nudgeRepaint(petWindow)
   } else {
     peekState = { active: false, edge: null }
     stopEdgeSnapWatch()
@@ -1421,7 +1432,16 @@ export function registerPetIpc(): void {
     // 与 createPetWindow 保持一致：VRM 形态暂回退全屏（compact 仅适配 Live2D）
     return (compactPetWindowEnabled() && currentModelKind() !== 'vrm') ? 'compact' : 'fullscreen'
   })
-  // compact 拖拽：渲染层给光标屏幕坐标 + 抓取点在窗口内偏移，主进程 setPosition（钳制工作区）
+  // compact 拖拽：渲染层给光标屏幕坐标 + 抓取点在窗口内偏移，主进程 setBounds（节流到约 1 帧；钳制工作区）
+  let dragPending: { x: number; y: number } | null = null
+  let dragTrailing: ReturnType<typeof setTimeout> | null = null
+  let dragLastAt = 0
+  const applyDragBounds = (win: BrowserWindow, x: number, y: number): void => {
+    const [w, h] = win.getSize()
+    const c = clampWindowPos(Math.round(x), Math.round(y), w, h)
+    // 设计要求移动走 setBounds（原子更新，透明 DComp 窗不丢呈现面，且不触发 MPO 退出）
+    win.setBounds({ x: c.x, y: c.y, width: w, height: h })
+  }
   ipcMain.on('pet:window-move', (e, payload: { screenX?: number; screenY?: number; grabX?: number; grabY?: number }) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
@@ -1430,16 +1450,36 @@ export function registerPetIpc(): void {
     if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
     const [w, h] = win.getSize()
     const c = clampWindowPos(Math.round(sx - gx), Math.round(sy - gy), w, h)
-    win.setPosition(c.x, c.y)
+    dragPending = c
+    const now = Date.now()
+    if (now - dragLastAt >= 16) {
+      win.setBounds({ x: c.x, y: c.y, width: w, height: h })
+      dragLastAt = now
+      dragPending = null
+    } else if (!dragTrailing) {
+      // 合并一帧内的多次 mousemove，尾帧必落地
+      dragTrailing = setTimeout(() => {
+        dragTrailing = null
+        if (petWindow && !petWindow.isDestroyed() && dragPending) {
+          applyDragBounds(petWindow, dragPending.x, dragPending.y)
+          dragLastAt = Date.now()
+          dragPending = null
+        }
+      }, 17)
+    }
   })
-  // compact 拖拽结束：持久化窗口位置 + 边缘吸附检测
+  /** 透明窗在高频移动后可能停止呈现：模块级 nudgeRepaint 已在 clampWindowPos 后定义 */
+  // compact 拖拽结束：落最终位置 + 持久化 + 边缘吸附 + 强制重绘
   ipcMain.on('pet:window-move-end', (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    if (dragTrailing) { clearTimeout(dragTrailing); dragTrailing = null }
+    if (dragPending) { applyDragBounds(win, dragPending.x, dragPending.y); dragPending = null }
     const [x, y] = win.getPosition()
     updatePetConfig({ x, y })
     // 边缘吸附（拖拽结束时检测）
     handleEdgeSnapOnMoveEnd()
+    nudgeRepaint(win)
   })
 
   // 边缘吸附配置开关

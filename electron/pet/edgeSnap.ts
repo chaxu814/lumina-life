@@ -19,8 +19,8 @@ export interface EdgeSnapConfig {
 
 export const DEFAULT_EDGE_SNAP: EdgeSnapConfig = {
   enabled: true,
-  sensitivity: 24,
-  peekWidth: 40,
+  sensitivity: 16,
+  peekWidth: 48,
   mouseThreshold: 80,
 }
 
@@ -49,7 +49,7 @@ export function detectEdge(
   ]
   candidates.sort((a, b) => a.dist - b.dist)
   const nearest = candidates[0]
-  if (nearest.dist <= 24) {return nearest.side}
+  if (nearest.dist <= 16) {return nearest.side}
   return null
 }
 
