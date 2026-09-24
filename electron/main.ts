@@ -87,6 +87,7 @@ import { registerSystemIpc, cleanupSystemProcesses, autoStartEdgeTts } from './i
 import { registerSttModelIpc } from './whisper/sttModelIpc'  // 🎙 离线中文 STT 模型就绪检测/一键下载
 import { registerTeamIpc, initTeamSocialEngine } from './ipc/teamIpc'
 import { registerLoopIpc } from './ipc/loopIpc'
+import { registerThemeIpc } from './ipc/themeIpc' // theme skin ecosystem
 
 // ─── 🆕 v2.7 新模??────────────────────────────────────
 import { initMessageQueue, getMessageQueue, destroyMessageQueue } from './messageQueue'
@@ -113,6 +114,8 @@ import { exportDataToZip, importDataFromZip, getDataLocations, defaultExportFile
 import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系剧本
 import { registerLuckyModeIpc } from './ipc/luckyModeIpc'
 import { registerArtifactIpc } from './ipc/artifactIpc'  // task workspace artifact file ops
+import { registerModelStoreIpc } from './ipc/modelStoreIpc'  // v0.2 Live2D model store (local mode)
+import { registerSkillRuntimeIpc } from './ipc/skillRuntimeIpc'  // v0.2 third-party skill runtime
 import { registerMemoryFederationIpc } from './ipc/memoryFederationIpc'  // proposal3: memory federation
 import { registerWebdavSyncIpc } from './ipc/webdavSyncIpc'  // proposal4: webdav sync
 import { initLuckyModeIntegration } from './luckyModeIntegration'
@@ -635,11 +638,14 @@ for (const { id } of orch.listRunners()) {
   registerCustomAgentIpc()                                // 🤖 自定义 Agent 管理                               // 📡 v10.0: 统一 Provider IPC
   registerTeamIpc()                                   // 🆕 v2.6: AI 小团队系统 IPC
   registerTeamCollabIpc()                             // 🤝 v3.20: 信箱/任务板/动态 worker/CU 策略
-  registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
+  registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
+  registerThemeIpc()                                   // 🎨 theme skin ecosystem
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
   registerPlatformIpc()
   registerPushIpc()
-  registerArtifactIpc(() => mainWindow)            // task workspace artifact file ops
+  registerArtifactIpc(() => mainWindow)
+  registerModelStoreIpc()                            // v0.2 Live2D model store (local/offline)
+  registerSkillRuntimeIpc()                          // v0.2 third-party skill runtime (sandbox+approval+scan)            // task workspace artifact file ops
   registerMemoryFederationIpc()                       // proposal3: memory federation
   registerWebdavSyncIpc()                            // proposal4: webdav sync                                 // cross-platform feature matrix IPC
   ipcMain.handle('feature-flags:get-all', () => allFlags())  // I7: 全量功能开关

@@ -1244,7 +1244,7 @@ const api = {
   customAgentGetDefault: () =>
     ipcRenderer.invoke('custom-agent:get-default') as Promise<{ ok: boolean; defaultLeaderId?: string }>,
 
-  // -- proposal3: team memory federation --
+  // -- 提案3: team memory federation --
   federationExport: (opts?: { source?: string; memoryRoot?: string }) =>
     ipcRenderer.invoke('federation:export', opts) as Promise<{ ok: boolean; package?: any; error?: string }>,
   federationImport: (pkg: any, options?: any) =>
@@ -1254,7 +1254,7 @@ const api = {
   federationSetConfidence: (source: string, confidence: number) =>
     ipcRenderer.invoke('federation:set-confidence', source, confidence) as Promise<{ ok: boolean; error?: string }>,
 
-  // -- proposal4: cross-device WebDAV sync --
+  // -- 提案4: cross-device WebDAV sync --
   webdavGetConfig: () =>
     ipcRenderer.invoke('webdav-sync:get-config') as Promise<{ ok: boolean; config?: any; hasEncryption?: boolean }>,
   webdavSaveSettings: (input: any) =>
@@ -1266,7 +1266,52 @@ const api = {
   webdavRun: () =>
     ipcRenderer.invoke('webdav-sync:run') as Promise<{ ok: boolean; report?: any; error?: string }>,
   webdavResolveConflict: (relPath: string, choice: 'local' | 'remote' | 'merge') =>
-    ipcRenderer.invoke('webdav-sync:resolve-conflict', relPath, choice) as Promise<{ ok: boolean; error?: string }>,}
+    ipcRenderer.invoke('webdav-sync:resolve-conflict', relPath, choice) as Promise<{ ok: boolean; error?: string }>,
+
+  // ── 🎨 主题皮肤生态 ─────────────────────────────────────
+  themeList: () =>
+    ipcRenderer.invoke('theme:list') as Promise<{ ok: boolean; themes?: any[]; error?: string }>,
+  themeApply: (name: string) =>
+    ipcRenderer.invoke('theme:apply', name) as Promise<{ ok: boolean; theme?: any; resolvedVars?: Record<string, string>; error?: string }>,
+  themeImport: (filePath: string) =>
+    ipcRenderer.invoke('theme:import', filePath) as Promise<{ ok: boolean; theme?: any; error?: string }>,
+  themeExport: (name: string, filePath: string) =>
+    ipcRenderer.invoke('theme:export', name, filePath) as Promise<{ ok: boolean; error?: string }>,
+  themeDelete: (name: string) =>
+    ipcRenderer.invoke('theme:delete', name) as Promise<{ ok: boolean; error?: string }>,
+  themeGetCurrent: () =>
+    ipcRenderer.invoke('theme:get-current') as Promise<{ ok: boolean; theme?: any; resolvedVars?: Record<string, string>; error?: string }>,
+  themeSave: (theme: any) =>
+    ipcRenderer.invoke('theme:save', theme) as Promise<{ ok: boolean; theme?: any; error?: string }>,
+  themeOnChanged: (cb: (payload: { name: string; isDark: boolean; resolvedVars: Record<string, string> }) => void) => {
+    const listener = (_e: unknown, payload: any) => cb(payload)
+    ipcRenderer.on('theme:changed', listener)
+    return () => ipcRenderer.removeListener('theme:changed', listener)
+  },
+  // ── v0.2: Live2D model store (local/offline) ─────────────
+  modelStoreList: () =>
+    ipcRenderer.invoke('pet:models:list') as Promise<{ ok: boolean; models?: any[]; current?: any; error?: string }>,
+  modelStoreSelect: (id: string) =>
+    ipcRenderer.invoke('pet:set-model', id) as Promise<{ ok: boolean; kind?: string; modelId?: string; error?: string }>,
+  modelStoreRemove: (id: string) =>
+    ipcRenderer.invoke('pet:models:remove', { id }) as Promise<{ ok: boolean; models?: any[]; error?: string }>,
+  modelStoreImportFolder: () =>
+    ipcRenderer.invoke('model-store:import-folder') as Promise<{ ok: boolean; canceled?: boolean; blocked?: boolean; error?: string; model?: any; warnings?: any[]; issues?: any[] }>,
+  modelStoreCloudStatus: () =>
+    ipcRenderer.invoke('model-store:cloud-status') as Promise<{ ok: boolean; configured: boolean; url: string | null; mode: string; note: string }>,
+
+  // ── v0.2: third-party skill runtime ──────────────────────
+  skillRuntimeOpenPackage: () =>
+    ipcRenderer.invoke('skill-runtime:open-package') as Promise<{ ok: boolean; canceled?: boolean; zipPath?: string; error?: string }>,
+  skillRuntimePrepare: (zipPath: string) =>
+    ipcRenderer.invoke('skill-runtime:prepare', zipPath) as Promise<{ ok: boolean; stagedId?: string; manifest?: any; scan?: any; signatureStatus?: string; signatureReason?: string; error?: string }>,
+  skillRuntimeConfirm: (stagedId: string) =>
+    ipcRenderer.invoke('skill-runtime:confirm', stagedId) as Promise<{ ok: boolean; skill?: any; error?: string }>,
+  skillRuntimeList: () =>
+    ipcRenderer.invoke('skill-runtime:list') as Promise<{ ok: boolean; skills?: any[]; error?: string }>,
+  skillRuntimeUninstall: (name: string) =>
+    ipcRenderer.invoke('skill-runtime:uninstall', name) as Promise<{ ok: boolean; error?: string }>,
+}
 
 contextBridge.exposeInMainWorld('luminaAPI', api)
 

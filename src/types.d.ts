@@ -488,6 +488,31 @@ declare global {
       customAgentReadSoul: (id: string) => Promise<{ ok: boolean; soul?: string; error?: string }>
       customAgentSetDefault: (id: string) => Promise<{ ok: boolean; defaultLeaderId?: string; error?: string }>
       customAgentGetDefault: () => Promise<{ ok: boolean; defaultLeaderId?: string }>
+
+      // 🛒 v0.2: Live2D 配件商城（本地/离线模式）
+      modelStoreList: () => Promise<{ ok: boolean; models?: any[]; current?: any; error?: string }>
+      modelStoreSelect: (id: string) => Promise<{ ok: boolean; kind?: string; modelId?: string; error?: string }>
+      modelStoreRemove: (id: string) => Promise<{ ok: boolean; models?: any[]; error?: string }>
+      modelStoreImportFolder: () => Promise<{ ok: boolean; canceled?: boolean; blocked?: boolean; error?: string; model?: any; warnings?: any[]; issues?: any[] }>
+      modelStoreCloudStatus: () => Promise<{ ok: boolean; configured: boolean; url: string | null; mode: string; note: string }>
+
+      // 🧪 v0.2: 第三方技能包运行时
+      skillRuntimeOpenPackage: () => Promise<{ ok: boolean; canceled?: boolean; zipPath?: string; error?: string }>
+      skillRuntimePrepare: (zipPath: string) => Promise<{ ok: boolean; stagedId?: string; manifest?: any; scan?: any; signatureStatus?: string; signatureReason?: string; error?: string }>
+      skillRuntimeConfirm: (stagedId: string) => Promise<{ ok: boolean; skill?: any; error?: string }>
+      skillRuntimeList: () => Promise<{ ok: boolean; skills?: any[]; error?: string }>
+      skillRuntimeUninstall: (name: string) => Promise<{ ok: boolean; error?: string }>
+
+      // 🎨 主题皮肤生态
+      themeList: () => Promise<{ ok: boolean; themes?: any[]; error?: string }>
+      themeApply: (name: string) => Promise<{ ok: boolean; theme?: any; resolvedVars?: Record<string, string>; error?: string }>
+      themeImport: (filePath: string) => Promise<{ ok: boolean; theme?: any; error?: string }>
+      themeExport: (name: string, filePath: string) => Promise<{ ok: boolean; error?: string }>
+      themeDelete: (name: string) => Promise<{ ok: boolean; error?: string }>
+      themeGetCurrent: () => Promise<{ ok: boolean; theme?: any; resolvedVars?: Record<string, string>; error?: string }>
+      themeSave: (theme: any) => Promise<{ ok: boolean; theme?: any; error?: string }>
+      themeOnChanged: (cb: (payload: { name: string; isDark: boolean; resolvedVars: Record<string, string> }) => void) => () => void
+
       // proposal3: team memory federation
       federationExport: (opts?: { source?: string; memoryRoot?: string }) => Promise<{ ok: boolean; package?: any; error?: string }>
       federationImport: (pkg: any, options?: any) => Promise<any>
