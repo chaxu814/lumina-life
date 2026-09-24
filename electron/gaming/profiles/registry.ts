@@ -7,11 +7,15 @@
 import type { GameProfile } from './types'
 import { minecraftProfile } from './minecraft'
 import { factorioProfile } from './factorio'
+import { stardewValleyProfile } from './stardewValley'
+import { civilization6Profile } from './civilization6'
 import { genericProfile } from './generic'
 
 export const PROFILES: Record<string, GameProfile> = {
   [minecraftProfile.id]: minecraftProfile,
   [factorioProfile.id]: factorioProfile,
+  [stardewValleyProfile.id]: stardewValleyProfile,
+  [civilization6Profile.id]: civilization6Profile,
   [genericProfile.id]: genericProfile,
 }
 

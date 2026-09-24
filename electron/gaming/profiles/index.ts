@@ -10,6 +10,8 @@ export type {
 
 export { minecraftProfile } from './minecraft'
 export { factorioProfile } from './factorio'
+export { stardewValleyProfile } from './stardewValley'
+export { civilization6Profile } from './civilization6'
 export { genericProfile } from './generic'
 export {
   PROFILES,

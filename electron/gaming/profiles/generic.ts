@@ -19,13 +19,19 @@ export const genericProfile: GameProfile = {
   supportedRoutes: ['visual'],
 
   actionMap: {
-    move_up: { keys: ['up'] },
-    move_down: { keys: ['down'] },
-    move_left: { keys: ['left'] },
-    move_right: { keys: ['right'] },
-    confirm: { keys: ['enter'] },
-    back: { keys: ['esc'] },
-    click: { mouse: 'left_click' },
+    move_up: { keys: ['w'], hold: true, defaultDurationMs: 300, note: 'W 上移' },
+    move_down: { keys: ['s'], hold: true, defaultDurationMs: 300, note: 'S 下移' },
+    move_left: { keys: ['a'], hold: true, defaultDurationMs: 300, note: 'A 左移' },
+    move_right: { keys: ['d'], hold: true, defaultDurationMs: 300, note: 'D 右移' },
+    arrow_up: { keys: ['up'], note: '方向键上' },
+    arrow_down: { keys: ['down'], note: '方向键下' },
+    arrow_left: { keys: ['left'], note: '方向键左' },
+    arrow_right: { keys: ['right'], note: '方向键右' },
+    confirm: { keys: ['enter'], note: '回车确认' },
+    back: { keys: ['esc'], note: 'Esc 返回/菜单' },
+    click: { mouse: 'left_click', note: '鼠标左键点选' },
+    right_click: { mouse: 'right_click', note: '鼠标右键' },
+    wait: { note: '原地等待，观察画面变化' },
   },
 
   security: {

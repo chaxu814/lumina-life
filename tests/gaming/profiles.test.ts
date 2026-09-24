@@ -27,8 +27,8 @@ describe('PROFILES 注册表', () => {
     expect(getProfile('nope')).toBeUndefined()
   })
 
-  it('listProfiles 返回三个 profile', () => {
-    expect(listProfiles().length).toBe(3)
+  it('listProfiles 返回全部 5 个 profile', () => {
+    expect(listProfiles().length).toBe(5)
   })
 })
 
@@ -51,6 +51,14 @@ describe('detectActiveProfile', () => {
 
   it('都不命中 → undefined', () => {
     expect(detectActiveProfile('Chrome', 'chrome.exe')).toBeUndefined()
+  })
+
+  it('窗口标题包含 Stardew Valley → stardew-valley', () => {
+    expect(detectActiveProfile('Stardew Valley')?.id).toBe('stardew-valley')
+  })
+
+  it('窗口标题包含 Civilization VI / Sid Meier → civilization-vi', () => {
+    expect(detectActiveProfile("Sid Meier's Civilization VI")?.id).toBe('civilization-vi')
   })
 })
 
