@@ -1,5 +1,46 @@
-﻿# 📝 Changelog — Lumina Life
+# 📝 Changelog — Lumina Life
 
+## [Unreleased] — feature/v02-comprehensive-upgrade 🚀 发布前深度改造第二轮（2026-09-24）
+
+> 基于用户实机截图诊断的 8 大问题逐项修复。目标：Live2D 能显示、团队能干活、任务工作区是真的、三平台可用、英语能用、游戏有边界。
+
+### 🐛 P0 修复（A）
+- **Live2D 不显示根因**：`loadFile(getRendererHtmlPath())` 把含 `?model=` 的路径当文件路径，`?` 被编码为 `%3F` 导致 ERR_FAILED。拆为 `getRendererHtmlFilePath()` + `loadPetHtml()` 用 `loadFile(path,{query:{model}})`，4 处调用全替换
+- **postinstall**：预编译二进制检测、分平台工具链指引、失败降级、exit 0 不阻塞安装
+- **vite 告警清零**：6 模块 redundant dynamic import 改静态引用，"will not move module" 告警 6→0
+- **teamAutonomy 降噪**：30s 冷却、真实崩溃检测、console.debug 守卫、持久化计数器
+
+### 🎮 游戏增强（B）
+- **焦点鲁棒性** `focusWindowRobust()`：平台 focus→150ms 校验→重试→AppActivate 兜底→ESC 关弹窗
+- **反作弊护栏**：12 款竞技网游黑名单（CS2/CoD/Valorant/PUBG/Fortnite/Apex 等），autoPlay 每轮检测命中即硬停
+- **新增 Profile**：Stardew Valley、Civilization VI、generic 完善；gaming 测试 9 文件 101 例
+- **autoPlay 质量**：minRoundsBeforeStop、consecutiveNoOpLimit、defaultDecide 带历史+should_stop
+
+### 🖱️ 托盘菜单（C）
+- 原生右键→自定义圆角浮层（仿 ATK X1 Ultra）：头像+状态+5 菜单项、失焦自动关闭、9 测试
+
+### 👥 团队协作（D）
+- **根因**：委托 prompt 被截断 50 字、context 传入但 fork 路径不用
+- **修复**：delegationPrompt.ts 完整首轮消息（任务+历史+工具+项目+铁则），验证闭环 3 轮上限
+
+### 📋 任务工作区（E）
+- **根因**：AsyncTaskManager 事件无 webContents.send 转发，preload 监听器是哑的
+- **修复**：agentIpc 转发 5 类事件、preload 新通道、store upsertRemoteTask、running 自动弹出、实时时间线
+
+### 🌐 英语 i18n（F）
+- en-US/zh-CN key 对齐，外置 TopBar/SettingsModal/ChatInputBar/SettingsLLM/SettingsTTS 硬编码中文，6 测试
+
+### 🖥️ Linux/macOS（G）
+- macOS：cliclick 降级+键码映射表修复；Linux：grim 探测+Wayland 识别；三平台能力矩阵；69 平台测试
+
+### 💡 8 创新提案（H）
+- `docs/innovation-proposals-20260924.md`（744 行），推荐 P0 主动推送→P1 主题/云同步/安全治理→P2 商城/无障碍→P3 分成/联邦
+
+### 📊 验证
+- tsc 0 错误 / 107 文件 1279 测试通过 / build 成功 / 20 commits
+
+### ⚠️ 未实机验证
+- Live2D 白屏、VLM 真实画面、焦点 AttachThreadInput、团队委托端到端、任务工作区 UI 滚动、mac/Linux 实机、dmg/AppImage 打包
 ## [Unreleased] — feature/crossplatform-gaming-onboarding 🚀 发布前大型改造（2026-09-23）
 
 > 本分支将 Roadmap v1.1.0/v1.3.0 的多个特性提前实现，目标是发布前大幅提升竞争力。
