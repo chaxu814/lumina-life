@@ -1,0 +1,54 @@
+/* ============================================================
+   Lumina 主题皮肤生态 — 语义化 CSS 变量体系
+   innovation-proposal-8: theme skin ecosystem
+
+   这套变量是「主题包」写入的目标。主进程在 applyTheme() 时
+   把主题 vars 解析后的完整映射（含旧版 --surface-* 等令牌别名）
+   以 inline custom property 注入 <html>，从而覆盖本文件默认值。
+
+   约定：
+   - 语义变量（--bg-*/--text-*/--accent-*/--bubble-*）是主题包格式的核心。
+   - 旧版设计令牌（--surface-*/--accent-500 等）由主进程在注入时
+     派生映射，避免逐个组件硬改；新组件请优先引用语义变量。
+   - 无障碍（高对比）子代理使用 --a11y- 前缀，本文件不占用。
+   ============================================================ */
+
+:root {
+  /* 背景 */
+  --bg-primary:   #ffffff;   /* 主背景（主窗口 / 卡片） */
+  --bg-secondary: #fafbfc;   /* 次级背景（侧边栏 / 表头） */
+  --bg-tertiary:  #f4f5f7;   /* 三级背景（输入框 / hover 层） */
+  --bg-hover:     #ebecf0;   /* 悬停态 */
+
+  /* 文字 */
+  --text-primary:   #172b4d;
+  --text-secondary: #5e6c84;
+  --text-muted:     #8993a4;
+
+  /* 强调色 */
+  --accent-primary: #0065ff;  /* 主强调（按钮 / 链接） */
+  --accent-secondary: #2684ff; /* 次强调 */
+  --accent-hover:   #0052cc;  /* 强调 hover */
+
+  /* 边框 */
+  --border-color: #ebecf0;
+  --border-radius: 8px;
+
+  /* 阴影（覆盖 global.css 的同名令牌） */
+  --shadow-sm: 0 1px 3px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.1);
+  --shadow-md: 0 4px 8px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.1);
+  --shadow-lg: 0 8px 16px rgba(9, 30, 66, 0.15), 0 0 1px rgba(9, 30, 66, 0.1);
+
+  /* 桌宠气泡 */
+  --bubble-bg:    rgba(0, 0, 0, 0.75);
+  --bubble-text:   #ffffff;
+  --bubble-border: transparent;
+
+  /* 注入过渡：切主题时平滑过渡 */
+  color-scheme: light;
+}
+
+/* 主题切换时让颜色平滑过渡（仅对背景/文字/边框生效，避免动画成本） */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
