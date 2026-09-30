@@ -213,26 +213,26 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
 //   → 返回结果，Lumina 整理成人话回复用户
 //
 // ⚠️ 路由口径（与 accessControl.ts 权限表一致，改一处必须改另一处）：
-//   写代码/调试/重构 → recha（热茶，程序员）
-//   审查/挑错/风险评估 → yak（Yak，数据分析师兼审查员）
+//   写代码/调试/重构 → yak（Yak，代码工程师）
+//   审查/挑错/风险评估 → recha（热茶，数据分析师兼审查员）
 //   历史版本这里是反的，会把编码任务派给没有写权限的一方，等于任务注定失败。
 // ═══════════════════════════════════════════════════════════
 
 export const delegateToDef: ToolDef = {
   name: 'delegate_to',
   description:
-    '⭐ 委托任务给团队成员（写代码→热茶🍵，审查找错→Yak📊）。\n' +
+    '⭐ 委托任务给团队成员（写代码→Yak📊，审查找错→热茶🍵）。\n' +
     '只有以下 5 种场景才用，其他事你自己干：\n' +
-    '1. 写代码/调试 bug → recha（热茶）\n' +
-    '2. 审查代码/找逻辑漏洞 → yak（Yak）\n' +
-    '3. 反面意见/风险评估 → yak（Yak）\n' +
-    '4. 浏览网页/读取 URL 内容 → yak（Yak，用 fetch_content）\n' +
-    '5. 搜索研究/资料查找 → yak（Yak，用 web_research）\n' +
-    '热茶 和 Yak 有独立的 LLM 和上下文，能记住之前的委托历史。',
+    '1. 写代码/调试 bug → yak（Yak）\n' +
+    '2. 审查代码/找逻辑漏洞 → recha（热茶）\n' +
+    '3. 反面意见/风险评估 → recha（热茶）\n' +
+    '4. 浏览网页/读取 URL 内容 → recha（热茶，用 fetch_content）\n' +
+    '5. 搜索研究/资料查找 → recha（热茶，用 web_research）\n' +
+    'Yak 和 热茶 有独立的 LLM 和上下文，能记住之前的委托历史。',
   params: {
     to: {
       type: 'string',
-      description: '目标成员：\n  - recha 🍵：代码工程师（写代码、调试、重构）\n  - yak 📊：数据分析师兼审查员（审查代码、挑错、风险评估，只读不写）',
+      description: '目标成员：\n  - yak 📊：代码工程师（写代码、调试、重构）\n  - recha 🍵：数据分析师兼审查员（审查代码、挑错、风险评估，只读不写）',
       required: true,
     },
     task: {
@@ -264,7 +264,7 @@ export async function delegateTo(args: Record<string, any>): Promise<ToolResult>
   if (!to || !['yak', 'recha'].includes(to)) {
     return {
       callId, ok: false, content: '',
-      error: '目标成员必须是 recha 🍵（代码工程师）或 yak 📊（数据分析师兼审查员）',
+      error: '目标成员必须是 yak 📊（代码工程师）或 recha 🍵（数据分析师兼审查员）',
     }
   }
 
@@ -332,7 +332,7 @@ export async function delegateTo(args: Record<string, any>): Promise<ToolResult>
 export const delegateChainDef: ToolDef = {
   name: 'delegate_chain',
   description:
-    '委托热茶写代码 → 自动转Yak审查 → 有问题自动返回热茶修改的迭代流水线。\n' +
+    '委托Yak写代码 → 自动转热茶审查 → 有问题自动返回Yak修改的迭代流水线。\n' +
     '适用于需要代码实现+代码审查的复杂任务。\n' +
     '系统会自动控制迭代次数（最多5轮），不会无限循环。',
   params: {
@@ -385,11 +385,11 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
   }
 
   for (let i = 1; i <= maxIterations; i++) {
-    console.log(`[delegate_chain] 📦 第${i}轮: 热茶 写代码`)
+    console.log(`[delegate_chain] 📦 第${i}轮: Yak 写代码`)
 
-    // Step 1: 热茶（recha，程序员）写代码 —— 它才是有写权限的那一方
-    const rechaResult = await dm.delegate(fromId, {
-      to: 'recha',
+    // Step 1: Yak（yak，程序员）写代码 —— 它才是有写权限的那一方
+    const yakResult = await dm.delegate(fromId, {
+      to: 'yak',
       task: i === 1
         ? task + (prevContext ? '\n\n已有上下文:\n' + prevContext : '')
         : `修复/改进以下代码:\n\n${prevContext}\n\n原始任务: ${task}`,
@@ -398,30 +398,8 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
       filePaths,
     })
 
-    if (!rechaResult.success) {
-      return { callId, ok: false, content: '', error: `在第${i}轮热茶执行失败: ${rechaResult.error}` }
-    }
-
-    if (rechaResult.questions && rechaResult.questions.length > 0) {
-      return {
-        callId, ok: false, content: '',
-        error: `热茶需要确认: ${rechaResult.questions.join('; ')}。请先回答后再启动流水线。`,
-      }
-    }
-
-    // Step 2: Yak（审查员）审查
-    const reviewTask = `审查以下代码：\n\n${rechaResult.content.slice(0, 4000)}\n\n关注：逻辑正确性、边界条件、安全问题、性能问题。`
-    console.log(`[delegate_chain] 📦 第${i}轮: Yak 审查`)
-
-    const yakResult = await dm.delegate(fromId, {
-      to: 'yak',
-      task: reviewTask,
-      taskType: 'code_review',
-      context: '',
-    })
-
     if (!yakResult.success) {
-      return { callId, ok: false, content: '', error: `在第${i}轮Yak审查失败: ${yakResult.error}` }
+      return { callId, ok: false, content: '', error: `在第${i}轮 Yak 执行失败: ${yakResult.error}` }
     }
 
     if (yakResult.questions && yakResult.questions.length > 0) {
@@ -431,15 +409,37 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
       }
     }
 
-    const reviewPassed = /✅|通过|批准|认可|没问题|可以合并|同意|LGTM|approved/i.test(yakResult.content)
-    prevContext = `第${i}轮结果:\n热茶: ${rechaResult.content.slice(0, 1000)}\n\nYak: ${yakResult.content.slice(0, 1000)}`
+    // Step 2: 热茶（审查员）审查
+    const reviewTask = `审查以下代码：\n\n${yakResult.content.slice(0, 4000)}\n\n关注：逻辑正确性、边界条件、安全问题、性能问题。`
+    console.log(`[delegate_chain] 📦 第${i}轮: 热茶 审查`)
+
+    const rechaResult = await dm.delegate(fromId, {
+      to: 'recha',
+      task: reviewTask,
+      taskType: 'code_review',
+      context: '',
+    })
+
+    if (!rechaResult.success) {
+      return { callId, ok: false, content: '', error: `在第${i}轮热茶审查失败: ${rechaResult.error}` }
+    }
+
+    if (rechaResult.questions && rechaResult.questions.length > 0) {
+      return {
+        callId, ok: false, content: '',
+        error: `热茶需要确认: ${rechaResult.questions.join('; ')}。请先回答后再启动流水线。`,
+      }
+    }
+
+    const reviewPassed = /✅|通过|批准|认可|没问题|可以合并|同意|LGTM|approved/i.test(rechaResult.content)
+    prevContext = `第${i}轮结果:\nYak: ${yakResult.content.slice(0, 1000)}\n\n热茶: ${rechaResult.content.slice(0, 1000)}`
 
     if (reviewPassed) {
       console.log(`[delegate_chain] ✅ 第${i}轮审查通过！`)
-      dm.setContext('last_chain_result', rechaResult.content.slice(0, 500), 'recha')
+      dm.setContext('last_chain_result', yakResult.content.slice(0, 500), 'yak')
       return {
         callId, ok: true,
-        content: `## 流水线结果（第${i}轮通过）\n\n### 热茶（程序员）输出\n${rechaResult.content}\n\n### Yak 审查\n${yakResult.content}\n\n> 共 ${i} 轮迭代完成`,
+        content: `## 流水线结果（第${i}轮通过）\n\n### Yak（程序员）输出\n${yakResult.content}\n\n### 热茶 审查\n${rechaResult.content}\n\n> 共 ${i} 轮迭代完成`,
       }
     }
 
@@ -448,7 +448,7 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
     } else {
       return {
         callId, ok: true,
-        content: `## 流水线达到最大轮数（${maxIterations}轮）\n\n### 最终热茶（程序员）输出\n${rechaResult.content}\n\n### 最终 Yak 审查\n${yakResult.content}\n\n> ⚠️ 达到最大迭代次数，仍有未解决的问题。建议手动审查。`,
+        content: `## 流水线达到最大轮数（${maxIterations}轮）\n\n### 最终 Yak（程序员）输出\n${yakResult.content}\n\n### 最终 热茶 审查\n${rechaResult.content}\n\n> ⚠️ 达到最大迭代次数，仍有未解决的问题。建议手动审查。`,
       }
     }
   }

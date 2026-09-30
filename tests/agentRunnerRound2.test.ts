@@ -10,7 +10,7 @@
 //      → R1/QwQ 这类模型返回空 → 触发空回复恢复
 //   3. 参数解析失败用 {} 继续跑工具 → securityGuard 基于真实参数做的
 //      危险判定等于被整个跳过
-//   4. 团队角色统一：热茶=程序员、Yak=分析/审查（同名反向职责已修）
+//   4. 团队角色统一：Yak=代码工程师、热茶=审查员（同名反向职责已修）
 //   5. 所有"没执行"路径统一走 notExecutedNote
 // ============================================================
 
@@ -141,49 +141,50 @@ describe('②d 主路径的 API 协议合法性', () => {
   })
 })
 
-describe('④ 团队角色统一：热茶=程序员，Yak=分析/审查', () => {
-  it('后台团队：Yak 不再自称代码工程师', () => {
+describe('④ 团队角色统一：Yak=代码工程师，热茶=审查员', () => {
+  it('后台团队：Yak 是代码工程师', () => {
     expect(personas).toContain('TEAM_YAK')
-    expect(personas).toContain('数据分析师兼审查员')
-    // 旧的 Yak=工程师描述不能残留
-    expect(personas).not.toContain('专业的代码工程师。只写代码、调试 bug')
+    expect(personas).toMatch(/TEAM_YAK[\s\S]{0,400}代码工程师。写代码、调试 bug、重构、解释代码/)
+    // 旧的 Yak=审查员描述不能残留
+    expect(personas).not.toContain('数据分析师兼审查员，只审不写')
   })
 
-  it('后台团队：热茶是代码工程师', () => {
+  it('后台团队：热茶是审查员', () => {
     expect(personas).toContain('TEAM_RECHA')
-    expect(personas).toMatch(/TEAM_RECHA[\s\S]{0,400}代码工程师/)
+    expect(personas).toMatch(/TEAM_RECHA[\s\S]{0,400}数据分析师 \+ 审查员。做客观评估、挑错、从反面论证。只审不写/)
   })
 
-  it('Lumina 的委派路由已对调：写代码→热茶，审查→Yak', () => {
-    expect(personas).toContain('写代码 / 调试 bug / 重构 → 委托给**热茶**')
-    expect(personas).toContain('审查代码 / 挑错 / 从反面论证 / 风险评估 → 委托给**Yak**')
+  it('Lumina 的委派路由已对调：写代码→Yak，审查→热茶', () => {
+    expect(personas).toContain('写代码 / 调试 bug / 重构 → 委托给**Yak**（代码工程师）')
+    expect(personas).toContain('审查代码 / 挑错 / 从反面论证 / 风险评估 → 委托给**热茶**')
     // 旧的反向路由不能残留
-    expect(personas).not.toContain('写代码/调试 bug → 委托给 Yak')
+    expect(personas).not.toContain('写代码 / 调试 bug / 重构 → 委托给**热茶**')
   })
 
   it('身份文件与后台团队一致', () => {
-    expect(yakSoul).toContain('数据分析师兼审查员')
-    expect(yakSoul).toContain('**不写代码**')
-    expect(yakAgents).toContain('数据分析师兼审查员')
-    expect(yakAgents).toContain('绝对不能写代码')
+    expect(yakSoul).toContain('代码工程师')
+    expect(yakSoul).toContain('不做审查（那是热茶的活）')
+    expect(yakAgents).toContain('代码工程师')
+    expect(yakAgents).toContain('绝对不做审查')
 
-    expect(rechaSoul).toContain('专业**代码工程师**')
-    expect(rechaSoul).toContain('不做审查')
-    expect(rechaAgents).toContain('专业代码工程师')
-    expect(rechaAgents).toContain('绝对不能做审查')
+    expect(rechaSoul).toContain('审查员')
+    expect(rechaSoul).toContain('不写代码、不执行命令')
+    expect(rechaAgents).toContain('审查员')
+    expect(rechaAgents).toContain('绝对不能写代码')
   })
 
   it('与群聊人设（agentSouls）方向一致，没有反向', () => {
-    expect(souls).toContain('天才程序员')          // 热茶在群聊里是程序员
-    expect(souls).toContain('数据分析师')          // Yak 在群聊里是分析师
-    // 后台团队必须跟群聊一致，不能再出现 Yak=工程师 / 热茶=审查员
-    expect(personas).not.toMatch(/TEAM_RECHA[\s\S]{0,200}严格的审查员/)
+    expect(souls).toContain('天才程序员')          // Yak 在群聊里是程序员
+    expect(souls).toContain('数据分析师')          // 热茶在群聊里是分析师
+    // 后台团队必须跟群聊一致，不能再出现 Yak=审查员 / 热茶=程序员
+    expect(personas).not.toMatch(/TEAM_YAK[\s\S]{0,200}只审不写/)
   })
 
   it('Lumina 身份文件里的委托规则也已对调', () => {
-    expect(luminaAgents).toContain('写代码 / 调试 bug / 重构 → 委托给**热茶**')
-    expect(luminaAgents).toContain('→ 委托给**Yak**')
-    expect(luminaAgents).not.toContain('委托给 Yak\n2. 需要自我否定')
+    expect(luminaAgents).toContain('写代码 / 调试 bug / 重构 → 委托给**Yak**')
+    expect(luminaAgents).toContain('从反面论证 / 评估风险 → 委托给**热茶**')
+    // 编码任务不得路由给热茶
+    expect(luminaAgents).not.toMatch(/写代码[^\n]*委托给\*\*热茶\*\*/)
   })
 })
 

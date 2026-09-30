@@ -64,14 +64,14 @@ describe('Agent knowledge domains', () => {
     expect(LUMINA_PERSONA.knowledgeDomains).toContain('emotion')
   })
 
-  // v15 角色统一：热茶=程序员（只看 code），Yak=分析/审查（code + data）
-  it('热茶 covers code', () => {
-    expect(RECHA_PERSONA.knowledgeDomains).toContain('code')
+  // 角色统一：Yak=代码工程师（code），热茶=审查员（code + data，审查需懂代码、兼数据核对）
+  it('Yak covers code', () => {
+    expect(YAK_PERSONA.knowledgeDomains).toContain('code')
   })
 
-  it('Yak covers code and data（分析/审查）', () => {
-    expect(YAK_PERSONA.knowledgeDomains).toContain('code')
-    expect(YAK_PERSONA.knowledgeDomains).toContain('data')
+  it('热茶 covers code and data（审查/分析）', () => {
+    expect(RECHA_PERSONA.knowledgeDomains).toContain('code')
+    expect(RECHA_PERSONA.knowledgeDomains).toContain('data')
   })
 
   it('each agent has knowledge blind spots', () => {
@@ -110,21 +110,21 @@ describe('Agent catchphrases', () => {
     expect(all.length).toBeGreaterThan(5)
   })
 
-  it('热茶 catchphrases are blunt（程序员口吻）', () => {
-    const all = RECHA_PERSONA.catchphrases.join(' ')
-    // 热茶现在是代码工程师：简短、动手派
+  it('Yak catchphrases are blunt（程序员口吻）', () => {
+    const all = YAK_PERSONA.catchphrases.join(' ')
+    // Yak 现在是代码工程师：简短、动手派
     expect(all).toMatch(/收到|完成|改好/)
   })
 
-  it('Yak catchphrases are review-flavored（审查员口吻）', () => {
-    const all = YAK_PERSONA.catchphrases.join(' ')
+  it('热茶 catchphrases are review-flavored（审查员口吻）', () => {
+    const all = RECHA_PERSONA.catchphrases.join(' ')
     expect(all).toMatch(/审查|发现|问题/)
   })
 
-  it('Yak catchphrases are brief', () => {
-    const all = YAK_PERSONA.catchphrases.join(' ')
-    // Yak 的口头禅简短直接
+  it('热茶 catchphrases are brief', () => {
+    const all = RECHA_PERSONA.catchphrases.join(' ')
+    // 热茶的口头禅简短直接
     expect(all.length).toBeGreaterThan(0)
-    expect(YAK_PERSONA.catchphrases.length).toBeLessThanOrEqual(5)
+    expect(RECHA_PERSONA.catchphrases.length).toBeLessThanOrEqual(5)
   })
 })

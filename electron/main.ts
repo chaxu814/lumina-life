@@ -518,53 +518,32 @@ app.whenReady().then(async () => {
 const orch = getOrchestrator()
   const workerIds: TeamMemberId[] = ['yak', 'recha']
 
-  /** Worker 不应有的工具 ??后台 Worker 不需要前??网络/MCP/桌面操控类工??*/
-  const WORKER_BLOCKED_TOOLS = [
-    'browser', 'web_fetch', 'web_search', 'web_search_multi', 'serpapi_search', 'tavily_search', 'tavily_extract',
-    'screenshot', 'ocr',
-    'desktop_see', 'desktop_act', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_screen_size', 'desktop_scan',
-    'hearing_start', 'hearing_stop', 'hearing_status', 'hearing_transcript',
-    'keyboard_press', 'keyboard_type',
-    'mail_send', 'mail_list', 'mail_mark_read',
-    'mcp_connect', 'mcp_list_servers', 'mcp_list_tools', 'mcp_call_tool',
-    'skill_run', 'use_skill', 'install_skill', 'quick_setup',
-    'proactive_status', 'proactive_trigger', 'proactive_check',
-    'notification', 'open_file', 'clipboard_get', 'clipboard_set',
-    'weather',
-    'mode_switch', 'mode_status',
-    'oath_make', 'oath_list', 'oath_fulfill', 'appointment_set', 'appointment_list',
-    'content_collect',
-    'ast_search', 'lsp_symbols', 'lsp_references',
-    'delegate_to',  // Worker 不调用委??    'delegate_chain',  // Worker 不运行流水线
-  ]
-  /** Yak 额外禁止 ??审查/分析类工??*/
-  const YAK_EXTRA_BLOCKED: string[] = []
-  /** 热茶额外禁止 ??写文??执行命令类工??*/
-  const RECHA_EXTRA_BLOCKED = [
-    'file_write', 'file_edit',
-    'shell_exec',
-    'git_status', 'git_commit', 'git_log', 'git_diff',
-    'cron_schedule', 'cron_list', 'cron_cancel',
-    'todo',
-  ]
+  // v11.0: 工具权限唯一事实源 = electron/rolePolicy.ts
+  // 不再在主进程硬编码 WORKER_BLOCKED / RECHA_EXTRA_BLOCKED / YAK_EXTRA_BLOCKED，
+  // 而是从角色策略派生「该角色应被禁用的工具」。
+  //   yak   = 代码工程师 -> 可写文件 / 可执行命令 / 可 git 提交
+  //   recha = 审查员     -> 只读（不写文件 / 不执行命令 / 不 git 提交）
+  // 最终行为与旧硬编码一致：yak 可写可执行、recha 只读。
+  const { getDisabledToolsForRole } = await import('./rolePolicy')
+  const { getToolNames } = await import('./tools/registry')
+  const allRegisteredTools = [...getToolNames()]
 
   for (const id of workerIds) {
     if (agentConfig.isConfigured(id)) {
       const member = TEAM_MEMBERS[id]
-      const extraBlocked = id === 'recha' ? RECHA_EXTRA_BLOCKED : YAK_EXTRA_BLOCKED
+      const disabledTools = getDisabledToolsForRole(id, allRegisteredTools)
       const runner = new AgentRunner({
         mode: 'agent',
         personaId: id,
-        // v8.0: 不传 systemPrompt ??buildYakPrompt/buildRechaPrompt 已包含完??persona
-        // 避免 initSystemPrompt 追加「自定义指令」造成提示词重??        model: '',
+        model: '',
         baseUrl: '',
         apiKey: '',
         skipApproval: true,        // 后台 Worker 不需要用户逐项审批
         isChildAgent: true,        // 过滤 blockedInChild 工具
-        disabledTools: [...WORKER_BLOCKED_TOOLS, ...extraBlocked],
+        disabledTools,             // v11.0: 由 rolePolicy 派生
       } as any)
       orch.registerRunner(id, runner)
-      console.log(`[main] 🚀 ${member?.icon} ${id} 独立 Runner 已创建（${member?.name}）`)
+      console.log(`[main] 🚀 ${member?.icon} ${id} 独立 Runner 已创建（${member?.name}，disabledTools=${disabledTools.length}）`)
     } else {
       console.log(`[main] ⏭️ ${id} 未配??LLM，跳??Runner 创建`)
     }

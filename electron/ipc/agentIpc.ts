@@ -26,6 +26,8 @@ import { llmCoordinator } from '../llmCoordinator'
 import { xpManager, XP_RULES } from '../gamification/levels'
 import { achievementManager } from '../gamification/achievements'
 import * as emotionBridge from '../gamification/emotionBridge'
+import { probeEndpoint, buildUnreachableGuidance } from '../onboarding/llmReachability'
+import { isLocalEndpoint } from '../core/modelCompat'
 
 // ═══════════════════════════════════════════════════════════
 // LLM API 响应类型
@@ -284,6 +286,23 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
           ...params.config,
           // 前端显式指定 mode 时尊重之（桌宠陪伴会话传 'chat' 轻量工具集）；其余调用方默认 'agent'
           mode: params.config.mode || 'agent',
+        }
+      }
+
+      // 🛰️ 运行时可达性预检：仅对本地端点（LM Studio/Ollama/局域网）探测，
+      //   防止"本地模型没启动 → 静默空回复"。云端端点不加此预检以避免每条消息的延迟。
+      if (runConfig.baseUrl && isLocalEndpoint(runConfig.baseUrl)) {
+        const probe = await probeEndpoint(runConfig.baseUrl, runConfig.apiKey || undefined, 2000)
+        if (!probe.reachable) {
+          const kind = probe.errorKind || 'unknown'
+          console.warn(`[agent:chat] LLM 端点不可达（${kind}）: ${runConfig.baseUrl} — ${probe.message || ''}`)
+          activeAgentRunning = false
+          return {
+            success: false,
+            content: buildUnreachableGuidance(runConfig.baseUrl, kind),
+            error: 'LLM_ENDPOINT_UNREACHABLE',
+            errorKind: kind,
+          }
         }
       }
 

@@ -30,7 +30,7 @@ export interface TaskNode {
   projectId: string
   /** 任务标题 */
   title: string
-  /** 详细描述（给执行者/默认给热茶的任务描述） */
+  /** 详细描述（给执行者/默认给 Yak 的任务描述） */
   description: string
   /** 状态 */
   status: TaskStatus
@@ -38,7 +38,7 @@ export interface TaskNode {
   priority: TaskPriority
   /** 依赖的任务 ID 列表（必须先完成这些） */
   dependsOn: string[]
-  /** 分配给谁（'recha' 热茶=程序员执行 / 'yak' Yak=审查 / 'lumina' 老大） */
+  /** 分配给谁（'yak' Yak=程序员执行 / 'recha' 热茶=审查 / 'lumina' 老大） */
   assignTo: 'yak' | 'lumina' | 'recha'
   /** 🆕 v2.0: 分配给哪个实习生（intern_xxx ID，非空时表示走实习生模式） */
   assignIntern: string | null
@@ -208,9 +208,9 @@ export class TaskBoard {
       status: 'pending',
       priority: options?.priority || 'normal',
       dependsOn: options?.dependsOn || [],
-      // ⚠️ 默认执行者是 recha（热茶，程序员）——它才是有写权限/执行权的一方。
-      //    历史上默认是 'yak'，而那时的 yak 只能读，等于默认派给了一个干不了活的角色。
-      assignTo: options?.assignTo || 'recha',
+      // ⚠️ 默认执行者是 yak（Yak，代码工程师）——它才是有写权限/执行权的一方。
+      //    历史上默认是 'recha'，而现在的 recha 只能读，等于默认派给了一个干不了活的角色。
+      assignTo: options?.assignTo || 'yak',
       assignIntern: options?.assignIntern ?? null,
       parallelPhase: options?.parallelPhase ?? 0,
       parallelGroup: options?.parallelGroup ?? 0,

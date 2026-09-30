@@ -324,4 +324,4 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 
 ---
 
-> 完整的发布版本和下载链接见 [GitHub Releases](https://github.com/lumina-life/lumina-life/releases)。
+> 完整的发布版本和下载链接见 [GitHub Releases](https://github.com/chaxu814/lumina-life/releases)。

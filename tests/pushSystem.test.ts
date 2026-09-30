@@ -16,6 +16,11 @@ import {
 import { decidePush, type PushDecision } from '../electron/proactive/pushDecider'
 import { executePush } from '../electron/proactive/pushExecutor'
 
+function localTodayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function makeState(overrides: Partial<PushState> = {}): PushState {
   return {
     fatigue: 0.3,
@@ -24,7 +29,7 @@ function makeState(overrides: Partial<PushState> = {}): PushState {
     lastActiveAt: Date.now() - 30 * 60 * 1000, // 30分钟前活跃
     lastPushAt: 0,
     todayPushCount: 0,
-    todayDate: new Date().toISOString().slice(0, 10),
+    todayDate: localTodayStr(),
     consecutiveIgnored: 0,
     updatedAt: Date.now() - 60 * 1000,
     ...overrides,

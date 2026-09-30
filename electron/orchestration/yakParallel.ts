@@ -5,13 +5,13 @@
 //    留下的历史命名，为保证对外导出签名不变而保留；引擎本身与角色无关。
 //
 // 「招实习生」模式的核心编排层。
-// 当热茶（recha，程序员）的大任务可以被拆解为独立子任务时，热茶启动此引擎：
+// 当 Yak（yak，代码工程师）的大任务可以被拆解为独立子任务时，Yak 启动此引擎：
 //
 // 流程：
-//   ① splitTask() — 热茶分析任务，拆成可并行子任务
+//   ① splitTask() — Yak 分析任务，拆成可并行子任务
 //   ② hireInterns() — 从 InternPool 招人（按需）
 //   ③ executeParallel() — 子任务并发派给实习生
-//   ④ reviewResults() — 交由 Yak（审查员）把关质量
+//   ④ reviewResults() — 交由 热茶（审查员）把关质量
 //   ⑤ integrateResults() — 合并结果成完整输出
 //   ⑥ dismissInterns() — 结账走人
 //
@@ -83,7 +83,7 @@ export interface ParallelExecuteResult {
 }
 
 // ═══════════════════════════════════════════════════════════
-// TaskSplitter — 任务拆解（热茶的策略层）
+// TaskSplitter — 任务拆解（Yak 的策略层）
 // ═══════════════════════════════════════════════════════════
 
 export class TaskSplitter {
@@ -91,7 +91,7 @@ export class TaskSplitter {
    * 将大任务拆分为可并行执行的子任务
    *
    * ⚠️ 这是一个结构化的模板方法。
-   *   实际拆解由热茶（LLM，recha 程序员）通过分析任务后调用。
+   *   实际拆解由 Yak（LLM，yak 代码工程师）通过分析任务后调用。
    *   这里提供基础的工具函数做自动拆分。
    *
    * @param taskId 关联的 taskBoard 项目 ID
@@ -241,7 +241,7 @@ export class YakParallel {
   /**
    * 在并行组内派活并等待结果
    *
-   * 热茶（程序员）的视角：
+   * Yak（代码工程师）的视角：
    *   "小陈做模块A，小李做模块B，小王做模块C"
    *   派完等结果，谁先做完谁先交
    *
@@ -292,13 +292,13 @@ export class YakParallel {
       try {
         // 通过 DelegationManager 委托给实习生
         const result: DelegationResult = await delegationManager.delegate(
-          'recha', // 发起者：热茶（程序员）派活给实习生
+          'yak', // 发起者：Yak（代码工程师）派活给实习生
           {
             to: intern.id as any, // 路由到实习生
             task: [
               `【${intern.name} 任务】`,
               ``,
-              `热茶 老师让你做这个子任务：`,
+              `Yak 老师让你做这个子任务：`,
               task.description,
               ``,
               task.deliverable
@@ -452,7 +452,7 @@ export class YakParallel {
 
   /**
    * 整合并行执行结果
-   * 热茶的合并逻辑（最终质量把关交给 Yak 审查员）
+   * Yak 的合并逻辑（最终质量把关交给 热茶 审查员）
    */
   integrate(results: InternResult[]): string {
     const sections: string[] = []
@@ -479,8 +479,8 @@ export class YakParallel {
   }
 
   /**
-   * 热茶对实习生输出做形式检查（通过率/失败原因）
-   * 注意：这里只做形式检查，真正的内容审查由 Yak（审查员）负责
+   * Yak 对实习生输出做形式检查（通过率/失败原因）
+   * 注意：这里只做形式检查，真正的内容审查由 热茶（审查员）负责
    */
   review(results: InternResult[]): string[] {
     const notes: string[] = []

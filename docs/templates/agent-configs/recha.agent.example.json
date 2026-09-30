@@ -1,0 +1,46 @@
+{
+  "id": "recha",
+  "name": "热茶",
+  "role": "worker",
+  "enabled": true,
+  "llm": {
+    "provider": "lmstudio",
+    "model": "your-model-name",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "apiKey": "",
+    "maxContextTokens": 131072,
+    "timeout": 600,
+    "temperature": 0.2,
+    "topP": 0.9
+  },
+  "tools": {
+    "whitelist": [
+      "file_read",
+      "file_list",
+      "file_search",
+      "git_status",
+      "git_diff",
+      "git_log",
+      "adversarial_review"
+    ],
+    "blacklist": [
+      "file_write",
+      "file_edit",
+      "shell_exec",
+      "git_commit"
+    ],
+    "approvalLevel": "none"
+  },
+  "social": {
+    "ttsVoice": "zh-CN-YunxiNeural",
+    "mood": 0.4,
+    "energy": 0.6,
+    "affinity": 0.7
+  },
+  "paths": {
+    "chats": "chats.json",
+    "jobs": "jobs.json",
+    "memory": "memory",
+    "dialog": "dialog"
+  }
+}

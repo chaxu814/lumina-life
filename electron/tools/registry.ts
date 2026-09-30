@@ -388,7 +388,7 @@ const NOT_EXECUTED_GUIDANCE =
  * ok:false 时只回灌 `工具错误: ${result.error}`，content 会被丢弃，
  * 不写进 error 这条防幻觉提示就永远到不了模型眼前。
  */
-function buildNotExecutedResult(reason: string, detail: string): ToolResult {
+export function buildNotExecutedResult(reason: string, detail: string): ToolResult {
   return {
     callId: '',
     ok: false,

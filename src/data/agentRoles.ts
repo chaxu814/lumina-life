@@ -339,7 +339,7 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
     name: '学习辅导',
     desc: '深度分析、知识讲解、作业辅导',
     color: '#f59e0b',
-    preferredAgents: ['lumina', 'yak'],
+    preferredAgents: ['lumina', 'recha'],
     quickPrompts: ['帮我解释一下量子计算', '整理一份Python学习路线', '这道题怎么做？'],
   },
   {
@@ -357,7 +357,7 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
     name: '代码开发',
     desc: '写代码、改bug、技术问答',
     color: '#10b981',
-    preferredAgents: ['recha', 'yak'],
+    preferredAgents: ['yak', 'recha'],
     quickPrompts: ['帮我写个爬虫', '这段代码有bug', '帮我重构这个函数'],
   },
   {
@@ -366,7 +366,7 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
     name: '商业设计',
     desc: 'UI建议、配色方案、设计思路',
     color: '#f472b6',
-    preferredAgents: ['lumina', 'recha'],
+    preferredAgents: ['lumina', 'yak'],
     quickPrompts: ['帮我配一套主题色', '这个页面怎么布局？', 'Logo设计方向建议'],
   },
   {
@@ -375,7 +375,7 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
     name: '情报监控',
     desc: '信息抓取、监控变化、预警提醒',
     color: '#3b82f6',
-    preferredAgents: ['yak', 'lumina'],
+    preferredAgents: ['recha', 'lumina'],
     quickPrompts: ['追踪AI行业最新动态', '监控竞品有什么新动作', '今天有什么热点？'],
   },
   {
@@ -384,7 +384,7 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
     name: '职场办公',
     desc: '日程管理、会议纪要、邮件处理',
     color: '#8b5cf6',
-    preferredAgents: ['lumina', 'yak'],
+    preferredAgents: ['lumina', 'recha'],
     quickPrompts: ['帮我整理会议纪要', '写一封工作邮件', '生成本周周报'],
   },
 ]
@@ -392,8 +392,8 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
 /** 团队成员信息 */
 export const TEAM_MEMBERS = [
   { id: 'lumina', name: 'Lumina', icon: '🐱', color: '#FF6B6B', roles: ['chat', 'learn', 'write', 'design', 'work'] },
-  { id: 'recha', name: '热茶', icon: '🍵', color: '#448AFF', roles: ['code', 'design'] },
-  { id: 'yak', name: 'Yak', icon: '📊', color: '#43A047', roles: ['learn', 'intel', 'work'] },
+  { id: 'recha', name: '热茶', icon: '🍵', color: '#448AFF', roles: ['learn', 'intel', 'work'] },
+  { id: 'yak', name: 'Yak', icon: '📊', color: '#43A047', roles: ['code', 'design'] },
 ]
 
 /** 根据任务类型获取推荐的执行者 */

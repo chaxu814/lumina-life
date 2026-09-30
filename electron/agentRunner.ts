@@ -18,6 +18,7 @@ import {
   groupParallelBatches,
 } from './tools/registry'
 import { registerAllTools } from './tools/index'
+import { isToolAllowedForRole } from './rolePolicy'
 import { getMemoryStore } from './memory/memoryStore'
 import { getAgentChatsManager } from './agentChatsManager'
 import { getAgentDialogManager } from './agentDialogManager'
@@ -3250,6 +3251,12 @@ private summarizer: ConversationSummarizer | null = null
       const disabledSet = new Set(disabled)
       tools = tools.filter(t => !disabledSet.has(t))
     }
+
+    // 角色硬闸门（广告层）：在 disabledTools 之上，再按 rolePolicy 过滤一遍，
+    // 确保向 LLM 广告的工具都在当前角色白名单内。
+    // personaId 缺省按 lumina（全放行）处理，不影响 Lumina 主聊天。
+    const personaId = this.config.personaId
+    tools = tools.filter(t => isToolAllowedForRole(personaId, t).allowed)
 
     return { tools, toolsetName }
   }

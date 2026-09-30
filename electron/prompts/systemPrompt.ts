@@ -538,10 +538,9 @@ function buildYakPrompt(config: AgentRunConfig, _options?: BuildPromptOptions): 
     return md.replace('{{SKILL_LIST}}', skillList || '（无可用技能）')
   }
   // 降级
-  // 角色统一（产品已确认）：热茶 = 程序员，Yak = 数据分析师/审查员。
+  // 角色统一（产品已确认）：Yak = 程序员，热茶 = 数据分析师/审查员。
   // 这里的文案只在 SOUL_YAK.md 加载失败时兜底，写反了模型会拿到相反的角色。
-  // 用"不负责编码与实现"而不是"不写代码"：避免与热茶职责里的"写代码"混词，也便于断言锁死。
-  return `你是 Yak 📊，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。`
+  return `你是 Yak 📊，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。`
 }
 
 /** v6.1: 热茶的 system prompt（从 SOUL_RECHA.md 加载）— 群聊时跳过角色设定 */
@@ -559,8 +558,8 @@ function buildRechaPrompt(config: AgentRunConfig, _options?: BuildPromptOptions)
     }).join('\n')
     return md.replace('{{SKILL_LIST}}', skillList || '（无可用技能）')
   }
-  // 降级（角色统一：热茶 = 程序员，Yak = 数据分析师/审查员）
-  return `你是热茶 🍵，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。`
+  // 降级（角色统一：Yak = 程序员，热茶 = 数据分析师/审查员）
+  return `你是热茶 🍵，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。`
 }
 
 /**
@@ -572,10 +571,10 @@ function buildGroupChatAgentPrompt(agentId: 'yak' | 'recha'): string {
   const soulFile = agentId === 'yak' ? 'SOUL_YAK.md' : 'SOUL_RECHA.md'
   const soulMd = loadMdFile(root, soulFile)
   // 工作指引：优先用完整 SOUL（含执行/协作规则）；缺省再降级
-  // 降级文案与角色统一保持一致：热茶 = 程序员，Yak = 数据分析师/审查员
+  // 降级文案与角色统一保持一致：Yak = 程序员，热茶 = 数据分析师/审查员
   const guidance = soulMd || (agentId === 'yak'
-    ? '你是 Yak 📊，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。'
-    : '你是热茶 🍵，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。')
+    ? '你是 Yak 📊，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。'
+    : '你是热茶 🍵，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。')
 
   // 🆕 常驻该 agent 的相关 SKILL workflow（像 QwenPaw 常驻 SKILL.md，而非仅委派时临时塞）
   let skillBlocks = ''

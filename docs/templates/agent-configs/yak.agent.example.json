@@ -1,0 +1,44 @@
+{
+  "id": "yak",
+  "name": "Yak",
+  "role": "worker",
+  "enabled": true,
+  "llm": {
+    "provider": "lmstudio",
+    "model": "your-model-name",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "apiKey": "",
+    "maxContextTokens": 131072,
+    "timeout": 600,
+    "temperature": 0.3,
+    "topP": 0.9
+  },
+  "tools": {
+    "whitelist": [
+      "file_read",
+      "file_write",
+      "file_edit",
+      "file_list",
+      "file_search",
+      "shell_exec",
+      "git_status",
+      "git_diff",
+      "git_log",
+      "git_commit"
+    ],
+    "blacklist": [],
+    "approvalLevel": "none"
+  },
+  "social": {
+    "ttsVoice": "zh-CN-YunjianNeural",
+    "mood": 0.5,
+    "energy": 0.8,
+    "affinity": 0.6
+  },
+  "paths": {
+    "chats": "chats.json",
+    "jobs": "jobs.json",
+    "memory": "memory",
+    "dialog": "dialog"
+  }
+}

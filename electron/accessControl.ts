@@ -12,6 +12,7 @@
 // ============================================================
 
 import type { TeamMemberId } from './agentTeamTypes'
+import { isToolAllowedForRole } from './rolePolicy'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -69,27 +70,27 @@ export const DEFAULT_PERMISSIONS: Record<TeamMemberId, AgentPermissions> = {
     allowedCommands: ['*'],
     description: 'Lumina — 老大，无限制',
   },
-  // ⚠️ 角色口径（2026-09 统一，历史版本反向过，必须按下面对照实现）
-  //   recha（热茶）= 程序员      → 可读可写、可执行命令
-  //   yak（Yak）  = 数据分析师兼审查员 → 只读，不写文件、不执行命令
-  // 为什么必须严格区分：权限反过来时，程序员一行代码都写不出来（活干不了），
+  // ⚠️ 角色口径（以 AGENTS.md / electron/rolePolicy.ts 为唯一事实源）
+  //   yak（Yak）   = 代码工程师  → 可读可写、可执行命令、可 git 提交
+  //   recha（热茶）= 审查员      → 只读，不写文件、不执行命令、不 git 提交
+  // 为什么必须严格区分：权限反过来时，写代码的人一行都写不出来（活干不了），
   // 而审查员却能删改任意文件/跑任意命令（越权）。
-  recha: {
-    agentId: 'recha',
+  yak: {
+    agentId: 'yak',
     allowedReadPaths: ['*'],       // 可读任何路径（读代码需要）
-    allowedWritePaths: ['*'],      // 可写任何路径（写代码需要）
+    allowedWritePaths: ['*'],      // 可写任何路径（改代码需要）
     allowedDangerousTools: [
-      'file_write', 'file_edit', 'shell_exec',
+      'file_write', 'file_edit', 'shell_exec', 'git_commit',
     ],
     networkAccess: true,
     allowedDomains: ['*'],         // 需要 npm/pip/git 等
     shellAccess: true,
     allowedCommands: ['*'],
-    description: '热茶 — 代码工程师，可写文件和执行命令',
+    description: 'Yak — 代码工程师，可写文件和执行命令',
   },
-  yak: {
-    agentId: 'yak',
-    allowedReadPaths: ['*'],       // 可读任何路径（读代码需要）
+  recha: {
+    agentId: 'recha',
+    allowedReadPaths: ['*'],       // 可读任何路径（读代码审查需要）
     allowedWritePaths: [],          // ❌ 审查员不写文件
     allowedDangerousTools: [],      // ❌ 禁止危险工具
     networkAccess: true,
@@ -97,7 +98,7 @@ export const DEFAULT_PERMISSIONS: Record<TeamMemberId, AgentPermissions> = {
     // ❌ 审查员只给意见，不执行任意命令（否则等于绕过只读边界去改环境）
     shellAccess: false,
     allowedCommands: [],
-    description: 'Yak — 数据分析师兼审查员，只读不写',
+    description: '热茶 — 审查员，只读不写',
   },
 }
 
@@ -153,27 +154,16 @@ export class AccessController {
     return deny(`${agentId} 无权写入 ${filePath}`)
   }
 
-  /** 检查工具调用权限 */
+  /** 检查工具调用权限 —— 以 rolePolicy 为唯一事实源 */
   checkToolAccess(agentId: TeamMemberId, toolName: string): PermissionCheckResult {
     const perm = this.permissions.get(agentId)
     if (!perm) {return deny(`${agentId} 无权限配置`)}
 
-    // 白名单工具始终允许
-    const safeTools = [
-      'file_read', 'file_search', 'grep_search', 'glob_search',
-      'web_search', 'web_fetch',
-      'memory_search', 'read_file',
-      'list_agents', 'chat_with_agent', 'recall_history',
-      'get_current_time', 'get_token_usage',
-      'skill_run', 'use_skill',
-    ]
-    if (safeTools.includes(toolName)) {return allow()}
-
-    // 检查危险工具白名单
-    if (perm.allowedDangerousTools.includes('*')) {return allow()}
-    if (perm.allowedDangerousTools.includes(toolName)) {return allow()}
-
-    return deny(`${agentId} 不允许使用 ${toolName}`, '这是安全敏感操作，需要 Lumina 处理')
+    // 唯一事实源：electron/rolePolicy.ts
+    // yak=代码工程师（可写可执行），recha=审查员（只读），lumina=全量。
+    const verdict = isToolAllowedForRole(agentId, toolName)
+    if (verdict.allowed) {return allow()}
+    return deny(verdict.reason, '这是安全敏感操作，需要 Lumina 处理')
   }
 
   /** 检查网络访问 */

@@ -1,58 +1,38 @@
 // ============================================================
-// agentPermissions.ts — 权限声明 + 工具检查
+// agentPermissions.ts — 权限声明 + 工具检查（薄封装）
+//
+// ⚠️ 真正的唯一事实源是 electron/rolePolicy.ts。
+//    这里只保留旧的导出签名（getDisabledToolsForAgent / enforceToolPermission），
+//    内部一律委托 rolePolicy，禁止再维护一份会漂移的工具表。
+//
+// 角色口径（与 rolePolicy.ts / AGENTS.md 一致）：
+//   yak（Yak）   = 代码工程师 -> 可写文件、可执行命令、可 git 提交
+//   recha（热茶）= 审查员     -> 只读，不写文件、不执行命令、不 git 提交
+//   lumina       = 全量调度   -> 无限制
 // ============================================================
+
+import { isToolAllowedForRole, getExplicitDeniedTools } from './rolePolicy'
 
 // AgentId 白名单
 export type AgentId = 'lumina' | 'yak' | 'recha'
 
-// 工具 + agent 权限映射
-//
-// ⚠️ 角色口径（与 accessControl.ts 的 DEFAULT_PERMISSIONS 必须一致）
-//   recha（热茶）= 程序员        → 白名单含 file_write/file_edit/shell_exec
-//   yak（Yak）  = 数据分析师兼审查员 → 只读，不给任何写类/执行类工具
-// 历史版本这里是反的：审查员能写文件、程序员反而被禁止写文件，
-// 结果就是「写代码的人没工具，有工具的人不写代码」。修这个 bug 时两张表要一起看。
-const PERMISSIONS: Record<AgentId, string[]> = {
-  lumina: [],                       // 全量（空数组 = 无额外限制）
-  recha: [
-    // 写 + 执行（程序员）
-    'file_read', 'file_edit', 'file_write',
-    'file_list', 'file_search', 'glob_search', 'grep_search',
-    'disk_list', 'shell_exec',
-    // 只读检索
-    'browser', 'web_fetch', 'web_search',
-  ],
-  yak: [
-    // 只读（审查员/数据分析师）
-    'file_read', 'file_list', 'file_search',
-    'glob_search', 'grep_search', 'disk_list',
-    'browser', 'web_fetch', 'web_search',
-  ],
+/**
+ * 某角色应被禁用的工具。
+ *  - 传入全量工具名时：返回该角色无权使用的补集（供 disabledTools 用）。
+ *  - 不传时：返回该角色被显式 denylist 的工具（兼容旧调用 / 展示）。
+ */
+export function getDisabledToolsForAgent(agentId: AgentId, allToolNames?: string[]): string[] {
+  if (!allToolNames || allToolNames.length === 0) {
+    return getExplicitDeniedTools(agentId)
+  }
+  return allToolNames.filter(t => !isToolAllowedForRole(agentId, t).allowed)
 }
 
-// 拒绝使用的工具（安全兜底）
-const DENIED: Record<AgentId, Set<string>> = {
-  lumina: new Set(),
-  recha: new Set(['mail_send', 'mail_read', 'computer_use', 'desktop_screenshot',
-                  'mcp_call_tool', 'skill_install', 'cron_schedule', 'cron_cancel']),
-  yak:   new Set(['file_write', 'file_edit', 'shell_exec',      // ❌ 只审不改：不写文件、不跑命令
-                  'mail_send', 'mail_read', 'computer_use',
-                  'desktop_screenshot', 'cron_schedule', 'cron_cancel']),
-}
-
-export function getDisabledToolsForAgent(agentId: AgentId): string[] {
-  const allowed = PERMISSIONS[agentId]
-  const denied = DENIED[agentId]
-  if (allowed.length === 0) {return Array.from(denied)}
-
-  // 用小集合判断，远小于全量工具
-  const set = new Set(allowed)
-  return Array.from(denied).filter(t => !set.has(t))
-}
-
+/** 是否允许某 Agent 调用某工具（与运行时硬闸门同一口径） */
 export function enforceToolPermission(agentId: AgentId, toolName: string): boolean {
-  if (DENIED[agentId].has(toolName)) {
-    console.warn(`[Permission] ❌ ${agentId} 被禁止使用工具: ${toolName}`)
+  const verdict = isToolAllowedForRole(agentId, toolName)
+  if (!verdict.allowed) {
+    console.warn(`[Permission] ❌ ${agentId} 被禁止使用工具: ${toolName} -> ${verdict.reason}`)
     return false
   }
   return true

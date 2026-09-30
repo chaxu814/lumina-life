@@ -17,7 +17,7 @@ hero:
       link: /TROUBLESHOOTING
     - theme: alt
       text: GitHub
-      link: https://github.com/lumina-life/lumina-life
+      link: https://github.com/chaxu814/lumina-life
 
 features:
   - icon: 🖥️

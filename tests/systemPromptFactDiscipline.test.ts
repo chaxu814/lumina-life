@@ -6,7 +6,7 @@
 // 尤其是群聊（skipSoul=true，会剥掉人格风格）——
 // 旧实现把三条纪律混在 `## ✨ 你的风格` 里，群聊整段被剥，等于群聊无底线。
 //
-// 同时锁定角色统一文案：热茶 = 程序员，Yak = 数据分析师/审查员。
+// 同时锁定角色统一文案：Yak = 代码工程师，热茶 = 审查员。
 // ============================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -163,7 +163,7 @@ describe('事实纪律 — 任何场景都生效', () => {
   })
 })
 
-// ── 角色统一文案兜底（热茶 = 程序员，Yak = 数据分析师/审查员） ──
+// ── 角色统一文案兜底（Yak = 代码工程师，热茶 = 审查员） ──
 // 这段文案只在 SOUL/AGENTS md 加载失败时才会被用到，所以通过 mock fs
 // 让身份文件"加载失败"，强制走到降级分支。
 describe('后台成员降级文案（角色统一）', () => {
@@ -191,22 +191,22 @@ describe('后台成员降级文案（角色统一）', () => {
     return mod.buildSystemPrompt(agentId, undefined, { skipSoul: socialMode, injectSkills: false })
   }
 
-  it('Yak 的降级文案是数据分析师/审查员，不含"写代码/代码工程师"', async () => {
+  it('Yak 的降级文案是代码工程师，不含"数据分析师/审查员"', async () => {
     for (const socialMode of [false, true]) {
       const prompt = await buildFallback('yak', socialMode)
       expect(prompt).toContain('Yak')
-      expect(prompt).toContain('数据分析师')
-      expect(prompt, `Yak 降级文案不应出现"写代码"（socialMode=${socialMode}）`).not.toContain('写代码')
-      expect(prompt, `Yak 降级文案不应出现"代码工程师"（socialMode=${socialMode}）`).not.toContain('代码工程师')
+      expect(prompt).toContain('代码工程师')
+      expect(prompt, `Yak 降级文案不应出现"数据分析师"（socialMode=${socialMode}）`).not.toContain('数据分析师')
     }
   })
 
-  it('热茶的降级文案是代码工程师，不含"审查员"', async () => {
+  it('热茶的降级文案是审查员，不含"代码工程师/写代码"', async () => {
     for (const socialMode of [false, true]) {
       const prompt = await buildFallback('recha', socialMode)
       expect(prompt).toContain('热茶')
-      expect(prompt).toContain('代码工程师')
-      expect(prompt, `热茶降级文案不应出现"审查员"（socialMode=${socialMode}）`).not.toContain('审查员')
+      expect(prompt).toContain('审查员')
+      expect(prompt, `热茶降级文案不应出现"代码工程师"（socialMode=${socialMode}）`).not.toContain('代码工程师')
+      expect(prompt, `热茶降级文案不应出现"写代码"（socialMode=${socialMode}）`).not.toContain('写代码')
     }
   })
 })

@@ -11,6 +11,7 @@ Lumina Life 提供完整的 REST API，无需启动 GUI 即可与 Agent 交互�
 
 - [启用 API](#启用-api)
 - [认证](#认证)
+- [CORS 与安全注意事项](#cors-与安全注意事项)
 - [端点一览](#端点一览)
 - [端点详情](#端点详情)
   - [健康检查](#1-健康检查)
@@ -60,15 +61,72 @@ npm run api
 
 ## 认证
 
-默认 API 无认证（仅监听 `127.0.0.1`）。生产环境部署建议：
+API 默认绑定回环地址 `127.0.0.1`，**仅本机进程可访问**，默认不启用鉴权。
+一旦你把监听地址改为 `0.0.0.0` 或暴露到局域网 / 公网，**务必同时设置 Access Token**。
+
+### 设置 Access Token
+
+在 `.env` 中配置 `LUMINA_API_KEY`（建议随机长字符串）：
 
 ```bash
-# 设置 API Key（环境变量）
-LUMINA_API_KEY=your-secret-key
-
-# 请求时在 Header 中携带
-Authorization: Bearer your-secret-key
+LUMINA_API_KEY=your-random-secret-token
 ```
+
+启动后日志会显示 `🔑 API Key 认证已启用`。之后所有请求都必须携带凭证，否则返回 `401`：
+
+```http
+# 方式一：X-API-Key 请求头
+X-API-Key: your-random-secret-token
+
+# 方式二：Bearer Token
+Authorization: Bearer your-random-secret-token
+```
+
+### 用 curl 携带 Token
+
+```bash
+curl http://localhost:3456/api/health -H "X-API-Key: your-random-secret-token"
+```
+
+---
+
+## CORS 与安全注意事项
+
+### 默认仅本机可达
+
+- 服务默认监听 `127.0.0.1`（可由 `LUMINA_API_HOST` 调整），**局域网与公网均无法直接访问**。
+- CORS 白名单默认只放行本机来源：
+  `http://127.0.0.1:<port>` 与 `http://localhost:<port>`。
+- **无 Origin 的请求**（`curl`、命令行脚本、桌面客户端）不受 CORS 限制，照常放行——这是有意设计，方便本机自动化调用。
+
+### 浏览器跨域行为
+
+| 请求来源 | 响应中的 `Access-Control-Allow-Origin` | 浏览器结果 |
+|----------|----------------------------------------|------------|
+| `http://localhost:3456`（白名单内） | 回显 `http://localhost:3456`（+ `Vary: Origin`） | ✅ 放行 |
+| `http://localhost:5173`（未配置的本地前端） | 不返回该头 | ❌ 被拦截 |
+| `http://evil.example.com`（外部网站） | 不返回该头 | ❌ 被拦截 |
+| 无 Origin（curl / CLI） | 不设置该头 | ✅ 不受 CORS 约束 |
+
+如需让你自己的本地前端（如 Vite 的 `http://localhost:5173`）调用 API，在 `.env` 中把它的 Origin 加入白名单：
+
+```bash
+LUMINA_API_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:3456
+```
+
+设为 `LUMINA_API_ALLOWED_ORIGINS=*` 可放开所有来源——**仅在你完全信任所在网络时使用**。
+
+### ⚠️ 暴露到局域网 / 公网的风险
+
+将 `LUMINA_API_HOST` 改为 `0.0.0.0` 后，任何能访问到该端口的人都可以：
+- 让你的 Agent 执行工具、读写记忆与配置；
+- 触发定时任务、调用 LLM（产生费用）。
+
+因此：
+1. **必须**设置强随机的 `LUMINA_API_KEY`；
+2. 优先用反向代理 + HTTPS，而不是直接裸奔；
+3. 如非必要，不要在 `LUMINA_API_ALLOWED_ORIGINS` 使用 `*`；
+4. 用完即关（`LUMINA_API_ENABLED=0`）。
 
 ---
 
@@ -702,4 +760,4 @@ console.log(reply.reply);
 
 ---
 
-> 有问题或建议？欢迎提交 [GitHub Issue](https://github.com/lumina-life/lumina-life/issues)。
+> 有问题或建议？欢迎提交 [GitHub Issue](https://github.com/chaxu814/lumina-life/issues)。

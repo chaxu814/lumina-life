@@ -73,8 +73,8 @@
 | Agent | 角色 Role | 性格 Personality | 专长 Expertise |
 |-------|-----------|-----------------|---------------|
 | **Lumina** 🐱 | 团队老大 — 唯一对用户接口<br>Team leader, your only interface | 温暖可爱、偶尔迷糊<br>Warm, caring, sometimes adorably clumsy | 对话 · 情绪感知 · 日常陪伴<br>Chat, emotion sensing, companionship |
-| **热茶 (Recha)** 🍵 | 毒舌技术宅 — 后台工作者<br>Sarcastic engineer, behind-the-scenes | 外冷内热、毒舌但可靠<br>Cold on the outside, sharp but reliable | 写代码 · 调试 · 代码审查<br>Coding, debugging, code review |
-| **Yak** 📊 | 冷静分析师 — 后台工作者<br>Calm analyst, behind-the-scenes | 理性至上、数据狂<br>Data-driven, logic-first | 搜索 · 分析 · 任务调度<br>Research, analysis, task orchestration |
+| **热茶 (Recha)** 🍵 | 毒舌技术宅 — 后台工作者<br>Sarcastic reviewer, behind-the-scenes | 外冷内热、毒舌但可靠<br>Cold on the outside, sharp but reliable | 代码审查 · 挑错 · 风险评估<br>Code review, critique, risk assessment |
+| **Yak** 📊 | 冷静分析师 — 后台工作者<br>Calm engineer, behind-the-scenes | 理性至上、数据狂<br>Data-driven, logic-first | 写代码 · 调试 · 重构 · 跑测试<br>Coding, debugging, refactoring, testing |
 
 **如何协作？** How they work together:
 
@@ -228,13 +228,13 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ### 方式一：下载安装包（推荐）
 
-> 首个公开版本（v0.1）即将发布；发布后可从 [Releases](https://github.com/lumina-life/lumina-life/releases) 下载安装包，双击安装、3 分钟上手。在此之前请用下方「开发者模式」运行。
+> 首个公开版本（v0.1）即将发布；发布后可从 [Releases](https://github.com/chaxu814/lumina-life/releases) 下载安装包，双击安装、3 分钟上手。在此之前请用下方「开发者模式」运行。
 
 ### 方式二：开发者模式
 
 ```bash
 # Prerequisites: Node.js 18+ · Python 3.10+（可选）
-git clone https://github.com/lumina-life/lumina-life.git
+git clone https://github.com/chaxu814/lumina-life.git
 cd lumina-life
 npm install
 cp .env.example .env            # 编辑 .env 填入 LLM API（默认 LM Studio 已激活）
@@ -337,8 +337,8 @@ curl -X POST http://localhost:3456/api/chat \
 
 ```
 用户：帮我算一下这个月的开支
-Lumina：好的，我让数据分析师看看↗
-        （内部 → Yak 处理数据）
+Lumina：好的，我这就帮你理一下↗
+        （内部 → 后台整理账目数据）
 Lumina：本月开支共 ¥3,280，比上月少 12% 哦！主要节省在餐饮上 👍
 ```
 
@@ -513,8 +513,8 @@ Lumina Life 采用 **双许可证（Dual-License）** 发布，您可在以下�
 
 | 途径 | 用途 |
 |------|------|
-| 💡 [GitHub Issues](https://github.com/lumina-life/lumina-life/issues) | Bug 反馈 & 功能建议 |
-| 📖 [GitHub Discussions](https://github.com/lumina-life/lumina-life/discussions) | 技术讨论 & 使用技巧 |
+| 💡 [GitHub Issues](https://github.com/chaxu814/lumina-life/issues) | Bug 反馈 & 功能建议 |
+| 📖 [GitHub Discussions](https://github.com/chaxu814/lumina-life/discussions) | 技术讨论 & 使用技巧 |
 | 🎨 [贡献指南](CONTRIBUTING.md) | 参与开发的完整指引 |
 | 📝 [更新日志](CHANGELOG.md) | 版本发布记录 |
 

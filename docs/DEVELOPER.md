@@ -49,7 +49,7 @@ sudo apt-get install -y libappindicator1 libayatana-appindicator3-1 libnss3 libf
 
 ```bash
 # 1. 克隆
-git clone https://github.com/lumina-life/lumina-life.git
+git clone https://github.com/chaxu814/lumina-life.git
 cd lumina-life
 
 # 2. 安装依赖
@@ -159,18 +159,18 @@ lumina-life/
 └───────┬──────────────────────┬───────────────┘
         │                      │
 ┌───────▼──────────┐  ┌───────▼──────────────┐
-│  热茶 🍵 (DEV)   │  │  Yak 📊 (ANAL)       │
-│ 角色：开发者 Agent │  │ 角色：分析 Agent      │
-│ 职责：写代码、查错 │  │ 职责：数据分析、研究   │
-│ 工具：文件、终端   │  │ 工具：搜索、可视化    │
+│  Yak 📊 (DEV)    │  │  热茶 🍵 (REVIEW)    │
+│ 角色：开发者 Agent │  │ 角色：审查 Agent      │
+│ 职责：写代码、调试 │  │ 职责：审查、挑错、风险 │
+│ 工具：文件、终端   │  │ 工具：只读查看、搜索   │
 └──────────────────┘  └──────────────────────┘
 ```
 
 ### Agent 委托流程
 
 ```
-用户请求 → Lumina 判断 → 需要开发？→ 委托热茶
-                        → 需要分析？→ 委托 Yak
+用户请求 → Lumina 判断 → 需要写代码？→ 委托 Yak
+                        → 需要审查/挑错？→ 委托 热茶
                         → 普通对话 → Lumina 自己回答
 ```
 

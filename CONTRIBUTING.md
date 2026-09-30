@@ -210,8 +210,8 @@ npx vitest run        # 单次运行（CI 使用）
 
 ## 💬 提问与讨论
 
-- **Bug 报告 / 功能请求** → [GitHub Issues](https://github.com/lumina-life/lumina-life/issues)
-- **技术讨论 / 使用帮助** → [GitHub Discussions](https://github.com/lumina-life/lumina-life/discussions)
+- **Bug 报告 / 功能请求** → [GitHub Issues](https://github.com/chaxu814/lumina-life/issues)
+- **技术讨论 / 使用帮助** → [GitHub Discussions](https://github.com/chaxu814/lumina-life/discussions)
 - **安全漏洞** → 请私信报告，不要公开提交 Issue
 
 ---

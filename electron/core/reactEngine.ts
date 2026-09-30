@@ -6,7 +6,8 @@
 // ============================================================
 
 import type { ToolResult } from '../tools/types'
-import { executeToolWithRetry, executeToolsParallel, groupParallelBatches } from '../tools/registry'
+import { executeToolWithRetry, executeToolsParallel, groupParallelBatches, buildNotExecutedResult } from '../tools/registry'
+import { isToolAllowedForRole, type PermissionVerdict } from '../rolePolicy'
 import { getInjectionGuard } from '../injectionGuard'
 import { getSecurityGuard, GuardSeverity } from '../securityGuard'
 import { getApprovalService } from '../approvalService'
@@ -117,11 +118,23 @@ function cleanXmlToolCalls(text: string): string {
   return cleaned
 }
 
+/** 角色硬闸门：被拒时返回一个「未执行」失败结果；放行返回 null */
+function checkRoleGate(personaId: string | undefined, toolName: string): ToolResult | null {
+  const verdict: PermissionVerdict = isToolAllowedForRole(personaId, toolName)
+  if (verdict.allowed) {return null}
+  console.warn(`[ReActEngine] ⛔ 角色硬闸门拦截: role=${personaId || 'lumina'} tool=${toolName} -> ${verdict.reason}`)
+  return buildNotExecutedResult(
+    `该角色无权使用此工具（${personaId || 'lumina'} / ${toolName}）`,
+    verdict.reason,
+  )
+}
+
 /** 尝试解析和执行 XML 工具调用，返回是否成功处理 */
 async function tryExecuteXmlToolCall(
   text: string,
   messages: ReactMessage[],
   emit?: ReactEmitCallbacks,
+  personaId?: string,
 ): Promise<boolean> {
   // 格式B/C: <tool_call>\n<web_search>\nquery="xxx"\nmax_results=10\n</web_search>\n</tool_call>
   let match = text.match(/<tool_call>[\s\S]*?<(\w+)>([\s\S]*?)<\/\1>[\s\S]*?<\/tool_call>/i)
@@ -141,6 +154,13 @@ async function tryExecuteXmlToolCall(
       if (Object.keys(args).length > 0) {
         console.log(`[ReActEngine] 🔄 检测到 JSON 参数工具调用: ${fnName}(${rawArgs})，尝试执行...`)
         try {
+          const gate = checkRoleGate(personaId, fnName)
+          if (gate) {
+            emit?.onToolStart?.(fnName, args)
+            emit?.onToolEnd?.(fnName, gate)
+            messages.push({ role: 'system', content: `【${fnName} 结果】\n错误: ${gate.error}` })
+            return true
+          }
           emit?.onToolStart?.(fnName, args)
           const result = await executeToolWithRetry(fnName, args).catch((e) => ({
             callId: '', ok: false, content: '', error: e.message,
@@ -184,6 +204,13 @@ async function tryExecuteXmlToolCall(
         if (fnName && typeof fnName === 'string') {
           console.log(`[ReActEngine] 🔄 检测到嵌套 JSON 工具调用: ${fnName}(${JSON.stringify(args)})，尝试执行...`)
           try {
+            const gate = checkRoleGate(personaId, fnName)
+            if (gate) {
+              emit?.onToolStart?.(fnName, args)
+              emit?.onToolEnd?.(fnName, gate)
+              messages.push({ role: 'system', content: `【${fnName} 结果】\n错误: ${gate.error}` })
+              return true
+            }
             emit?.onToolStart?.(fnName, args)
             const result = await executeToolWithRetry(fnName, args).catch((e) => ({
               callId: '', ok: false, content: '', error: e.message,
@@ -223,6 +250,16 @@ async function tryExecuteXmlToolCall(
   console.log(`[ReActEngine] 🔄 检测到 XML 工具调用: ${toolName}(${JSON.stringify(args)})，尝试执行...`)
 
   try {
+    const gate = checkRoleGate(personaId, toolName)
+    if (gate) {
+      emit?.onToolStart?.(toolName, args)
+      emit?.onToolEnd?.(toolName, gate)
+      messages.push({
+        role: 'system',
+        content: `【${toolName} 结果】\n错误: ${gate.error}`,
+      })
+      return true
+    }
     emit?.onToolStart?.(toolName, args)
     const result = await executeToolWithRetry(toolName, args).catch((e) => ({
       callId: '',
@@ -424,7 +461,7 @@ export class ReActEngine {
         //     4. 如果工具执行失败，只保留清理后的文本
         if (replyText && hasXmlToolCall(replyText)) {
           this.emit?.onThinking?.('🔄 检测到 XML 工具调用标记，尝试执行...')
-          const executed = await tryExecuteXmlToolCall(replyText, messages, this.emit)
+          const executed = await tryExecuteXmlToolCall(replyText, messages, this.emit, this.config.personaId)
           if (executed) {
             // 执行成功 → 清理标记后继续下一轮
             replyText = cleanXmlToolCalls(replyText)
@@ -657,6 +694,19 @@ export class ReActEngine {
         }
       }
 
+      // 角色硬闸门（执行层）：无权工具不调用 registry，直接回 ok:false 失败信号
+      const gate = checkRoleGate(this.config.personaId, fn.name)
+      if (gate) {
+        this.emit?.onToolStart?.(fn.name, args)
+        this.emit?.onToolEnd?.(fn.name, gate)
+        messages.push({
+          role: 'tool',
+          content: gate.ok ? (gate.content || '') : `工具错误: ${gate.error || '无权调用'}`,
+          tool_call_id: tc.id,
+        })
+        return
+      }
+
       this.emit?.onToolStart?.(fn.name, args)
 
       const hookCtx: any = {
@@ -735,6 +785,16 @@ export class ReActEngine {
           messages.push({
             role: 'tool',
             content: `🔐 ${tc.function.name} 需要审批: ${guardResult.summary}`,
+            tool_call_id: tc.id,
+          })
+          continue
+        }
+        // 角色硬闸门（并行路径）：无权工具直接回 ok:false，不进执行批次
+        const gate = checkRoleGate(this.config.personaId, tc.function.name)
+        if (gate) {
+          messages.push({
+            role: 'tool',
+            content: gate.ok ? (gate.content || '') : `工具错误: ${gate.error || '无权调用'}`,
             tool_call_id: tc.id,
           })
           continue

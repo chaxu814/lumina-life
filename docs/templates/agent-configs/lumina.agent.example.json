@@ -1,0 +1,33 @@
+{
+  "id": "lumina",
+  "name": "Lumina",
+  "role": "boss",
+  "enabled": true,
+  "llm": {
+    "provider": "lmstudio",
+    "model": "your-model-name",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "apiKey": "",
+    "maxContextTokens": 131072,
+    "timeout": 600,
+    "temperature": 0.7,
+    "topP": 0.9
+  },
+  "tools": {
+    "whitelist": [],
+    "blacklist": [],
+    "approvalLevel": "auto"
+  },
+  "social": {
+    "ttsVoice": "zh-CN-XiaoxiaoNeural",
+    "mood": 0.3,
+    "energy": 0.7,
+    "affinity": 0.5
+  },
+  "paths": {
+    "chats": "chats.json",
+    "jobs": "jobs.json",
+    "memory": "memory",
+    "dialog": "dialog"
+  }
+}

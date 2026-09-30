@@ -54,6 +54,14 @@ export interface ApiConfig {
   port: number
   host: string
   apiKey: string | null
+  /**
+   * 允许的浏览器 Origin 白名单（CORS）。
+   * - 缺省：仅本机 http://127.0.0.1:<port> 与 http://localhost:<port>
+   * - 传入 '*'：完全放开（仅在你明确知道风险时使用）
+   * - 未命中白名单的 Origin 不会回显 ACAO，浏览器侧即被拦截；
+   *   无 Origin 的请求（curl / 命令行）不受影响，照常放行。
+   */
+  allowedOrigins?: string[]
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
@@ -153,6 +161,21 @@ export class ApiServer {
 
   constructor(config?: Partial<ApiConfig>) {
     this.config = { ...DEFAULT_API_CONFIG, ...config }
+    // CORS 白名单解析优先级：显式传入 > 环境变量 LUMINA_API_ALLOWED_ORIGINS > 本机默认
+    if (!this.config.allowedOrigins || this.config.allowedOrigins.length === 0) {
+      const envOrigins = process.env.LUMINA_API_ALLOWED_ORIGINS
+      if (envOrigins && envOrigins.trim()) {
+        this.config.allowedOrigins = envOrigins
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      } else {
+        this.config.allowedOrigins = [
+          `http://127.0.0.1:${this.config.port}`,
+          `http://localhost:${this.config.port}`,
+        ]
+      }
+    }
   }
 
   get port(): number { return this.config.port }
@@ -203,10 +226,8 @@ export class ApiServer {
   // ── 请求处理 ─────────────────────────────────────────
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    // CORS 头
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization')
+    // CORS 头（按白名单策略生成）
+    this.applyCors(req, res)
 
     // OPTIONS 预检
     if (req.method === 'OPTIONS') {
@@ -248,6 +269,29 @@ export class ApiServer {
 
     // 404
     this.json(res, 404, { error: `未找到路由: ${req.method} ${pathname}` })
+  }
+
+  // ── CORS：按白名单回显 Origin，未命中则不回显 ACAO ─────
+  private applyCors(req: http.IncomingMessage, res: http.ServerResponse): void {
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization')
+
+    // 无 Origin（curl / 命令行 / 非浏览器）：不设置 ACAO，请求照常处理
+    const origin = req.headers.origin as string | undefined
+    if (!origin) {return}
+
+    const allowed = this.config.allowedOrigins || []
+    if (allowed.includes('*')) {
+      // 仅当用户显式配置 '*' 时才完全放开
+      res.setHeader('Access-Control-Allow-Origin', '*')
+      return
+    }
+    if (allowed.includes(origin)) {
+      // 命中白名单：回显具体 Origin，并提示缓存方按 Origin 区分
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Vary', 'Origin')
+    }
+    // 未命中：不设置 ACAO，浏览器侧会拦截该跨域响应
   }
 
   private authenticate(req: http.IncomingMessage): boolean {
