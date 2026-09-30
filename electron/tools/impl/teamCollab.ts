@@ -57,6 +57,82 @@ function allRoleIds(): string[] {
 const VALID_ROLES = () => Object.keys(ROLE_SPECS) as WorkerRole[]
 
 // ═══════════════════════════════════════════════════════════
+//  worker 结果回灌：截断必须留痕，空结果必须算失败
+//
+//  为什么这两件事必须一起做：
+//  子 agent 产出 4000 字、主 agent 只拿到前 1500 字却不知道被切过，
+//  模型就会把半截当成「已经查全了」的结论去回答用户 —— 这是最隐蔽的一种答错：
+//  它不会报错、看不出异常，只是结论缺了后半截。
+//  反过来，0 成功时回灌 ok:true +「0/6 成功」，模型极易读成
+//  「已经查过了，确实没有相关内容」，于是编一个自信的否定结论。
+//  静默截断 + 静默成功，是同一个毛病的两个方向。
+// ═══════════════════════════════════════════════════════════
+
+/** 单个 worker 结果回灌给主 agent 的字数上限 */
+export const WORKER_RESULT_MAX_CHARS = 1500
+
+/** 截断标记文案（单测与上层展示都依赖这个语义，不要随意改写） */
+export const WORKER_TRUNCATION_MARK = '已截断'
+
+/** 截断但显式标注：告诉主 agent「这是节选，不是全文」 */
+export function truncateWorkerResult(raw: string, max = WORKER_RESULT_MAX_CHARS): string {
+  const text = String(raw || '')
+  if (text.length <= max) {return text}
+  return `${text.slice(0, max)}\n…（${WORKER_TRUNCATION_MARK}，完整共 ${text.length} 字）`
+}
+
+/** hire 工具回灌结果的最小结构（避开 JobResult 全量字段，方便单测构造） */
+export interface HireResultItem {
+  role: string
+  name: string
+  title: string
+  ok: boolean
+  result?: string
+  error?: string
+  worktreeMerged?: boolean
+}
+
+/**
+ * 拼装 hire_worker 的 ToolResult。
+ *
+ * 判定规则：没有任何一条「成功」结果里带文本 → 走 fail。
+ * 「0/6 成功」对模型来说是合法但无信息量的输出，必须显式升级成错误，
+ * 否则主 agent 会自己脑补一个「查过了没有」的结论。
+ */
+export function formatHireResult(
+  results: HireResultItem[],
+  alive: number,
+  iconOf: (role: string) => string,
+  maxChars = WORKER_RESULT_MAX_CHARS,
+): ToolResult {
+  const succeeded = results.filter(r => r.ok).length
+  const usable = results.filter(r => r.ok && String(r.result || '').trim().length > 0).length
+
+  const summary = results.map((r, i) => {
+    const head = `${i + 1}. ${iconOf(r.role)} ${r.name}「${r.title}」${r.ok ? '✅' : '❌'}${r.worktreeMerged ? ' 🔀已合并' : ''}`
+    let body: string
+    if (!r.ok) {
+      body = `失败：${r.error}`
+    } else if (!String(r.result || '').trim()) {
+      body = '⚠️ worker 未产出任何文本（空回复，不能当作查到了内容）'
+    } else {
+      body = truncateWorkerResult(String(r.result || ''), maxChars)
+    }
+    return `${head}\n${body}`
+  }).join('\n\n')
+
+  if (usable === 0) {
+    return fail(
+      `worker 未产出任何文本（${succeeded}/${results.length} 成功但无有效内容，${alive} 位留场）。\n\n${summary}\n\n`
+      + '⚠️ 这不代表「查过了、确实没有相关内容」，而是没有拿到任何内容。'
+      + '请改用其他方式获取信息，不要把空结果当成结论回复用户。',
+    )
+  }
+
+  return ok(`👷 并行雇佣 ${results.length} 位 worker 完成（${succeeded}/${results.length} 成功，${alive} 位留场）：\n\n${summary}`)
+}
+
+// ═══════════════════════════════════════════════════════════
 // team_message
 // ═══════════════════════════════════════════════════════════
 
@@ -416,13 +492,7 @@ export async function hireWorker(args: Record<string, any>): Promise<ToolResult>
     const results = await hireAndRun(jobs, { keepAlive: !!args.keep_alive })
     const mdRegistry = getAgentMarkdownRegistry()
     const iconOf = (role: string) => ROLE_SPECS[role]?.icon || mdRegistry.get(role)?.icon || '👷'
-    const summary = results.map((r, i) => {
-      const head = `${i + 1}. ${iconOf(r.role)} ${r.name}「${r.title}」${r.ok ? '✅' : '❌'}${r.worktreeMerged ? ' 🔀已合并' : ''}`
-      const body = r.ok ? String(r.result || '').slice(0, 1500) : `失败：${r.error}`
-      return `${head}\n${body}`
-    }).join('\n\n')
-    const alive = listDynamicWorkers().length
-    return ok(`👷 并行雇佣 ${jobs.length} 位 worker 完成（${results.filter(r => r.ok).length}/${jobs.length} 成功，${alive} 位留场）：\n\n${summary}`)
+    return formatHireResult(results, listDynamicWorkers().length, iconOf)
   } catch (e: any) {
     return fail(`雇佣 worker 失败: ${e?.message || e}`)
   }

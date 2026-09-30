@@ -31,12 +31,103 @@ import {
 
 // ── 三层记忆类型 ────────────────────────────────────────
 
+// ── 事实来源强度（防幻觉固化）────────────────────────────
+//
+// 为什么要有这一层：记忆被污染比记不住更危险。
+// 旧实现里模型只要调一次 memory_save，就写进 confidence=1.0 / source='user_said'，
+// 之后 memory_get 把「(100%)」原样喂回模型，于是这一次编造被当成权威事实反复召回，
+// 每轮都在加固，且没有任何纠正路径。
+//
+// 现在的规矩：
+//   1. 事实的权威性只由 source（谁说的）决定，不由调用方随手传的 confidence 决定；
+//   2. 外部传入的 confidence 一律按 source 上限 clamp，不允许越界；
+//   3. 低置信度（<0.8）条目在展示时必须带「未验证」标注；
+//   4. 写入按内容指纹去重，更高置信度的说法覆盖旧记录（唯一的纠正路径）。
+
+/** 事实来源枚举：来源强度 = 置信度上限 */
+export type FactSource = 'user_stated' | 'user_confirmed' | 'model_inferred'
+
+/** 各来源的置信度上限与缺省值 */
+export const SOURCE_CONFIDENCE: Record<FactSource, { cap: number; default: number; label: string }> = {
+  user_confirmed: { cap: 1.0, default: 1.0, label: '用户确认过' },
+  user_stated: { cap: 0.95, default: 0.95, label: '用户亲口说过' },
+  model_inferred: { cap: 0.6, default: 0.6, label: '模型推断，未验证' },
+}
+
+/** 低于此值的记忆视为「未验证」，展示时必须带标注 */
+export const UNVERIFIED_CONFIDENCE = 0.8
+
+/** 旧数据（无 source / 老枚举值）一律按 user_said 处理，但置信度上限压到 0.9 —— 不给老数据 100% 的权威 */
+export const LEGACY_CONFIDENCE_CAP = 0.9
+
+/** memory_save 未声明来源时的缺省来源：模型自己说的，不确定性最高 */
+export const DEFAULT_FACT_SOURCE: FactSource = 'model_inferred'
+
+/** 旧枚举 → 新枚举（用于调用方/LLM 传来的 source 归一化；DB 里的旧行不改写，只降权） */
+const LEGACY_SOURCE_ALIAS: Record<string, FactSource> = {
+  user_said: 'user_stated',    // 老代码把模型输出也标成 user_said，这里按「用户说的」理解
+  observed: 'model_inferred',  // 模型自称观察到，但没有独立验证
+  inferred: 'model_inferred',
+}
+
+/** 归一化 source：未知/缺失一律降级为 model_inferred（最保守，宁可标未验证也不给权威） */
+export function normalizeFactSource(raw?: string | null): FactSource {
+  const s = (raw || '').trim()
+  if (s in SOURCE_CONFIDENCE) { return s as FactSource }
+  return LEGACY_SOURCE_ALIAS[s] || DEFAULT_FACT_SOURCE
+}
+
+/** 解析一条（可能是旧数据的）source，返回其置信度上限 */
+export function resolveSourceCap(raw?: string | null): number {
+  const s = (raw || '').trim()
+  return (s in SOURCE_CONFIDENCE) ? SOURCE_CONFIDENCE[s as FactSource].cap : LEGACY_CONFIDENCE_CAP
+}
+
+/** 把外部传入的 confidence 压进 [0, cap]：只允许往低调，不允许往高调 */
+export function clampConfidence(value: number | null | undefined, cap: number): number {
+  const v = typeof value === 'number' && Number.isFinite(value) ? value : cap
+  return Math.max(0, Math.min(v, cap))
+}
+
+/** 落库前把 confidence 按 source 上限收敛 */
+export function resolveConfidence(source: string | null | undefined, requested?: number | null): number {
+  return clampConfidence(requested, resolveSourceCap(source))
+}
+
+/**
+ * 内容归一化（写入去重用的指纹原料）：全角转半角、转小写、去空白与标点。
+ * 为什么：同一句幻觉换个标点/大小写再写一遍，不该变成「两条互相印证的事实」。
+ */
+export function normalizeFactContent(content: string): string {
+  return (content || '')
+    .replace(/[\uff01-\uff5e]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)) // 全角 → 半角
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]/gu, '') // 只保留字母与数字（\p{Letter} 含中日韩汉字）
+}
+
+/** 内容指纹：category + 归一化内容，作为同一条事实的身份 */
+export function factContentKey(category: string, content: string): string {
+  return `${category}\u0001${normalizeFactContent(content)}`
+}
+
+/**
+ * 给事实内容加「未验证」标注（低置信度）或置信度百分比（高置信度）。
+ * 为什么要标：模型看到 (60%) 不会当权威，看到一句干净的事实会。
+ */
+export function markUnverifiedFact(content: string, fact: { confidence?: number | null }): string {
+  const conf = typeof fact.confidence === 'number' && Number.isFinite(fact.confidence) ? fact.confidence : 0
+  const pct = Math.round(conf * 100)
+  if (conf < UNVERIFIED_CONFIDENCE) { return `${content}【未验证·模型推断，置信度 ${pct}%】` }
+  return `${content}（${pct}%）`
+}
+
 export interface FactEntry {
   id: number
   category: string  // 'user' | 'environment' | 'event' | 'preference' | 'habit' | 'agent_memory'
   content: string
-  confidence: number  // 0-1, 事实确信度
-  source: string      // 来源: 'user_said' | 'observed' | 'inferred' | 'agent_tool'
+  confidence: number  // 0-1, 事实确信度（写入时已按 source 上限 clamp）
+  /** 来源: 'user_stated' | 'user_confirmed' | 'model_inferred'（旧数据可能是 'user_said'/'observed'/'inferred'/'agent_tool' 等历史值） */
+  source: string
   timestamp: string
 }
 
@@ -177,6 +268,54 @@ export class MemoryStore {
 
     // 迁移：扩展 facts.category 约束以支持 agent_memory
     this.migrateFactsCategory()
+    // 迁移：facts 加上来源可信度策略（新增列 + 旧数据降权）
+    this.migrateFactProvenance()
+  }
+
+  /**
+   * 迁移：facts 事实可信度策略
+   *
+   * 只用 `ALTER TABLE ... ADD COLUMN`（不删列、不重建表），老库原地升级，不丢任何历史行。
+   *   1. content_key / hit_count：内容指纹列，写入去重 + 纠正覆盖靠它
+   *   2. source 为空的旧行回填 'user_said'（按用户亲口说的处理，但不因此给 100% 权威）
+   *   3. 旧来源（不在新枚举里）的行，置信度一律压到 ≤ 0.9
+   *      —— 老版本里模型幻觉被写成 1.0 是普遍现象，迁移后它们至少会带上「未验证」标注
+   * 注意：这里不动已经符合新枚举的行（user_confirmed 的 1.0 不受影响）。
+   */
+  private migrateFactProvenance(): void {
+    try {
+      const cols = this.db.prepare("PRAGMA table_info(facts)").all() as Array<{ name: string }>
+      const names = new Set(cols.map(c => c.name))
+      if (!names.has('content_key')) { this.db.exec('ALTER TABLE facts ADD COLUMN content_key TEXT') }
+      if (!names.has('hit_count')) { this.db.exec('ALTER TABLE facts ADD COLUMN hit_count INTEGER DEFAULT 0') }
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_facts_content_key ON facts(content_key)')
+
+      // 旧行没有 source → 按 user_said 处理
+      this.db.prepare("UPDATE facts SET source='user_said' WHERE source IS NULL OR TRIM(source)=''").run()
+
+      // 旧来源的置信度降权（只压旧来源，新枚举里 user_confirmed 本来就可以是 1.0）
+      const legacyList = Object.keys(SOURCE_CONFIDENCE).map(s => `'${s}'`).join(',')
+      this.db.prepare(
+        `UPDATE facts SET confidence=? WHERE (confidence IS NULL OR confidence > ?)
+         AND (source IS NULL OR TRIM(source)='' OR source NOT IN (${legacyList}))`
+      ).run(LEGACY_CONFIDENCE_CAP, LEGACY_CONFIDENCE_CAP)
+
+      // 回填内容指纹（限量 5000 条，避免大库一次性全表扫）
+      const rows = this.db.prepare(
+        'SELECT id, category, content FROM facts WHERE content_key IS NULL LIMIT 5000'
+      ).all() as Array<{ id: number; category: string; content: string }>
+      if (rows.length > 0) {
+        const upd = this.db.prepare('UPDATE facts SET content_key=? WHERE id=?')
+        for (const r of rows) { upd.run(factContentKey(r.category, r.content), r.id) }
+        console.log(`[MemoryStore] facts 迁移：回填 ${rows.length} 条内容指纹`)
+      }
+
+      const capped = (this.db.prepare('SELECT COUNT(*) as c FROM facts WHERE confidence > ?').get(LEGACY_CONFIDENCE_CAP) as { c: number }).c
+      if (capped > 0) { console.log(`[MemoryStore] facts 迁移：${capped} 条旧数据的置信度已压到 ≤ ${LEGACY_CONFIDENCE_CAP}`) }
+    } catch (err) {
+      // 迁移失败不能拖垮记忆系统：退化到「读时 clamp」，仍能防止 100% 幻觉
+      console.error('[MemoryStore] facts 来源/置信度迁移失败:', err)
+    }
   }
 
   /** 将旧 facts 表（5类）迁移为允许 agent_memory 的新表 */
@@ -311,30 +450,115 @@ export class MemoryStore {
   // ── Layer 1: 事实记忆 (Facts) ──────────────────────────
 
   /**
-   * 添加一条事实记忆
-   * @param fact - 分类、内容、确信度、来源（不含 id 和 timestamp，由系统自动生成）
-   * @returns 新事实的数据库 ID
+   * 添加一条事实记忆（带来源可信度策略：去重 + 纠正覆盖 + confidence clamp）
+   *
+   * 规则：
+   *   - confidence 一律按 source 上限 clamp，调用方传 1.0 也只能往下压
+   *   - 同内容（归一化后）重复写入不产生新行，只累加 hit_count：重复调用不等于多一次验证
+   *   - 同内容但 confidence 更高 → 覆盖旧记录（这是唯一的纠正路径，不让两条矛盾事实并存）
+   * @param fact - 分类、内容、来源（可选，默认 model_inferred）、确信度（可选，会被 clamp）
+   * @returns 该事实的数据库 ID（新建或被复用/覆盖的那条）
    */
-  addFact(fact: Omit<FactEntry, 'id' | 'timestamp'>): number {
+  addFact(fact: { category: string; content: string; confidence?: number; source?: string }): number {
     const ts = new Date().toISOString()
-    return this.db.prepare(
-      'INSERT INTO facts (category, content, confidence, source, created_at) VALUES (?,?,?,?,?)'
-    ).run(fact.category, fact.content, fact.confidence ?? 1.0, fact.source || 'user_said', ts).lastInsertRowid as number
+    const source = (fact.source || '').trim() || DEFAULT_FACT_SOURCE
+    const confidence = resolveConfidence(source, fact.confidence)
+    const contentKey = factContentKey(fact.category, fact.content)
+
+    // 去重：同 category + 同归一化内容视为同一条事实
+    const existing = this.db.prepare(
+      'SELECT id, confidence FROM facts WHERE content_key=? ORDER BY confidence DESC, id DESC LIMIT 1'
+    ).get(contentKey) as { id: number; confidence: number } | undefined
+
+    if (existing) {
+      const oldConfidence = typeof existing.confidence === 'number' ? existing.confidence : 0
+      if (confidence > oldConfidence + 1e-9) {
+        // 纠正路径：更强的说法覆盖旧记录
+        this.db.prepare(
+          'UPDATE facts SET content=?, confidence=?, source=?, created_at=?, content_key=? WHERE id=?'
+        ).run(fact.content, confidence, source, ts, contentKey, existing.id)
+      } else {
+        // 同样强或更弱：只记一次命中，不改内容（避免同一幻觉被反复加固）
+        this.db.prepare('UPDATE facts SET hit_count=COALESCE(hit_count,0)+1 WHERE id=?').run(existing.id)
+      }
+      return existing.id
+    }
+
+    const r = this.db.prepare(
+      'INSERT INTO facts (category, content, confidence, source, created_at, content_key, hit_count) VALUES (?,?,?,?,?,?,0)'
+    ).run(fact.category, fact.content, confidence, source, ts, contentKey)
+    return r.lastInsertRowid as number
   }
 
-  getFacts(category?: string, limit = 20): FactEntry[] {
-    const sql = category
-      ? 'SELECT * FROM facts WHERE category=? ORDER BY id DESC LIMIT ?'
-      : 'SELECT * FROM facts ORDER BY id DESC LIMIT ?'
-    const params = category ? [category, limit] : [limit]
-    return (this.db.prepare(sql).all(...params) as any[]).map(r => ({
+  /** 读取时再 clamp 一次：即使有绕过 addFact 的裸写入，也不会把 100% 的幻觉放出去 */
+  private static toFactEntry(r: any): FactEntry {
+    const source = (r.source as string) || 'user_said'
+    return {
       id: r.id as number,
       category: r.category,
       content: r.content,
-      confidence: r.confidence,
-      source: r.source,
+      confidence: resolveConfidence(source, r.confidence),
+      source,
       timestamp: r.created_at,
-    }))
+    }
+  }
+
+  /**
+   * 读取事实。
+   *
+   * 排序必须是 confidence DESC 优先、id DESC 次之：
+   * 上一轮加了置信度分级（模型推断 ≤60%、用户亲口 95%），但排序还停在 id DESC，
+   * 结果是「越新的越权威」——上周模型编的一条（id 大、confidence 0.6）
+   * 永远压过用户今天亲口确认的那条（id 小、confidence 0.95），
+   * 分级只体现在展示文案上，根本没参与召回顺序，等于白做。
+   *
+   * COALESCE(confidence, LEGACY_CONFIDENCE_CAP)：旧行可能是 NULL，
+   * SQLite 里 DESC 会把 NULL 排在最前面（正好是最不该被召回的位置），
+   * 兜底值取 LEGACY_CONFIDENCE_CAP，与 toFactEntry 里的读取归一化保持一致。
+   */
+  getFacts(category?: string, limit = 20): FactEntry[] {
+    const order = `ORDER BY COALESCE(confidence, ${LEGACY_CONFIDENCE_CAP}) DESC, id DESC`
+    const sql = category
+      ? `SELECT * FROM facts WHERE category=? ${order} LIMIT ?`
+      : `SELECT * FROM facts ${order} LIMIT ?`
+    const params = category ? [category, limit] : [limit]
+    return (this.db.prepare(sql).all(...params) as any[]).map(r => MemoryStore.toFactEntry(r))
+  }
+
+  /**
+   * 纠正一条事实：写新说法 + 把被纠正的旧条目降权。
+   *
+   * 为什么必须有纠正入口：memory_save 只有「新增」，没有「这条是错的」。
+   * 于是模型上周编的结论会一直躺在库里，用户今天当面纠正之后，
+   * 旧条目不但还在，还因为 id 更大而排在前面被反复召回 —— 越纠正越错。
+   *
+   * 降权而不是物理删除：删了就查不到「当初为什么记了这条」，
+   * 而且用户哪天重新认可旧说法时（source 足够强）还能通过 addFact 升回来。
+   * 旧的 content 不动，只把置信度压到底、来源标成已被取代，
+   * 展示时就会自动落到「未验证」档（见 markUnverifiedFact）并排在最后。
+   */
+  correctFact(
+    id: number,
+    fact: { category: string; content: string; source?: string; confidence?: number },
+  ): { ok: boolean; newId: number; demoted: number[]; reason?: string } {
+    const old = this.db.prepare('SELECT id FROM facts WHERE id=?').get(id) as { id: number } | undefined
+    if (!old) {
+      // 找不到就退化成新增：纠正失败不该让这次保存整个丢掉
+      const newId = this.addFact(fact)
+      return { ok: false, newId, demoted: [], reason: `未找到 id=${id} 的事实，已作为新记忆保存` }
+    }
+
+    const newId = this.addFact(fact)
+
+    const demoted: number[] = []
+    // 新旧内容相同 → addFact 已在原条目上升级置信度，不需要降权
+    if (newId !== id) {
+      this.db.prepare(
+        "UPDATE facts SET confidence=0.05, source='superseded', created_at=? WHERE id=?",
+      ).run(new Date().toISOString(), id)
+      demoted.push(id)
+    }
+    return { ok: true, newId, demoted }
   }
 
   /** 删除指定事实 */
@@ -354,14 +578,7 @@ export class MemoryStore {
     const rows = this.db.prepare(
       `SELECT * FROM facts WHERE content LIKE ? ORDER BY confidence DESC, id DESC LIMIT ?`
     ).all(`%${query}%`, limit) as any[]
-    return rows.map(r => ({
-      id: r.id as number,
-      category: r.category,
-      content: r.content,
-      confidence: r.confidence,
-      source: r.source,
-      timestamp: r.created_at,
-    }))
+    return rows.map(r => MemoryStore.toFactEntry(r))
   }
 
   // ── Layer 2: 反思记忆 (Reflections) ────────────────────
@@ -512,11 +729,11 @@ export class MemoryStore {
     const mem = this.getStructuredMemory()
     const parts: string[] = []
 
-    // Layer 1: 事实
+    // Layer 1: 事实（低置信度必须带「未验证」标注，否则每轮注入都会被当成权威事实）
     const factsByCategory: Record<string, string[]> = {}
     for (const f of mem.facts) {
       if (!factsByCategory[f.category]) {factsByCategory[f.category] = []}
-      factsByCategory[f.category].push(f.content)
+      factsByCategory[f.category].push(markUnverifiedFact(f.content, f))
     }
     if (Object.keys(factsByCategory).length > 0) {
       const factLines: string[] = []

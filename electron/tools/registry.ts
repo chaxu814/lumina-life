@@ -361,6 +361,43 @@ const DEFAULT_RETRY_CONFIG: Required<RetryConfig> = {
   toolTimeouts: {},
 }
 
+// ═══════════════════════════════════════════════════════════
+// 失败信号 — 「没做成」必须显式失败（ok:false）
+//
+// 为什么：以前「工具不存在 / 被安全守卫拦截 / 需用户批准」三条路径
+// 都返回 ok:true。于是这三件事会以**普通成功结果**的形式回灌给 LLM，
+// 模型分不清「工具跑通了并返回内容」和「这件事根本没发生」，
+// 很容易把「⛔ 被拦截」当事实继续推理 —— 这正是幻觉/编造的温床。
+//
+// 为什么不写 ok:true 就"不断链"：ReAct 循环会不会断，跟 ok 无关。
+// agentRunner 拿到结果后无条件 push 一条 role:'tool' 消息，然后
+// continue 下一轮（runReActLoop 里单工具分支的 push + 循环末尾
+// continue）。所以这里改 ok:false **不会**中断循环，只会让回灌给模型
+// 的文本从"看起来像结果"变成明确的失败信号。
+// ═══════════════════════════════════════════════════════════
+
+/** 交给模型的失败信号尾部：模型最容易在这里自作聪明，所以写死口径 */
+const NOT_EXECUTED_GUIDANCE =
+  '禁止据此作答，也禁止把这段内容当作事实依据继续推理；请改用可用工具重试，或直接告诉用户你做不到以及原因。'
+
+/**
+ * 构造一次「没有真的执行」的失败结果
+ *
+ * content 面向人和模型阅读（含原因 + 补救建议）；
+ * error 也重复带上「未执行 + 别当事实」这句 —— 因为 agentRunner 在
+ * ok:false 时只回灌 `工具错误: ${result.error}`，content 会被丢弃，
+ * 不写进 error 这条防幻觉提示就永远到不了模型眼前。
+ */
+function buildNotExecutedResult(reason: string, detail: string): ToolResult {
+  return {
+    callId: '',
+    ok: false,
+    content: `⛔ 未执行成功（原因：${reason}）。以下是失败说明，不是结果。${NOT_EXECUTED_GUIDANCE}\n\n${detail}`,
+    error: `未执行成功（原因：${reason}）。${NOT_EXECUTED_GUIDANCE}`,
+    durationMs: 0,
+  }
+}
+
 /**
  * 带超时和重试的工具执行
  *
@@ -380,15 +417,12 @@ export async function executeToolWithRetry(
 ): Promise<ToolResult> {
   const cfg = { ...DEFAULT_RETRY_CONFIG, ...config }
 
-  // 工具不存在 → 返回 ok:true 含引导内容，避免 ReAct 循环中 LLM 反复重试
+  // 工具不存在 → 显式失败，避免 LLM 把「换一个工具」的引导语当成执行结果
   if (!toolImplementations.has(name)) {
-    const knownSearch = ['web_search', 'browser', 'web_fetch'].join(' / ')
-    return {
-      callId: '',
-      ok: true,
-      content: `⚠️ 工具 **${name}** 不存在。请改用以下搜索工具之一:\n- web_search(query="...") — Bing 搜索\n- browser(action="search", query="...") — 浏览器搜索\n- web_fetch(url="...") — 抓取网页内容`,
-      durationMs: 0,
-    }
+    return buildNotExecutedResult(
+      `工具 "${name}" 不存在`,
+      `本次调用完全没有发生。可改用以下搜索工具之一:\n- web_search(query="...") — Bing 搜索\n- browser(action="search", query="...") — 浏览器搜索\n- web_fetch(url="...") — 抓取网页内容`,
+    )
   }
 
   // 安全检查 — 集成 SecurityGuard 对危险操作进行检测和拦截
@@ -400,21 +434,17 @@ export async function executeToolWithRetry(
       if (!guardResult.allowed) {
         const reasons = guardResult.findings.map(f => `  [${f.severity}] ${f.title}: ${f.description}`).join('\n')
         console.warn(`[SecurityGuard] ⛔ 拦截危险操作 "${name}":\n${reasons}`)
-        return {
-          callId: '',
-          ok: true,  // ok=true 让 ReAct 继续而不断链
-          content: `⛔ 操作已被安全守卫拦截: ${name}\n\n原因:\n${reasons}\n\n请调整操作参数后重试。`,
-          durationMs: 0,
-        }
+        return buildNotExecutedResult(
+          `操作被安全策略拦截（${name}）`,
+          `拦截原因:\n${reasons}\n\n请调整操作参数后重试。`,
+        )
       }
       if (guardResult.requiresApproval) {
         const reasons = guardResult.findings.map(f => `  [${f.severity}] ${f.title}`).join('\n')
-        return {
-          callId: '',
-          ok: true,
-          content: `⚠️ 该操作需要用户确认: ${name}\n${reasons}\n请简化为更安全的操作，或请用户手动执行。`,
-          durationMs: 0,
-        }
+        return buildNotExecutedResult(
+          `该操作需要用户批准（${name}），未获批准故未执行`,
+          `触发项:\n${reasons}\n\n请简化为更安全的操作，或请用户手动执行。`,
+        )
       }
     } catch (err) {
       // 安全检查失败不阻断工具执行（防御性编程）

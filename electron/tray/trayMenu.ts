@@ -22,6 +22,7 @@ import {
 } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { pushThemeToWindow } from '../ipc/themeIpc'
 
 // ─── 类型 ─────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ export interface TrayMenuState {
   gameEnabled: boolean
   /** 主窗口当前是否可见 */
   windowVisible: boolean
+  /** 任务工作区里已启用的定时任务数（可选；0/未提供时不显示角标） */
+  pendingTasks?: number
 }
 
 export interface TrayMenuActions {
@@ -178,10 +181,13 @@ function registerIpc(): void {
         options.actions.quit()
         break
       default:
-        break
+        return
     }
-    // 菜单项点击后关闭浮层（退出除外，退出会直接关进程）
-    if (action !== 'quit') {
+    // 开关类菜单项点了之后不关浮层，让用户当场看到状态变化（同原生托盘）
+    // 导航类点了就关；退出直接关进程。
+    if (action === 'toggle-game') {
+      pushState(menuWindow)
+    } else if (action !== 'quit') {
       hideTrayMenu()
     }
   })
@@ -195,6 +201,7 @@ function defaultState(): TrayMenuState {
     statusText: '在线',
     gameEnabled: false,
     windowVisible: true,
+    pendingTasks: 0,
   }
 }
 
@@ -272,20 +279,19 @@ export function showTrayMenu(): void {
   menuWindow.setPosition(pos.x, pos.y, false)
   menuWindow.setSize(pos.width, pos.height)
 
-  // 先刷新状态再显示，保证顶部指示器是最新的
-  menuWindow.webContents.once('did-finish-load', () => {
-    pushState(menuWindow)
-  })
-  // 如果已经加载过（复用窗口），直接推一次
-  if (menuWindow.webContents.isLoadingMainFrame() === false) {
+  // 首次加载：等 did-finish-load 再推，保证 DOM 已就绪
+  // （只在真正加载中挂 once，复用窗口时不会越堆越多）
+  if (menuWindow.webContents.isLoadingMainFrame()) {
+    menuWindow.webContents.once('did-finish-load', () => {
+      pushState(menuWindow)
+    })
+  } else {
     pushState(menuWindow)
   }
 
   menuWindow.showInactive()
   menuWindow.focus()
 }
-
-import { pushThemeToWindow } from '../ipc/themeIpc'
 
 function pushState(win: BrowserWindow | null): void {
   if (win && !win.isDestroyed()) { try { pushThemeToWindow(win) } catch { /* ignore */ } }
@@ -298,6 +304,17 @@ function pushState(win: BrowserWindow | null): void {
 export function hideTrayMenu(): void {
   if (menuWindow && !menuWindow.isDestroyed()) {
     menuWindow.hide()
+  }
+}
+
+/**
+ * 主进程状态变化时主动推一次新状态。
+ * 浮层正开着时，"显示/隐藏 Lumina" 的文案和任务数会立刻跟着变，
+ * 不用等用户关掉再打开。
+ */
+export function refreshTrayMenuState(): void {
+  if (isTrayMenuVisible()) {
+    pushState(menuWindow)
   }
 }
 

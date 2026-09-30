@@ -84,6 +84,20 @@ declare global {
       showAbout: () => void
       toggleDevTools: () => void
 
+      // 系统外部打开
+      openExternal: (url: string) => Promise<boolean>
+      openPath: (targetPath: string) => Promise<string>
+
+      // 进度看板（图1 任务板）
+      onTaskBoard: (callback: (board: any) => void) => () => void
+      getTaskBoard: () => Promise<{ ok: boolean; board: any }>
+      setTaskBoard: (board: any) => void
+
+      // 内置浏览器
+      openBrowser: (url?: string) => Promise<{ ok: boolean; error?: string }>
+      isBrowserOpen: () => Promise<{ ok: boolean; open: boolean }>
+      closeBrowserWindow: () => Promise<{ ok: boolean }>
+
       // TTS
       ttsSpeak: (params: { text: string; voice?: string; speed?: number; volume?: number }) => Promise<{ audio?: string; error?: string }>
 

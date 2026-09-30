@@ -9,6 +9,8 @@
 //   5. show 前推送最新状态；quit 动作不自动 hide（退出流程）
 // ============================================================
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
 
 // ── hoisted mocks（在 import 前可用） ──────────────────────
 const h = vi.hoisted(() => {
@@ -244,5 +246,43 @@ describe('状态推送', () => {
     const state = handle!.cb({})
     expect(state.online).toBe(true)
     expect(state.gameEnabled).toBe(false)
+  })
+})
+
+// ── 6. 静态资源：CSP 不得静默拦掉交互脚本 ─────────────────────
+//
+// 这条回归测试守的是一个「坏了也看不见」的坑：
+//   trayMenu.html 的 CSP 是 `script-src 'self'`（不放行内联脚本）。
+//   一旦有人把交互脚本「顺手」改回内联 <script>，页面照样正常渲染出菜单，
+//   但点击全部失效、状态永远停在硬编码默认值——没有报错、没有红字，
+//   表现为「功能不可用」，极难定位。
+//   所以这里直接断言：脚本必须是外部引用，且文件必须真实存在。
+describe('托盘菜单静态资源', () => {
+  const trayDir = join(__dirname, '..', 'electron', 'tray')
+  const html = readFileSync(join(trayDir, 'trayMenu.html'), 'utf-8')
+
+  it('trayMenu.html 引用外部脚本 trayMenu.ui.js，而不是内联 <script>', () => {
+    const body = html.slice(html.indexOf('<body'))
+    const inlineScripts = body.match(/<script(?![^>]*\bsrc=)[^>]*>/g)
+    expect(inlineScripts ?? []).toEqual([])
+    expect(html).toMatch(/<script\s+src="trayMenu\.ui\.js"><\/script>/)
+  })
+
+  it('外部脚本文件真实存在', () => {
+    expect(existsSync(join(trayDir, 'trayMenu.ui.js'))).toBe(true)
+  })
+
+  it('外部脚本不与 trayMenu.ts 撞名（否则 Vite 会优先解析到 .js）', () => {
+    expect(existsSync(join(trayDir, 'trayMenu.js'))).toBe(false)
+  })
+
+  it('CSS 配色走 --tm-* 私有变量，不直接用会被主题覆盖的 --text-primary', () => {
+    // 主题系统把 --text-primary 等以 inline style 注入 <html>，优先级高于 :root。
+    // 菜单直接消费它们会被浅色主题改成深色字糊在深色卡片上。
+    expect(html).toContain('--tm-text:')
+    const styleBlock = html.slice(html.indexOf('<style'), html.indexOf('</style>'))
+    // 只允许出现在 --tm-* 的定义里（var(--text-primary 作为取值）
+    expect(styleBlock).toMatch(/--tm-text:\s*var\(--text-primary/)
+    expect(styleBlock).not.toMatch(/color:\s*var\(--text-primary\)/)
   })
 })

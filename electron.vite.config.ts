@@ -37,6 +37,19 @@ function copyPetAssets() {
         const trayHtml = resolve(__dirname, 'electron', 'tray', 'trayMenu.html')
         if (existsSync(trayHtml)) {
           copyFileSync(trayHtml, resolve(destDir, 'trayMenu.html'))
+          // 交互脚本必须和 HTML 同目录：HTML 用 <script src="trayMenu.ui.js"> 引用，
+          // 且 CSP 是 script-src 'self'（不放行内联脚本），漏拷会导致菜单点不动。
+          // 文件名带 .ui 是为了不跟 trayMenu.ts 撞名——Vite 的 resolve.extensions
+          // 里 .js 排在 .ts 前面，同名会把 `from './tray/trayMenu'` 解析到 .js。
+          const trayUiJs = resolve(__dirname, 'electron', 'tray', 'trayMenu.ui.js')
+          if (existsSync(trayUiJs)) {
+            copyFileSync(trayUiJs, resolve(destDir, 'trayMenu.ui.js'))
+          }
+        }
+        // 内置浏览器宿主页（工具栏 + webview 容器）
+        const browserHtml = resolve(__dirname, 'electron', 'browser', 'browser.html')
+        if (existsSync(browserHtml)) {
+          copyFileSync(browserHtml, resolve(destDir, 'browser.html'))
         }
         // 拷贝 IndexTTS 服务脚本
         const pyDir = resolve(__dirname, 'python')
@@ -77,6 +90,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
           trayMenu: resolve(__dirname, 'electron/tray/trayMenuPreload.ts'),
+          browser: resolve(__dirname, 'electron/browser/browserPreload.ts'),
         }
       }
     }

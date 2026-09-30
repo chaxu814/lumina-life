@@ -10,7 +10,11 @@ import 'dotenv/config'
 import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification, dialog } from 'electron'
 import { join } from 'path'
 import { getAppIconPath, getTrayIcon } from './appIcon'
-import { createTrayMenu, showTrayMenu } from './tray/trayMenu'
+import { createTrayMenu, showTrayMenu, refreshTrayMenuState } from './tray/trayMenu'
+import { applyGameEnabledOverride, persistGameEnabled, getGameEnabled } from './tray/trayPrefs'
+import {
+  showBrowserWindow, closeBrowser, isBrowserOpen, registerBrowserIpc,
+} from './browser/browserWindow'
 
 // ── 必须在 app.whenReady 前设置 ──────────────────────
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -129,6 +133,8 @@ import { initChannelManager, getChannelManager } from './channels/channelManager
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+/** 进度看板最近一份（渲染进程拉取 + 外部推送的中转） */
+let lastTaskBoard: any = null
 
 // 桌宠模块（独立进程，Plan C 架构）
 let petModule: Awaited<typeof import('./pet/petWindow')> | null = null
@@ -211,6 +217,9 @@ function createWindow(): BrowserWindow {
     ;(globalThis as any).__luminaMainWindow = win
   })
   win.on('show', () => { ;(globalThis as any).__luminaMainWindow = win })
+  // 主窗口显隐变化时同步托盘浮层（浮层正开着就立刻改文案，否则下次打开已是最新）
+  win.on('show', () => { refreshTrayMenuState() })
+  win.on('hide', () => { refreshTrayMenuState() })
 
   win.on('close', (e) => {
     if (!isQuitting) { e.preventDefault(); win.hide() }
@@ -234,13 +243,30 @@ function createTray(): void {
 
   tray.setToolTip('Lumina Life 1.0')
 
+  /** 任务工作区角标：已启用的定时任务数 */
+  const countPendingTasks = (): number => {
+    try {
+      const { countEnabledCronEntries } = require('./tools/impl/cron')
+      return countEnabledCronEntries()
+    } catch {
+      return 0
+    }
+  }
+
   // 自定义圆角浮层托盘菜单（替代原生 setContextMenu）
-  let gameEnabled = process.env.LUMINA_GAME_ENABLED === '1' || process.env.LUMINA_GAME_ENABLED === 'true'
+  // 游戏陪伴开关以 tray-prefs.json 为准，覆盖 .env 里的默认值
+  let gameEnabled = getGameEnabled()
   createTrayMenu(tray, {
     actions: {
       toggleMainWindow: () => {
         if (!mainWindow) { return }
-        if (mainWindow.isVisible()) { mainWindow.hide() } else { mainWindow.show() }
+        if (mainWindow.isVisible()) {
+          mainWindow.hide()
+        } else {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+        refreshTrayMenuState()
       },
       openSettings: () => {
         mainWindow?.show()
@@ -253,8 +279,13 @@ function createTray(): void {
         mainWindow?.webContents.send('tray:open-task-workspace')
       },
       toggleGame: () => {
-        gameEnabled = !gameEnabled
-        process.env.LUMINA_GAME_ENABLED = gameEnabled ? '1' : '0'
+        // 落盘 + 同步 process.env：gaming 模块每次调用都现读 env，改完立即生效
+        gameEnabled = persistGameEnabled(!gameEnabled)
+        try {
+          // 延迟加载：不必让主进程启动就背上 gaming 的工具注册链
+          const { resetRouteCache } = require('./gaming/gameActions')
+          resetRouteCache()
+        } catch { /* 缓存重置失败不影响开关本身 */ }
         return gameEnabled
       },
       quit: () => {
@@ -269,6 +300,7 @@ function createTray(): void {
       statusText: mainWindow?.isVisible() ? '在线' : '已隐藏',
       gameEnabled,
       windowVisible: !!mainWindow?.isVisible(),
+      pendingTasks: countPendingTasks(),
     }),
   })
 
@@ -593,11 +625,16 @@ for (const { id } of orch.listRunners()) {
     console.warn(`[main] ⚠️ 渠道管理器启动可能失败: ${err.message}`)
   }
 
+  // 🎮 托盘拨过的游戏陪伴开关优先于 .env 默认值（必须在任何 loadGameConfig 之前）
+  try { applyGameEnabledOverride() } catch { /* 无记录或不可读，按 .env 走 */ }
+
   // 1. 窗口
   mainWindow = createWindow()
 
   // 2. 托盘 + 快捷??+ 右键菜单
   try { createTray() } catch { /* tray not available */ }
+  // 2b. 内置浏览器 IPC（工具栏页与渲染进程共用；网页本体的状态由页面回报）
+  try { registerBrowserIpc() } catch (e) { console.warn('[Browser] 注册失败（忽略）:', e) }
   // 低风险常驻内存治理（启动后/隐藏后清缓存，不影响本地资源与桌宠）
   try { scheduleMemoryTrims(() => mainWindow) } catch (e) { console.warn('[MemoryManager] 启动失败（忽略）:', e) }
   try { registerHotkeys() } catch { /* hotkeys not available */ }
@@ -638,7 +675,8 @@ for (const { id } of orch.listRunners()) {
   registerCustomAgentIpc()                                // 🤖 自定义 Agent 管理                               // 📡 v10.0: 统一 Provider IPC
   registerTeamIpc()                                   // 🆕 v2.6: AI 小团队系统 IPC
   registerTeamCollabIpc()                             // 🤝 v3.20: 信箱/任务板/动态 worker/CU 策略
-  registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
+  registerLoopIpc()                                   // 🔁 Phase 4: Loop 磁盘持久化 IPC
+
   registerThemeIpc()                                   // 🎨 theme skin ecosystem
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
   registerPlatformIpc()
@@ -978,6 +1016,51 @@ try {
       }, 300)
     }
   })
+
+  // 7c. 系统外部打开 + 进度看板
+  //
+  // 只允许 http/https/file 这类安全协议，避免把 javascript: 之类交给 shell.openExternal
+  ipcMain.handle('shell:open-external', async (_e, url: string) => {
+    try {
+      const raw = String(url || '').trim()
+      if (!/^(https?:|file:|mailto:)/i.test(raw)) {
+        return false
+      }
+      const { shell } = require('electron')
+      await shell.openExternal(raw)
+      return true
+    } catch {
+      return false
+    }
+  })
+
+  ipcMain.handle('shell:open-path', async (_e, targetPath: string) => {
+    try {
+      const { shell } = require('electron')
+      return await shell.openPath(String(targetPath || ''))
+    } catch {
+      return '打开失败'
+    }
+  })
+
+  // 进度看板：主进程持有最近一份，渲染进程可拉取；外部/CLI 也可通过 sendBoard 推
+  ipcMain.handle('task:board:get', () => ({ ok: true, board: lastTaskBoard }))
+  // 渲染进程回写（Agent 调 task_board_update 工具后）→ 同步给 CLI / 其他窗口
+  ipcMain.on('task:board:set', (_e, board: any) => {
+    lastTaskBoard = board ?? null
+  })
+
+  // 8. 🆕 内置浏览器：渲染进程（任务工作区 / 设置 / Agent 工具）打开同一个窗口
+  ipcMain.handle('browser:open', (_e, url?: string) => {
+    try {
+      showBrowserWindow(url)
+      return { ok: true }
+    } catch (err: any) {
+      return { ok: false, error: String(err?.message || err) }
+    }
+  })
+  ipcMain.handle('browser:is-open', () => ({ ok: true, open: isBrowserOpen() }))
+  ipcMain.handle('browser:close', () => { closeBrowser(); return { ok: true } })
 
   // 8. 🆕 ProactiveEngine IPC handlers
   ipcMain.handle('proactive:status', () => getProactiveEngine().getStatus())

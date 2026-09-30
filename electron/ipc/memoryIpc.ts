@@ -6,7 +6,7 @@
 import { ipcMain, app } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
-import { getMemoryStore, MemoryVectorStore } from '../memory/memoryStore'
+import { getMemoryStore, MemoryVectorStore, normalizeFactSource } from '../memory/memoryStore'
 import { getSessionManager, type SessionData } from '../sessionManager'
 import { MessageHistory, isMultimodalMessage, extractMultimodalText, type MultimodalContentItem } from '../msgHistory'
 import { ScrollContext } from '../memory/scrollContext'
@@ -49,14 +49,17 @@ export function registerMemoryIpc(): void {
 
   // ─── Memory ──────────────────────────────────────
 
-  ipcMain.handle('memory:save', (_event, params: { category: string; content: string }) => {
+  ipcMain.handle('memory:save', (_event, params: { category: string; content: string; source?: string }) => {
     const store = getMemoryStore(memoryPath)
     switch (params.category) {
       case 'preference': store.saveUserProfile({ preferences: [params.content] }); break
       case 'habit': store.saveUserProfile({ habits: [params.content] }); break
       case 'lesson': store.saveMemoryConfig({ lessons: [params.content] }); break
       case 'convention': store.saveMemoryConfig({ projectConventions: [params.content] }); break
-      case 'fact': store.addFact({ category: 'user', content: params.content, confidence: 1.0, source: 'user_said' }); break
+      // source 决定这条事实的权威性；未声明时按 model_inferred（≤60%）处理。
+      // 以前这里硬编码 confidence:1.0 / source:'user_said'，等于让前端/模型一句话
+      // 把幻觉永久固化成「100% 确定的事实」，且没有任何纠正路径。
+      case 'fact': store.addFact({ category: 'user', content: params.content, source: normalizeFactSource(params.source) }); break
       case 'reflection': store.addReflection({ topic: '会话反思', insight: params.content, action: '' }); break
       default: store.saveMemoryConfig({ systemInfo: [params.content] }); break
     }

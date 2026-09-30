@@ -463,6 +463,8 @@ const COLLAPSED_GROUPS_KEY = 'lumina_tw_collapsed_groups'
 const COLLAPSED_SECTIONS_KEY = 'lumina_tw_collapsed_sections'
 const PANEL_WIDTH_KEY = 'lumina_tw_panel_width'
 const LAST_ARTIFACT_KEY = 'lumina_tw_last_artifact'
+/** 进度看板（图1）持久化 key */
+const BOARD_KEY = 'lumina_tw_board'
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -502,7 +504,165 @@ function saveJson(key: string, value: unknown): void {
   } catch { /* 隐私模式/Node 测试环境降级 */ }
 }
 
-export type SectionKey = 'agents' | 'tools' | 'timeline' | 'artifacts'
+// ─── 类型：进度看板（图1 那种"进度 / 交付物"任务板） ────────
+
+export type BoardItemStatus = 'done' | 'active' | 'pending'
+
+/** 看板条目附带的交付物（结果） */
+export interface BoardDeliverable {
+  /** 产物类型：artifact=工作区产物, file=磁盘文件, url=链接, text=文本结果 */
+  kind: 'artifact' | 'file' | 'url' | 'text'
+  /** 展示名 */
+  label: string
+  /** file/url/text 类型的实际目标；artifact 类型指向 ArtifactItem.id */
+  ref?: string
+}
+
+export interface BoardItem {
+  id: string
+  /** 条目文案 */
+  text: string
+  status: BoardItemStatus
+  /** 完成时间（毫秒） */
+  completedAt?: number
+  /** 交付物：该条目产出的结果 */
+  deliverable?: BoardDeliverable
+}
+
+export interface TaskBoard {
+  title: string
+  items: BoardItem[]
+  updatedAt: number
+}
+
+/** 看板进度：已完成 / 总数 */
+export function boardProgress(board: TaskBoard | null): { done: number; total: number; percent: number } {
+  const items = board?.items ?? []
+  const total = items.length
+  const done = items.filter((i) => i.status === 'done').length
+  return { done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) }
+}
+
+/** 从任意数组推导看板状态：显式 status 优先，否则 done/active/pending 按位置猜 */
+export function normalizeBoardItems(raw: any[]): BoardItem[] {
+  return raw.map((r, idx) => {
+    const text = String(r?.text ?? r?.title ?? r?.task ?? '').trim()
+    let status: BoardItemStatus
+    if (r?.status === 'done' || r?.status === 'completed' || r?.done === true) {
+      status = 'done'
+    } else if (r?.status === 'active' || r?.status === 'in_progress' || r?.status === 'running') {
+      status = 'active'
+    } else if (r?.status === 'pending' || r?.status === 'todo') {
+      status = 'pending'
+    } else {
+      status = 'pending'
+    }
+    return {
+      id: String(r?.id ?? `bi-${idx}-${Math.random().toString(36).slice(2, 6)}`),
+      text,
+      status,
+      completedAt: r?.completedAt ?? (status === 'done' ? Date.now() : undefined),
+      deliverable: r?.deliverable ? {
+        kind: r.deliverable.kind ?? 'text',
+        label: String(r.deliverable.label ?? r.deliverable.ref ?? '交付物'),
+        ref: r.deliverable.ref,
+      } : undefined,
+    }
+  }).filter((i) => i.text.length > 0)
+}
+
+// ─── 类型：工具调用记录（持久，随会话保留） ────────────────
+
+/**
+ * 一次工具调用的完整记录。
+ *
+ * 为什么不直接读 agentRuntimeStore.toolTraces：
+ *   ChatPanel 在每轮对话结束时会调 `resetAgentRuntime()`，把
+ *   agentEvents / toolTraces 一次性清空。任务工作区如果依赖它，
+ *   就会在"Agent 刚干完活"的那一刻清空成"暂无工具调用"——
+ *   正是工作区一直不跟聊天联动的原因。
+ *   所以这里维护一份独立、合并过 start/end、带耗时的持久记录。
+ */
+export interface ToolCallRecord {
+  /** 唯一 ID：一次调用一个，不是按工具名去重 */
+  id: string
+  name: string
+  /** 执行方：'lumina' | 'recha' | 'yak' | 'worker' */
+  agentId: string
+  /** 所属会话 */
+  conversationId?: string
+  status: 'running' | 'done' | 'error'
+  args?: unknown
+  result?: unknown
+  error?: string
+  startedAt: number
+  endedAt?: number
+  durationMs?: number
+}
+
+/** 找到某个工具当前仍在跑的那条记录（同名并发时取最近一条） */
+export function findRunningToolCall(
+  calls: ToolCallRecord[],
+  name: string,
+  conversationId?: string | null,
+): ToolCallRecord | undefined {
+  for (let i = calls.length - 1; i >= 0; i--) {
+    const c = calls[i]
+    if (c.name === name && c.status === 'running' && (c.conversationId ?? null) === (conversationId ?? null)) {
+      return c
+    }
+  }
+  return undefined
+}
+
+/** 会话内已结束的调用是否需要丢弃（会话容量保护，避免无限增长） */
+export function pruneToolCalls(calls: ToolCallRecord[], keep = 300): ToolCallRecord[] {
+  if (calls.length <= keep) return calls
+  // 优先丢弃最旧的已结束记录，运行中的永远保留
+  const running = calls.filter((c) => c.status === 'running')
+  const finished = calls.filter((c) => c.status !== 'running')
+  const keepFinished = finished.slice(-Math.max(0, keep - running.length))
+  return [...keepFinished, ...running].sort((a, b) => a.startedAt - b.startedAt)
+}
+
+/** 「刚刚完成」的时间窗口：这段时间内卡片仍显示最近干过什么，不立刻弹回待机 */
+export const RECENT_ACTIVITY_MS = 8000
+
+/**
+ * 从持久工具调用记录派生 Agent 状态文案。
+ *
+ * 与 deriveStatusText 的区别：后者读的是 agentRuntimeStore 的瞬时 toolTraces，
+ * 每轮对话结束就被 resetAgentRuntime() 清空，工作区会瞬间全部退回"待机中"；
+ * 这里读带时间戳的持久记录，刚干完活的几秒内仍如实显示"做了什么"。
+ */
+export function deriveAgentStatusFromCalls(
+  calls: ToolCallRecord[],
+  lastThinking: string,
+  now = Date.now(),
+): { text: string; status: TaskStatus } {
+  // 运行中的工具永远优先
+  const running = calls.find((c) => c.status === 'running')
+  if (running) {
+    return { text: `执行工具 ${running.name}`, status: 'running' }
+  }
+  if (lastThinking && lastThinking.trim()) {
+    return { text: '正在思考…', status: 'running' }
+  }
+  if (calls.length > 0) {
+    const last = calls[calls.length - 1]
+    const age = now - (last.endedAt || last.startedAt)
+    if (last.status === 'error') {
+      return { text: `工具 ${last.name} 失败`, status: 'error' }
+    }
+    if (age <= RECENT_ACTIVITY_MS) {
+      return { text: `完成 ${last.name}`, status: 'done' }
+    }
+    return { text: '待机中', status: 'idle' }
+  }
+  return { text: '待机中', status: 'idle' }
+}
+
+export type SectionKey = 'agents' | 'tools' | 'timeline' | 'artifacts' | 'board'
 
 // 模块级记录最近一次同步进来的原始 Loop 列表，
 
@@ -530,6 +690,18 @@ interface TaskWorkspaceState {
   timeline: TimelineEvent[]
   addTimelineEvent: (ev: TimelineEvent) => void
   clearTimeline: (taskId?: string) => void
+
+  /** 🆕 持久工具调用记录（不随 resetAgentRuntime 清空） */
+  toolCalls: ToolCallRecord[]
+  recordToolStart: (name: string, agentId?: string, conversationId?: string | null, args?: unknown) => string
+  recordToolEnd: (name: string, ok: boolean, agentId?: string, conversationId?: string | null, result?: unknown) => void
+  clearToolCalls: (conversationId?: string) => void
+
+  /** 🆕 进度看板（图1）：任务板 + 交付物 */
+  board: TaskBoard | null
+  setBoard: (board: { title?: string; items: any[] } | null) => void
+  updateBoardItem: (id: string, patch: Partial<Omit<BoardItem, 'id'>>) => void
+  clearBoard: () => void
 
   /** 产物标签页 */
   artifacts: ArtifactItem[]
@@ -625,6 +797,100 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
   clearTimeline: (taskId) => set((s) => ({
     timeline: taskId ? s.timeline.filter((e) => e.taskId !== taskId) : [],
   })),
+
+  toolCalls: [],
+  recordToolStart: (name, agentId = 'lumina', conversationId = null, args) => {
+    const id = genId('tc')
+    set((s) => ({
+      toolCalls: pruneToolCalls([
+        ...s.toolCalls,
+        {
+          id,
+          name,
+          agentId,
+          conversationId: conversationId ?? undefined,
+          status: 'running' as const,
+          args,
+          startedAt: Date.now(),
+        },
+      ]),
+    }))
+    return id
+  },
+  recordToolEnd: (name, ok, agentId = 'lumina', conversationId = null, result) => {
+    set((s) => {
+      const running = findRunningToolCall(s.toolCalls, name, conversationId)
+      if (!running) {
+        // 没配对到 start（事件乱序/被丢弃）：补一条已结束的记录，别让调用凭空消失
+        return {
+          toolCalls: pruneToolCalls([
+            ...s.toolCalls,
+            {
+              id: genId('tc'),
+              name,
+              agentId,
+              conversationId: conversationId ?? undefined,
+              status: ok ? ('done' as const) : ('error' as const),
+              result,
+              startedAt: Date.now(),
+              endedAt: Date.now(),
+              durationMs: 0,
+            },
+          ]),
+        }
+      }
+      const endedAt = Date.now()
+      const toolCalls = [...s.toolCalls]
+      const idx = toolCalls.findIndex((c) => c.id === running.id)
+      toolCalls[idx] = {
+        ...running,
+        status: ok ? 'done' : 'error',
+        result,
+        endedAt,
+        durationMs: endedAt - running.startedAt,
+      }
+      return { toolCalls: pruneToolCalls(toolCalls) }
+    })
+  },
+  clearToolCalls: (conversationId) => set((s) => ({
+    toolCalls: conversationId
+      ? s.toolCalls.filter((c) => (c.conversationId ?? null) !== conversationId)
+      : [],
+  })),
+
+  // ── 进度看板 ──
+  board: loadJson<TaskBoard | null>(BOARD_KEY, null),
+  setBoard: (b) => {
+    if (!b || !Array.isArray(b.items) || b.items.length === 0) {
+      saveJson(BOARD_KEY, null)
+      set({ board: null })
+      return
+    }
+    const board: TaskBoard = {
+      title: b.title?.trim() || '进度',
+      items: normalizeBoardItems(b.items),
+      updatedAt: Date.now(),
+    }
+    saveJson(BOARD_KEY, board)
+    set({ board })
+  },
+  updateBoardItem: (id, patch) => set((s) => {
+    if (!s.board) return s
+    const items = s.board.items.map((i) => {
+      if (i.id !== id) return i
+      const next = { ...i, ...patch }
+      if (patch.status === 'done' && !next.completedAt) next.completedAt = Date.now()
+      if (patch.status && patch.status !== 'done') next.completedAt = undefined
+      return next
+    })
+    const board = { ...s.board, items, updatedAt: Date.now() }
+    saveJson(BOARD_KEY, board)
+    return { board }
+  }),
+  clearBoard: () => {
+    saveJson(BOARD_KEY, null)
+    set({ board: null })
+  },
 
   artifacts: [],
   activeArtifactId: typeof savedArtifactId === 'string' ? savedArtifactId : null,
@@ -772,7 +1038,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
   // ── 区块折叠 ──
   collapsedSections: (() => {
     const DEFAULT_SECTIONS: Record<SectionKey, boolean> = {
-      agents: false, tools: false, timeline: false, artifacts: false,
+      agents: false, tools: false, timeline: false, artifacts: false, board: false,
     }
     const raw = loadJson<Partial<Record<SectionKey, boolean>>>(COLLAPSED_SECTIONS_KEY, {})
     // 逐键类型校验，缺失/非法键回退默认

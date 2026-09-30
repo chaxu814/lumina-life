@@ -512,3 +512,95 @@ a:hover { text-decoration: underline; }
 [data-theme="dark"] [style*="background: #ecfeff"][style*="border-radius"] {
   filter: brightness(0.7) saturate(0.6);
 }
+
+/* ══════════════════════════════════════════════════════════
+   🧠 思考过程折叠面板 —— 展开/收起动画
+
+   用 grid-template-rows: 0fr → 1fr 做高度过渡：
+   不需要 JS 量高度，内容多高都能平滑展开（max-height 方案会失真）。
+   Electron 35 = Chromium 134，原生支持。
+   ══════════════════════════════════════════════════════════ */
+.thinking-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.thinking-collapse.open {
+  grid-template-rows: 1fr;
+}
+
+/* 内层负责裁剪：0fr 时把内容压扁并藏掉 */
+.thinking-collapse > .thinking-clip {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.thinking-collapse.open > .thinking-clip {
+  opacity: 1;
+  transform: translateY(0);
+  /* 展开时让内容稍晚一点跟上，避免和高度动画抢节奏 */
+  transition-delay: 0.06s, 0s;
+}
+
+/* 展开态里每一步的错峰入场（--i 由调用方按序号注入，最多前 8 步） */
+.thinking-collapse.open .thinking-step {
+  animation: thinkingStepIn 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  animation-delay: calc(0.05s + var(--i, 0) * 0.035s);
+}
+@keyframes thinkingStepIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* 折叠箭头：单个字形旋转，不再用 ▶/▼ 直接换字 */
+.thinking-chevron {
+  display: inline-block;
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.thinking-collapse-label-open .thinking-chevron,
+.thinking-toggle[aria-expanded="true"] .thinking-chevron {
+  transform: rotate(90deg);
+}
+
+/* 折叠标题条：hover / 展开时的反馈 */
+.thinking-toggle {
+  border-radius: 6px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.thinking-toggle:hover {
+  background: var(--surface-100);
+  color: var(--text-primary);
+}
+
+/* 运行时"正在思考"的小圆点 */
+.thinking-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  margin-right: 5px;
+  vertical-align: middle;
+  animation: thinkingLivePulse 1.4s ease-in-out infinite;
+}
+@keyframes thinkingLivePulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-collapse,
+  .thinking-collapse > .thinking-clip,
+  .thinking-chevron,
+  .thinking-toggle {
+    transition: none !important;
+  }
+  .thinking-collapse.open .thinking-step {
+    animation: none;
+  }
+  .thinking-live-dot { animation: none; opacity: 1; }
+}

@@ -6,7 +6,7 @@
 //   - 并行执行状态（parallelGroup / parallelPhase）
 //   - 自动实习生调度（autoAssignInterns）
 //   - 执行进度可视化（getProgressReport）
-//   - Yak 视角的看板概览（getYakBoardView）
+//   - Yak 视角的看板概览（getYakBoardView — 旧角色命名的遗留方法名，内容与角色无关）
 //
 // v1.0 基础能力：
 //   - 任务分解（父→子任务）
@@ -30,7 +30,7 @@ export interface TaskNode {
   projectId: string
   /** 任务标题 */
   title: string
-  /** 详细描述（给 Yak 的任务描述） */
+  /** 详细描述（给执行者/默认给热茶的任务描述） */
   description: string
   /** 状态 */
   status: TaskStatus
@@ -38,7 +38,7 @@ export interface TaskNode {
   priority: TaskPriority
   /** 依赖的任务 ID 列表（必须先完成这些） */
   dependsOn: string[]
-  /** 分配给谁 */
+  /** 分配给谁（'recha' 热茶=程序员执行 / 'yak' Yak=审查 / 'lumina' 老大） */
   assignTo: 'yak' | 'lumina' | 'recha'
   /** 🆕 v2.0: 分配给哪个实习生（intern_xxx ID，非空时表示走实习生模式） */
   assignIntern: string | null
@@ -208,7 +208,9 @@ export class TaskBoard {
       status: 'pending',
       priority: options?.priority || 'normal',
       dependsOn: options?.dependsOn || [],
-      assignTo: options?.assignTo || 'yak',
+      // ⚠️ 默认执行者是 recha（热茶，程序员）——它才是有写权限/执行权的一方。
+      //    历史上默认是 'yak'，而那时的 yak 只能读，等于默认派给了一个干不了活的角色。
+      assignTo: options?.assignTo || 'recha',
       assignIntern: options?.assignIntern ?? null,
       parallelPhase: options?.parallelPhase ?? 0,
       parallelGroup: options?.parallelGroup ?? 0,
@@ -476,7 +478,10 @@ export class TaskBoard {
   }
 
   /**
-   * 🆕 v2.0: 获取 Yak 视角的项目看板概览
+   * 🆕 v2.0: 获取「程序员视角」的项目看板概览
+   *
+   * ⚠️ 历史遗留命名：方法名 getYakBoardView 里的 "Yak" 是旧角色口径留下的，
+   * 导出名保持不变（对外 API 稳定性优先），实际内容与角色无关，纯看板渲染。
    */
   getYakBoardView(projectId: string): string {
     const project = this.projects.get(projectId)

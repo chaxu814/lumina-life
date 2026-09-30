@@ -15,23 +15,36 @@ describe('Persona allowedTools whitelist', () => {
     expect(tools).toEqual([])
   })
 
-  it('热茶 has limited read-only tools', () => {
+  // v15 角色统一：全应用为 热茶=程序员、Yak=分析/审查（原先是反的）
+  it('热茶 has full dev tools（代码工程师）', () => {
     const tools = RECHA_PERSONA.allowedTools
     expect(tools).toContain('file_read')
     expect(tools).toContain('web_search')
-    // 热茶只能审查，不写代码
-    expect(tools).not.toContain('shell_exec')
-    expect(tools).not.toContain('file_write')
+    expect(tools).toContain('shell_exec')
+    expect(tools).toContain('file_write')
+    expect(tools).toContain('file_edit')
+    // 只写代码不提交 git
     expect(tools).not.toContain('git_commit')
   })
 
-  it('Yak has full dev tools', () => {
+  it('Yak has limited read-only tools（审查员）', () => {
     const tools = YAK_PERSONA.allowedTools
-    expect(tools).toContain('shell_exec')
     expect(tools).toContain('file_read')
-    expect(tools).toContain('file_write')
-    expect(tools).toContain('file_edit')
     expect(tools).toContain('web_search')
+    // Yak 只审不改
+    expect(tools).not.toContain('shell_exec')
+    expect(tools).not.toContain('file_write')
+    expect(tools).not.toContain('file_edit')
+    expect(tools).not.toContain('git_commit')
+  })
+
+  it('Yak can review without write tools（只审不改）', () => {
+    const tools = YAK_PERSONA.allowedTools
+    expect(tools).toContain('file_read')
+    expect(tools).toContain('web_search')
+    expect(tools).not.toContain('file_write')
+    expect(tools).not.toContain('file_edit')
+    expect(tools).not.toContain('shell_exec')
   })
 })
 
@@ -46,20 +59,23 @@ describe('allowedTools → disabledTools conversion', () => {
     expect(blocked).toEqual(allTools)
   })
 
-  it('热茶 has shell blocked (read-only reviewer)', () => {
+  // v15 角色统一：写入能力跟着热茶走，审查能力跟着 Yak 走
+  it('热茶 can use shell and write files（代码工程师）', () => {
     const allTools = ['shell_exec', 'file_read', 'file_write', 'web_search', 'git_commit']
     const blocked = computeDisabled(RECHA_PERSONA.allowedTools, allTools)
-    expect(blocked).toContain('shell_exec')
-    expect(blocked).toContain('file_write')
-    expect(blocked).toContain('git_commit')
-    expect(blocked).not.toContain('file_read')
-    expect(blocked).not.toContain('web_search')
-  })
-
-  it('Yak can use shell and file tools', () => {
-    const allTools = ['shell_exec', 'file_read', 'file_write', 'web_search', 'browser']
-    const blocked = computeDisabled(YAK_PERSONA.allowedTools, allTools)
     expect(blocked).not.toContain('shell_exec')
     expect(blocked).not.toContain('file_read')
+    expect(blocked).not.toContain('file_write')
+    // 不代替用户提交 git
+    expect(blocked).toContain('git_commit')
+  })
+
+  it('Yak has shell and write tools blocked（只审不改）', () => {
+    const allTools = ['shell_exec', 'file_read', 'file_write', 'web_search', 'browser']
+    const blocked = computeDisabled(YAK_PERSONA.allowedTools, allTools)
+    expect(blocked).toContain('shell_exec')
+    expect(blocked).toContain('file_write')
+    expect(blocked).not.toContain('file_read')
+    expect(blocked).not.toContain('web_search')
   })
 })

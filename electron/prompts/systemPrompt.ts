@@ -201,6 +201,121 @@ export const CHAT_MODE_TOOLS: string[] = [
 ]
 
 // ═══════════════════════════════════════════════════════════
+// 🧷 事实纪律（v10.6）— 与人格彻底解耦的"不可剥离底线"
+//
+// 为什么要有这一段：
+//   旧版把"不编造 / 标注来源 / 委托结果必须完整呈现"写在 AGENTS.md 的
+//   `## ✨ 你的风格` 里，而群聊（skipSoul=true）会把整段人格连同这些底线一起剥掉
+//   —— 于是群聊成了全应用唯一没有反幻觉约束的地方（有纪律，没底线）。
+//   所以事实纪律必须独立成段、放在人格风格之前，并且不参与任何剥离逻辑。
+//
+// 注意：AGENTS.md 模板文件由别的模块维护，这里是唯一的代码兜底来源；
+//   若模板里已经写了本段（`## 🧷 事实纪律`），直接信任模板，不重复注入。
+// ═══════════════════════════════════════════════════════════
+
+/** 人格风格段的标题识别（模板可能带后缀，所以用"包含"而不是全等） */
+const PERSONA_HEADING_RE = /^##\s+.*你的风格/
+/** 真正的二级标题：`## ` 开头且第三个字符不是 `#`（否则 `### 子标题` 会被误判成段落结束） */
+const H2_RE = /^##\s+[^#]/
+/** 本段的固定标题，用于幂等判定 */
+const FACT_DISCIPLINE_HEADING = '## 🧷 事实纪律'
+
+/**
+ * 旧模板里混在 `## ✨ 你的风格` 中的三条事实纪律（两个 AGENTS.md 版本的措辞略有差异，
+ * 这里只匹配行首的稳定关键词）。
+ * 为什么要在代码里"删"它们：需求是"挪走"而不是"复制"——
+ * 两处同时出现会变成两份互相重复的指令，后面谁改一处就会和另一处对不上。
+ */
+const LEGACY_FACT_DISCIPLINE_RES: RegExp[] = [
+  /^[-*]\s.*标注来源/,                    // 搜索结果用自己的话概括，标注来源
+  /^[-*]\s.*不编造/,                      // 不确定就说「这部分信息不够确定」，不编造
+  /^[-*]\s.*团队委托结果必须完整呈现给用户/, // 团队委托结果必须完整呈现给用户！
+]
+
+/** 五条底线，顺序即优先级。数组最后留一个空行，保证注入后 Markdown 段落边界完整 */
+const FACT_DISCIPLINE_LINES: string[] = [
+  FACT_DISCIPLINE_HEADING + '（任何场景都生效，不可省略）',
+  '',
+  '这 5 条优先级高于任何人格设定：群聊、委托、闲聊、半夜、情绪低落时都照做。',
+  '',
+  '1. 不确定就明说「这部分信息不够确定」，并指出哪一部分不确定 —— 禁止编造。',
+  '2. 引用搜索结果或工具输出时必须标注来源（站点名 / 文件名 / 链接），用自己的话概括，不要整段粘贴。',
+  '3. 团队委托结果必须**完整**呈现给用户：结论、数据、依据都要讲清楚，禁止截断，禁止只说"查到了"，禁止转述成一句结论。',
+  '4. 工具或查询失败时必须如实说失败（哪个工具、报了什么错），禁止把"没查到"说成"查到了"，也不许拿旧知识补位冒充本次结果。',
+  '5. 信息不足时直接告诉用户还缺什么（缺哪项数据、需要他提供什么），禁止用看似合理的猜测填空。',
+  '',
+]
+
+/** 把连续空行压成两行：段落被摘掉后不会留下 3 个以上换行，Markdown 结构保持合法 */
+function tidyMarkdown(text: string): string {
+  return text.replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * 组装底座 prompt：注入事实纪律 + （按需）剥离人格风格段。
+ *
+ * 为什么改成逐行扫描而不是一条正则：
+ *   原来的 `/## ✨ 你的风格[\s\S]*?(?=## |$)/` 有两个隐患——
+ *   ① 它的前瞻 `## ` 会命中 `### 子标题` 里第 2 个 `#` 开始的子串，
+ *      结果只剥掉人格段的前半截，留下孤立的 `###` 和后半截人格描述；
+ *   ② 一旦有人把 `[\s\S]*?` 写成贪婪匹配，就会连同后面所有章节一起吞掉。
+ *   逐行扫描只在"真正的二级标题"处停下，剥离范围可证明有边界。
+ *
+ * @param rawBase AGENTS.md 原始内容
+ * @param opts.stripPersona 群聊场景（skipSoul）：只剥人格风格，不碰事实纪律
+ */
+function composeBasePrompt(rawBase: string, opts: { stripPersona: boolean }): string {
+  // 模板里已经写了这段（模板维护方已升级）→ 信任模板，绝不重复注入
+  const alreadyHasFactSection = rawBase.includes(FACT_DISCIPLINE_HEADING)
+
+  const lines = rawBase.split(/\r?\n/)
+  const out: string[] = []
+  let inPersona = false
+  let factInjected = alreadyHasFactSection
+
+  for (const line of lines) {
+    if (!inPersona) {
+      if (PERSONA_HEADING_RE.test(line)) {
+        inPersona = true
+        // 事实纪律插在人格风格之前：底线先于人格出现
+        if (!factInjected) {
+          out.push(...FACT_DISCIPLINE_LINES)
+          factInjected = true
+        }
+        if (!opts.stripPersona) {out.push(line)}
+        continue
+      }
+      out.push(line)
+      continue
+    }
+
+    // 人格段内：遇到真正的二级标题才结束剥离
+    if (H2_RE.test(line)) {
+      inPersona = false
+      out.push(line)
+      continue
+    }
+    if (opts.stripPersona) {continue}
+    // 非群聊场景也照样"搬"：把混在人设里的事实纪律行删掉，避免与新段重复
+    if (LEGACY_FACT_DISCIPLINE_RES.some(re => re.test(line))) {continue}
+    out.push(line)
+  }
+
+  if (!factInjected) {
+    // 模板里根本没有"你的风格"段（旧版/自定义模板）→ 仍然必须注入底线，
+    // 否则群聊剥人格时会连事实纪律一起丢掉
+    const firstH2 = out.findIndex(l => H2_RE.test(l))
+    if (firstH2 >= 0) {
+      out.splice(firstH2, 0, ...FACT_DISCIPLINE_LINES)
+    } else {
+      out.push('', ...FACT_DISCIPLINE_LINES)
+    }
+  }
+
+  return tidyMarkdown(out.join('\n'))
+}
+
+// ═══════════════════════════════════════════════════════════
 // v6.0: buildSystemPrompt — Lumina 底座 + 团队表 + 模式注入
 // ═══════════════════════════════════════════════════════════
 
@@ -259,10 +374,9 @@ export function buildSystemPrompt(
       const teamTable = getTeamStatusTable()
       base = base.replace('{{TEAM_STATUS_TABLE}}', teamTable || '（无后台团队成员）')
     }
-    // 群聊场景跳过风格部分
-    if (options?.skipSoul) {
-      base = base.replace(/## ✨ 你的风格[\s\S]*?(?=## |$)/, '')
-    }
+    // 注入事实纪律（永远保留）+ 群聊场景跳过人格风格部分
+    // 注意顺序：先注入再剥离，事实纪律位于人格段之前，因此不会被剥掉
+    base = composeBasePrompt(base, { stripPersona: !!options?.skipSoul })
     parts.push(base)
   } else {
     // 降级：旧有的按 agent 分岔
@@ -271,9 +385,8 @@ export function buildSystemPrompt(
     const teamTable = getTeamStatusTable()
     const agentsMd = loadBaseSystemPrompt()
     let base = agentsMd.replace('{{TEAM_STATUS_TABLE}}', teamTable || '（无后台团队成员）')
-    if (options?.skipSoul) {
-      base = base.replace(/## ✨ 你的风格[\s\S]*?(?=## |$)/, '')
-    }
+    // 同上：降级路径的模板同样要走 composeBasePrompt（否则这里会漏掉事实纪律）
+    base = composeBasePrompt(base, { stripPersona: !!options?.skipSoul })
     parts.push(base)
   }
 
@@ -425,7 +538,10 @@ function buildYakPrompt(config: AgentRunConfig, _options?: BuildPromptOptions): 
     return md.replace('{{SKILL_LIST}}', skillList || '（无可用技能）')
   }
   // 降级
-  return `你是 Yak 📊，专业的后台代码工程师。只写代码、修 bug，不做其他事。`
+  // 角色统一（产品已确认）：热茶 = 程序员，Yak = 数据分析师/审查员。
+  // 这里的文案只在 SOUL_YAK.md 加载失败时兜底，写反了模型会拿到相反的角色。
+  // 用"不负责编码与实现"而不是"不写代码"：避免与热茶职责里的"写代码"混词，也便于断言锁死。
+  return `你是 Yak 📊，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。`
 }
 
 /** v6.1: 热茶的 system prompt（从 SOUL_RECHA.md 加载）— 群聊时跳过角色设定 */
@@ -443,8 +559,8 @@ function buildRechaPrompt(config: AgentRunConfig, _options?: BuildPromptOptions)
     }).join('\n')
     return md.replace('{{SKILL_LIST}}', skillList || '（无可用技能）')
   }
-  // 降级
-  return `你是热茶 🍵，专业的后台审查员。只做审查、挑错，不做其他事。`
+  // 降级（角色统一：热茶 = 程序员，Yak = 数据分析师/审查员）
+  return `你是热茶 🍵，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。`
 }
 
 /**
@@ -456,7 +572,10 @@ function buildGroupChatAgentPrompt(agentId: 'yak' | 'recha'): string {
   const soulFile = agentId === 'yak' ? 'SOUL_YAK.md' : 'SOUL_RECHA.md'
   const soulMd = loadMdFile(root, soulFile)
   // 工作指引：优先用完整 SOUL（含执行/协作规则）；缺省再降级
-  const guidance = soulMd || (agentId === 'yak' ? '你是 Yak 📊，专业的后台代码工程师。' : '你是热茶 🍵，专业的后台审查员。')
+  // 降级文案与角色统一保持一致：热茶 = 程序员，Yak = 数据分析师/审查员
+  const guidance = soulMd || (agentId === 'yak'
+    ? '你是 Yak 📊，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。'
+    : '你是热茶 🍵，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。')
 
   // 🆕 常驻该 agent 的相关 SKILL workflow（像 QwenPaw 常驻 SKILL.md，而非仅委派时临时塞）
   let skillBlocks = ''

@@ -15,6 +15,19 @@ import { useTaskWorkspace, mapAgentEventToTimeline } from '../stores/taskWorkspa
 let _initialized = false
 const _unsubs: Array<() => void> = []
 
+/** 后台 runner 事件的工具调用也进「工具执行」列表 */
+function recordRunnerToolEvent(ev: any, agentId: string): void {
+  if (!ev || !ev.tool) return
+  const store = useTaskWorkspace.getState()
+  if (ev.type === 'tool_start') {
+    store.recordToolStart(ev.tool, agentId, null, ev.args)
+  } else if (ev.type === 'tool_end') {
+    store.recordToolEnd(ev.tool, !ev.error, agentId, null, ev.result)
+  } else if (ev.type === 'tool_error') {
+    store.recordToolEnd(ev.tool, false, agentId, null, ev.error)
+  }
+}
+
 export function initTaskWorkspaceBridge(): void {
   if (_initialized) return
   const api = (window as any).luminaAPI
@@ -58,6 +71,48 @@ export function initTaskWorkspaceBridge(): void {
       if (mapped) {
         store.addTimelineEvent(mapped)
       }
+      // 后台任务跑的工具也进「工具执行」列表，否则只有前台聊天能看到
+      recordRunnerToolEvent(payload.event, payload.assignee || 'worker')
+    }))
+  }
+
+  // ── 进度看板（图1）：主进程 / CLI 推来的任务板直接进工作区 ──
+  if (api.onTaskBoard) {
+    _unsubs.push(api.onTaskBoard((board: any) => {
+      if (!board) return
+      ws().setBoard({ title: board.title, items: board.items || [] })
+      ws().setPanelOpen(true)
+    }))
+  }
+  // 启动时拉一次主进程持有的看板
+  if (api.getTaskBoard) {
+    api.getTaskBoard()
+      .then((r: any) => {
+        if (r?.ok && r.board) {
+          ws().setBoard({ title: r.board.title, items: r.board.items || [] })
+        }
+      })
+      .catch(() => { /* 主进程没起/无数据，忽略 */ })
+  }
+
+  // ── 前台聊天/群聊的工具调用 → 持久工具记录 ──
+  //
+  // 为什么放在这里而不是 ChatPanel：这是唯一一处订阅就能覆盖
+  // 单聊 + 团队群聊 + 委托回复 的位置，各面板自己订阅会漏掉群聊分支。
+  // 也因此这份记录不能依赖 agentRuntimeStore —— ChatPanel 每轮结束都会
+  // resetAgentRuntime() 清空它，工作区会跟着一起清空成"暂无工具调用"。
+  if (api.onAgentEvent) {
+    _unsubs.push(api.onAgentEvent((ev: any) => {
+      if (!ev || !ev.tool) return
+      const store = ws()
+      const convId = store.activeConversationId
+      if (ev.type === 'tool_start') {
+        store.recordToolStart(ev.tool, 'lumina', convId, ev.args)
+      } else if (ev.type === 'tool_end') {
+        store.recordToolEnd(ev.tool, !ev.error, 'lumina', convId, ev.result)
+      } else if (ev.type === 'tool_error') {
+        store.recordToolEnd(ev.tool, false, 'lumina', convId, ev.error)
+      }
     }))
   }
 
@@ -93,6 +148,13 @@ export function initTaskWorkspaceBridge(): void {
         status: 'error',
         timestamp: Date.now(),
       })
+    }))
+  }
+
+  // 看板变化 → 回写主进程，CLI / 其他窗口能读到同一份进度
+  if (api.setTaskBoard) {
+    _unsubs.push(useTaskWorkspace.subscribe((s) => {
+      api.setTaskBoard(s.board)
     }))
   }
 

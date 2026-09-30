@@ -393,7 +393,7 @@ export const TASK_TYPE_CARDS: TaskTypeCard[] = [
 export const TEAM_MEMBERS = [
   { id: 'lumina', name: 'Lumina', icon: '🐱', color: '#FF6B6B', roles: ['chat', 'learn', 'write', 'design', 'work'] },
   { id: 'recha', name: '热茶', icon: '🍵', color: '#448AFF', roles: ['code', 'design'] },
-  { id: 'yak', name: 'Yak', icon: '📊', color: '#43A047', roles: ['learn', 'code', 'intel', 'work'] },
+  { id: 'yak', name: 'Yak', icon: '📊', color: '#43A047', roles: ['learn', 'intel', 'work'] },
 ]
 
 /** 根据任务类型获取推荐的执行者 */

@@ -6,17 +6,29 @@
       content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
 <title>Lumina</title>
 <style>
+  /* ══════════════════════════════════════════════════════════
+     配色约定（改样式前先读这段）
+
+     主题系统（electron/ipc/themeIpc.ts）会把 --bg-primary /
+     --text-primary / --accent-primary 等变量以 **inline style**
+     注入到 <html> 上，优先级高于本文件的 :root 规则。
+
+     所以：本文件所有内部配色一律走 --tm-* 私有变量，只在 --tm-*
+     的定义里引用主题变量。否则浅色主题会把 --text-primary 换成深色，
+     卡片文字直接糊在背景里（只有 --danger 侥幸没被覆盖）。
+     ══════════════════════════════════════════════════════════ */
   :root {
-    --card-bg: rgba(28, 28, 34, 0.86);
-    --card-border: rgba(255, 255, 255, 0.08);
-    --text-primary: #f3f4f6;
-    --text-secondary: #9ca3af;
-    --text-dim: #6b7280;
-    --hover-bg: rgba(255, 255, 255, 0.07);
-    --active-bg: var(--accent-primary, rgba(99, 102, 241, 0.18));
-    --accent: var(--accent-primary, #818cf8);
-    --danger: #f87171;
-    --divider: rgba(255, 255, 255, 0.08);
+    --tm-bg:      color-mix(in srgb, var(--bg-primary, #1c1c22) 92%, transparent);
+    --tm-border:  color-mix(in srgb, var(--border-color, #3f3f4a) 60%, transparent);
+    --tm-text:    var(--text-primary, #f3f4f6);
+    --tm-text-2:  var(--text-secondary, #9ca3af);
+    --tm-text-3:  var(--text-muted, #6b7280);
+    --tm-hover:   color-mix(in srgb, var(--text-primary, #ffffff) 8%, transparent);
+    --tm-active:  color-mix(in srgb, var(--accent-primary, #818cf8) 22%, transparent);
+    --tm-accent:  var(--accent-primary, #818cf8);
+    --tm-danger:  light-dark(#dc2626, #f87171);
+    --tm-divider: color-mix(in srgb, var(--border-color, #3f3f4a) 55%, transparent);
+    --tm-track:   color-mix(in srgb, var(--text-primary, #ffffff) 20%, transparent);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
@@ -25,9 +37,12 @@
     width: 100%;
     height: 100%;
     background: transparent;
+    /* 主题未注入前的兜底；注入后由 themeIpc 写成具体值，
+       light-dark()（如 --tm-danger）据此取色 */
+    color-scheme: light dark;
     font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     font-size: 13px;
-    color: var(--text-primary);
+    color: var(--tm-text);
     overflow: hidden;
   }
 
@@ -35,14 +50,20 @@
     width: 248px;
     margin: 8px;
     border-radius: 16px;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
+    background: var(--tm-bg);
+    border: 1px solid var(--tm-border);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45),
                 0 2px 8px rgba(0, 0, 0, 0.3);
     overflow: hidden;
     padding: 14px 10px 10px;
+    animation: tm-pop 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+
+  @keyframes tm-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   /* ── 顶部状态区 ── */
@@ -81,7 +102,7 @@
     align-items: center;
     margin-top: 3px;
     font-size: 11px;
-    color: var(--text-secondary);
+    color: var(--tm-text-2);
   }
   .status-dot {
     width: 8px;
@@ -90,14 +111,15 @@
     background: #4ade80;
     margin-right: 5px;
     box-shadow: 0 0 6px currentColor;
+    transition: background 0.2s ease;
   }
   .status-text { font-size: 11px; }
 
   .header-badge {
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--tm-text);
+    background: var(--tm-hover);
     padding: 3px 8px;
     border-radius: 999px;
     flex-shrink: 0;
@@ -115,36 +137,44 @@
     cursor: pointer;
     transition: background 0.12s ease;
   }
-  .item:hover { background: var(--hover-bg); }
-  .item:active { background: var(--active-bg); }
+  .item:hover { background: var(--tm-hover); }
+  .item:active { background: var(--tm-active); }
+  .item:focus-visible {
+    outline: 2px solid var(--tm-accent);
+    outline-offset: -2px;
+  }
 
   .item-icon {
     width: 18px;
     height: 18px;
     margin-right: 10px;
-    color: var(--text-secondary);
+    color: var(--tm-text-2);
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
   }
+  .item:hover .item-icon { color: var(--tm-text); }
   .item-label {
     flex: 1;
     font-size: 13px;
-    color: var(--text-primary);
+    color: var(--tm-text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .item-value {
     font-size: 11px;
-    color: var(--text-dim);
+    color: var(--tm-text-3);
     margin-right: 6px;
+    transition: color 0.15s ease;
   }
+  /* 开关关闭时，"即将推出/已关闭"这类副文案跟着变淡，避免看着像禁用 */
+  .item-value.dim { opacity: 0.55; }
 
   .divider {
     height: 1px;
-    background: var(--divider);
+    background: var(--tm-divider);
     margin: 6px 8px;
   }
 
@@ -153,7 +183,7 @@
     width: 30px;
     height: 17px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
+    background: var(--tm-track);
     position: relative;
     transition: background 0.18s ease;
     flex-shrink: 0;
@@ -167,13 +197,19 @@
     height: 13px;
     border-radius: 50%;
     background: #fff;
-    transition: transform 0.18s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
-  .toggle.on { background: var(--accent); }
+  .toggle.on { background: var(--tm-accent); }
   .toggle.on::after { transform: translateX(13px); }
 
-  .item.danger .item-label { color: var(--danger); }
-  .item.danger .item-icon { color: var(--danger); }
+  .item.danger .item-label { color: var(--tm-danger); }
+  .item.danger .item-icon { color: var(--tm-danger); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    .toggle::after { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -191,41 +227,42 @@
     </div>
 
     <div class="menu">
-      <div class="item" data-action="toggle-main">
+      <div class="item" data-action="toggle-main" tabindex="0" role="button" id="itemToggleMain">
         <div class="item-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
         </div>
         <div class="item-label" id="toggleMainLabel">显示 Lumina</div>
       </div>
 
-      <div class="item" data-action="open-settings">
+      <div class="item" data-action="open-settings" tabindex="0" role="button">
         <div class="item-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
         <div class="item-label">打开设置</div>
       </div>
 
-      <div class="item" data-action="open-task-workspace">
+      <div class="item" data-action="open-task-workspace" tabindex="0" role="button">
         <div class="item-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </div>
         <div class="item-label">任务工作区</div>
-        <div class="item-value">即将推出</div>
+        <div class="item-value" id="taskCount"></div>
       </div>
 
       <div class="divider"></div>
 
-      <div class="item" data-action="toggle-game">
+      <div class="item" data-action="toggle-game" tabindex="0" role="switch" id="itemToggleGame" aria-checked="false">
         <div class="item-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
         </div>
         <div class="item-label">游戏陪伴</div>
+        <div class="item-value" id="gameStateText"></div>
         <div class="toggle" id="gameToggle"></div>
       </div>
 
       <div class="divider"></div>
 
-      <div class="item danger" data-action="quit">
+      <div class="item danger" data-action="quit" tabindex="0" role="button">
         <div class="item-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </div>
@@ -234,36 +271,6 @@
     </div>
   </div>
 
-<script>
-  // 由 trayMenuPreload 注入
-  var api = window.trayMenuAPI;
-
-  function applyState(s) {
-    if (!s) { return; }
-    var dot = document.getElementById('statusDot');
-    var st = document.getElementById('statusText');
-    var badge = document.getElementById('headerBadge');
-    var toggle = document.getElementById('gameToggle');
-    var tml = document.getElementById('toggleMainLabel');
-
-    if (dot) { dot.style.background = s.moodColor || '#4ade80'; dot.style.color = s.moodColor || '#4ade80'; }
-    if (st) { st.textContent = s.mood || '在线'; }
-    if (badge) { badge.textContent = s.statusText || (s.online ? '在线' : '离线'); }
-    if (toggle) { toggle.classList.toggle('on', !!s.gameEnabled); }
-    if (tml) { tml.textContent = s.windowVisible ? '隐藏 Lumina' : '显示 Lumina'; }
-  }
-
-  document.querySelectorAll('.item').forEach(function (el) {
-    el.addEventListener('click', function () {
-      var action = el.getAttribute('data-action');
-      if (action && api) { api.menuClick(action); }
-    });
-  });
-
-  if (api) {
-    api.onState(applyState);
-    api.getState().then(applyState).catch(function () {});
-  }
-</script>
+<script src="trayMenu.ui.js"></script>
 </body>
 </html>

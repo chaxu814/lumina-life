@@ -69,8 +69,13 @@ export const DEFAULT_PERMISSIONS: Record<TeamMemberId, AgentPermissions> = {
     allowedCommands: ['*'],
     description: 'Lumina — 老大，无限制',
   },
-  yak: {
-    agentId: 'yak',
+  // ⚠️ 角色口径（2026-09 统一，历史版本反向过，必须按下面对照实现）
+  //   recha（热茶）= 程序员      → 可读可写、可执行命令
+  //   yak（Yak）  = 数据分析师兼审查员 → 只读，不写文件、不执行命令
+  // 为什么必须严格区分：权限反过来时，程序员一行代码都写不出来（活干不了），
+  // 而审查员却能删改任意文件/跑任意命令（越权）。
+  recha: {
+    agentId: 'recha',
     allowedReadPaths: ['*'],       // 可读任何路径（读代码需要）
     allowedWritePaths: ['*'],      // 可写任何路径（写代码需要）
     allowedDangerousTools: [
@@ -80,18 +85,19 @@ export const DEFAULT_PERMISSIONS: Record<TeamMemberId, AgentPermissions> = {
     allowedDomains: ['*'],         // 需要 npm/pip/git 等
     shellAccess: true,
     allowedCommands: ['*'],
-    description: 'Yak — 代码工程师，可写文件和执行命令',
+    description: '热茶 — 代码工程师，可写文件和执行命令',
   },
-  recha: {
-    agentId: 'recha',
-    allowedReadPaths: ['*'],       // 可读任何路径（审查代码需要）
-    allowedWritePaths: [],          // ❌ 禁止写文件
+  yak: {
+    agentId: 'yak',
+    allowedReadPaths: ['*'],       // 可读任何路径（读代码需要）
+    allowedWritePaths: [],          // ❌ 审查员不写文件
     allowedDangerousTools: [],      // ❌ 禁止危险工具
     networkAccess: true,
     allowedDomains: ['*'],
-    shellAccess: true,              // 可运行命令（验证用）
-    allowedCommands: ['*'],
-    description: '热茶 — 审查员，只读不写，禁止危险操作',
+    // ❌ 审查员只给意见，不执行任意命令（否则等于绕过只读边界去改环境）
+    shellAccess: false,
+    allowedCommands: [],
+    description: 'Yak — 数据分析师兼审查员，只读不写',
   },
 }
 

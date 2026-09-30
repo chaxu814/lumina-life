@@ -49,6 +49,37 @@ export interface LLMResponse {
     function: { name: string; arguments: string }
   }>
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+  /**
+   * 流式被超时/看门狗中断，text 只是半截。
+   * 为什么必须显式标记：半截答案和完整答案在返回值上长得一模一样，
+   * 调用方按「成功」处理就会把「我来帮你搜索一下…」当成结论发给用户，
+   * 用户无从判断后面是不是还有内容。截断提示由上层（agentRunner）补，
+   * 这里只负责如实上报，不做展示层决策。
+   */
+  truncated?: boolean
+}
+
+/** 上层把截断提示追加到正文末尾时使用的统一文案（避免各处各写一份、口径不一致） */
+export const STREAM_TRUNCATION_NOTICE = '（因超时中断，内容可能不完整）'
+
+/** 推理兜底前缀：模型只给了 reasoning_content、没给正式回答时的显式说明 */
+export const REASONING_FALLBACK_PREFIX =
+  '（模型未返回正式回答，以下是它的推理过程草稿，不是最终结论）'
+
+/**
+ * 推理模型（DeepSeek-R1 / QwQ 等）把回答放进 reasoning_content 而非 content 时的兜底文本。
+ *
+ * 为什么加前缀而不是裸顶替：
+ *   裸顶替（streamText = reasoningAccum）会让聊天框直接显示「嗯，我需要先分析…第一步…」，
+ *   用户分不清这是答案还是过程，而思考面板里同时还有同一份，同一段话出现两次，
+ *   最糟的情况是用户把半截推理当成结论。
+ *   直接丢弃又会让 streamText 一直为空，触发 reactEngine 的连续空回复错误。
+ *   所以保留内容（保住可诊断性），但用一句人话前缀钉死它的性质。
+ */
+export function buildReasoningFallbackText(reasoning: string): string {
+  const body = (reasoning || '').trim()
+  if (!body) {return ''}
+  return `${REASONING_FALLBACK_PREFIX}\n\n${body}`
 }
 
 export interface LLMEmitCallbacks {
@@ -217,6 +248,23 @@ export class LLMProvider {
 
     const toolCallAccum = new Map<number, { id: string; name: string; args: string }>()
 
+    // 流被中断时，tool_calls 的 arguments 只到一半。
+    // 关键：中断路径也必须把已累积的 tool_calls 交出去 —— 丢掉它等于把模型
+    // 「已经决定要做的事」整个抹掉，调用方只能看到一段前言，后面什么都不会发生。
+    const buildAccumulatedToolCalls = (): LLMResponse['toolCalls'] => {
+      const tcs: NonNullable<LLMResponse['toolCalls']> = []
+      for (const [, tc] of toolCallAccum) {
+        if (tc.name) {
+          tcs.push({
+            id: tc.id || `call_${Date.now()}`,
+            type: 'function',
+            function: { name: tc.name, arguments: tc.args },
+          })
+        }
+      }
+      return tcs.length > 0 ? tcs : undefined
+    }
+
     // per-chunk 看门狗
     let watchdogTimer: NodeJS.Timeout | null = null
     const FIRST_TOKEN_TIMEOUT = 120_000 // 首 token 120s
@@ -384,17 +432,7 @@ export class LLMProvider {
       }
 
       // 构建 tool calls
-      const tcs: LLMResponse['toolCalls'] = []
-      for (const [, tc] of toolCallAccum) {
-        if (tc.name) {
-          tcs.push({
-            id: tc.id || `call_${Date.now()}`,
-            type: 'function',
-            function: { name: tc.name, arguments: tc.args },
-          })
-        }
-      }
-      streamToolCalls = tcs.length > 0 ? tcs : undefined
+      streamToolCalls = buildAccumulatedToolCalls()
       streamSuccess = true
 
       // 推理结束
@@ -406,7 +444,7 @@ export class LLMProvider {
         //   推理模型（DeepSeek-R1/QwQ 等）将全部内容放在 reasoning_content 而非 content，
         //   若不在此处兜底，streamText 一直为空 → 触发 reactEngine 的连续空回复错误。
         if (!streamText && this.reasoningAccum) {
-          streamText = this.reasoningAccum
+          streamText = buildReasoningFallbackText(this.reasoningAccum)
         }
         this.reasoningAccum = ''
       }
@@ -431,7 +469,16 @@ export class LLMProvider {
           emit?.onThinkingStream?.('', false, true)
           this.reasoningStarted = false
           this.reasoningAccum = ''
-          return { text: partialText, usage: streamUsage }
+          // truncated: true 让上层知道这段文本随时可能断在半句上：
+          // 不标的话，调用方会把它当完整结论展示，用户就只能看到半截答案而毫无提示。
+          // toolCalls 同样必须带出去 —— 模型可能刚说「我来帮你搜索一下…」就调了工具，
+          // 丢掉 tool_calls 会让这轮对话到此为止，再没有下文。
+          return {
+            text: partialText,
+            toolCalls: buildAccumulatedToolCalls(),
+            usage: streamUsage,
+            truncated: true,
+          }
         }
 
         // 内容太少 → 降级非流式
@@ -452,9 +499,9 @@ export class LLMProvider {
     // ── 成功返回 ──
     // 兜底 — 如果 streamText 为空但 reasoningAccum 有内容，
     //   说明模型把回复放在 reasoning_content 而非 content（某些推理模型行为）。
-    //   此时用 reasoningAccum 作为最终回复文本，避免静默丢内容。
+    //   此时用带说明前缀的推理内容兜底，避免静默丢内容，也避免用户把裸思维链当成答案。
     if (!streamText && this.reasoningAccum) {
-      streamText = this.reasoningAccum
+      streamText = buildReasoningFallbackText(this.reasoningAccum)
     }
     return {
       text: streamText || undefined,
@@ -544,7 +591,10 @@ export class LLMProvider {
       if (!choice) {return { error: '非流式响应无 choices' }}
 
       return {
-        text: (choice.message?.reasoning_content || choice.message?.content || '').trimStart(),
+        // 🔧 顺序修正：content 优先、reasoning_content 兜底。
+        //   原来 reasoning 优先 —— 非流式分支是「流式 400 / 超时」的降级必经路径，
+        //   一旦模型两者都返回，用户就会直接看到思维链而不是答案。
+        text: (choice.message?.content || choice.message?.reasoning_content || '').trimStart(),
         toolCalls: choice.message?.tool_calls?.map((tc: any) => ({
           id: tc.id,
           type: 'function' as const,

@@ -12,7 +12,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentRuntime } from '../stores/agentRuntimeStore'
 import { useLoopStore } from '../stores/loopStore'
 import {
-  useTaskWorkspace, deriveStatusText,
+  useTaskWorkspace, deriveAgentStatusFromCalls,
   aggregateSubtaskProgress, formatDuration, shouldAutoExpand,
 } from '../stores/taskWorkspaceStore'
 import type { TaskStatus, SubtaskItem, TaskWorkspaceTask } from '../stores/taskWorkspaceStore'
@@ -211,7 +211,11 @@ const GroupTaskCard: React.FC<{
 
 const AgentStatusCards: React.FC = () => {
   const lastThinking = useAgentRuntime((s) => s.lastThinking)
-  const toolTraces = useAgentRuntime((s) => s.toolTraces)
+  // 工具活动改读持久记录：agentRuntimeStore.toolTraces 每轮结束就被
+  // resetAgentRuntime() 清空，用它会让三张卡片在 Agent 干完活的瞬间
+  // 全部退回"待机中"，看起来就是工作区和聊天脱节。
+  const toolCalls = useTaskWorkspace((s) => s.toolCalls)
+  const activeConvId = useTaskWorkspace((s) => s.activeConversationId)
   const loopTasks = useLoopStore((s) => s.tasks)
   // 从任务工作区 store 读取"已隐藏 Loop 任务"与对应动作
   const dismissedLoopIds = useTaskWorkspace((s) => s.dismissedLoopIds)
@@ -225,13 +229,13 @@ const AgentStatusCards: React.FC = () => {
   const [confirmClear, setConfirmClear] = useState(false)
 
   const builtin = useMemo(() => {
-    return BUILTIN_AGENTS.map((agent) => {
-      // 当前运行时事件是全局共享的，三张卡片共用派生结果；
-      // 不伪造单 Agent 专属进度，只反映全局活动状态。
-      const { text, status } = deriveStatusText(lastThinking, toolTraces)
-      return { ...agent, text, status }
-    })
-  }, [lastThinking, toolTraces])
+    // 当前运行时事件是全局共享的，三张卡片共用派生结果；
+    // 不伪造单 Agent 专属进度，只反映全局活动状态。
+    // 只统计当前会话的调用，避免上个会话的尾巴污染。
+    const scoped = toolCalls.filter((c) => (c.conversationId ?? null) === (activeConvId ?? null))
+    const { text, status } = deriveAgentStatusFromCalls(scoped, lastThinking)
+    return BUILTIN_AGENTS.map((agent) => ({ ...agent, text, status }))
+  }, [toolCalls, activeConvId, lastThinking])
 
   // 过滤掉已被用户隐藏的 Loop 任务
   const visibleLoops = useMemo(

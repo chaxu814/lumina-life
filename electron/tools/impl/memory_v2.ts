@@ -3,16 +3,35 @@
 // ============================================================
 
 import type { ToolDef, ToolResult } from '../types'
-import { getMemoryStore, getMemoryVectorStore } from '../../memory/memoryStore'
+import {
+  getMemoryStore,
+  getMemoryVectorStore,
+  markUnverifiedFact,
+  normalizeFactSource,
+} from '../../memory/memoryStore'
 
 // ── 记忆保存 ────────────────────────────────────────────
 
 export const memorySaveDef: ToolDef = {
   name: 'memory_save',
-  description: '保存记忆。category: "preference"(偏好) / "habit"(习惯) / "lesson"(教训) / "convention"(约定) / "system"(系统) / "fact"(事实) / "reflection"(反思) / "persona"(人格)',
+  description: '保存记忆。category: "preference"(偏好) / "habit"(习惯) / "lesson"(教训) / "convention"(约定) / "system"(系统) / "fact"(事实) / "reflection"(反思) / "persona"(人格)。保存 fact 时必须诚实声明 source：默认按 model_inferred 处理（置信度 ≤60%），只有用户真的说过/确认过才能用 user_stated / user_confirmed。若这条 fact 是在纠正一条已有的错误记忆（memory_get 里能看到的旧 id），必须带上 correct_id，否则旧条目会继续排在它前面被反复召回',
   params: {
     category: { type: 'string', description: '类别: preference/habit/lesson/convention/system/fact/reflection/persona', required: true },
     content: { type: 'string', description: '要记住的内容', required: true },
+    // source 只对 category="fact" 生效：事实的权威性由「谁说的」决定，不由调用方随手传 confidence 决定
+    source: {
+      type: 'string',
+      description: '事实来源强度（仅 category="fact" 生效）: user_stated(用户亲口说过) / user_confirmed(用户明确确认过) / model_inferred(你自己推出来的，未经验证)。默认 model_inferred',
+      required: false,
+      enum: ['user_stated', 'user_confirmed', 'model_inferred'],
+      default: 'model_inferred',
+    },
+    // 纠正入口：没有它，模型上周编的结论会永远压过用户今天亲口说的那条
+    correct_id: {
+      type: 'number',
+      description: '（仅 category="fact"）被这条纠正的旧记忆 id，来自 memory_get / memory_search 返回的条目编号。填了则旧条目被降权并标注为已取代；纠正用户明确否认的事实时必填',
+      required: false,
+    },
   },
   toolsets: ['agent', 'memory'],
 }
@@ -22,8 +41,37 @@ export async function memorySave(args: Record<string, any>): Promise<ToolResult>
   const { category, content } = args
 
   if (category === 'fact') {
-    store.addFact({ category: 'user', content, confidence: 1.0, source: 'user_said' })
-    return { callId: '', ok: true, content: `✅ 事实已记录: ${content.slice(0, 100)}` }
+    // 为什么不让调用方直接传 confidence:1.0 —— 模型幻觉一次就会被永久固化成「100% 确定的事实」，
+    // 之后每轮 memory_get 都把它当权威召回，越用越真且没有纠正路径。
+    // 记忆污染比记不住更危险，所以权威性只由 source 决定，confidence 一律被 clamp。
+    const source = normalizeFactSource(args.source)
+    const correctId = Number(args.correct_id)
+    if (Number.isFinite(correctId) && correctId > 0) {
+      const res = store.correctFact(Math.trunc(correctId), {
+        category: 'user', content, source, confidence: args.confidence,
+      })
+      const saved = store.getFacts('user', 200).find(f => f.id === res.newId)
+      const pct = Math.round((saved?.confidence ?? 0) * 100)
+      const demotedNote = res.demoted.length > 0
+        ? `\n   ♻️ 已纠正旧记忆 id=${res.demoted.join(',')}（降权并标注为已取代，不会再压过这条）`
+        : ''
+      const missingNote = res.ok ? '' : `\n   ⚠️ ${res.reason}`
+      return {
+        callId: '',
+        ok: true,
+        content: `✅ 事实已记录: ${content.slice(0, 100)}\n   来源: ${source} / 置信度: ${pct}%${demotedNote}${missingNote}`
+          + (pct < 80 ? '\n   ⚠️ 该条为未验证记忆，不得当作权威事实对外陈述。' : ''),
+      }
+    }
+    const id = store.addFact({ category: 'user', content, source, confidence: args.confidence })
+    const saved = store.getFacts('user', 100).find(f => f.id === id)
+    const pct = Math.round((saved?.confidence ?? 0) * 100)
+    return {
+      callId: '',
+      ok: true,
+      content: `✅ 事实已记录: ${content.slice(0, 100)}\n   来源: ${source} / 置信度: ${pct}%`
+        + (pct < 80 ? '\n   ⚠️ 该条为未验证记忆，不得当作权威事实对外陈述。' : ''),
+    }
   }
   if (category === 'reflection') {
     store.addReflection({ topic: '会话反思', insight: content, action: '' })
@@ -67,7 +115,8 @@ export async function memoryGet(args: Record<string, any>): Promise<ToolResult> 
     case 'facts': {
       const facts = store.getFacts(undefined, 20)
       if (facts.length === 0) {return { callId: '', ok: true, content: '(暂无事实记忆)' }}
-      const lines = facts.map((f, i) => `${i + 1}. [${f.category}] ${f.content} (${(f.confidence * 100).toFixed(0)}%)`)
+      // 低置信度条目必须带「未验证」标注，否则模型会把模型自己的幻觉当权威继续编
+      const lines = facts.map((f, i) => `${i + 1}. [${f.category}] ${markUnverifiedFact(f.content, f)}`)
       return { callId: '', ok: true, content: `📋 事实记忆 (${facts.length}条):\n${lines.join('\n')}` }
     }
     case 'reflections': {
@@ -176,7 +225,8 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
 
   // 事实记忆
   for (const fact of structured.facts) {
-    vectorStore.addEntry(`[事实:${fact.category}] ${fact.content}`, {
+    // 检索结果同样要带「未验证」标注，否则召回回来的幻觉会被当权威继续编
+    vectorStore.addEntry(`[事实:${fact.category}] ${markUnverifiedFact(fact.content, fact)}`, {
       type: 'fact',
       category: fact.category,
       confidence: fact.confidence,

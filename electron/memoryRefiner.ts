@@ -10,7 +10,7 @@
 // v2.5 重构: 从 agentRunner.ts (785行) 提取至独立模块
 // ============================================================
 
-import { getMemoryStore } from './memory/memoryStore'
+import { getMemoryStore, normalizeFactSource } from './memory/memoryStore'
 import { globalEventBus, BusEvents } from './eventBus'
 import { isEnabled } from './core/featureFlags'
 import type { AgentEvent } from './tools/types'
@@ -84,7 +84,7 @@ export async function autoExtractFacts(
       body: JSON.stringify({
         model: config.model,
         messages: [
-          { role: 'system', content: `你是信息提取助手。从对话中提取客观事实，输出 JSON（仅 JSON，不要其他文本）：{"facts":[{"category":"user|environment|event|preference|habit","content":"事实描述","confidence":0.0-1.0,"source":"user_said|observed|inferred"}]}。最多 3 条事实。` },
+          { role: 'system', content: `你是信息提取助手。从对话中提取客观事实，输出 JSON（仅 JSON，不要其他文本）：{"facts":[{"category":"user|environment|event|preference|habit","content":"事实描述","source":"user_stated|user_confirmed|model_inferred"}]}。最多 3 条事实。只在用户本轮对话里真的说过/确认过，才用 user_stated 或 user_confirmed；其余一律 model_inferred。不要输出 confidence——置信度由来源强度决定，不由模型自己判断。` },
           { role: 'user', content: `提取事实:\n${text.slice(0, 1000)}` },
         ],
         temperature: 0.1,
@@ -102,11 +102,15 @@ export async function autoExtractFacts(
     const parsed = JSON.parse(jsonMatch[0])
     const store = getMemoryStore()
     for (const fact of (parsed.facts || [])) {
+      // 为什么丢掉 fact.confidence：LLM 说「这条有 0.95 的把握」是自我评价，不是证据。
+      // 旧代码 `confidence: fact.confidence || 0.7` 等于让模型给自己发权威证书，
+      // 幻觉一次就被写成 95% 确定的事实。现在只信 source，置信度由 store 按上限 clamp。
+      // 另外这里整条链路都是模型输出（即使标了 observed 也只是模型"看到"的），
+      // 所以旧枚举 observed/inferred 一律按 model_inferred 处理。
       store.addFact({
         category: fact.category || 'event',
         content: fact.content,
-        confidence: fact.confidence || 0.7,
-        source: fact.source || 'observed',
+        source: normalizeFactSource(fact.source),
       })
     }
     console.log(`[MemoryRefiner] 自动提取 ${(parsed.facts || []).length} 条事实`)

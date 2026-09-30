@@ -823,6 +823,32 @@ const api = {
     ipcRenderer.invoke('window:show-about') as Promise<void>
   },
 
+  // ─── 内置浏览器（用户可见窗口，Agent 用同一套工具驱动它） ──
+  /** 打开/聚焦内置浏览器，可选先访问一个网址 */
+  openBrowser: (url?: string) => ipcRenderer.invoke('browser:open', url) as Promise<{ ok: boolean; error?: string }>,
+  /** 内置浏览器是否开着 */
+  isBrowserOpen: () => ipcRenderer.invoke('browser:is-open') as Promise<{ ok: boolean; open: boolean }>,
+  /** 关闭内置浏览器 */
+  closeBrowserWindow: () => ipcRenderer.invoke('browser:close') as Promise<{ ok: boolean }>,
+
+  // ─── 系统：外部打开 ──────────────────────────────────────
+  /** 用系统默认浏览器/应用打开外链（交付物里的链接走这里） */
+  openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url) as Promise<boolean>,
+  /** 用系统默认程序打开本地文件/目录（交付物里的文件走这里） */
+  openPath: (targetPath: string) => ipcRenderer.invoke('shell:open-path', targetPath) as Promise<string>,
+
+  // ─── 进度看板（图1 任务板） ─────────────────────────────
+  /** 推送进度看板（主进程 / CLI / 外部工具灌进来） */
+  onTaskBoard: (callback: (board: any) => void) => {
+    const handler = (_e: any, board: any) => callback(board)
+    ipcRenderer.on('task:board', handler)
+    return () => { ipcRenderer.removeListener('task:board', handler) }
+  },
+  /** 读取当前进度看板 */
+  getTaskBoard: () => ipcRenderer.invoke('task:board:get') as Promise<{ ok: boolean; board: any }>,
+  /** 回写进度看板到主进程（CLI / 其他窗口据此读取） */
+  setTaskBoard: (board: any) => ipcRenderer.send('task:board:set', board),
+
   /** 切换开发者工具 */
   toggleDevTools: () => {
     ipcRenderer.invoke('window:toggle-dev-tools') as Promise<void>

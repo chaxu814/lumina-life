@@ -159,6 +159,11 @@ export function replaceAllCronEntries(entries: Array<{ name: string; schedule: s
   console.log(`[Cron] 已同步 ${cronEntries.length} 个任务到主进程`)
 }
 
+/** 当前已启用的定时任务数（托盘菜单"任务工作区"角标用） */
+export function countEnabledCronEntries(): number {
+  return cronEntries.filter((e) => e.enabled).length
+}
+
 export const cronDef: ToolDef = {
   name: 'cron_schedule',
   description: '创建定时任务。支持标准 cron 表达式（分 时 日 月 周），如 "0 8 * * *" 表示每天早上8点、"*/30 * * * *" 表示每30分钟。',

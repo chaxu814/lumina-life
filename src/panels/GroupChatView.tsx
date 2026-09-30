@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStore } from '../stores/appStore'
 import { IconPlus, IconSend } from '../components/Icons'
 import AgentTaskBoard from '../components/AgentTaskBoard'
+import ThinkingStepList from '../components/ThinkingStepList'
 import AgentMoments from '../components/AgentMoments'
 import NoteCycle, { LuminaDailyReport, TeamMilestones, YakTechNotes } from '../components/NoteCycle'
 import CharacterCustomization from '../components/CharacterCustomization'
@@ -645,13 +646,17 @@ export default function GroupChatView() {
 
   const answerHandlerRef = useRef<((ev: any, msgId?: string) => void) | null>(null)
 
-  // 思考过程自动回收 — 收到最终答案后，自动把对应消息下的思考过程收起来
-  const collapseCurrentThinking = useCallback((msgId: string) => {
-    setThinkingCollapsed(prev => ({ ...prev, [msgId]: true }))
-  }, [])
-
-  const toggleThinking = useCallback((msgId: string) => {
-    setThinkingCollapsed(prev => ({ ...prev, [msgId]: !prev[msgId] }))
+  // 思考过程默认跟随输出状态（输出中展开、完毕收起），随时可手动开关。
+  // userExpandedRef 记录"用户主动点开过"——这样自动收回不会把用户
+  // 特意展开看的面板又弹回去。早期这里只有读没有写，是个死守卫，
+  // 导致自动收回逻辑实际上从没起过作用。
+  const toggleThinking = useCallback((msgId: string, streaming: boolean) => {
+    setThinkingCollapsed(prev => {
+      const nowCollapsed = !(msgId in prev ? prev[msgId] : !streaming)
+      if (nowCollapsed) userExpandedRef.current.delete(msgId)
+      else userExpandedRef.current.add(msgId)
+      return { ...prev, [msgId]: nowCollapsed }
+    })
   }, [])
 
   // 每个流独立的 Agent 事件监听器 — 彻底防止多 Agent 思考步骤串台
@@ -767,10 +772,17 @@ export default function GroupChatView() {
   const [gcVoiceTarget, setGcVoiceTarget] = useState<string | null>(null) // 🔧 v2.9: 当前调整的Agent
   const [ttsToggling, setTtsToggling] = useState(false) // 🔧 v2.9: 静音切换动画
   const [gcAttachments, setGcAttachments] = useState<Array<{name:string,size:number,text?:string,imageDataUrl?:string}>>([])
-  const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set())
   const [thinkingCollapsed, setThinkingCollapsed] = useState<Record<string, boolean>>({})
   const userExpandedRef = useRef<Set<string>>(new Set())
-  const autoCollapsedThinkingRef = useRef<Set<string>>(new Set())
+  /**
+   * 思考过程当前该是什么状态：
+   *   1. 用户手动点过 / 输出完毕自动收回过 → 显式记录优先
+   *   2. 没记录过 → 正在输出（!_animDone）默认展开，输出完毕默认收起
+   */
+  const isThinkingCollapsed = (msgId: string, msg?: GCMsg): boolean => {
+    if (msgId in thinkingCollapsed) return thinkingCollapsed[msgId]
+    return Boolean(msg && msg._animDone)
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 🆕 v9.2: 任务类型路由优先 — 用户选了任务卡片后，send() 应优先使用卡片指定的 agent，而非关键词自动匹配
   const pendingTaskTypeRef = useRef<TaskType | null>(null)
@@ -842,6 +854,37 @@ export default function GroupChatView() {
     window.dispatchEvent(new Event('gc:sessions-updated'))
   }, [activeSessionId, messages, sessions])
 
+  // 🧹 流式合帧 ——
+  // 推理 token 比帧还快，thinkingSteps 每个 token 都要 setMessages 一次，
+  // 而 setMessages 会重建整个消息数组 → 所有消息重渲染 → 主线程被占满。
+  // 症状就是"思考文字不像在打印" + "滚轮卡手"。
+  // 这里按 messageId 合并到一帧里，最多每帧渲染一次；累积逻辑完全不变。
+  const thinkPendingRef = useRef(new Map<string, ThinkingStep[]>())
+  const thinkRafRef = useRef(0)
+  const flushThinking = useCallback(() => {
+    thinkRafRef.current = 0
+    const batch = thinkPendingRef.current
+    if (batch.size === 0) {return}
+    const snapshot = new Map(batch)
+    batch.clear()
+    setMessages(prev => prev.map(m => {
+      const steps = snapshot.get(m.id)
+      // 只在不比现有数据旧时才覆盖：收尾处有直接 setMessages 写 thinkingSteps 的
+      // "最终确认"，那一帧可能比排队中的合帧更完整，覆盖回去会丢步骤。
+      if (!steps) {return m}
+      if ((m.thinkingSteps?.length ?? 0) > steps.length) {return m}
+      return { ...m, thinkingSteps: steps } as GCMsg
+    }))
+  }, [])
+  const pushThinking = useCallback((msgId: string, steps: ThinkingStep[]) => {
+    thinkPendingRef.current.set(msgId, steps)
+    if (thinkRafRef.current) {return}
+    thinkRafRef.current = requestAnimationFrame(flushThinking)
+  }, [flushThinking])
+  useEffect(() => () => {
+    if (thinkRafRef.current) { cancelAnimationFrame(thinkRafRef.current); thinkRafRef.current = 0 }
+  }, [])
+
   // 🆕 持久化 — v3.6: 只要有消息在动画中就不保存，让 animateTyping 完成时存
   useEffect(() => {
     if (messages.length <= 1) {return}
@@ -862,12 +905,24 @@ export default function GroupChatView() {
 
   useEffect(() => {
     // 只在用户处于底部时自动滚底，允许用户自由翻阅历史
-    if (isUserAtBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    // 原来挂在 [messages] 上且用 behavior:'smooth'——流式时每个 token 都是新引用，
+    // 于是每秒最多发起 60 次平滑滚动：动画被反复打断重定向（滚轮"卡手"），
+    // 而且用户刚往上拖一点就会被拽回底部。
+    // 现在 rAF 合帧 + auto 定位，用户离开底部后彻底不再打扰。
+    if (!isUserAtBottomRef.current) {return}
+    if (scrollRafRef.current) {return}
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0
+      if (!isUserAtBottomRef.current) {return}
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    })
   }, [messages, replyingAgent, msgCounter])
 
   // 跟踪用户是否在底部，防止强制滚底打断翻阅
+  const scrollRafRef = useRef(0)
+  useEffect(() => () => {
+    if (scrollRafRef.current) { cancelAnimationFrame(scrollRafRef.current); scrollRafRef.current = 0 }
+  }, [])
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) {return}
@@ -884,25 +939,11 @@ export default function GroupChatView() {
     }
   }, [messages.length])
 
-  // → v8.1: 思考过程在 Agent 输出时自动展开，输出完毕后默认收起（可手动展开）
-  useEffect(() => {
-    // 遍历所有消息，有思考步骤且未展开的 → 自动展开
-    let changed = false
-    setExpandedThinking(prev => {
-      const next = new Set(prev)
-      for (const m of messages) {
-        if (!m.thinkingSteps || m.thinkingSteps.length === 0) {continue}
-        // v8.1: 已完成的消息不自动展开（默认收起），仅正在输出的消息展开
-        const isComplete = Boolean(m._animDone)
-        if (isComplete) {continue}
-        if (!next.has(m.id)) {
-          next.add(m.id)
-          changed = true
-        }
-      }
-      return changed ? next : prev  // 无变化则不触发重渲染
-    })
-  }, [messages])
+  // → 思考过程展开规则：
+  //   正在输出 → 默认展开；输出完毕 → 默认收起；任何时候都能手动开关。
+  //   早前这里有个 useEffect 把"未完成的消息"塞进 expandedThinking，
+  //   但渲染层从来不读它，所以整段是死代码，展开/收起实际从没生效过。
+  //   现在改由 isThinkingCollapsed() 直接按 m._animDone 派生，不再维护中间状态。
   const messagesRef = useRef(messages)
   messagesRef.current = messages
   const activeSessionRef = useRef(activeSessionId)
@@ -1198,15 +1239,6 @@ export default function GroupChatView() {
         clearInterval(timer)
         setMessages(prev => {
           const updated = prev.map(m => m.id === msgId ? { ...m, content: fullText, _animDone: true } as any : m)
-          if (!userExpandedRef.current.has(msgId)) {
-            setThinkingCollapsed(prev => ({ ...prev, [msgId]: true }))
-            autoCollapsedThinkingRef.current.add(msgId)
-            setExpandedThinking(prev => {
-              const next = new Set(prev)
-              next.delete(msgId)
-              return next
-            })
-          }
           // v3.6: 写作完成后保存消息 + 同步更新会话列表
           saveGCMessages(activeSessionId, updated)
           const preview = updated.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || ''
@@ -1219,14 +1251,12 @@ export default function GroupChatView() {
           window.dispatchEvent(new Event('gc:sessions-updated'))
           return updated
         })
+        // 回复完毕 → 思考过程自动收回。
+        // 注意必须放在 setMessages 外面：早前这段 setState 写在 updater
+        // 里（reducer 里改别的 state），StrictMode 下会跑两次，是 React 明确的反模式。
+        // 用户主动点开过就尊重用户意图，不再强制弹回去。
         if (!userExpandedRef.current.has(msgId)) {
           setThinkingCollapsed(prev => ({ ...prev, [msgId]: true }))
-          autoCollapsedThinkingRef.current.add(msgId)
-          setExpandedThinking(prev => {
-            const next = new Set(prev)
-            next.delete(msgId)
-            return next
-          })
         }
         return
       }
@@ -1725,8 +1755,7 @@ export default function GroupChatView() {
           (s as any)._stableKey = stableKey || ''
           phaseThinkingAccum.push(s)
         }
-        setMessages(prev => prev.map(m => m.id === currentMsgId
-          ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
+        pushThinking(currentMsgId, [...phaseThinkingAccum])
       }
       // 向后兼容
       const pushCollabStep = (s: ThinkingStep, currentMsgId: string) =>
@@ -1746,11 +1775,12 @@ export default function GroupChatView() {
         if (collabPhaseRef.current !== currentPhase) {return}
         if (ev.type === 'thinking_stream') {
           // 推理内容累积到同一个步骤 — 不刷屏
+          const collabStreamId = `reasoning-${collabCurrentMsgIdRef.current}`
           const stableKey = `reasoning:${collabCurrentMsgIdRef.current}`
           if (ev.isLast) {
             // 推理结束：更新标签为完成
             upsertCollabStep({
-              id: `reasoning-end-${Date.now()}`,
+              id: collabStreamId,
               type: 'thinking',
               label: '💭 推理完成',
               timestamp: Date.now(),
@@ -1760,7 +1790,7 @@ export default function GroupChatView() {
             const existing = phaseThinkingAccum.find(s => (s as any)._stableKey === stableKey)
             const fullText = existing?.result ? existing.result + ev.text : ev.text
             upsertCollabStep({
-              id: `reasoning-${Date.now()}`,
+              id: collabStreamId,
               type: 'thinking',
               label: '💭 推理中...',
               result: fullText.slice(-5000),
@@ -1866,19 +1896,24 @@ export default function GroupChatView() {
         const coderPrompt = `你是热茶，Lumina 团队的代码工程师。收到了编程任务。
 
 ⚠️ 铁律（违反就是失败）：
-1. 不准说 "建议你" "你可以" "我来分析" — 你没资格分析，你只负责写
-2. 第一反应必须是 file_read 看现状 或 file_write 直接写
-3. 写完必须 shell_exec 验证，报错就改，改到通过为止
-4. 完成只说：文件路径 + 功能 + 验证结果，不超过3句话
-5. 如果这是修复轮（修复之前测试失败的问题），必须先理解错误 → 定位代码 → 修改 → 验证
-6. 不准问问题 — 需求不明确就按最合理的理解直接写`
+1. 第一反应必须是 file_read 看现状 或 file_write 直接写 —— 不要先给建议再问要不要写
+2. 写完必须 shell_exec 验证，报错就改，改到通过为止。没验证过的结论等于没做过
+3. 报告要如实：跑了什么命令、输出是什么、哪里没跑通。
+   禁止写"应该没问题""大概可用""理论上可以"这类没验证过的话
+4. 如果这是修复轮（修复之前测试失败的问题），必须先理解错误 → 定位代码 → 修改 → 验证
+5. 需求确实存在歧义、且猜错代价很高（删数据、改接口、不可逆操作）时：
+   先做无风险的准备工作，然后**明确写出你的假设**并继续往下做；
+   只有在真的无法判断时，才向用户提问并说明缺什么信息
+6. 做不到的事直接说做不到，不要用模糊话术搪塞过去`
 
         const reviewerPrompt = `你是 Yak，审阅热茶的代码。看完直接给结论。
 规则：
-- file_read 读代码 → 一句话评价（通过/有问题）
-- 有问题说具体位置和原因
+- file_read 读代码 → 给出"通过"或"有问题"的明确结论
+- 有问题必须说具体位置和原因，不许写"建议优化一下"这种无法执行的话
 - 没问题就说 "✓ 代码通过"
-- 不准写代码，不准提建议，只审阅`
+- 只审阅不改代码
+- ⛔ 审阅要覆盖真实风险：逻辑错误、边界情况、异常未处理、安全隐患都要看。
+  确实没发现问题就明说没发现，不要为了显得尽责而编造问题`
 
         const testerPrompt = `你是 Lumina，用 shell_exec 跑热茶写的程序并报告结果。
 规则：
@@ -2233,8 +2268,7 @@ export default function GroupChatView() {
           (s as any)._stableKey = stableKey || ''
           phaseThinkingAccum.push(s)
         }
-        setMessages(prev => prev.map(m => m.id === currentMsgId
-          ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
+        pushThinking(currentMsgId, [...phaseThinkingAccum])
       }
       const pushCollabStep = (s: ThinkingStep, currentMsgId: string) =>
         upsertCollabStep(s, currentMsgId)
@@ -2249,10 +2283,11 @@ export default function GroupChatView() {
         if (abortRef.current) {return}
         if (collabPhaseRef.current !== currentPhase) {return}
         if (ev.type === 'thinking_stream') {
+          const collabStreamId = `reasoning-${collabCurrentMsgIdRef.current}`
           const stableKey = `reasoning:${collabCurrentMsgIdRef.current}`
           if (ev.isLast) {
             upsertCollabStep({
-              id: `reasoning-end-${Date.now()}`,
+              id: collabStreamId,
               type: 'thinking', label: '💭 推理完成',
               timestamp: Date.now(),
             }, collabCurrentMsgIdRef.current, stableKey)
@@ -2260,7 +2295,7 @@ export default function GroupChatView() {
             const existing = phaseThinkingAccum.find(s => (s as any)._stableKey === stableKey)
             const fullText = existing?.result ? existing.result + ev.text : ev.text
             upsertCollabStep({
-              id: `reasoning-${Date.now()}`,
+              id: collabStreamId,
               type: 'thinking', label: '💭 推理中...',
               result: fullText.slice(-5000),
               timestamp: Date.now(),
@@ -2343,19 +2378,24 @@ export default function GroupChatView() {
         const coderPrompt = `你是热茶，Lumina 团队的代码工程师。收到了编程任务。
 
 ⚠️ 铁律（违反就是失败）：
-1. 不准说 "建议你" "你可以" "我来分析" — 你没资格分析，你只负责写
-2. 第一反应必须是 file_read 看现状 或 file_write 直接写
-3. 写完必须 shell_exec 验证，报错就改，改到通过为止
-4. 完成只说：文件路径 + 功能 + 验证结果，不超过3句话
-5. 如果这是修复轮（修复之前审查发现的问题），必须先理解错误 → 定位代码 → 修改 → 验证
-6. 不准问问题 — 需求不明确就按最合理的理解直接写`
+1. 第一反应必须是 file_read 看现状 或 file_write 直接写 —— 不要先给建议再问要不要写
+2. 写完必须 shell_exec 验证，报错就改，改到通过为止。没验证过的结论等于没做过
+3. 报告要如实：跑了什么命令、输出是什么、哪里没跑通。
+   禁止写"应该没问题""大概可用""理论上可以"这类没验证过的话
+4. 如果这是修复轮（修复之前审查发现的问题），必须先理解错误 → 定位代码 → 修改 → 验证
+5. 需求确实存在歧义、且猜错代价很高（删数据、改接口、不可逆操作）时：
+   先做无风险的准备工作，然后**明确写出你的假设**并继续往下做；
+   只有在真的无法判断时，才向用户提问并说明缺什么信息
+6. 做不到的事直接说做不到，不要用模糊话术搪塞过去`
 
         const reviewerPrompt = `你是 Yak，审阅热茶的代码。看完直接给结论。
 规则：
-- file_read 读代码 → 一句话评价（通过/有问题）
-- 有问题说具体位置和原因
+- file_read 读代码 → 给出"通过"或"有问题"的明确结论
+- 有问题必须说具体位置和原因，不许写"建议优化一下"这种无法执行的话
 - 没问题就说 "✓ 代码通过"
-- 不准写代码，不准提建议，只审阅`
+- 只审阅不改代码
+- ⛔ 审阅要覆盖真实风险：逻辑错误、边界情况、异常未处理、安全隐患都要看。
+  确实没发现问题就明说没发现，不要为了显得尽责而编造问题`
 
         let codingIteration = 0
         const MAX_CODING_ITERATIONS = 2
@@ -2654,8 +2694,7 @@ export default function GroupChatView() {
           (s as any)._stableKey = stableKey || ''
           thinkingAccum.push(s)
         }
-        setMessages(prev => prev.map(m => m.id === currentReplyId
-          ? { ...m, thinkingSteps: [...thinkingAccum] } as GCMsg : m))
+        pushThinking(currentReplyId, [...thinkingAccum])
       }
       const pushStep = (s: ThinkingStep) => upsertStep(s)
 
@@ -2670,12 +2709,13 @@ export default function GroupChatView() {
         // 用户中止时立即停止累积思考步骤
         if (abortRef.current) {return}
         if (ev.type === 'thinking_stream') {
-          const stableKey = `reasoning:${currentReplyId}`
+          const streamStepId = `re-${currentReplyId}`
+        const stableKey = `reasoning:${currentReplyId}`
           if (ev.isLast) {
             // fix: 保留之前累积的推理内容，不因 isLast 覆盖丢失
             const existing = thinkingAccum.find(s => (s as any)._stableKey === stableKey)
             upsertStep({
-              id: `re-${Date.now()}`,
+              id: streamStepId,
               type: 'thinking',
               label: '💭 推理完成',
               result: existing?.result,  // 保留推理内容
@@ -2688,7 +2728,7 @@ export default function GroupChatView() {
               // 仅创建占位步骤，不累积文本
               if (!thinkingAccum.find(s => (s as any)._stableKey === stableKey)) {
                 upsertStep({
-                  id: `re-${Date.now()}`,
+                  id: streamStepId,
                   type: 'thinking',
                   label: '💭 推理中...',
                   timestamp: Date.now(),
@@ -2698,7 +2738,7 @@ export default function GroupChatView() {
               const existing = thinkingAccum.find(s => (s as any)._stableKey === stableKey)
               const fullText = existing?.result ? existing.result + ev.text : ev.text
               upsertStep({
-                id: `re-${Date.now()}`,
+                id: streamStepId,
                 type: 'thinking',
                 label: '💭 推理中...',
                 result: fullText.slice(-5000),
@@ -3351,8 +3391,7 @@ export default function GroupChatView() {
             } else if (ev.type === 'tool_end') {
               decUpsertStep({ id: `dte-${Date.now()}`, type: 'tool_end', label: `✅ ${ev.tool || ''}`, tool: ev.tool, result: ev.result?.ok ? '完成' : '失败', timestamp: Date.now() })
             }
-            setMessages(prev => prev.map(m => m.id === decMsgId
-              ? { ...m, thinkingSteps: [...decThinkingAccum] } as GCMsg : m))
+            pushThinking(decMsgId, [...decThinkingAccum])
           })
 
           try {
@@ -4568,52 +4607,40 @@ export default function GroupChatView() {
                 userSelect: 'text',
                 cursor: 'text',
               }}>{m.content || (m._animDone ? '（内容为空）' : <span className="typing-dots" style={{ display: 'inline-flex', gap: 3, padding: 0 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /></span>)}</div>
-              {/* 🆕 v10.3fix: 渲染思考过程（借鉴 QwenPaw） */}
+              {/* 🆕 v10.3fix: 渲染思考过程（借鉴 QwenPaw）
+                  正在输出默认展开，输出完毕默认收起，随时可点标题栏切换 */}
               {m.thinkingSteps && m.thinkingSteps.length > 0 && (
                 <div style={{ marginTop: 6, marginBottom: 2, borderTop: '1px solid var(--border-light)', paddingTop: 4 }}>
                   <button
-                    onClick={() => toggleThinking(m.id)}
+                    className="thinking-toggle"
+                    onClick={() => toggleThinking(m.id, !m._animDone)}
+                    aria-expanded={!isThinkingCollapsed(m.id, m)}
+                    aria-controls={`thinking-${m.id}`}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer', fontSize: 13,
-                      color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0',
+                      color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px',
                     }}
                   >
-                    <span style={{ fontSize: 14 }}>
-                      {(thinkingCollapsed[m.id] ?? false) ? '▶' : '▼'}
+                    <span className="thinking-chevron" style={{ fontSize: 11, display: 'inline-block' }}>
+                      ▶
                     </span>
                     <span>思考过程 ({m.thinkingSteps.length} 步)</span>
                   </button>
-                  {!(thinkingCollapsed[m.id] ?? false) && (
-                    <div style={{
-                      marginTop: 4, padding: '8px 10px', borderRadius: 6, background: 'var(--surface-50)',
-                      border: '1px solid var(--border-light)', fontSize: 13, lineHeight: 1.6, maxHeight: 250,
-                      overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    }}>
-                      {m.thinkingSteps.map((step: any, idx: number) => (
-                        <div key={step.id || idx} style={{ marginBottom: 2, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                          <span style={{ flexShrink: 0, width: 16, textAlign: 'center' }}>
-                            {step.type === 'thinking' && '💭'}
-                            {step.type === 'tool_start' && '🔧'}
-                            {step.type === 'tool_end' && '✅'}
-                            {step.type === 'tool_error' && '❌'}
-                            {step.type === 'text' && '📝'}
-                          </span>
-                          <span style={{ flex: 1 }}>
-                            <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{step.label}</span>
-                            {step.tool && <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>[{step.tool}]</span>}
-                            {step.durationMs !== undefined && (
-                              <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>({(step.durationMs / 1000).toFixed(1)}s)</span>
-                            )}
-                            {step.result && (
-                              <div style={{ color: 'var(--text-secondary)', marginTop: 1, fontSize: 10, whiteSpace: 'pre-wrap' }}>
-                                {step.result}
-                              </div>
-                            )}
-                          </span>
-                        </div>
-                      ))}
+                  {/* grid-template-rows: 0fr → 1fr 做展开/收起动画，无需 JS 量高度 */}
+                  <div
+                    id={`thinking-${m.id}`}
+                    className={'thinking-collapse' + (isThinkingCollapsed(m.id, m) ? '' : ' open')}
+                  >
+                    <div className="thinking-clip">
+                      <div style={{
+                        marginTop: 4, padding: '4px 6px', borderRadius: 8, background: 'var(--surface-50)',
+                        border: '1px solid var(--border-light)', maxHeight: 300,
+                        overflowY: 'auto', overflowX: 'hidden',
+                      }}>
+                        <ThinkingStepList steps={m.thinkingSteps} />
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
               {/* 🆕 v8.1: 文件预览 — 用户气泡下方文件卡片（简洁版：仅显示文件名和类型） */}

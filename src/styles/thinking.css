@@ -1,0 +1,146 @@
+/* ══════════════════════════════════════════════════════════
+   🧠 思考过程步骤列表（ThinkingStepList）
+   单聊 / 团队群聊共用一套栅格：图标列定宽，文字左边线严格对齐。
+   ══════════════════════════════════════════════════════════ */
+
+.tsl-list {
+  display: flex;
+  flex-direction: column;
+  /* 2px 抵消容器边框，让分隔线落在内容区正中 */
+  padding: 2px 0;
+}
+
+/* ── 单行：图标列 + 内容列 ── */
+.tsl-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 6px;
+  padding: 5px 6px 5px 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.tsl-row + .tsl-row {
+  border-top: 1px solid var(--border-light, #eef0f3);
+}
+.tsl-row:hover { background: var(--surface-50, #f7f8fa); }
+
+/* 图标列：定宽 + 顶部对齐，保证每行标题左边缘在同一条竖线上 */
+.tsl-icon {
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  filter: saturate(0.9);
+}
+
+.tsl-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── 标题行：主标题 + [tool] 标签 + 耗时 ── */
+.tsl-title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.tsl-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--text-primary, #172b4d);
+  word-break: break-word;
+  min-width: 0;
+}
+/* 工具名做成 chip，和普通文字区分开，图6 的 [browser] 那种观感 */
+.tsl-tag {
+  font-size: 10px;
+  line-height: 15px;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--text-secondary, #5e6c84);
+  background: var(--surface-100, #eef0f3);
+  border: 1px solid var(--border-light, #e5e7eb);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tsl-duration {
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--text-tertiary, #8993a4);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── 副行（入参 / 结果）：缩进到标题左线，深色浅底，可读不抢戏 ── */
+.tsl-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.tsl-sub-key {
+  font-size: 10px;
+  color: var(--text-tertiary, #8993a4);
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--surface-50, #f7f8fa);
+}
+.tsl-sub-text {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-secondary, #5e6c84);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
+}
+.tsl-sub-muted { color: var(--text-tertiary, #8993a4); font-style: italic; }
+
+/* 结果行给一个极浅的底 + 左边线，长文本再长也不糊 */
+.tsl-sub-result {
+  margin-top: 1px;
+  padding: 3px 6px;
+  border-left: 2px solid var(--border-light, #e5e7eb);
+  background: var(--surface-50, #f7f8fa);
+  border-radius: 0 4px 4px 0;
+}
+.tsl-row.is-done .tsl-title { color: #16a34a; }
+.tsl-row.is-error .tsl-title { color: #dc2626; }
+.tsl-row.is-error .tsl-sub-result {
+  border-left-color: #fca5a5;
+  background: var(--red-50, #fef2f2);
+}
+.tsl-row.is-error .tsl-sub-text { color: #b91c1c; }
+
+/* ── 错峰入场（由 ThinkingStepList 的 --i 驱动） ── */
+.tsl-row.tsl-animate {
+  animation: tslRowIn 0.26s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 0.03s);
+}
+@keyframes tslRowIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tsl-row.tsl-animate { animation: none; }
+  .tsl-row { transition: none; }
+}
+
+/* ── 深色主题微调 ── */
+[data-theme='dark'] .tsl-row:hover { background: var(--surface-100); }
+[data-theme='dark'] .tsl-sub-result {
+  background: var(--surface-50);
+  border-left-color: var(--border-medium, #3f3f46);
+}
+[data-theme='dark'] .tsl-row.is-error .tsl-sub-result {
+  background: rgba(239, 68, 68, 0.12);
+  border-left-color: rgba(239, 68, 68, 0.5);
+}

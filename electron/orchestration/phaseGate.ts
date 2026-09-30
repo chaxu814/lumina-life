@@ -4,6 +4,12 @@
 // 复杂任务的五阶段执行流程：
 //   Research → Plan → Execute → Verify → Review
 //
+// ⚠️ 阶段 → 角色映射（角色口径已统一，2026-09）：
+//   调研/执行/验证（要读要改要跑） → recha（热茶，程序员）
+//   审查（只给意见、不动文件）        → yak（Yak，数据分析师兼审查员）
+//   历史版本这三项挂给了 yak，而 yak 当时是「只能读」的那一方，
+//   导致验证/执行阶段根本跑不动命令，等于门控形同虚设。
+//
 // 设计：
 //   - 每个阶段有明确的准入/准出条件
 //   - 阶段间通过任务看板（TaskBoard）传递工作产物
@@ -96,13 +102,14 @@ export const PHASES: Record<PhaseName, PhaseDef> = {
     label: '验证',
     icon: '🧪',
     description: '自动编译/测试/类型检查，失败自动修复循环',
-    checkGate: (project) => project.tasks.some(t => t.status === 'done' && t.assignTo === 'yak'),
+    // 执行类是热茶（程序员）干的活，所以这里看的是 recha 的产出
+    checkGate: (project) => project.tasks.some(t => t.status === 'done' && t.assignTo === 'recha'),
   },
   review: {
     name: 'review',
     label: '审查',
     icon: '👁️',
-    description: '由热茶进行代码审查，输出改进建议',
+    description: '由 Yak 进行代码审查，输出改进建议',
     checkGate: (project) => project.tasks.filter(t => t.status === 'done').length >= 2,
   },
 }
@@ -236,7 +243,7 @@ export class PhaseGate {
   }
 
   /**
-   * 🔍 调研阶段：委托给 Yak 做 read-only 调查
+   * 🔍 调研阶段：委托给热茶（程序员）做 read-only 调查
    */
   private async _doResearch(options: PhaseOptions): Promise<PhaseResult> {
     const start = Date.now()
@@ -270,7 +277,7 @@ ${options.task}
 - ⚠️ 潜在风险
 - 📐 建议的实现方案（至少 2 种）`
 
-    const result = await options.delegateFn('yak', researchTask, 'code_explain')
+    const result = await options.delegateFn('recha', researchTask, 'code_explain')
     const taskId = `research-${Date.now()}`
     artifacts.push(taskId)
 
@@ -319,24 +326,26 @@ ${options.task}
 
     // 简单拆分：按文件/功能拆分子任务
     // 实际场景中可以在 Research 后由 LLM 细化
+    // ⚠️ 默认全部派给 recha（热茶）：规划出的子任务都是「要做」的事，
+    //    只有热茶有写权限和执行权；纯审查类子任务再显式指定审查角色（yak）。
     const defaultTasks = [
       {
         title: '准备工作（环境检查 + 读取现有代码）',
         description: `读取现有代码结构，确认运行环境，了解完整的代码组织方式。\n原始任务：${options.task.slice(0, 500)}`,
         dependsOn: [] as string[],
-        assignTo: 'yak' as const,
+        assignTo: 'recha' as const,
       },
       {
         title: '核心实现',
         description: `实现主要功能。\n原始任务：${options.task.slice(0, 500)}`,
         dependsOn: [] as string[],
-        assignTo: 'yak' as const,
+        assignTo: 'recha' as const,
       },
       {
         title: '验证与修复',
         description: `运行编译/测试验证，修复可能的问题。\n原始任务：${options.task.slice(0, 500)}`,
         dependsOn: [] as string[],
-        assignTo: 'yak' as const,
+        assignTo: 'recha' as const,
       },
     ]
 
@@ -459,7 +468,7 @@ ${options.task}
     const projectRoot = process.cwd()
     const verifyCommands = options.verifyCommands || ['npx tsc --noEmit 2>&1', 'npm test 2>&1 || echo "no tests"']
 
-    const delegateResult = await options.delegateFn('yak',
+    const delegateResult = await options.delegateFn('recha',
       `【验证阶段 — 自动验证】
 请在项目根目录执行以下验证命令并收集结果：
 
@@ -488,7 +497,7 @@ ${verifyCommands.join('\n')}`, 'code_debug')
   }
 
   /**
-   * 👁️ 审查阶段：委托给热茶做代码审查
+   * 👁️ 审查阶段：委托给 Yak（审查员）做代码审查
    */
   private async _doReview(options: PhaseOptions): Promise<PhaseResult> {
     const start = Date.now()
@@ -512,7 +521,7 @@ ${verifyCommands.join('\n')}`, 'code_debug')
       .map(t => `任务: ${t.title}\n结果摘要: ${(t.result || '').slice(0, 500)}`)
       .join('\n---\n')
 
-    const result = await options.delegateFn('recha',
+    const result = await options.delegateFn('yak',
       `【代码审查 — 请审查以下代码修改】
 
 原始需求：

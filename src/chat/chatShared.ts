@@ -89,9 +89,14 @@ export function loadGCMessages(sid: string): GCMsg[] {
     const raw = localStorage.getItem(`lumina_gc_${sid}`)
     if (!raw) {return []}
     const msgs: GCMsg[] = JSON.parse(raw)
+    // 从存储读回来的都是**历史**，不可能还在打字机动画里。
+    // 但持久化时机是"每次 messages 变化"，如果上次退出时正在打字，
+    // 那条消息会被存成没有 _animDone —— 渲染层据此判断"还在输出"，
+    // 于是每次启动它的思考过程都是展开的。这里统一按"已完成"归一。
+    const normalized: GCMsg[] = msgs.map(m => (m._animDone === true ? m : { ...m, _animDone: true }))
     // 过滤空白气泡 — 但保留有思考步骤的消息（即使内容为空）
-    return msgs.filter(m =>
-      m.from === 'system' || m.content || !m._animDone ||
+    return normalized.filter(m =>
+      m.from === 'system' || m.content ||
       (m.thinkingSteps && m.thinkingSteps.length > 0)
     )
   }

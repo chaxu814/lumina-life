@@ -20,6 +20,7 @@ import TeamCommunityModal from './components/TeamCommunityModal'  // 👥 v1.0: 
 import PersonalModal from './components/PersonalModal'  // 👤 v1.0: 个性化弹窗
 import NewsPanel from './panels/NewsPanel'  // 🆕 v1.1: 新闻早报
 import SandboxPanel from './panels/SandboxPanel'  // 🔍 I5: 沙箱透明玻璃房
+import TasksPanel from './panels/TasksPanel'  // 🗓️ 任务工作区（托盘菜单入口）
 import { initThemeClient } from './services/themeClient'  // 🎨 主题皮肤生态
 
 import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8.1: 插件面板
@@ -31,6 +32,7 @@ import OnboardingWizard from './components/OnboardingWizard'  // 🆕 v1.0: 首�
 import ModeTransition from './components/ModeTransition'  // 🆕 v2.0: 场景模式过渡动画
 import PetChatSync from './components/PetChatSync'  // 🐾 桌宠聊天同步
 import { useStore, type PanelType } from './stores/appStore'
+import { useTaskWorkspace } from './stores/taskWorkspaceStore'
 import { generateReport } from './services/reportGenerator'
 
 // ═══════ 桌宠聊天框内"朋友圈/剧场/日报"数据组装（取自主界面同一 store / localStorage，实时互通）═══════
@@ -107,6 +109,7 @@ const panelMap: Record<string, React.FC> = {
 
   plugins: PluginPanelContainer, // 🆕 v8.1: 插件面板
   more: MoreSettingsPanel, // ⚙️ v1.0: 更多设置（整合入口）
+  tasks: TasksPanel, // 🗓️ 任务工作区（托盘菜单「任务工作区」入口）
 }
 
 export default function App() {
@@ -252,6 +255,20 @@ export default function App() {
     // 桌宠跳转：设置页指定 tab
     cleanups.push(window.luminaAPI?.onMenuEvent('settings:goto', (tab: string) => {
       setSettingsTab(tab)
+      setActivePanel('settings')
+    }))
+    // 🗓️ 托盘浮层 → 任务工作区
+    //
+    // 注意：任务工作区是 ChatPanel 右侧的抽屉面板（TaskWorkspacePanel），
+    // 不是左侧导航里的「定时任务」面板（TasksPanel / cron）。两者同名但完全不同的东西，
+    // 之前误跳到 'tasks' 导致用户点了托盘却看到定时任务列表。
+    // 抽屉只挂在 ChatPanel 下，所以必须先切回 chat 再展开。
+    cleanups.push(window.luminaAPI?.onMenuEvent('tray:open-task-workspace', () => {
+      setActivePanel('chat')
+      useTaskWorkspace.getState().setPanelOpen(true)
+    }))
+    // ⚙️ 托盘浮层 → 打开设置
+    cleanups.push(window.luminaAPI?.onMenuEvent('tray:open-settings', () => {
       setActivePanel('settings')
     }))
     // 桌宠跳转：指定对话

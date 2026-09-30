@@ -580,6 +580,14 @@ export async function hireAndRun(jobs: JobSpec[], opts: { keepAlive?: boolean } 
     })
     try {
       const result = await runWorker(worker, job.task, job.timeoutMs)
+      // 空回复不等于成功。
+      // 为什么：worker 最常见的失败形态不是抛异常，而是「只调工具、不下结论」，
+      // 结果是空串。原来 ok 只取决于有没有 throw，于是空串一路标着 ok:true 回到主 agent，
+      // 再被 teamCollab 汇总成「N/N 成功」，主模型读到的是一个「查到了」的空信封，
+      // 于是自己编一个结论出来。空文本必须在此处就转成失败。
+      if (!String(result || '').trim()) {
+        throw new Error('worker 未产出任何文本（可能只调用了工具却没有给出结论）')
+      }
       const fin = await finalizeWorkerWorktree(worker, true)
       const durationMs = Date.now() - started
       // v3.33 绩效画像 + 关系 + trace

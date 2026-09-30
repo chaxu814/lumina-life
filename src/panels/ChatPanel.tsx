@@ -29,6 +29,7 @@ import ProactiveSidebar from '../components/ProactiveSidebar'
 import MomentsPanel from '../components/MomentsPanel'
 import AgentTaskBoard from '../components/AgentTaskBoard'
 import TaskWorkspacePanel from '../components/TaskWorkspacePanel'
+import ThinkingStepList, { normalizeThinkingStep } from '../components/ThinkingStepList'
 import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
 import AgentMoments from '../components/AgentMoments'
 import MemoryTheater from '../components/MemoryTheater'
@@ -133,6 +134,8 @@ export default function ChatPanel() {
   /** 🆕 v6.1: 当前消息ID，用于关联思考步骤 */
   const [currentReplyId] = useState(() => `reply-${Date.now()}`)
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
+  /** 运行中"实时思考"面板：输出期间默认展开，输出完毕/中断后自动收起（可随时点开） */
+  const [liveThinkingExpanded, setLiveThinkingExpanded] = useState(true)
   const [showPersonaPicker, setShowPersonaPicker] = useState(false)
   const [showVoicePicker, setShowVoicePicker] = useState(false)
   const [showHistory, setShowHistory] = useState(true)
@@ -165,6 +168,8 @@ export default function ChatPanel() {
   const fullResponseRef = useRef('')
   // ──────────────────────────────────────────────────────
   const bottomRef = useRef<HTMLDivElement>(null)
+  /** 消息列表滚动容器 — 用来判断用户是否已离开底部（离开就不再强制跟随） */
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef(false)
   // ── v2.7: 审批流状态 ────────────────────────────
@@ -179,7 +184,22 @@ export default function ChatPanel() {
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null)
 
   // ── 工具栏状态（与团队群聊一致） ──
-  const [thinkingMode, setThinkingMode] = useState(false)
+  // 🧠 思考模式 — 默认开启（与团队群聊 / ChatInputBar 保持一致）。
+  // 之前这里是 false，而后端 trackReasoning 未显式传时会走默认值，
+  // 造成"按钮显示关闭、实际行为又像开着"的两边不一致。
+  const [thinkingMode, setThinkingMode] = useState(true)
+  // handleSendWithText 没有依赖数组（避免重建回调导致输入框抖动），
+  // 所以开关状态必须走 ref 才能在发送时读到最新值。
+  const thinkingModeRef = useRef(thinkingMode)
+  thinkingModeRef.current = thinkingMode
+  // ── 流式状态用 ref 兜住 ──
+  // handleSendWithText 里的收尾代码是在 await 之后执行的，那时闭包捕获的
+  // agentEvents / currentThinkingSteps 早就过期了（还是发送前的旧快照），
+  // 导致"上轮思考过程"面板拿到空数据。统一从 ref 读。
+  const thinkingAccumRef = useRef<ThinkingStep[]>([])
+  const eventLogRef = useRef<any[]>([])
+  /** handleAbort 用：把还没落地的合帧立刻刷出去 */
+  const thinkingFlushRef = useRef<(() => void) | null>(null)
   const [realtimeVoiceActive, setRealtimeVoiceActive] = useState(false)
   const [computerUseActive, setComputerUseActive] = useState(false)
 
@@ -297,8 +317,31 @@ export default function ChatPanel() {
     prevModeRef.current = mode
   }, [mode])
 
-  // scroll
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, agentEvents, streamingText])
+  // ── 自动滚底 ──
+  // 之前是 `scrollIntoView({behavior:'smooth'})` 直接挂在 [messages, agentEvents, streamingText] 上。
+  // 这三个在流式输出时**每个 token 都是新引用**，于是每秒最多发起 60 次平滑滚动：
+  //   - 平滑滚动动画会被下一次调用打断重定向 → 滚轮"卡手"，拖上拖下很难受
+  //   - 而且完全没有"用户在不在底部"的判断，用户往上翻历史会被立刻拽回底部
+  // 现在：① 用户不在底部就不跟随 ② 用 rAF 合帧，一帧最多滚一次 ③ 流式期间用 auto 而非 smooth
+  const isUserAtBottomRef = useRef(true)
+  const scrollRafRef = useRef(0)
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollRef.current
+    if (!el) {return}
+    isUserAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }, [])
+  useEffect(() => {
+    if (!isUserAtBottomRef.current) {return}
+    if (scrollRafRef.current) {return}
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = 0
+      if (!isUserAtBottomRef.current) {return}
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    })
+  }, [messages, agentEvents, streamingText])
+  useEffect(() => () => {
+    if (scrollRafRef.current) { window.cancelAnimationFrame(scrollRafRef.current); scrollRafRef.current = 0 }
+  }, [])
 
   // 注入情绪条 CSS 动画
   useEffect(() => { injectEmotionStyles() }, [])
@@ -614,6 +657,7 @@ export default function ChatPanel() {
     useStore.getState().addMessage(currentConvId, 'user', userMessage)
     setLastAgentEvents([])
     setThinkingExpanded(false)
+    setLiveThinkingExpanded(true)
     setAgentEvents([{ type: 'thinking', text: '思考中...', timestamp: Date.now() }])
     useAgentRuntime.getState().setAgentEvents([{ type: 'thinking', text: '思考中...', timestamp: Date.now() }])
 
@@ -653,19 +697,50 @@ export default function ChatPanel() {
       apiKey: llmConfig.apiKey,
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.maxTokens,
-      maxToolCalls: 10,
+      // 之前是 10 —— 对"读文件 → 改 → 跑命令 → 验证结果"这种闭环几乎不够，
+      // Agent 经常在验证之前就被迫收尾，于是给出的结论没有验证支撑。
+      // 配合 agentRunner 里的重复工具封禁门，调高是安全的。
+      maxToolCalls: 20,
       systemPrompt: effectiveSystemPrompt,
       personaId: activePersona,
       disabledTools: getDisabledToolNames(skillConfig),
       contextWindow: llmConfig.contextWindow || 0,
+      // 🧠 思考开关接到后端：关掉就不再产生 thinking_stream
+      trackReasoning: thinkingModeRef.current,
     }
 
-    const eventLog: any[] = []
+    // 本轮的累积器挂在 ref 上：await 之后的收尾代码要读到的是"最终快照"，
+    // 而不是点击发送那一刻的旧闭包值（否则"上轮思考过程"面板拿到的是空数组）
+    const eventLog = (eventLogRef.current = [] as any[])
     let agentText = ''
     /** 🆕 v6.1: 当前消息的思维步骤追踪器 */
     const stepIds = new Set<string>()
     const stepStartTimes = new Map<string, number>()
-    const thinkingAccum: ThinkingStep[] = []
+    const thinkingAccum = (thinkingAccumRef.current = [] as ThinkingStep[])
+
+    // 🧹 流式合帧 ——
+    // 推理 token 来得比帧还快，逐个 setState 会把渲染队列堆满、把主线程占死。
+    // 用户看到的就是两件事：思考文字不像在"打印"，以及滚轮卡手。
+    // 这里把同一帧内的多次更新合并成一次渲染，累积逻辑完全不变。
+    let thinkingRaf = 0
+    const flushThinking = () => {
+      thinkingRaf = 0
+      setCurrentThinkingSteps([...thinkingAccum])
+      // 双写 — 本地 state(渲染) + runtime store(跨面板备份)
+      setAgentEvents([...eventLog])
+      useAgentRuntime.getState().setAgentEvents([...eventLog])
+    }
+    /** 收尾用：把还没落地的合帧立刻刷出去，避免结束时读到旧快照 */
+    const flushThinkingNow = () => {
+      if (thinkingRaf) { window.cancelAnimationFrame(thinkingRaf); thinkingRaf = 0 }
+      flushThinking()
+    }
+    const scheduleThinking = () => {
+      if (thinkingRaf) return
+      thinkingRaf = window.requestAnimationFrame(flushThinking)
+    }
+    // 暴露给 handleAbort，让"中断"也能拿到最后一帧的思考步骤
+    thinkingFlushRef.current = flushThinkingNow
 
     /** 🆕 v6.1: upsert 思维步骤 — 同 key 更新而非新增 (借鉴团队群聊) */
     const upsertThinkingStep = (s: ThinkingStep, stableKey?: string) => {
@@ -680,9 +755,8 @@ export default function ChatPanel() {
         (s as any)._stableKey = stableKey || ''
         thinkingAccum.push(s)
       }
-      setCurrentThinkingSteps([...thinkingAccum])
-      // 同步到 runtime store 以便跨面板访问
-      useAgentRuntime.getState().setAgentEvents([...eventLog])
+      // 合帧：一帧最多渲染一次，而不是每个 token 渲染一次
+      scheduleThinking()
     }
 
     const unsub = window.luminaAPI.onAgentEvent((ev) => {
@@ -690,11 +764,12 @@ export default function ChatPanel() {
 
       // 推理流 — 不再吞掉！推入 ThinkingStep 显示推理内容
       if (ev.type === 'thinking_stream') {
+        const streamStepId = `re-${currentReplyId}`
         const stableKey = `reasoning:${currentReplyId}`
         if (ev.isLast) {
           const existing = thinkingAccum.find(s => (s as any)._stableKey === stableKey)
           upsertThinkingStep({
-            id: `re-${Date.now()}`,
+            id: streamStepId,
             type: 'thinking',
             label: '💭 推理完成',
             result: existing?.result,
@@ -705,7 +780,7 @@ export default function ChatPanel() {
           const existing = thinkingAccum.find(s => (s as any)._stableKey === stableKey)
           const fullText = existing?.result ? existing.result + ev.text : ev.text
           upsertThinkingStep({
-            id: `re-${Date.now()}`,
+            id: streamStepId,
             type: 'thinking',
             label: '💭 推理中...',
             result: fullText.slice(-5000),
@@ -715,7 +790,7 @@ export default function ChatPanel() {
           // isFirst 只创建占位，不累积文本
           if (!thinkingAccum.find(s => (s as any)._stableKey === stableKey)) {
             upsertThinkingStep({
-              id: `re-${Date.now()}`,
+              id: streamStepId,
               type: 'thinking',
               label: '💭 推理中...',
               timestamp: Date.now(),
@@ -749,13 +824,14 @@ export default function ChatPanel() {
         return
       }
 
-      // 其他事件正常推入
+      // 其他事件正常推入（token_update / text 等同样高频，交给合帧统一渲染）
       eventLog.push(ev)
-      // 双写 — 本地 state (渲染) + runtime store (跨面板备份)
-      setAgentEvents([...eventLog])
-      useAgentRuntime.getState().setAgentEvents([...eventLog])
+      scheduleThinking()
 
       // 工具事件 → ThinkingStep
+      // 注：工具调用的「持久记录」由 services/taskWorkspaceBridge.ts 统一写入
+      // taskWorkspaceStore —— 那里是一处订阅覆盖所有面板（单聊 + 团队群聊），
+      // 这里只维护本轮瞬时状态（resetAgentRuntime 会清）。
       if (ev.type === 'tool_start' && ev.tool) {
         useAgentRuntime.getState().addToolTrace(ev.tool, 'running')
         upsertThinkingStep({
@@ -830,7 +906,8 @@ export default function ChatPanel() {
       }
       unsub()
       // 保存结构化思考步骤供面板展示
-      setLastAgentEvents([...agentEvents, ...currentThinkingSteps.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
+      flushThinkingNow()
+      setLastAgentEvents([...eventLogRef.current, ...thinkingAccumRef.current.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
       setAgentEvents([])
       setCurrentThinkingSteps([])
       useAgentRuntime.getState().resetAgentRuntime()
@@ -881,7 +958,7 @@ export default function ChatPanel() {
         }
       }
     } catch (err: any) {
-      unsub(); setLastAgentEvents([...agentEvents, ...currentThinkingSteps.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
+      unsub(); flushThinkingNow(); setLastAgentEvents([...eventLogRef.current, ...thinkingAccumRef.current.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
       setAgentEvents([])
       setCurrentThinkingSteps([])
       useAgentRuntime.getState().resetAgentRuntime()
@@ -906,10 +983,14 @@ export default function ChatPanel() {
   const handleAbort = () => {
     abortRef.current = true
     window.luminaAPI.agentAbort()
-    // 保留思考步骤供查看
-    setLastAgentEvents([...agentEvents, ...currentThinkingSteps.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
+    // 保留思考步骤供查看 —— 读 ref 而不是闭包旧值，并把没落地的合帧刷出来
+    thinkingFlushRef.current?.()
+    setLastAgentEvents([...eventLogRef.current, ...thinkingAccumRef.current.map(s => ({ ...s, type: 'thinking', text: `${s.label}${s.result ? '\n' + s.result : ''}` }))])
     setAgentEvents([])
     setCurrentThinkingSteps([])
+    // 中断后转入"上轮思考过程"折叠面板，同样以收起状态呈现
+    setLiveThinkingExpanded(false)
+    setThinkingExpanded(false)
     useAgentRuntime.getState().resetAgentRuntime()
     setIsProcessing(false)
     // v2.4.1: 停止打字动画
@@ -1643,7 +1724,7 @@ export default function ChatPanel() {
         ) : (<> 
 
         {/* ── Messages ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        <div ref={chatScrollRef} onScroll={handleChatScroll} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
           {messages.length === 0 && !isProcessing && (
             <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 60, fontSize: 14 }}>
               <style>{`
@@ -1863,23 +1944,20 @@ export default function ChatPanel() {
           {lastAgentEvents.length > 0 && agentEvents.length === 0 && (
             <div style={{ marginBottom: 8 }}>
               <button
+                className="thinking-toggle"
                 onClick={() => setThinkingExpanded(!thinkingExpanded)}
+                aria-expanded={thinkingExpanded}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '5px 10px', borderRadius: 8,
                   border: '1px solid var(--border-light)', background: 'var(--surface-50)',
                   fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer',
-                  transition: 'background 0.15s', width: 'fit-content',
+                  width: 'fit-content',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--border-light)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface-50)')}
               >
-                <span style={{
-                  display: 'inline-block',
-                  transition: 'transform 0.2s',
-                  transform: thinkingExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                  fontSize: 8,
-                }}>▶</span>
+                <span className="thinking-chevron" style={{ fontSize: 8 }}>
+                  ▶
+                </span>
                 <span>🧠 思考过程</span>
                 <span style={{
                   background: 'var(--border-light)', borderRadius: 8,
@@ -1889,117 +1967,64 @@ export default function ChatPanel() {
                   <span style={{ fontSize: 9 }}>🔧</span>
                 )}
               </button>
-              {thinkingExpanded && (
-                <div style={{
-                  marginTop: 4, padding: '6px 8px',
-                  background: 'var(--surface-50)', borderRadius: 8,
-                  border: '1px solid var(--border-light)',
-                  maxHeight: 320, overflowY: 'auto',
-                }}>
-                  {lastAgentEvents.map((ev: any, i: number) => {
-                    const isThinking = ev.type === 'thinking'
-                    const isToolStart = ev.type === 'tool_start'
-                    const isToolEnd = ev.type === 'tool_end' || ev.type === 'tool_error'
-                    return (
-                      <div key={i} style={{
-                        marginBottom: 3, display: 'flex', alignItems: 'flex-start',
-                        gap: 6, fontSize: 11,
-                        borderBottom: i < lastAgentEvents.length - 1 ? '1px solid #f3f4f6' : 'none',
-                        paddingBottom: 3,
-                      }}>
-                        <span style={{ fontSize: 12, flexShrink: 0, marginTop: 0 }}>
-                          {isThinking && (ev.label?.includes('推理') ? '💭' : '🤔')}
-                          {isToolStart && '🔨'}
-                          {isToolEnd && (ev.result?.ok !== false ? '✅' : '❌')}
-                          {!isThinking && !isToolStart && !isToolEnd && '📋'}
-                        </span>
-                        <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, flex: 1, minWidth: 0 }}>
-                          {isThinking && (
-                            <>
-                              <span style={{ fontWeight: 500 }}>{ev.label || ev.text?.slice(0, 60)}</span>
-                              {ev.result && ev.result !== ev.label && ev.result !== ev.text && (
-                                <div style={{
-                                  marginTop: 2, padding: '2px 6px',
-                                  background: 'var(--green-100)', borderRadius: 4,
-                                  color: 'var(--text-primary)', fontSize: 10,
-                                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                                  maxHeight: 120, overflowY: 'auto',
-                                }}>{ev.result.slice(0, 800)}</div>
-                              )}
-                            </>
-                          )}
-                          {isToolStart && (
-                            <span>
-                              <b>{ev.tool}</b>
-                              {ev.args ? ` ${ev.args.slice(0, 80)}` : ''}
-                            </span>
-                          )}
-                          {isToolEnd && (
-                            <div style={{ color: ev.result?.ok !== false ? '#16a34a' : '#dc2626' }}>
-                              <span style={{ fontWeight: ev.tool ? 600 : 400 }}>
-                                {ev.tool && `${ev.tool}: `}
-                              </span>
-                              <span style={{ fontSize: 10 }}>
-                                {(ev.result || ev.error || '(完成)').slice(0, 200)}
-                              </span>
-                              {ev.durationMs && (
-                                <span style={{ marginLeft: 6, color: 'var(--text-secondary)', fontSize: 9 }}>
-                                  {(ev.durationMs / 1000).toFixed(1)}s
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
+              {/* grid-template-rows: 0fr → 1fr 做展开/收起动画，无需 JS 量高度 */}
+              <div className={'thinking-collapse' + (thinkingExpanded ? ' open' : '')}>
+                <div className="thinking-clip">
+                  <div style={{
+                    marginTop: 4, padding: '4px 6px',
+                    background: 'var(--surface-50)', borderRadius: 8,
+                    border: '1px solid var(--border-light)',
+                    maxHeight: 320, overflowY: 'auto', overflowX: 'hidden',
+                  }}>
+                    <ThinkingStepList
+                      steps={lastAgentEvents.map((ev: any, i: number) => normalizeThinkingStep(ev, i))}
+                    />
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
-          {/* 🆕 v6.1: 实时思考过程 — 运行中展示（借鉴团队群聊） */}
+          {/* 🆕 v6.1: 实时思考过程 — 运行中展示。
+              输出期间默认展开，输出完毕自动收起（面板卸载、转入下方折叠面板）。
+              内部复用 ThinkingStepList，避免和上轮折叠面板、群聊三套渲染各走各的。 */}
           {isProcessing && currentThinkingSteps.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <div style={{
-                padding: '6px 8px', background: 'var(--yellow-100)', borderRadius: 8,
-                border: '1px solid #fde68a', maxHeight: 320, overflowY: 'auto',
-              }}>
-                <div style={{ fontSize: 11, color: 'var(--yellow-500)', fontWeight: 600, marginBottom: 4 }}>
-                  🧠 实时思考中...
+              <button
+                className="thinking-toggle"
+                onClick={() => setLiveThinkingExpanded(v => !v)}
+                aria-expanded={liveThinkingExpanded}
+                aria-controls="live-thinking"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '5px 10px', borderRadius: 8,
+                  border: '1px solid var(--border-light)', background: 'var(--surface-50)',
+                  fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer',
+                  width: 'fit-content',
+                }}
+              >
+                <span className="thinking-chevron" style={{ fontSize: 8 }}>
+                  ▶
+                </span>
+                <span className="thinking-live-dot" />
+                <span>🧠 思考中</span>
+                <span style={{
+                  background: 'var(--border-light)', borderRadius: 8,
+                  padding: '0px 5px', fontSize: 9, color: 'var(--text-secondary)',
+                }}>{currentThinkingSteps.length}步</span>
+              </button>
+              {/* grid-template-rows: 0fr → 1fr 做展开/收起动画，无需 JS 量高度 */}
+              <div id="live-thinking" className={'thinking-collapse' + (liveThinkingExpanded ? ' open' : '')}>
+                <div className="thinking-clip">
+                  <div style={{
+                    marginTop: 4, padding: '4px 6px',
+                    background: 'var(--surface-50)', borderRadius: 8,
+                    border: '1px solid var(--border-light)',
+                    maxHeight: 320, overflowY: 'auto', overflowX: 'hidden',
+                  }}>
+                    <ThinkingStepList steps={currentThinkingSteps} />
+                  </div>
                 </div>
-                {currentThinkingSteps.map((step, i) => {
-                  const isReasoning = step.label?.includes('推理')
-                  return (
-                    <div key={step.id || i} style={{
-                      marginBottom: 3, display: 'flex', alignItems: 'flex-start',
-                      gap: 6, fontSize: 11,
-                      borderBottom: i < currentThinkingSteps.length - 1 ? '1px solid var(--yellow-100)' : 'none',
-                      paddingBottom: 3,
-                    }}>
-                      <span style={{ fontSize: 12, flexShrink: 0 }}>
-                        {isReasoning ? '💭' : step.type === 'tool_start' ? '🔨' : step.type === 'tool_end' ? '✅' : step.type === 'tool_error' ? '❌' : '🤔'}
-                      </span>
-                      <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, flex: 1, minWidth: 0 }}>
-                        <span style={{ fontWeight: 500 }}>{step.label}</span>
-                        {step.result && step.result !== step.label && (
-                          <div style={{
-                            marginTop: 2, padding: '2px 6px',
-                            background: isReasoning ? 'var(--green-100)' : 'var(--surface-100)',
-                            borderRadius: 4, color: 'var(--text-primary)', fontSize: 10,
-                            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                            maxHeight: 100, overflowY: 'auto',
-                          }}>{step.result.slice(0, 500)}</div>
-                        )}
-                        {step.durationMs && (
-                          <span style={{ marginLeft: 6, color: 'var(--text-secondary)', fontSize: 9 }}>
-                            {(step.durationMs / 1000).toFixed(1)}s
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
             </div>
           )}

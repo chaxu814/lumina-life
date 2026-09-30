@@ -18,6 +18,34 @@ import type { AgentMode, TeamMemberId } from '../../agentTeamTypes'
 import { getDelegationManager } from '../../delegationManager'
 
 // ═══════════════════════════════════════════════════════════
+// 「没做成」的统一口径（与 tools/registry.ts 的 buildNotExecutedResult 对齐）
+//
+// 为什么不 import registry 里那个函数：registry.ts 在主进程侧加载整张
+//   工具表，工具实现再反向 import 它会形成 registry ↔ impl 循环依赖。
+//   所以各文件各写一份本地小函数，用同一套文案保证行为一致。
+//
+// 为什么失败必须 ok:false：agentRunner 只在 ok:true 时把 content 原样回灌
+//   给模型（ok:false 时回灌 `工具错误: ${error}`）。返回 ok:true 的失败
+//   会以「这就是记忆/上下文内容」的形状进上下文，模型会把「查不到」当成
+//   「不存在」继续编 —— 编造就是这么来的。
+//
+// 边界口径：**确实查了、确实为空**属于成功的查询，保持 ok:true，
+//   但必须写明「查询成功，0 条结果」；只有真的没做成才走本函数。
+// ═══════════════════════════════════════════════════════════
+const NOT_EXECUTED_GUIDANCE =
+  '禁止据此作答，也禁止把这段内容当作事实依据继续推理；请改用可用工具重试，或直接告诉用户你做不到以及原因。'
+
+function notExecuted(callId: string, toolName: string, reason: string, detail: string): ToolResult {
+  return {
+    callId,
+    ok: false,
+    content: `⛔ 未执行成功（${toolName}，原因：${reason}）。以下是失败说明，不是结果。${NOT_EXECUTED_GUIDANCE}${detail ? `\n\n${detail}` : ''}`,
+    error: `未执行成功（${toolName}，原因：${reason}）。${NOT_EXECUTED_GUIDANCE}${detail ? ` 实际错误/原始输出：${detail}` : ''}`,
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
 // mode_switch — 切换工作模式
 // ═══════════════════════════════════════════════════════════
 
@@ -160,7 +188,9 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
     const store = getStructuredMemory()
     const results = await store.search(query, 5)
     if (!results || results.length === 0) {
-      return { callId, ok: true, content: '未找到相关记忆。' }
+      // 口径：记忆库确实检索了、确实 0 条 → 成功的查询，保持 ok:true，
+      // 但写明「0 条」，避免模型把「没检索到」当成「用户从没提过」。
+      return { callId, ok: true, content: `✅ 查询成功，0 条结果：记忆库中没有与「${query}」相关的记录。这表示没检索到，不代表不存在。` }
     }
     const formatted = results
       .map((r: any, i: number) => `${i + 1}. [${r.source || 'memory'}] ${r.content || r.text}`)
@@ -178,26 +208,31 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
 // 现在 (v8.0): 走 DelegationManager → 目标 Agent 的独立 Runner → 保留完整上下文
 //
 // 工作流:
-//   Lumina 调用此工具 → DM 路由到 Yak/热茶的独立 Runner
+//   Lumina 调用此工具 → DM 路由到 热茶/Yak 的独立 Runner
 //   → 目标 Runner 用自己的 LLM/工具/记忆处理
 //   → 返回结果，Lumina 整理成人话回复用户
+//
+// ⚠️ 路由口径（与 accessControl.ts 权限表一致，改一处必须改另一处）：
+//   写代码/调试/重构 → recha（热茶，程序员）
+//   审查/挑错/风险评估 → yak（Yak，数据分析师兼审查员）
+//   历史版本这里是反的，会把编码任务派给没有写权限的一方，等于任务注定失败。
 // ═══════════════════════════════════════════════════════════
 
 export const delegateToDef: ToolDef = {
   name: 'delegate_to',
   description:
-    '⭐ 委托任务给团队成员（写代码/浏览→Yak📊，审查找错→热茶🍵）。\n' +
+    '⭐ 委托任务给团队成员（写代码→热茶🍵，审查找错→Yak📊）。\n' +
     '只有以下 5 种场景才用，其他事你自己干：\n' +
-    '1. 写代码/调试 bug → yak\n' +
-    '2. 审查代码/找逻辑漏洞 → recha\n' +
-    '3. 反面意见/风险评估 → recha\n' +
-    '4. 浏览网页/读取 URL 内容 → yak（用 fetch_content）\n' +
-    '5. 搜索研究/资料查找 → yak（用 web_research）\n' +
-    'Yak 和 热茶 有独立的 LLM 和上下文，能记住之前的委托历史。',
+    '1. 写代码/调试 bug → recha（热茶）\n' +
+    '2. 审查代码/找逻辑漏洞 → yak（Yak）\n' +
+    '3. 反面意见/风险评估 → yak（Yak）\n' +
+    '4. 浏览网页/读取 URL 内容 → yak（Yak，用 fetch_content）\n' +
+    '5. 搜索研究/资料查找 → yak（Yak，用 web_research）\n' +
+    '热茶 和 Yak 有独立的 LLM 和上下文，能记住之前的委托历史。',
   params: {
     to: {
       type: 'string',
-      description: '目标成员：\n  - yak 📊：代码工程师（写代码、调试、重构）\n  - recha 🍵：审查员（审查代码、挑错、风险评估）',
+      description: '目标成员：\n  - recha 🍵：代码工程师（写代码、调试、重构）\n  - yak 📊：数据分析师兼审查员（审查代码、挑错、风险评估，只读不写）',
       required: true,
     },
     task: {
@@ -229,7 +264,7 @@ export async function delegateTo(args: Record<string, any>): Promise<ToolResult>
   if (!to || !['yak', 'recha'].includes(to)) {
     return {
       callId, ok: false, content: '',
-      error: '目标成员必须是 yak 📊（代码工程师）或 recha 🍵（审查员）',
+      error: '目标成员必须是 recha 🍵（代码工程师）或 yak 📊（数据分析师兼审查员）',
     }
   }
 
@@ -252,7 +287,7 @@ export async function delegateTo(args: Record<string, any>): Promise<ToolResult>
     if (!dm.isConfigured(to as TeamMemberId)) {
       return {
         callId, ok: false, content: '',
-        error: `${to === 'yak' ? 'Yak 📊' : '热茶 🍵'} 未配置 LLM，暂时不可用。请先在设置中为该 Agent 配置 LLM。`,
+        error: `${to === 'recha' ? '热茶 🍵' : 'Yak 📊'} 未配置 LLM，暂时不可用。请先在设置中为该 Agent 配置 LLM。`,
       }
     }
 
@@ -297,7 +332,7 @@ export async function delegateTo(args: Record<string, any>): Promise<ToolResult>
 export const delegateChainDef: ToolDef = {
   name: 'delegate_chain',
   description:
-    '委托Yak写代码 → 自动转热茶审查 → 有问题自动返回Yak修改的迭代流水线。\n' +
+    '委托热茶写代码 → 自动转Yak审查 → 有问题自动返回热茶修改的迭代流水线。\n' +
     '适用于需要代码实现+代码审查的复杂任务。\n' +
     '系统会自动控制迭代次数（最多5轮），不会无限循环。',
   params: {
@@ -350,11 +385,11 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
   }
 
   for (let i = 1; i <= maxIterations; i++) {
-    console.log(`[delegate_chain] 📦 第${i}轮: Yak 写代码`)
+    console.log(`[delegate_chain] 📦 第${i}轮: 热茶 写代码`)
 
-    // Step 1: Yak 写代码
-    const yakResult = await dm.delegate(fromId, {
-      to: 'yak',
+    // Step 1: 热茶（recha，程序员）写代码 —— 它才是有写权限的那一方
+    const rechaResult = await dm.delegate(fromId, {
+      to: 'recha',
       task: i === 1
         ? task + (prevContext ? '\n\n已有上下文:\n' + prevContext : '')
         : `修复/改进以下代码:\n\n${prevContext}\n\n原始任务: ${task}`,
@@ -363,30 +398,8 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
       filePaths,
     })
 
-    if (!yakResult.success) {
-      return { callId, ok: false, content: '', error: `在第${i}轮Yak执行失败: ${yakResult.error}` }
-    }
-
-    if (yakResult.questions && yakResult.questions.length > 0) {
-      return {
-        callId, ok: false, content: '',
-        error: `Yak 需要确认: ${yakResult.questions.join('; ')}。请先回答后再启动流水线。`,
-      }
-    }
-
-    // Step 2: 热茶 审查
-    const reviewTask = `审查以下代码：\n\n${yakResult.content.slice(0, 4000)}\n\n关注：逻辑正确性、边界条件、安全问题、性能问题。`
-    console.log(`[delegate_chain] 📦 第${i}轮: 热茶 审查`)
-
-    const rechaResult = await dm.delegate(fromId, {
-      to: 'recha',
-      task: reviewTask,
-      taskType: 'code_review',
-      context: '',
-    })
-
     if (!rechaResult.success) {
-      return { callId, ok: false, content: '', error: `在第${i}轮热茶审查失败: ${rechaResult.error}` }
+      return { callId, ok: false, content: '', error: `在第${i}轮热茶执行失败: ${rechaResult.error}` }
     }
 
     if (rechaResult.questions && rechaResult.questions.length > 0) {
@@ -396,15 +409,37 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
       }
     }
 
-    const reviewPassed = /✅|通过|批准|认可|没问题|可以合并|同意|LGTM|approved/i.test(rechaResult.content)
-    prevContext = `第${i}轮结果:\nYak: ${yakResult.content.slice(0, 1000)}\n\n热茶: ${rechaResult.content.slice(0, 1000)}`
+    // Step 2: Yak（审查员）审查
+    const reviewTask = `审查以下代码：\n\n${rechaResult.content.slice(0, 4000)}\n\n关注：逻辑正确性、边界条件、安全问题、性能问题。`
+    console.log(`[delegate_chain] 📦 第${i}轮: Yak 审查`)
+
+    const yakResult = await dm.delegate(fromId, {
+      to: 'yak',
+      task: reviewTask,
+      taskType: 'code_review',
+      context: '',
+    })
+
+    if (!yakResult.success) {
+      return { callId, ok: false, content: '', error: `在第${i}轮Yak审查失败: ${yakResult.error}` }
+    }
+
+    if (yakResult.questions && yakResult.questions.length > 0) {
+      return {
+        callId, ok: false, content: '',
+        error: `Yak 需要确认: ${yakResult.questions.join('; ')}。请先回答后再启动流水线。`,
+      }
+    }
+
+    const reviewPassed = /✅|通过|批准|认可|没问题|可以合并|同意|LGTM|approved/i.test(yakResult.content)
+    prevContext = `第${i}轮结果:\n热茶: ${rechaResult.content.slice(0, 1000)}\n\nYak: ${yakResult.content.slice(0, 1000)}`
 
     if (reviewPassed) {
       console.log(`[delegate_chain] ✅ 第${i}轮审查通过！`)
-      dm.setContext('last_chain_result', yakResult.content.slice(0, 500), 'recha')
+      dm.setContext('last_chain_result', rechaResult.content.slice(0, 500), 'recha')
       return {
         callId, ok: true,
-        content: `## 流水线结果（第${i}轮通过）\n\n### Yak 输出\n${yakResult.content}\n\n### 热茶审查\n${rechaResult.content}\n\n> 共 ${i} 轮迭代完成`,
+        content: `## 流水线结果（第${i}轮通过）\n\n### 热茶（程序员）输出\n${rechaResult.content}\n\n### Yak 审查\n${yakResult.content}\n\n> 共 ${i} 轮迭代完成`,
       }
     }
 
@@ -413,7 +448,7 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
     } else {
       return {
         callId, ok: true,
-        content: `## 流水线达到最大轮数（${maxIterations}轮）\n\n### 最终Yak输出\n${yakResult.content}\n\n### 最终热茶审查\n${rechaResult.content}\n\n> ⚠️ 达到最大迭代次数，仍有未解决的问题。建议手动审查。`,
+        content: `## 流水线达到最大轮数（${maxIterations}轮）\n\n### 最终热茶（程序员）输出\n${rechaResult.content}\n\n### 最终 Yak 审查\n${yakResult.content}\n\n> ⚠️ 达到最大迭代次数，仍有未解决的问题。建议手动审查。`,
       }
     }
   }
@@ -573,7 +608,14 @@ export async function loadContext(args: Record<string, any>): Promise<ToolResult
   if (key) {
     const entry = dm.getContext(key.trim())
     if (!entry) {
-      return { callId, ok: true, content: `未找到共享上下文 [${key}]` }
+      // 按 key 精确读取没读到 = 没取到内容，与「查全量为空」性质不同，
+      // 必须显式失败，否则模型会拿没有的值继续推理。
+      const available = dm.getAllContext().map(e => e.key)
+      return notExecuted(
+        callId, 'load_context',
+        `未找到共享上下文 [${key}]`,
+        `当前已存在的 key: ${available.length > 0 ? available.join(', ') : '(一个都没有)'}\n可用 load_context() 不带参数列出全部。`,
+      )
     }
     return {
       callId, ok: true,
@@ -583,7 +625,8 @@ export async function loadContext(args: Record<string, any>): Promise<ToolResult
 
   const all = dm.getAllContext()
   if (all.length === 0) {
-    return { callId, ok: true, content: '共享上下文为空' }
+    // 口径：全量读取确实执行了、确实为空 → 成功的查询，保持 ok:true
+    return { callId, ok: true, content: '✅ 查询成功，0 条结果：团队共享上下文当前为空。' }
   }
 
   const lines = all.map(e => `- [${e.key}] ${e.updatedBy}: ${e.value.slice(0, 150)}${e.value.length > 150 ? '...' : ''}`)

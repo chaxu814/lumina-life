@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // tools/index.ts — 工具注册入口 (v3.6: 已注册 62+ 工具)
 // v3.6 新增: file_search（全盘递归搜索）+ disk_list（驱动器列表）
 // v3.0 新增: 团队协作工具 + 结构化记忆
@@ -123,6 +123,8 @@ import {
 } from './impl/computerUse'
 // 🎮 Minecraft 游戏集成（双路线：视觉 VLM / Mineflayer 程序化）
 import { registerGamingTools } from '../gaming'
+// 🌐 应用内置浏览器（用户可见窗口，Agent 可驱动）
+import { registerBrowserTools } from '../browser/browserTools'
 // 🔬 Phase C: Deep Research 工具
 import { deepResearchDef, deepResearch } from './impl/deepResearch'
 // 📡 Phase C: 渠道消息工具
@@ -322,6 +324,9 @@ export function registerAllTools(): void {
 
   // 🎮 Minecraft 游戏集成（视觉 + 程序化双路线）
   registerGamingTools()
+
+  // 🌐 内置浏览器工具（browser_*）
+  registerBrowserTools(registerTool)
 
   // 📬 Agent 邮件 (v2.6)
   registerTool(mailSendDef, mailSendHandler)

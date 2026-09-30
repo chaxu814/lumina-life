@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './styles/global.css'
 import './styles/app.css'
+import './styles/thinking.css'      // 🧠 思考过程步骤列表（单聊/群聊共用）
 import './styles/task-workspace.css'  // task workspace panel
 import './styles/theme-vars.css'       // 🎨 主题皮肤生态：语义化 CSS 变量
 import './styles/a11y-high-contrast.css' // ♿ 高对比度主题 + 字号缩放（创新提案 7）

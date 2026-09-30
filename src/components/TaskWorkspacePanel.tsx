@@ -19,6 +19,7 @@ import { useStore } from '../stores/appStore'
 import AgentStatusCards from './AgentStatusCards'
 import TaskTimeline from './TaskTimeline'
 import ToolExecutionFeed from './ToolExecutionFeed'
+import TaskBoardPanel from './TaskBoardPanel'
 import ArtifactViewer from './ArtifactViewer'
 // dev-only：产物渲染器自检条；生产构建被静态替换为 false 并 tree-shake
 import ArtifactSelfTest from './ArtifactSelfTest'
@@ -140,6 +141,14 @@ const TaskWorkspacePanel: React.FC = () => {
 
         {/* 顶部任务标签栏 */}
         <div className="tw-tabbar">
+          {/* 内置浏览器入口：Agent 用 browser_* 工具操作时，用户在这里能直接看到 */}
+          <button
+            className="tw-tab tw-tab-browser"
+            title="打开内置浏览器"
+            onClick={() => { window.luminaAPI?.openBrowser?.() }}
+          >
+            <span>🌐 浏览器</span>
+          </button>
           {tasks.slice(-5).map((t) => (
             <div
               key={t.id}
@@ -162,6 +171,7 @@ const TaskWorkspacePanel: React.FC = () => {
         {/* 内容区 */}
         <div className="tw-content">
           <AgentStatusCards />
+          <TaskBoardPanel />
           <ToolExecutionFeed />
           <TaskTimeline taskId={activeTaskId === '__runtime__' ? null : activeTaskId} />
         </div>

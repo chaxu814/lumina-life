@@ -113,6 +113,119 @@ export function clearModelToolBlacklist(_model?: string): void {
   // 不再需要清除全局黑名单（黑名单已移除）
   // 保留此导出以避免现有调用报错
 }
+
+// ───────────────────────────────────────────────────────────
+// 失败原因分类
+//
+// 早前所有失败都回同一句"抱歉，出了点问题，请稍后重试"。问题有两层：
+//   1. 用户分不清是模型超时、鉴权失败还是网络断了，没法采取任何行动
+//   2. Agent 自己拿不到可据以调整策略的信号，只能原样失败
+//
+// 这里的取舍：**透出可行动的原因分类，但不透出原始错误串**——
+// 原始串里常有 URL、本地路径、堆栈、密钥片段，直接回显既没用也不安全。
+// ───────────────────────────────────────────────────────────
+export type RunFailureKind =
+  | 'timeout'        // 模型响应超时
+  | 'auth'           // 鉴权 / 额度
+  | 'rate_limit'     // 触发限流
+  | 'network'        // 网络不可达
+  | 'context_length' // 上下文超长
+  | 'content_filter' // 被内容安全拦截
+  | 'cancelled'      // 用户主动中止
+  | 'unknown'
+
+const FAILURE_PATTERNS: Array<[RunFailureKind, RegExp, string]> = [
+  ['auth', /api[\s_-]?key|unauthorized|401|403|forbidden|invalid.*token|鉴权|密钥|额度|余额|quota/i,
+    '模型服务的鉴权或额度有问题，请检查 API Key / 账户余额后重试。'],
+  ['rate_limit', /rate[\s_-]?limit|429|too many requests|限流|频率/i,
+    '触发了模型服务的频率限制，等几十秒后重试即可。'],
+  ['timeout', /timeout|timed[\s_-]?out|超时|etimedout|aborted by timeout/i,
+    '模型响应超时，这次没能在时限内完成。可以把问题拆小一点再问一次。'],
+  ['context_length', /context[\s_-]?length|maximum context|too many tokens|上下文.*(超|长)/i,
+    '这次对话的内容超出了模型的上下文容量。建议新开一轮对话，或先让我总结一下再继续。'],
+  ['content_filter', /content[\s_-]?filter|content_policy|safety|敏感词|审核不通过/i,
+    '请求被模型服务的内容安全策略拦截了，换一种问法通常就能通过。'],
+  ['network', /econnrefused|enotfound|econnreset|network|fetch failed|getaddrinfo|网络|连接/i,
+    '连不上模型服务，请检查网络或代理设置。'],
+]
+
+/**
+ * 所有"没有真的执行"的路径统一用它拼提示。
+ *
+ * 为什么要统一：模型拿到一段"⛔ 被拦截"的文字时，如果不知道这件事**根本没发生**，
+ * 就很容易把它当成一次失败的结果继续推理（甚至当成事实写进答案）。
+ * 明确写"这不是结果 + 禁止据此作答"是消除这类幻觉最有效的一句。
+ */
+export function notExecutedNote(reason: string): string {
+  return `⛔ 未执行成功（原因：${reason}）。以下是失败说明，**不是结果**。`
+    + `禁止把这段内容当作事实依据继续推理，也禁止写进最终回答。`
+    + `请改用其他可行方式重试；若确实做不到，就直接告诉用户"做不到 + 为什么"。`
+}
+
+/** 工具返回 ok:false 时的回灌文本（ok:true 时原样返回 content） */
+function toolResultText(result: { ok: boolean; content?: string; error?: string }): string {
+  return result.ok
+    ? (result.content || '')
+    : notExecutedNote(result.error || '未知错误')
+}
+
+/**
+ * 把裁剪后的历史整理成"API 协议合法"的形态。
+ *
+ * 为什么需要：OpenAI 兼容协议要求 `role:'tool'` 消息必须**紧跟**一条带 `tool_calls`
+ * 的 assistant 消息，且 tool_call_id 要能对上。直接 `slice(-N)` 很容易从半截开始，
+ * 留下一堆没有父消息的孤儿 tool 消息 → 请求直接 400。
+ * 早前恢复轮只留 `[system, user]`，协议上安全但会丢全部上下文；现在要保留上下文，
+ * 就必须自己把协议补齐。
+ *
+ * 处理方式：孤儿 tool 消息降级成 user 角色的历史说明 —— 既不丢信息，也不违反协议。
+ */
+export function sanitizeHistoryForApi<T extends { role: string; content?: any; tool_calls?: any[]; tool_call_id?: string }>(
+  msgs: T[],
+): T[] {
+  const out: T[] = []
+  for (const m of msgs) {
+    if (m.role !== 'tool') { out.push(m); continue }
+
+    // 往前跳过已保留的连续 tool 消息，找到最近的一条**非 tool** 消息作为父。
+    // 一条 assistant 可以带多个 tool_calls，后面会跟多条 tool 消息，
+    // 只看紧邻的上一条会把第二条误判成孤儿。
+    let j = out.length - 1
+    while (j >= 0 && out[j].role === 'tool') { j-- }
+    const parent = j >= 0 ? out[j] : undefined
+
+    const parentHasCall =
+      !!parent && parent.role === 'assistant' &&
+      Array.isArray(parent.tool_calls) &&
+      parent.tool_calls.some((tc: any) => tc?.id === m.tool_call_id)
+
+    if (parentHasCall) {
+      out.push(m)
+    } else {
+      // 孤儿：降级为普通历史说明，保留内容但不假装它是一次合法的工具返回
+      out.push({
+        ...m,
+        role: 'user',
+        tool_calls: undefined,
+        tool_call_id: undefined,
+        content: `[历史工具结果·仅供参考] ${String(m.content ?? '')}`,
+      } as T)
+    }
+  }
+  return out
+}
+
+/** 把上述失败原因映射成一句用户能据此行动的说明；未知情况给通用但诚实的话术 */
+export function describeRunFailure(raw?: string): string {
+  const s = String(raw || '')
+  if (/abort|cancel|用户.*(中止|取消)/i.test(s)) {
+    return '这次回答被中止了。'
+  }
+  for (const [kind, re, text] of FAILURE_PATTERNS) {
+    if (re.test(s)) return text
+  }
+  return '这次没能完成，是模型服务返回了一个无法识别的错误。换个说法或稍后重试通常能解决。'
+}
 // 工具调用噪声过滤器已抽取到 ./agent/toolNoise（cleanToolNoiseText，行为保持不变）
 
 // ═══════════════════════════════════════════════════════════
@@ -1630,14 +1743,36 @@ private summarizer: ConversationSummarizer | null = null
               content: '[内部续话指令·非用户发言] 请直接回答用户的问题，不要继续搜索或等待。',
             })
           } else {
-            const sysBlocks = this.messages.filter(m => m.role === 'system')
             // v10.9: 多模态内容提取纯文本
             const lastUserText = Array.isArray(lastUserMsg.content)
               ? (lastUserMsg.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join(' ')
               : (lastUserMsg.content || '')
+            // 🔧 修复：之前这里把 messages 砍到只剩 [system, user(原问题)]，
+            //   丢掉了**全部工具结果和上文**。后果是模型在恢复轮里"失忆"，
+            //   会根据一句孤立的问题重新编一遍答案——用户看到的是完全不同的、
+            //   看似合理实则没依据的回答，而且察觉不到异常。
+            // 现在：保留 system + 最近 12 条（含工具结果）+ 原问题重述，
+            // 并显式告诉模型"你已经失败过一次，不要凭空重写"。
+            // ⚠️ slice 很容易从半截开始，切出没有父 assistant 的孤儿 tool 消息，
+            //    OpenAI 兼容协议会直接 400 —— 必须先 sanitize 成协议合法形态。
+            const sysBlocks = this.messages.filter(m => m.role === 'system')
+            const recentTail = sanitizeHistoryForApi(
+              this.messages.filter(m => m.role !== 'system').slice(-12),
+            )
             this.messages = [
               ...sysBlocks.slice(0, 1),
-              { role: 'user', content: `请自然、直接地回答用户的问题：「${lastUserText}」` },
+              {
+                role: 'system',
+                content: '[内部续话指令·非用户发言] 上一次回答失败了，这是第二次尝试。'
+                  + '请只依据下面保留下来的对话与工具结果作答。'
+                  + '⛔ 禁止凭空编造你没有依据的结论；如果所需信息确实缺失，'
+                  + '就直接告诉用户"缺少什么信息、为什么无法回答"，而不是猜一个答案。',
+              },
+              ...recentTail,
+              {
+                role: 'user',
+                content: `请自然、直接地回答用户的问题：「${lastUserText}」`,
+              },
             ]
           }
           const recoveryResult = await this.runReActLoop([])
@@ -1676,6 +1811,7 @@ private summarizer: ConversationSummarizer | null = null
     let slowThinkingRetries = 0    // 🆕 v5.3: 慢速思考重试计数，防止无限 retry
     let lastToolNames: string[] = []    // 🆕 v14.2: 最近 N 轮调用的工具名，用于检测重复
     let totalToolCallsThisRun = 0       // 🆕 v14.2: 本轮总计工具调用次数
+    let converged = false               // 🆕 v15: 是否已触发过强制收敛（防重复触发）
     const blockedTools = new Map<string, number>()  // 🆕 v14.3: 被安全门临时封禁的工具 → 解封轮次
 
     for (let round = 0; round < maxRounds; round++) {
@@ -1704,16 +1840,27 @@ private summarizer: ConversationSummarizer | null = null
       }
 
       // 门 2: 总计工具调用超 30 次 → 强制收敛
-      if (totalToolCallsThisRun > 30) {
+      // 🔧 这里必须用独立标记，不能只把计数钉回 30。
+      //    计数在下一轮还会 `+=`，33 > 30 会**再次**触发 → 每轮重复 emit 收敛提示、
+      //    重复往 messages 里塞 system 消息，上限依旧形同虚设。
+      if (!converged && totalToolCallsThisRun > 30) {
+        converged = true
         this.emit({ type: 'thinking', text: `🛡️ 工具调用已达 ${totalToolCallsThisRun} 次，强制收敛` })
         this.messages.push({
           role: 'system',
           content: `已调用工具 ${totalToolCallsThisRun} 次。请立即停止，使用已有信息回复用户。`,
         })
-        totalToolCallsThisRun = 0
       }
 
-      this.emit({ type: 'thinking', text: `思考中... (第 ${round + 1} 轮)` })
+      // 🧠 轮次标记 —— 说清楚这是"开始第 N 轮处理"，而不是假装模型在思考。
+      //   之前每轮无条件发"思考中... (第 N 轮)"，与模型是否真的在推理无关，
+      //   在没有 reasoning_content 的模型上就成了唯一的思考展示（看起来像假思考）。
+      this.emit({
+        type: 'thinking',
+        text: round === 0
+          ? `开始处理（第 1 轮）`
+          : `第 ${round + 1} 轮处理中`,
+      })
 
       try {
         const response = await this.callLLM(tools)
@@ -1771,8 +1918,11 @@ private summarizer: ConversationSummarizer | null = null
             break
           }
 
-          // 🔧 P3: 不再把错误详情暴露给用户，只用统一短语
-          finalText = `抱歉，出了点问题，请稍后重试。`
+          // 🔧 P3 重做: 不再所有错误都套同一句话。
+          //   统一话术的最大问题是——用户和开发者都分不清"模型超时"和"工具挂了"，
+          //   出问题后无从排查，Agent 也拿不到可据以调整的信号。
+          //   这里只隐藏真正的技术细节（堆栈、URL、密钥），保留**可行动的原因分类**。
+          finalText = describeRunFailure(response.error)
           break
         }
 
@@ -1797,14 +1947,42 @@ private summarizer: ConversationSummarizer | null = null
             const tc = response.toolCalls[0]
             const fn = tc.function
             let args: Record<string, any> = {}
-            try { args = JSON.parse(fn.arguments) } catch {}
+            let argsParseFailed = false
+            try {
+              args = JSON.parse(fn.arguments)
+            } catch {
+              // 🔧 原来这里是 catch {} —— 参数解析失败就拿 {} 继续跑工具。
+              //   但 securityGuard 的判定是基于真实参数做的，参数丢了等于
+              //   「危险工具的参数检查被整个跳过」，直接放行最坏情况。
+              //   正确做法：解析失败就不执行，如实告诉模型参数写坏了。
+              argsParseFailed = true
+              args = {}
+            }
+            if (argsParseFailed) {
+              this.emit({ type: 'tool_start', tool: fn.name, args: {} })
+              this.emit({
+                type: 'tool_end',
+                tool: fn.name,
+                result: {
+                  callId: tc.id, ok: false, content: '', durationMs: 0,
+                  error: notExecutedNote(`工具 "${fn.name}" 的参数不是合法 JSON，无法解析，未执行`),
+                },
+              })
+              this.messages.push({
+                role: 'tool',
+                content: notExecutedNote(`工具 "${fn.name}" 的参数不是合法 JSON，无法解析，未执行。`
+                  + `请重新调用并给出严格的 JSON 参数（字符串用双引号、不要尾随逗号、不要注释）`),
+                tool_call_id: tc.id,
+              })
+              continue
+            }
 
             // 安全检查
             const guardResult = getSecurityGuard().checkToolCall(tc)
             if (!guardResult.allowed) {
               this.messages.push({
                 role: 'tool',
-                content: `⛔ 安全审查阻止: ${guardResult.summary}`,
+                content: notExecutedNote(`安全审查阻止了 ${fn.name} — ${guardResult.summary}`),
                 tool_call_id: tc.id,
               })
               continue
@@ -1840,7 +2018,7 @@ private summarizer: ConversationSummarizer | null = null
                   const reason = decision === ApprovalDecision.TIMEOUT ? '审批超时' : '用户拒绝'
                   this.messages.push({
                     role: 'tool',
-                    content: `⛔ "${fn.name}" 已被${reason}，不执行。请尝试其他操作。`,
+                    content: notExecutedNote(`"${fn.name}" 已被${reason}，未执行`),
                     tool_call_id: tc.id,
                   })
                   this.emit({ type: 'tool_end', tool: fn.name, result: { callId: tc.id, ok: false, content: `审批${reason}` } })
@@ -1893,7 +2071,7 @@ private summarizer: ConversationSummarizer | null = null
                   const reason = decision === ApprovalDecision.TIMEOUT ? '审批超时' : '用户拒绝'
                   this.messages.push({
                     role: 'tool',
-                    content: `⛔ "${fn.name}" 已被${reason}，不执行。请尝试其他操作。`,
+                    content: notExecutedNote(`"${fn.name}" 已被${reason}，未执行`),
                     tool_call_id: tc.id,
                   })
                   this.emit({ type: 'tool_end', tool: fn.name, result: { callId: tc.id, ok: false, content: `审批${reason}` } })
@@ -1905,7 +2083,10 @@ private summarizer: ConversationSummarizer | null = null
             // 安全门封禁检查 — 被封禁的工具直接返回阻止结果
             if (blockedTools.has(fn.name)) {
               const unblockRound = blockedTools.get(fn.name)!
-              const blockedResult = { callId: tc.id, ok: false, content: '', error: `⛔ 工具 "${fn.name}" 已被安全门临时封禁（至第 ${unblockRound} 轮），请改用其他工具或直接回复。` }
+              const blockedResult = {
+                callId: tc.id, ok: false, content: '', durationMs: 0,
+                error: notExecutedNote(`工具 "${fn.name}" 已被安全门临时封禁（至第 ${unblockRound} 轮）`),
+              }
               this.emit({ type: 'tool_end', tool: fn.name, result: blockedResult })
               this.messages.push({
                 role: 'tool',
@@ -1950,7 +2131,7 @@ private summarizer: ConversationSummarizer | null = null
             this.emit({ type: 'tool_end', tool: fn.name, result })
             this.messages.push({
               role: 'tool',
-              content: result.ok ? result.content : `工具错误: ${result.error || '未知错误'}`,
+              content: toolResultText(result),
               tool_call_id: tc.id,
             })
           } else {
@@ -1962,7 +2143,7 @@ private summarizer: ConversationSummarizer | null = null
                 const unblockRound = blockedTools.get(tc.function.name)!
                 this.messages.push({
                   role: 'tool',
-                  content: `⛔ 工具 "${tc.function.name}" 已被安全门临时封禁（至第 ${unblockRound} 轮），请改用其他工具或直接回复。`,
+                  content: notExecutedNote(`工具 "${tc.function.name}" 已被安全门临时封禁（至第 ${unblockRound} 轮）`),
                   tool_call_id: tc.id,
                 })
                 continue
@@ -1971,7 +2152,7 @@ private summarizer: ConversationSummarizer | null = null
               if (!guardResult.allowed) {
                 this.messages.push({
                   role: 'tool',
-                  content: `⛔ 安全审查阻止 ${tc.function.name}: ${guardResult.summary}`,
+                  content: notExecutedNote(`安全审查阻止了 ${tc.function.name} — ${guardResult.summary}`),
                   tool_call_id: tc.id,
                 })
                 continue
@@ -1979,7 +2160,7 @@ private summarizer: ConversationSummarizer | null = null
               if (guardResult.requiresApproval && !this.config.skipApproval) {
                 this.messages.push({
                   role: 'tool',
-                  content: `🔐 ${tc.function.name} 需要审批: ${guardResult.summary}`,
+                  content: notExecutedNote(`${tc.function.name} 需要审批但未获批准 — ${guardResult.summary}`),
                   tool_call_id: tc.id,
                 })
                 continue
@@ -1992,11 +2173,20 @@ private summarizer: ConversationSummarizer | null = null
             for (const batch of batches) {
               const batchResults = await executeToolsParallel(batch)
               for (const item of batchResults) {
-                this.emit({ type: 'tool_start', tool: item.call.function.name, args: JSON.parse(item.call.function.arguments || '{}') })
+                // 🔧 模型偶尔会吐出畸形 JSON 参数。这里原来直接 JSON.parse，
+                //   一次解析失败就会把整个 ReAct 轮抛出去 → 整轮回答直接崩掉，
+                //   用户看到的是"莫名其妙失败"。参数解析失败不该影响其余工具。
+                let parsedArgs: any = {}
+                try {
+                  parsedArgs = JSON.parse(item.call.function.arguments || '{}')
+                } catch {
+                  parsedArgs = { __unparsable: String(item.call.function.arguments || '').slice(0, 200) }
+                }
+                this.emit({ type: 'tool_start', tool: item.call.function.name, args: parsedArgs })
                 this.emit({ type: 'tool_end', tool: item.call.function.name, result: item.result })
                 this.messages.push({
                   role: 'tool',
-                  content: item.result.ok ? item.result.content : `工具错误: ${item.result.error || '未知错误'}`,
+                  content: toolResultText(item.result),
                   tool_call_id: item.call.id,
                 })
               }
@@ -2222,8 +2412,9 @@ private summarizer: ConversationSummarizer | null = null
         globalEventBus.emit(BusEvents.AGENT_ERROR, { error: err.message })
         if (!this.isRecovering) {
           this.isRecovering = true
-          // 🔧 P3: 统一错误消息，不暴露技术细节
-          finalText = `抱歉，遇到了点问题，请稍后重试。`
+          // 🔧 P3 重做: 同样给分类文案，但只透出**用户能理解的部分**。
+          //   原始 err.message 可能含 URL / 路径 / 堆栈 / 密钥片段，不直接回显。
+          finalText = describeRunFailure(err?.message || '未知错误')
           try { this.messages = this.messages.slice(-10) } catch {}
           this.isRecovering = false
         }
@@ -2507,6 +2698,15 @@ private summarizer: ConversationSummarizer | null = null
         } else {
           last.content = (last.content || '') + '\n\n' + (m.content || '')
         }
+        // 🔧 合并相邻 assistant 时必须把 tool_calls 也带过来。
+        //   模型一轮同时返回 content 和 tool_calls 是常见情况（DeepSeek/Qwen），
+        //   callLLM 里先 push 了一条"只有文本"的 assistant，循环里又 push 一条
+        //   "文本 + tool_calls" 的 —— 合并时 last 是**第一条（没有 tool_calls）**，
+        //   tool_calls 被静默丢掉，紧跟其后的 role:'tool' 就成了孤儿，
+        //   OpenAI/vLLM 直接 400，用户只看到"无法识别的错误"。
+        if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+          last.tool_calls = [...(last.tool_calls || []), ...m.tool_calls]
+        }
       } else {
         mergedMessages.push({ ...m })
       }
@@ -2524,6 +2724,15 @@ private summarizer: ConversationSummarizer | null = null
         role: 'user',
         content: hasUserMessage ? '（继续）' : '你好',
       })
+    }
+
+    // 🔧 协议清洗 — 合并相邻 assistant 之后，可能出现 tool_call_id 对不上的
+    //   孤儿 tool 消息（合并丢 tool_calls 造成的历史遗留也在这一步兜住）。
+    //   OpenAI 兼容网关会直接 400，所以主路径这里也要走一遍 sanitize。
+    {
+      const cleaned = sanitizeHistoryForApi(mergedMessages)
+      mergedMessages.length = 0
+      mergedMessages.push(...cleaned)
     }
 
     // LM Studio / 本地模型兼容 — tool 角色转 user
@@ -2715,7 +2924,15 @@ private summarizer: ConversationSummarizer | null = null
           const choice = data.choices?.[0]
           if (!choice) {return { error: 'LLM 返回为空' }}
           const msg = choice.message
-          if (msg.content) {streamText = msg.content}
+          // 🔧 顺序修正：content 优先、reasoning_content 兜底。
+          //   注意这里必须判「非空字符串」而不是单纯真值 —— 工具调用轮 content
+          //   常常是 '' 或 null，用真值判断会掉进 else if，把**思维链当成正式回答**
+          //   直接显示给用户。只有在没有工具调用时才允许用 reasoning 兜底。
+          const hasContent = typeof msg.content === 'string' && msg.content.length > 0
+          if (hasContent) {streamText = msg.content}
+          else if (!msg.tool_calls?.length && typeof msg.reasoning_content === 'string' && msg.reasoning_content.length > 0) {
+            streamText = msg.reasoning_content
+          }
           if (msg.tool_calls?.length) {
             if (streamText) {this.messages.push({ role: 'assistant', content: streamText })}
             return { toolCalls: msg.tool_calls, text: streamText || undefined, usage: data.usage }
@@ -2756,17 +2973,12 @@ private summarizer: ConversationSummarizer | null = null
         let buffer = ''
 
         // 增量流式 — 完整工具检测与执行
-        const completedToolCalls: LLMToolCall[] = []
-        const earlyExecutionStarted = false
-        /** 🆕 v8.1: 只读工具名列表（可安全预执行，无副作用） */
-        const READONLY_EARLY_TOOLS = new Set([
-          'web_search', 'web_fetch', 'web_search_multi',
-          'file_read', 'file_list', 'glob_search', 'grep_search',
-          'datetime', 'get_current_time',
-          'memory_get', 'memory_all', 'memory_profile',
-          'system_info', 'git_status', 'git_log', 'git_diff',
-          'kb:search', 'kb:list', 'kb:stats',
-        ])
+        /** 已提示过的工具 id —— 仅用于避免重复 emit UI 事件，不参与最终工具列表构建 */
+        const announcedToolIds = new Set<string>()
+        // 🔧 v15: 原先这里还有一个 READONLY_EARLY_TOOLS 白名单 + earlyResults 预执行缓存，
+        //   用来在参数流还没收完时抢先跑只读工具。但参数中途 JSON.parse 成功 ≠ 参数完整，
+        //   抢先跑会用半截参数得到错结果，再被缓存当成最终结果使用。已整体移除，
+        //   正确性优先于几百毫秒的延迟。
 
         this.emit({ type: 'thinking_stream', text: '', isFirst: true, isLast: false })
 
@@ -2823,7 +3035,7 @@ private summarizer: ConversationSummarizer | null = null
                 for (const [idx, acc] of toolCallAccum) {
                   if (!acc.id || !acc.name) {continue}
                   // 检查是否已经标记为完成
-                  if (completedToolCalls.some(c => c.id === acc.id)) {continue}
+                  if (announcedToolIds.has(acc.id)) {continue}
                   // 尝试解析参数 — 解析成功才算完整
                   try {
                     JSON.parse(acc.args)
@@ -2832,22 +3044,16 @@ private summarizer: ConversationSummarizer | null = null
                       type: 'function' as const,
                       function: { name: acc.name!, arguments: acc.args },
                     }
-                    completedToolCalls.push(completeCall)
-                    console.log(`[AgentRunner] 🚀 早期检测到完整工具: ${acc.name} (${acc.id})`)
-                    // 只读工具预执行（无副作用，可安全提前跑）
-                    if (READONLY_EARLY_TOOLS.has(acc.name!)) {
-                      executeToolWithRetry(acc.name!, JSON.parse(acc.args)).then(result => {
-                        earlyResults.set(acc.id!, {
-                          content: result.ok ? result.content : '',
-                          error: result.ok ? undefined : (result.error || ''),
-                        })
-                        console.log(`[AgentRunner] ⚡ 增量预执行完成: ${acc.name} → ${(result.content || '').length} 字符`)
-                      }).catch(err => {
-                        console.warn(`[AgentRunner] 增量预执行失败: ${acc.name}:`, err.message)
-                      })
+                    // 🔧 这里**只做 UI 提示**，不推入 completedToolCalls、不预执行。
+                    //   原因：JSON.parse 在参数流中途就可能成功（例如已收到 {"query":"x"}，
+                    //   后面还会补 ,"limit":3}），此时判定"完整"会让后续参数字段被去重丢弃，
+                    //   工具就会以**残缺参数**执行完 —— 模型拿到的还是错的结果。
+                    //   正确性优先：真正的工具调用统一在流结束后用完整 toolCallAccum 构建。
+                    if (!announcedToolIds.has(acc.id)) {
+                      announcedToolIds.add(acc.id)
+                      console.log(`[AgentRunner] 🔎 收到工具调用: ${acc.name}（参数仍在累积）`)
+                      this.emit({ type: 'incremental_tool', toolCall: completeCall })
                     }
-                    // 触发 tool_call 检测事件（ReAct 循环会拾取）
-                    this.emit({ type: 'incremental_tool', toolCall: completeCall })
                   } catch {
                     // 参数还不完整，继续积累
                   }
@@ -2859,18 +3065,35 @@ private summarizer: ConversationSummarizer | null = null
           }
         }
 
-        // 如果有早期工具调用，合并到最终列表
-        // 构建 tool calls（去重：已完成的跳过）
-        const tcs: LLMToolCall[] = [...completedToolCalls]
-        const completedIds = new Set(completedToolCalls.map(c => c.id))
+        // 🔧 工具调用只在这里统一构建一次，用的是**流结束时的完整参数**。
+        //   早前会把"中途判定完整"的快照一起并进来，后续补齐的字段就被覆盖/丢弃了。
+        const tcs: LLMToolCall[] = []
+        let malformedToolArgs = 0
         for (const [, tc] of toolCallAccum) {
-          if (tc.name && !completedIds.has(tc.id || '')) {
-            tcs.push({
-              id: tc.id || `call_${Date.now()}`,
-              type: 'function',
-              function: { name: tc.name, arguments: tc.args },
-            })
+          if (!tc.name) {continue}
+          let args = tc.args || '{}'
+          try {
+            JSON.parse(args)
+          } catch {
+            // 参数到流结束仍不合法 → 如实计数。
+            // ⚠️ 关键：**不要**在这里把 args 洗成 '{}'。
+            //    洗白之后下游的 JSON.parse 必然成功 → 解析失败保护形同虚设 →
+            //    工具会带着空参数真的执行，参数级安全检查也就被跳过了。
+            //    保留原始坏参数，让下游的保护自然接住并阻断执行。
+            malformedToolArgs++
+            console.warn(`[AgentRunner] ⚠️ 工具 ${tc.name} 的参数不是合法 JSON，将阻断执行`)
           }
+          tcs.push({
+            id: tc.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            type: 'function',
+            function: { name: tc.name, arguments: args },
+          })
+        }
+        if (malformedToolArgs > 0) {
+          this.emit({
+            type: 'thinking',
+            text: `⚠️ 有 ${malformedToolArgs} 个工具调用的参数格式异常，已阻断执行`,
+          })
         }
         streamToolCalls = tcs.length > 0 ? tcs : undefined
         this.emit({ type: 'thinking_stream', text: '', isFirst: false, isLast: true })
