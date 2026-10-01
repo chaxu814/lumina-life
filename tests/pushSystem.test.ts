@@ -135,13 +135,15 @@ describe('pushDecider', () => {
   })
 
   it('高欲望值时推送（亲密度高+精力足+不疲劳+晚上黄金时段）', () => {
-    const s = makeState({
-      intimacy: 0.9, luminaEnergy: 0.9, fatigue: 0.1,
-      lastActiveAt: Date.now() - 30 * 60 * 1000,
-    })
     const evening = new Date()
     evening.setHours(20, 0, 0, 0)
-    const r = decidePush(s, settings, evening.getTime())
+    const t = evening.getTime()
+    const s = makeState({
+      intimacy: 0.9, luminaEnergy: 0.9, fatigue: 0.1,
+      lastActiveAt: t - 30 * 60 * 1000,
+      updatedAt: t - 60 * 1000,
+    })
+    const r = decidePush(s, settings, t)
     expect(r.should_speak).toBe(true)
     expect(r.speech.length).toBeGreaterThan(0)
     expect(['low', 'medium', 'high']).toContain(r.intensity)
@@ -158,26 +160,30 @@ describe('pushDecider', () => {
   })
 
   it('连续未响应2次提高阈值（原本能推送的变成不推送）', () => {
+    const evening = new Date(); evening.setHours(20, 0, 0, 0)
+    const t = evening.getTime()
     const base = makeState({
       intimacy: 0.65, luminaEnergy: 0.7, fatigue: 0.3,
-      lastActiveAt: Date.now() - 30 * 60 * 1000,
+      lastActiveAt: t - 30 * 60 * 1000,
+      updatedAt: t - 60 * 1000,
     })
-    const evening = new Date(); evening.setHours(20, 0, 0, 0)
-    const r1 = decidePush(base, settings, evening.getTime())
+    const r1 = decidePush(base, settings, t)
     // 加未响应计数
     const ignored = { ...base, consecutiveIgnored: 3 }
-    const r2 = decidePush(ignored, settings, evening.getTime())
+    const r2 = decidePush(ignored, settings, t)
     // 至少有一个状态变化（阈值提高后可能从推送变不推送，或强度降低）
     expect(r1.reason).not.toBe(r2.reason)
   })
 
   it('推送类型在允许列表中', () => {
+    const evening = new Date(); evening.setHours(20, 0, 0, 0)
+    const t = evening.getTime()
     const s = makeState({
       intimacy: 0.9, luminaEnergy: 0.9, fatigue: 0.1,
-      lastActiveAt: Date.now() - 30 * 60 * 1000,
+      lastActiveAt: t - 30 * 60 * 1000,
+      updatedAt: t - 60 * 1000,
     })
-    const evening = new Date(); evening.setHours(20, 0, 0, 0)
-    const r = decidePush(s, { ...settings, allowedTypes: ['care'] }, evening.getTime())
+    const r = decidePush(s, { ...settings, allowedTypes: ['care'] }, t)
     expect(r.should_speak).toBe(true)
     expect(r.type).toBe('care')
   })

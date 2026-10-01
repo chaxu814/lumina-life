@@ -86,10 +86,24 @@
     "files": [
       "out/**/*",
       "public/**/*",
+      "!dist/**",
+      "!build/**",
       "!**/node_modules/onnxruntime-web/**",
       "!**/node_modules/onnx-proto/**",
       "!**/node_modules/protobufjs/**",
-      "!**/node_modules/@protobufjs/**"
+      "!**/node_modules/@protobufjs/**",
+      "!**/node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
+      "!**/node_modules/onnxruntime-node/bin/napi-v3/linux/**",
+      "!**/node_modules/better-sqlite3/deps/**",
+      "!**/node_modules/better-sqlite3/build/Release/obj/**",
+      "!**/node_modules/better-sqlite3/build/Release/*.iobj",
+      "!**/node_modules/better-sqlite3/build/Release/*.ipdb",
+      "!**/node_modules/better-sqlite3/build/Release/*.lib",
+      "!**/node_modules/better-sqlite3/build/Release/*.exp",
+      "!**/node_modules/better-sqlite3/build/Release/test_extension.node",
+      "!**/node_modules/sharp/vendor/**/include/**",
+      "!**/node_modules/sharp/**/*.lib",
+      "!**/node_modules/sharp/vendor/**/lib/**/*.def"
     ],
     "win": {
       "target": [
@@ -102,19 +116,9 @@
       ],
       "forceCodeSigning": false,
       "icon": "resources/icon.ico",
-      "files": [
-        "!**/node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
-        "!**/node_modules/onnxruntime-node/bin/napi-v3/linux/**",
-        "!**/node_modules/better-sqlite3/deps/**",
-        "!**/node_modules/better-sqlite3/build/Release/obj/**",
-        "!**/node_modules/better-sqlite3/build/Release/*.iobj",
-        "!**/node_modules/better-sqlite3/build/Release/*.ipdb",
-        "!**/node_modules/better-sqlite3/build/Release/*.lib",
-        "!**/node_modules/better-sqlite3/build/Release/*.exp",
-        "!**/node_modules/better-sqlite3/build/Release/test_extension.node",
-        "!**/node_modules/sharp/vendor/**/include/**",
-        "!**/node_modules/sharp/**/*.lib",
-        "!**/node_modules/sharp/vendor/**/lib/**/*.def"
+      "electronLanguages": [
+        "zh-CN",
+        "en-US"
       ]
     },
     "nsis": {

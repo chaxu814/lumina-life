@@ -976,6 +976,24 @@ function findPetSourceDir(): string | null {
   return null
 }
 
+/**
+ * 递归复制目录（不使用 fs.cpSync）。
+ * 打包后源目录位于 app.asar 内，Node 的 fs.cpSync 对 asar 虚拟文件系统会误报
+ * ENOENT（existsSync 为 true 但 cpSync 失败）；改用 readdir + copyFileSync 逐文件复制。
+ */
+function copyDirRecursive(src: string, dst: string): void {
+  fs.mkdirSync(dst, { recursive: true })
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name)
+    const dstPath = path.join(dst, entry.name)
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, dstPath)
+    } else if (entry.isFile()) {
+      fs.copyFileSync(srcPath, dstPath)
+    }
+  }
+}
+
 function copyPetAssets(dir: string): void {
   const src = findPetSourceDir()
   if (!src) {
@@ -986,7 +1004,7 @@ function copyPetAssets(dir: string): void {
     fs.copyFileSync(path.join(src, 'pet-live2d.html'), path.join(dir, 'pet.html'))
     const assetsSrc = path.join(src, 'assets')
     if (fs.existsSync(assetsSrc)) {
-      fs.cpSync(assetsSrc, path.join(dir, 'assets'), { recursive: true })
+      copyDirRecursive(assetsSrc, path.join(dir, 'assets'))
     }
     // 复制设置面板
     const settingsSrc = path.join(src, 'settings.html')
