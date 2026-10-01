@@ -16,7 +16,7 @@ import { getProfile, detectActiveProfile, minecraftProfile } from './profiles'
 import { resolveRoute } from './gameConfig'
 import { reviewGameAction } from './security'
 import { visualSee, visualAct, formatGameState } from './visualRoute'
-import { isMineflayerAvailable, botSee, botAct } from './botRoute'
+import { isMineflayerAvailable, botSee, botAct, GAME_COMPANION_EXTENSION_NOTICE } from './botRoute'
 
 /**
  * 解析当前 Profile。优先级：
@@ -64,6 +64,20 @@ export function resetRouteCache(): void {
 }
 
 /**
+ * 判断「支持程序化 bot 的 profile（Minecraft）」是否缺少游戏陪伴扩展。
+ * 非 bot profile（Factorio 等）返回 false（它们走视觉路线，不需要 mineflayer）。
+ */
+async function botExtensionMissing(profile: GameProfile): Promise<boolean> {
+  if (!profile.supportedRoutes.includes('bot')) {
+    return false
+  }
+  if (_botAvailableCache == null) {
+    _botAvailableCache = await isMineflayerAvailable()
+  }
+  return !_botAvailableCache
+}
+
+/**
  * 获取游戏状态。
  * 未启用模块 → 提示未开启；否则按 Profile 与路线执行。
  */
@@ -81,6 +95,17 @@ export async function getGameState(
   }
 
   const profile = resolveProfile(undefined, config, windowTitle)
+
+  // 发行版未内置 mineflayer：返回友好的「可选扩展」状态，不报错、不跑 VLM
+  if (await botExtensionMissing(profile)) {
+    return {
+      state: { detected: false, hotbar: [], raw: GAME_COMPANION_EXTENSION_NOTICE },
+      route: 'visual',
+      text: GAME_COMPANION_EXTENSION_NOTICE,
+      profile,
+    }
+  }
+
   const route = await detectRoute(config, profile)
 
   if (route === 'bot') {
@@ -108,6 +133,16 @@ export async function executeGameAction(
   }
 
   const profile = resolveProfile(req, config)
+
+  // 发行版未内置 mineflayer：返回友好的「可选扩展」提示，不执行、不报错
+  if (await botExtensionMissing(profile)) {
+    return {
+      ok: false,
+      content: GAME_COMPANION_EXTENSION_NOTICE,
+      error: 'game_companion_extension',
+    }
+  }
+
   const guard = reviewGameAction(req, profile)
   if (!guard.allowed) {
     return { ok: false, content: guard.reason || '⛔ 操作被安全护栏拒绝', error: 'guard_blocked' }

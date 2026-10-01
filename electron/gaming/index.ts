@@ -13,6 +13,7 @@ import { loadGameConfig } from './gameConfig'
 import { getGameState, executeGameAction } from './gameActions'
 import { runAutoPlay } from './autoPlay'
 import { getProfile, listProfiles, minecraftProfile } from './profiles'
+import { GAME_COMPANION_EXTENSION_NOTICE } from './botRoute'
 import type { GameActionRequest } from './types'
 
 // ──────────────────────────────────────────────────────────
@@ -186,6 +187,15 @@ export const gameAutoDef: ToolDef = {
 export async function gameAuto(args: Record<string, any>): Promise<ToolResult> {
   const config = loadGameConfig()
   const profile = getProfile(config.activeProfile || '') || minecraftProfile
+
+  // 发行版未内置 mineflayer（Minecraft 自主陪伴扩展缺失）：友好提示，不空转
+  if (profile.supportedRoutes.includes('bot')) {
+    const { isMineflayerAvailable } = await import('./botRoute')
+    if (!(await isMineflayerAvailable())) {
+      return { callId: '', ok: false, content: GAME_COMPANION_EXTENSION_NOTICE, error: 'game_companion_extension' }
+    }
+  }
+
   const maxRounds = args.max_rounds != null ? Number(args.max_rounds) : 20
   const maxDurationSec = args.max_duration_sec != null ? Number(args.max_duration_sec) : 120
   const result = await runAutoPlay({

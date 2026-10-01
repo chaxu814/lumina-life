@@ -26,6 +26,17 @@ export async function isMineflayerAvailable(): Promise<boolean> {
   }
 }
 
+/**
+ * 游戏陪伴扩展（Minecraft 程序化 bot）的友好状态文案。
+ * 发行版未内置 mineflayer（已移至 devDependencies）时，由游戏工具统一返回，
+ * 避免报错或未捕获异常。
+ */
+export const GAME_COMPANION_EXTENSION_NOTICE = [
+  '🧩 游戏陪伴组件（Minecraft 自主陪伴）将在首发后作为可选扩展提供。',
+  '当前发行版未内置该组件，因此游戏内自主陪伴（读取生命值/快捷栏、自主游玩）暂不可用。',
+  '如需启用：在源码/开发环境安装依赖 `npm install -D mineflayer`，开发版 `npm run dev` 下游戏功能照常可用。',
+].join('\n')
+
 /** 断开 bot（退出/重连时调用） */
 export function disconnectBot(): void {
   try { cachedBot?.quit?.('lumina disconnect') } catch { /* ignore */ }
