@@ -39,6 +39,8 @@ import { updateEmotion, emotionContext } from '../services/agentEmotion'
 import { injectEmotionStyles } from '../components/AgentEmotionBar'
 import { addBookmark } from '../services/messageBookmarks'
 import { showToast } from '../components/Toast'
+import LinkifiedText from '../components/LinkifiedText'
+import { shouldAutoOpen } from '../utils/linkifyText'
 import { buildAgentPrompt, AGENT_SOULS } from '../data/agentSouls'
 import {
   calculateSpark,
@@ -61,6 +63,21 @@ import {
   useLLMPanels,
   cleanTtsText, formatTime, getConvPreview, insertAtCursor, getAgentSystemPrompt,
 } from '../chat/chatShared'
+
+/**
+ * 新 assistant 回复落地后调用：仅当 browser.autoOpenLinks 开关开启、
+ * 且回复里确有 http/https 链接时，才自动在内置浏览器打开「主要 URL」。
+ * 开关默认关 → shouldAutoOpen 直接返回 null，绝不弹窗。
+ * 每次回复现读配置，开关改动即时生效，无需额外监听。全程静默失败，不打扰用户。
+ */
+async function maybeAutoOpenBrowserOnReply(text: string): Promise<void> {
+  try {
+    const cfg = await window.luminaAPI.getConfig()
+    const enabled = cfg?.browser?.autoOpenLinks === true
+    const target = shouldAutoOpen(text, enabled)
+    if (target) void window.luminaAPI.openBrowser(target)
+  } catch { /* 静默失败 */ }
+}
 
 export default function ChatPanel() {
   const conversations = useStore(s => s.conversations)
@@ -935,6 +952,9 @@ export default function ChatPanel() {
         // ── 🔧 v2.17: 修复闭包过期 — 使用最新 convId，切换对话时不丢消息 ──
         const finalConvId = useStore.getState().activeConversationId || activeConversationId
         useStore.getState().addMessage(finalConvId, 'assistant', agentText)
+        // ═══ 浏览器链接智能联动：开关开启时，新回复含 URL 则自动在内置浏览器打开 ═══
+        // 仅对「刚落地的新回复」触发；切换/渲染历史会话不会走到这里。
+        void maybeAutoOpenBrowserOnReply(agentText)
         // ── v2.4.1: 流式打字动画 ──────────────────────
         startTypingAnimation(agentText, finalConvId, () => {
           // @ts-expect-error
@@ -1835,7 +1855,7 @@ export default function ChatPanel() {
                 <div style={{
                   fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word', userSelect: 'text',
-                }}>{msg.content.replace(/^\n+/, '')}</div>
+                }}><LinkifiedText text={msg.content.replace(/^\n+/, '')} /></div>
                 {/* ═══ v2.14: 内联操作按钮 ═══ */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 2, marginTop: 6,

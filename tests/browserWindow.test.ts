@@ -188,3 +188,20 @@ describe('内置浏览器：IPC 注册', () => {
     expect(winSrc).toMatch(/sendState\(await getBrowserState\(\)\)/)
   })
 })
+
+describe('内置浏览器：底部水平滚动条「抽搐」修复', () => {
+  it('responsive 模式下宿主页默认不滚动（overflow:hidden，网页自身在 webview 内滚）', () => {
+    expect(html).toMatch(/\.viewport\s*\{[^}]*overflow:\s*hidden/)
+  })
+  it('仅设备预览（.device）才允许宿主页出现滚动条', () => {
+    expect(html).toContain('.viewport.device { overflow: auto; }')
+  })
+  it('webview 允许收缩（min-width:0），避免 flex 最小宽度撑出横向滚动条', () => {
+    expect(html).toMatch(/webview\s*\{[^}]*min-width:\s*0/)
+  })
+  it('切换 responsive/device 时正确加/移除 .device 类', () => {
+    expect(html).toContain("viewport.classList.toggle('device', !!d.w)")
+    // 默认回到 responsive 时不带 .device
+    expect(html).toContain("applyDevice('responsive')")
+  })
+})

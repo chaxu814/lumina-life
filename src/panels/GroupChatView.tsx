@@ -20,6 +20,7 @@ import { updateEmotion, emotionContext } from '../services/agentEmotion'
 import { injectEmotionStyles } from '../components/AgentEmotionBar'
 import { addBookmark } from '../services/messageBookmarks'
 import { showToast } from '../components/Toast'
+import LinkifiedText from '../components/LinkifiedText'
 import TeamPanel from './TeamPanel'  // 🆕 团队面板整合
 import { buildAgentPromptLite } from '../data/agentSouls'
 import {
@@ -4616,7 +4617,7 @@ export default function GroupChatView() {
                 fontStyle: m.content ? undefined : 'italic',
                 userSelect: 'text',
                 cursor: 'text',
-              }}>{m.content || (m._animDone ? '（内容为空）' : <span className="typing-dots" style={{ display: 'inline-flex', gap: 3, padding: 0 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /></span>)}</div>
+              }}>{m.content ? <LinkifiedText text={m.content} /> : (m._animDone ? '（内容为空）' : <span className="typing-dots" style={{ display: 'inline-flex', gap: 3, padding: 0 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-tertiary)', display: 'inline-block' }} /></span>)}</div>
               {/* 🆕 v10.3fix: 渲染思考过程（借鉴 QwenPaw）
                   正在输出默认展开，输出完毕默认收起，随时可点标题栏切换 */}
               {m.thinkingSteps && m.thinkingSteps.length > 0 && (

@@ -29,7 +29,9 @@ export const browserOpenDef: ToolDef = {
   name: 'browser_open',
   description:
     '打开/切换应用内置浏览器并访问网址。支持 http/https/文件地址；不写协议会按 https 处理。'
-    + '浏览器是用户可见的窗口，用户能同时看到你正在看什么。',
+    + '浏览器是用户可见的窗口，用户能同时看到你正在看什么。'
+    + '当你需要向用户展示网页、联网搜索结果、在线文档或任何在线内容时，'
+    + '调用本工具在内置浏览器打开它，而不是只在回复里贴一串网址让用户自己点。',
   params: { url: { type: 'string', description: '要打开的网址，例如 https://example.com 或 example.com', required: true } },
   toolsets: ['browser', 'agent'],
 }

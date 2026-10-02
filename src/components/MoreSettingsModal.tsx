@@ -21,6 +21,7 @@ import ModelStorePanel from '../panels/ModelStorePanel'
 import SettingsA11y from '../panels/settings/SettingsA11y'
 import MemoryFederationPanel from '../panels/MemoryFederationPanel'
 import WebDavSyncPanel from '../panels/WebDavSyncPanel'
+import BrowserLinksPanel from '../panels/settings/BrowserLinksPanel'
 
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
@@ -40,6 +41,7 @@ const SIDEBAR_ITEMS = [
   { id: 'plugins',     icon: '📦', label: '插件面板' },
   { id: 'appearance',  icon: '🎨', label: '外观' },
   { id: 'a11y',        icon: '♿', label: '无障碍' },
+  { id: 'browser',     icon: '🌐', label: '浏览器' },
   { id: 'federation', icon: '🤝', label: '记忆共享' },
   { id: 'webdav',      icon: '☁️', label: '云同步' },
 ] as const
@@ -289,6 +291,7 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             {activeSection === 'plugins'    && <PluginPanelContainer />}
             {activeSection === 'appearance' && <AppearancePanel />}
             {activeSection === 'a11y'        && <SettingsA11y />}
+            {activeSection === 'browser'     && <BrowserLinksPanel />}
 {activeSection === 'federation' && <MemoryFederationPanel embedded />}
 {activeSection === 'webdav'      && <WebDavSyncPanel embedded />}
             {(activeSection === 'agentPool' || activeSection === 'routing' || activeSection === 'access' || activeSection === 'modes' || activeSection === 'workflow') && (
