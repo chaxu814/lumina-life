@@ -242,6 +242,17 @@ function addChatOptions(options) {
 }
 function clearChat() { chatLog.innerHTML = ''; }
 
+// 由主 Agent 回复文本本地派生动作/表情（纯关键词启发式，**不发任何 LLM**）。
+// 替代旧的"同一轮再打一次 pet:chat 意图 LLM"——那会和完整回复并发抢同一个本地模型。
+function deriveIntent(text) {
+  const t = text || '';
+  if (/[?？]/.test(t.slice(-8)) || /为什么|怎么|如何|是不是|对吗/.test(t)) return { action: 'think', mood: '好奇 🤔' };
+  if (/[哈呵嘿嘻嘻]|😊|😄|🎉|✨|开心|高兴|棒|好耶/.test(t)) return { action: 'happy', mood: '开心 😊' };
+  if (/晚安|睡|困|累|疲惫|早点休息/.test(t)) return { action: 'sleep', mood: '疲惫 😩' };
+  if (/抱歉|对不起|没答上|出错|失败|不行/.test(t)) return { action: 'sad', mood: '闷闷不乐 😕' };
+  return { action: 'nod', mood: '平静 😐' };
+}
+
 function sendText(text) {
   const t = (text || '').trim();
   if (!t) return;
@@ -249,10 +260,10 @@ function sendText(text) {
   if (chatInput) chatInput.value = '';
   showTyping(true);
   if (HAS_IPC) {
+    // 完整回复统一走 pet:sync 主 Agent 路径（串行排队 + 退避重试在主窗 PetChatSync 编排）。
+    // 不再并发打 pet:chat 意图 LLM——避免与完整回复抢同一个本地模型导致冷启动失败。
+    // 动作/表情等主 Agent 回复回来后，由回复文本本地派生（见 pet:sync-reply 处理）。
     try { ipc.send('pet:sync-send', { text: t }); } catch (e) {}
-    ipc.invoke('pet:chat', { text: t }).then(res => {
-      if (!res || !res.ok) { addChatMsg('pet', '呜…脑子转不动了喵…'); showTyping(false); }
-    }).catch(() => { showTyping(false); addChatMsg('pet', '喵…连接出了点问题…'); });
   } else {
     showTyping(false);
     addChatMsg('pet', '喵~');
@@ -296,6 +307,10 @@ if (HAS_IPC) {
     if (data && data.text) {
       addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
       if (data.role !== 'user' && Array.isArray(data.options) && data.options.length) addChatOptions(data.options);
+      // 主 Agent 回复回来 → 本地派生动作/表情（pet:test-intent 不发 LLM，只驱动桌宠动效）
+      if (data.role !== 'user') {
+        try { ipc.invoke('pet:test-intent', deriveIntent(data.text)); } catch (e) {}
+      }
     }
   });
   // 历史回填

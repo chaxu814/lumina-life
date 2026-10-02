@@ -869,7 +869,7 @@ try {
       driveGaze(c.x, c.y);
     } catch (err) { /* 模型未就绪时忽略 */ }
   });
-} catch (err) { /* 非 Electron 环境（浏览器预览）无 ipc */ }
+} catch (err) { /* 非 Electron 环境（浏览器预览）无 ipc */ }
 // 透明置顶窗在 Windows setBounds/移动后 DWM 可能丢弃 WebGL 的 DirectComposition 呈现面（窗口在、角色空白）。
 // 收到主进程请求后重建绘图缓冲，强制 DWM 重新挂接呈现面并补画一帧。
 try {
@@ -1181,8 +1181,9 @@ function replyProactive(text) {
   showTyping(true);
   if (typeof patchInteraction === 'function') patchInteraction();
   if (HAS_IPC) {
+    // 完整回复统一走 pet:sync 主 Agent 路径；不再并发打 pet:chat 意图 LLM。
+    // typing 等主 Agent 回复(pet:sync-reply)再关，避免提前消失。
     try { ipc.send('pet:sync-send', { text }); } catch (e) {}
-    ipc.invoke('pet:chat', { text }).catch(function(){ showTyping(false); });  // typing 等主 Agent 回复(pet:sync-reply)再关，避免提前消失
   } else { showTyping(false); }
 }
 function positionProactiveCard() {
@@ -2175,6 +2176,16 @@ function positionChatPanel() {
   chatPanel.style.left = x + 'px';
   chatPanel.style.top = Math.max(8, Math.min(innerHeight - h - 8, top)) + 'px';
 }
+// 由主 Agent 回复文本本地派生动作/表情（纯关键词启发式，**不发任何 LLM**）。
+// 替代旧的"同一轮再打一次 pet:chat 意图 LLM"——避免与完整回复并发抢同一个本地模型。
+function derivePetIntent(text) {
+  const t = text || '';
+  if (/[?？]/.test(t.slice(-8)) || /为什么|怎么|如何|是不是|对吗/.test(t)) return { action: 'think', mood: '好奇 🤔' };
+  if (/[哈呵嘿嘻嘻]|😊|😄|🎉|✨|开心|高兴|棒|好耶/.test(t)) return { action: 'happy', mood: '开心 😊' };
+  if (/晚安|睡|困|累|疲惫|早点休息/.test(t)) return { action: 'sleep', mood: '疲惫 😩' };
+  if (/抱歉|对不起|没答上|出错|失败|不行/.test(t)) return { action: 'sad', mood: '闷闷不乐 😕' };
+  return { action: 'nod', mood: '平静 😐' };
+}
 function addChatMsg(role, text) {
   if (!chatLog) return;
   const d = document.createElement('div');
@@ -2243,22 +2254,10 @@ function submitChat() {
   if (chatInput) chatInput.value = '';
   showTyping(true);
   if (HAS_IPC) {
-    // 1) 同步到主窗口 Lumina Agent 聊天
+    // 完整回复统一走 pet:sync 主 Agent 路径（串行排队+退避重试在主窗 PetChatSync 编排）。
+    // 不再并发打 pet:chat 意图 LLM——避免与完整回复抢同一个本地模型导致冷启动失败。
+    // 动作/表情等主 Agent 回复回来后，由回复文本本地派生（见 pet:sync-reply 处理）。
     try { ipc.send('pet:sync-send', { text }); } catch(e) {}
-    // 2) 桌宠意图系统（驱动动作/表情）
-    //    dispatchIntent 在主进程已通过 pet:command 下发执行，这里只处理错误情况
-    ipc.invoke('pet:chat', { text }).then(res => {
-      // typing 等主 Agent 回复(pet:sync-reply)或 12s 意图兜底再关，这里不提前关
-      if (!res || !res.ok) {
-        addChatMsg('pet', '呜…脑子转不动了喵…');
-        showTyping(false);
-      }
-      // 如果 LLM 不可用降级了，pet:command 事件会执行 intent
-      // 如果 source 是 llm，dispatchIntent 也已经下发了
-    }).catch(() => {
-      showTyping(false);
-      addChatMsg('pet', '喵…连接出了点问题…');
-    });
   } else {
     showTyping(false);
     addChatMsg('pet', '喵~');
@@ -3108,9 +3107,13 @@ if (HAS_IPC) {
     if (data && data.text) {
       addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
       if (data.role !== 'user' && Array.isArray(data.options) && data.options.length) addChatOptions(data.options);
-      // 如果聊天面板没打开，显示气泡提示
-      if (data.role !== 'user' && !chatOpenNow()) {
-        say(data.text.slice(0, 80));
+      // 主 Agent 回复回来 → 本地派生动作/表情（pet:test-intent 不发 LLM，只驱动动效）
+      if (data.role !== 'user') {
+        try { ipc.invoke('pet:test-intent', derivePetIntent(data.text)); } catch (e) {}
+        // 如果聊天面板没打开，显示气泡提示
+        if (!chatOpenNow()) {
+          say(data.text.slice(0, 80));
+        }
       }
     }
   });

@@ -2,21 +2,30 @@
  * PetChatSync — 桌宠聊天 ↔ Lumina Agent 主聊天双向同步
  *
  * - 固定一个 "🐾 Live2D 桌宠" 对话（ID: conv-pet-live2d）
- * - 桌宠发消息 → 注入该对话 → 触发 Agent → 回复同步回桌宠
- * - 用户在该对话发消息 → 同步到桌宠
+ * - 桌宠发消息 → 注入该对话 → 触发 Agent（串行排队 + 失败退避重试）→ 回复同步回桌宠
+ * - 用户在该对话（主窗）发消息 → 同步到桌宠
  * - Agent 在该对话回复 → 同步到桌宠
+ *
+ * 真正的"串行队列 / 失败重试 / 退避"逻辑抽到 src/lib/petChatOrchestrator.ts
+ * （纯函数、可单测）；本组件只负责把 zustand store 与 IPC 适配进编排器。
  */
 import { useEffect, useRef } from 'react'
 import { useStore } from '../stores/appStore'
+import {
+  PetChatOrchestrator,
+  messagesToForward,
+  deriveLocalIntent,
+} from '../lib/petChatOrchestrator'
 
 const PET_CONV_ID = 'conv-pet-live2d'
 const PET_CONV_NAME = '🐾 Live2D 桌宠'
 
 export default function PetChatSync() {
-  const processingRef = useRef(false)
-  const syncedTimestamps = useRef<Set<number>>(new Set())
+  const orchestratorRef = useRef<PetChatOrchestrator | null>(null)
+  // 注入期标志：我们自己 addMessage 时置 true（zustand subscribe 同步触发，
+  // 据此区分"桌宠侧注入"与"主窗 UI 新增"，避免把桌宠自己发的消息回声回推）
+  const injectingRef = useRef(false)
   const lastMsgCount = useRef(0)
-  const initialized = useRef(false)
 
   useEffect(() => {
     const api = (window as any).luminaAPI
@@ -43,70 +52,74 @@ export default function PetChatSync() {
     }
 
     ensurePetConv()
-    initialized.current = true
 
-    // ── 桌宠 → 主聊天 ──
-    const unsubPetMsg = api.onPetSyncMessage(async (data: { text: string; from: string }) => {
-      if (processingRef.current) {return}
-      if (!data?.text) {return}
-
-      const store = useStore.getState()
-      let conv = store.conversations.find((c: any) => c.id === PET_CONV_ID)
-      if (!conv) {conv = ensurePetConv()}
-
-      const ts = Date.now()
-      syncedTimestamps.current.add(ts)
-      useStore.getState().addMessage(PET_CONV_ID, 'user', data.text)
-      lastMsgCount.current = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)?.messages.length || 0
-
-      processingRef.current = true
+    // ── 把一条消息写进固定对话；置注入标志，避免同步订阅把它当"主窗新消息"回推 ──
+    const addMessageTracked = (role: 'user' | 'assistant', content: string): string => {
+      injectingRef.current = true
       try {
-        const latestConv = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)
-        const history = latestConv?.messages
-          .filter((m: any) => m.role !== 'system')
-          .map((m: any) => ({ role: m.role, content: m.content })) || []
+        useStore.getState().addMessage(PET_CONV_ID, role, content)
+      } finally {
+        injectingRef.current = false
+      }
+      const conv = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)
+      return conv?.messages?.[conv.messages.length - 1]?.id || ''
+    }
 
+    // ── 组装编排器依赖 ──
+    const orchestrator = new PetChatOrchestrator({
+      getHistory: () => {
+        const conv = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)
+        return (conv?.messages || [])
+          .filter((m: any) => m.role !== 'system')
+          .map((m: any) => ({ role: m.role, content: m.content }))
+      },
+      addMessage: addMessageTracked,
+      agentChat: async (text, history) => {
         const llmConfig = useStore.getState().llmConfig
+        const conv = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)
         const config = {
-          mode: 'chat' as const,        // 桌宠是陪伴对话：用轻量 Chat 工具集，不给完整 Agent 重工具链
+          mode: 'chat' as const,        // 桌宠是陪伴对话：轻量 Chat 工具集，不给完整 Agent 重工具链
           model: llmConfig.model,
           baseUrl: llmConfig.baseUrl,
           apiKey: llmConfig.apiKey,
           temperature: llmConfig.temperature,
           maxTokens: llmConfig.maxTokens,
           maxToolCalls: 4,
-          noAutoSearch: true,          // 关键：身份/闲聊不自动联网（模型真需要时仍可自己调 web_search）
+          noAutoSearch: true,          // 身份/闲聊不自动联网（模型真需要时仍可自己调 web_search）
           personaId: 'lumina',
           contextWindow: llmConfig.contextWindow || 0,
         }
-
-        const result = await api.agentChat({
-          text: data.text,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await api.agentChat({
+          text,
           config,
           sessionId: PET_CONV_ID,
-          compactedContext: latestConv?.compactedContext,
+          compactedContext: conv?.compactedContext,
           conversationHistory: history,
         })
+        return result as { content?: string; error?: string; success?: boolean }
+      },
+      sendToPet: (text, role) => {
+        try { api.petSyncReply?.(text, role) } catch { /* 桌宠窗未开 */ }
+      },
+      // 回复成功后，由文本本地派生动作/表情（走 pet:test-intent，不再打第二次 LLM）
+      dispatchLocalIntent: (replyText) => {
+        try { api.petTestIntent?.(deriveLocalIntent(replyText)) } catch { /* 桌宠窗未开 */ }
+      },
+    })
+    orchestratorRef.current = orchestrator
 
-        const replyText = result?.content || ''
-        if (replyText) {
-          const replyTs = Date.now()
-          syncedTimestamps.current.add(replyTs)
-          useStore.getState().addMessage(PET_CONV_ID, 'assistant', replyText)
-          try { api.petSyncReply?.(replyText, 'assistant') } catch {}
-        } else if (result?.error) {
-          const errMsg = result.content || `出错了: ${String(result.error).slice(0, 100)}`
-          useStore.getState().addMessage(PET_CONV_ID, 'assistant', errMsg)
-          try { api.petSyncReply?.(errMsg, 'assistant') } catch {}
-        }
-      } catch (err: any) {
-        const errMsg = `喵…连接不上大脑了（${err?.message || '未知错误'}）`
-        useStore.getState().addMessage(PET_CONV_ID, 'assistant', errMsg)
-        try { api.petSyncReply?.(errMsg, 'assistant') } catch {}
-      } finally {
-        processingRef.current = false
-        lastMsgCount.current = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)?.messages.length || 0
-      }
+    // 初始化 lastMsgCount，避免挂载瞬间把已有历史当成"新消息"回推给桌宠
+    {
+      const conv = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)
+      lastMsgCount.current = conv?.messages?.length || 0
+    }
+
+    // ── 桌宠 → 主聊天（注入 + 串行跑 Agent，失败退避重试由编排器负责）──
+    const unsubPetMsg = api.onPetSyncMessage((data: { text: string; from: string }) => {
+      if (!data?.text) {return}
+      ensurePetConv()
+      orchestrator.handlePetMessage(data.text)
     })
 
     // ── 桌宠请求历史记录 → 返回固定对话的消息 ──
@@ -125,24 +138,19 @@ export default function PetChatSync() {
     })
 
     // ── 主聊天 → 桌宠（订阅 store，监听固定对话的新消息）──
+    //    zustand subscribe 在 set() 时同步触发：我们注入桌宠消息时 injectingRef=true，
+    //    这批新消息不回推（已由 sendToPet 直接发过）；只有主窗 UI 新增的才推给桌宠。
     const unsubStore = useStore.subscribe((state: any) => {
       const conv = state.conversations.find((c: any) => c.id === PET_CONV_ID)
       if (!conv) {return}
-
-      const count = conv.messages.length
-      if (count > lastMsgCount.current) {
-        const newMsgs = conv.messages.slice(lastMsgCount.current)
-        for (const msg of newMsgs) {
-          if (msg.role === 'system') {continue}
-          // 跳过刚从桌宠同步过来的消息
-          if (syncedTimestamps.current.has(msg.timestamp)) {
-            syncedTimestamps.current.delete(msg.timestamp)
-            continue
-          }
-          try { api.petSyncReply?.(msg.content, msg.role) } catch {}
-        }
+      const messages = conv.messages || []
+      if (messages.length <= lastMsgCount.current) {return}
+      const newMsgs = messages.slice(lastMsgCount.current)
+      lastMsgCount.current = messages.length
+      const toForward = messagesToForward(newMsgs, injectingRef.current)
+      for (const msg of toForward) {
+        try { api.petSyncReply?.(msg.content, msg.role) } catch { /* 桌宠窗未开 */ }
       }
-      lastMsgCount.current = count
     })
 
     return () => { unsubPetMsg?.(); unsubStore?.(); unsubHistoryReq?.() }
