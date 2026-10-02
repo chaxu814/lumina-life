@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion%20System-5D-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-25-60-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="25-60 Tools & Skills">
+  <img src="https://img.shields.io/badge/Tools-130-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="130 Built-in Tools">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -74,7 +74,7 @@
 |-------|-----------|-----------------|---------------|
 | **Lumina** 🐱 | 团队老大 — 唯一对用户接口<br>Team leader, your only interface | 温暖可爱、偶尔迷糊<br>Warm, caring, sometimes adorably clumsy | 对话 · 情绪感知 · 日常陪伴<br>Chat, emotion sensing, companionship |
 | **热茶 (Recha)** 🍵 | 毒舌技术宅 — 后台工作者<br>Sarcastic reviewer, behind-the-scenes | 外冷内热、毒舌但可靠<br>Cold on the outside, sharp but reliable | 代码审查 · 挑错 · 风险评估<br>Code review, critique, risk assessment |
-| **Yak** 📊 | 冷静分析师 — 后台工作者<br>Calm engineer, behind-the-scenes | 理性至上、数据狂<br>Data-driven, logic-first | 写代码 · 调试 · 重构 · 跑测试<br>Coding, debugging, refactoring, testing |
+| **Yak** 💻 | 代码工程师 — 后台工作者<br>Calm engineer, behind-the-scenes | 理性至上、工程狂<br>Logic-first, engineering-obsessed | 写代码 · 调试 · 重构 · 跑测试<br>Coding, debugging, refactoring, testing |
 
 **如何协作？** How they work together:
 
@@ -84,7 +84,7 @@
   ▼
 Lumina 🐱 判断 → "这个让 Yak 看看"
   │
-  ├── delegate → Yak 📊 写修复方案
+  ├── delegate → Yak 💻 写修复方案
   │                  │
   │                  └── delegate → 热茶 🍵 审查代码
   │                                    │
@@ -147,7 +147,7 @@ Lumina 🐱 判断 → "这个让 Yak 看看"
 💡 **屏幕感知**：你在写代码？热茶会自发提出优化建议<br>
 💡 **看得见你的操作**：不只是聊天窗口，是整个屏幕
 
-🎮 **游戏陪伴（多游戏）**：她能看画面、操作键鼠陪你玩——目前支持 **Minecraft**（视觉 + Mineflayer 程序化双路线）和 **Factorio**（视觉路线）。基于 GameProfile 框架，新游戏可通过 Profile 接入。支持自主游玩闭环 `game_auto`，但**请勿用于带反作弊的竞技网游**（封号风险）。详见 [docs/gaming-overview.md](docs/gaming-overview.md) 与 [docs/game-safety.md](docs/game-safety.md)。
+🎮 **游戏陪伴（可选扩展）**：她能看画面、操作键鼠陪你玩——视觉路线（截图→理解→操作键鼠）开箱即用，基于 GameProfile 框架可接入新游戏（已适配 **Minecraft**、**Factorio** 等）；**Minecraft 的 Mineflayer 程序化控制作为可选扩展，需额外安装，首发安装包不含**。支持自主游玩闭环 `game_auto`，但**请勿用于带反作弊的竞技网游**（封号风险）。详见 [docs/gaming-overview.md](docs/gaming-overview.md) 与 [docs/game-safety.md](docs/game-safety.md)。
 
 ---
 
@@ -194,9 +194,9 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ---
 
-### 🔧 100+ Built-in Tools · 三档模式按需加载（另可经 MCP / 技能市场扩展）
+### 🔧 130 Built-in Tools · 三档模式按需加载（另可经 MCP / 技能市场扩展）
 
-<sub>口径：注册表共注册 100+ 个工具（含 Computer Use / 团队 / 语音 / 新闻 / 创作者等；启动日志打印精确数）；按模式分档加载——chat 纯对话 0 个、agent 日常约 32 个、developer 约 36 个，其余在对应功能与设置中启用，另可经 MCP 协议动态扩展。</sub>
+<sub>口径：注册表共注册 130 个真实工具（含 Computer Use / 团队 / 语音 / 新闻 / 创作者等；启动日志打印精确数）；按模式分档加载——chat 纯对话 0 个、agent 日常约 32 个、developer 约 36 个，其余在对应功能与设置中启用，另可经 MCP 协议动态扩展。</sub>
 
 `搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · ……
 
@@ -217,7 +217,7 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 | **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
 | **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + BM25/TF-IDF 混合召回（RRF 融合）+ 证据链** |
 | **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **双层安全审查 + 审批流** |
-| **🔧 工具生态** | ⭐ 看项目 | ✅ **100+ 工具（日常约 32）+ MCP + 技能商店** |
+| **🔧 工具生态** | ⭐ 看项目 | ✅ **130 个工具（日常约 32）+ MCP + 技能商店** |
 | **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
@@ -333,7 +333,7 @@ curl -X POST http://localhost:3456/api/chat \
 
 ### 🥇 铁则一：用户只看到 Lumina
 
-用户全程只与 Lumina 🐱 对话。热茶 🍵 和 Yak 📊 在后台隐身工作，用户感知不到他们的存在。
+用户全程只与 Lumina 🐱 对话。热茶 🍵 和 Yak 💻 在后台隐身工作，用户感知不到他们的存在。
 
 ```
 用户：帮我算一下这个月的开支
@@ -394,7 +394,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  │               Multi-Agent System                         │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐               │ │
 │  │  │  Lumina  │  │   热茶   │  │   Yak    │               │ │
-│  │  │  🐱 BOSS  │  │  🍵 DEV  │  │  📊 ANAL  │               │ │
+│  │  │  🐱 BOSS  │  │  🍵 REV  │  │  💻 DEV   │               │ │
 │  │  └────┬─────┘  └────┬─────┘  └────┬─────┘               │ │
 │  │       └──────────────┼──────────────┘                     │ │
 │  │              Team Social Engine                           │ │
@@ -402,7 +402,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  25-60 tools/skills · MCP │  Plugin SDK · Skill Store      │ │
+│  │  130 tools · MCP          │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -434,12 +434,6 @@ lumina-life/
 | 🐾 **Live2D 桌宠**<br>桌面上的 Lumina，呼吸/眨眼/表情随情绪变化 | ![Pet Live2D](docs/images/pet-live2d.png) |
 | 📱 **Moments 朋友圈**<br>旁观 Lumina、热茶、Yak 的自发动态 | ![Moments](docs/images/moments.png) |
 
-> ⚠️ **当前为占位卡片，非真实界面**：正式发布前请替换 `docs/images/` 下这 3 张 PNG 为真实截图：
-> 1. `chat-panel.png` — 主聊天面板（含消息流 + 情绪指示）
-> 2. `pet-live2d.png` — 桌面上的 Live2D 桌宠小窗口（可顺带展示全屏注视 / 屏幕视觉）
-> 3. `moments.png` — Moments 朋友圈面板
->
-> 截取方式：启动 `npm run dev`，用 Win+Shift+S 截取，保存为同名 PNG 覆盖即可。
 ---
 
 ## 🧪 Tech Stack · 技术栈
@@ -459,7 +453,7 @@ lumina-life/
 
 ## 🗺️ Roadmap · 路线图
 
-- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统（BM25/TF-IDF 混合召回）+ 100+ 工具 + 真·屏幕视觉 + 全屏注视 / 全双工对话 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
+- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统（BM25/TF-IDF 混合召回）+ 130 个工具 + 真·屏幕视觉 + 全屏注视 / 全双工对话 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
 - 🔜 **v1.1.0** — 自定义 Agent 创建（定义新角色加入团队）
 - 🔜 **v1.2.0** — 插件生态开放（社区技能商店）
 - 🔜 **v1.3.0** — macOS / Linux 支持
