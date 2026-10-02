@@ -19,6 +19,7 @@ import {
 } from './tools/registry'
 import { registerAllTools } from './tools/index'
 import { isToolAllowedForRole } from './rolePolicy'
+import { enterAgentContext } from './tools/agentRunContext'
 import { getMemoryStore } from './memory/memoryStore'
 import { getAgentChatsManager } from './agentChatsManager'
 import { getAgentDialogManager } from './agentDialogManager'
@@ -1805,6 +1806,9 @@ private summarizer: ConversationSummarizer | null = null
    * @returns 最终响应文本
    */
   async runReActLoop(tools: any[]): Promise<string> {
+    // 🆕 v3.0: 注入当前 persona 到 AsyncLocalStorage，工具（如 run_subagents）
+    // 即可读到"是谁在调用"，无需改 executeTool 签名。
+    enterAgentContext(this.config.personaId)
     const maxRounds = this.config.maxToolCalls ?? 30
     //                    ↑ 从 200 降为 30 — 正常对话 3-8 轮足矣，防止工具循环空转
     let finalText = ''

@@ -76,6 +76,60 @@ export function initTaskWorkspaceBridge(): void {
     }))
   }
 
+  // ── 🆕 v03: 子智能体（实习生）生命周期 → 「子智能体」侧边栏实时渲染 ──
+  // 任意 owner（Lumina/Yak/热茶）派生的并行子智能体：hire/assign/done/error/fire。
+  if (api.onSubtaskEvent) {
+    _unsubs.push(api.onSubtaskEvent((ev: any) => {
+      if (!ev || !ev.id) return
+      const store = ws()
+      switch (ev.type) {
+        case 'assigned':
+          store.upsertSubagent({
+            id: ev.id,
+            title: ev.title || ev.name || '子任务',
+            status: 'running',
+            owner: ev.owner || 'lumina',
+            createdAt: ev.at || Date.now(),
+            internName: ev.name,
+          })
+          store.setPanelOpen(true)
+          break
+        case 'done':
+          store.upsertSubagent({
+            id: ev.id,
+            title: ev.title || '',
+            status: 'done',
+            owner: ev.owner || 'lumina',
+            createdAt: ev.at || Date.now(),
+            completedAt: ev.at || Date.now(),
+            result: ev.result,
+            internName: ev.name,
+          })
+          break
+        case 'error':
+          store.upsertSubagent({
+            id: ev.id,
+            title: ev.title || '',
+            status: 'error',
+            owner: ev.owner || 'lumina',
+            createdAt: ev.at || Date.now(),
+            completedAt: ev.at || Date.now(),
+            error: ev.error,
+            internName: ev.name,
+          })
+          store.setPanelOpen(true)
+          break
+        case 'fired':
+          // 用完即走：离职即从侧边栏移除
+          store.removeSubagent(ev.id)
+          break
+        // 'hired' 还没领到具体子任务，不进列表（避免空点）
+        default:
+          break
+      }
+    }))
+  }
+
   // ── 进度看板（图1）：主进程 / CLI 推来的任务板直接进工作区 ──
   if (api.onTaskBoard) {
     _unsubs.push(api.onTaskBoard((board: any) => {

@@ -14,6 +14,7 @@ import { mcpManager } from '../tools/impl/mcp'
 // v6.0: MultiAgentOrchestrator 已删除，使用独立 Agent 配置 + 委托管理器
 import { getAgentConfig, type AgentId } from '../agentConfig'
 import { getDelegationManager } from '../delegationManager'
+import { onAnySubagentEvent } from '../orchestration/internPool'
 import { getMails, markRead, markAllRead, deleteMail, getUnreadCount, getTotalCount, onMailChange, getArchivedMails, restoreMail, purgeArchivedMail } from '../mailStore'
 import { initTeamSocialEngine } from './teamIpc'
 import { fetchWithRetry } from '../llmRetry'
@@ -134,6 +135,13 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
   // Worker 实时事件（tool_start/tool_end/thinking/error）→ 工具时间线
   taskManager.on('task:runner-event', (payload: any) => {
     try { mainWindow.webContents.send('task:runner-event', payload) } catch { /* 窗口已关 */ }
+  })
+
+  // ─── v3.0: 子智能体（实习生）生命周期事件 → 「子智能体」侧边栏 ───
+  // 任意 owner（Lumina/Yak/热茶）派生的并行子智能体，hire/assign/done/error/fire
+  // 都会经此转发到渲染进程，前端实时渲染彩色圆点 + 状态。
+  onAnySubagentEvent((ev) => {
+    try { mainWindow.webContents.send('subtask:event', ev) } catch { /* 窗口已关 */ }
   })
 
   // ─── Agent ──────────────────────────────────────────

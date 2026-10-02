@@ -97,7 +97,7 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   team: {
     description: '团队协作 — 委托/流水线/通知板/共享上下文/模式切换',
-    tools: ['delegate_to', 'mode_switch', 'mode_status', 'team_context',
+    tools: ['delegate_to', 'run_subagents', 'mode_switch', 'mode_status', 'team_context',
             'delegate_chain', 'write_notice', 'read_notices', 'save_context', 'load_context'],
   },
 

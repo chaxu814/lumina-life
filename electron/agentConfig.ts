@@ -536,11 +536,25 @@ class AgentConfigManager {
     return !!(cfg && cfg.enabled && cfg.model && cfg.endpoint)
   }
 
+  /**
+   * 🆕 v3.0: 从 intern ID（intern_<owner>_<name>）解析派生 owner。
+   * 非 intern ID 返回 null。
+   */
+  private _internOwner(agentId: string): 'lumina' | 'yak' | 'recha' | null {
+    if (!agentId || !agentId.startsWith('intern_')) return null
+    const owner = agentId.split('_')[1]
+    if (owner === 'lumina' || owner === 'yak' || owner === 'recha') return owner
+    return null
+  }
+
   /** 从 agent.json 构建 AgentRunConfig (P3-1) */
   buildRunConfig(agentId: AgentId, profile?: AgentProfile, overrides?: any): any {
-    const cfg = this._configs[agentId]
+    // 🆕 v3.0: intern 是 owner 的临时 fork，不自带 LLM 凭证 → 用 owner 的配置
+    const internOwner = this._internOwner(agentId)
+    const effectiveId = (internOwner ?? agentId) as AgentId
+    const cfg = this._configs[effectiveId] ?? this._configs['lumina']
     const agentProfile = profile || this._buildDefaultProfile(agentId)
-    
+
     return {
       mode: agentProfile.role === 'boss' ? 'chat' : 'agent',
       model: cfg.model,
@@ -553,12 +567,29 @@ class AgentConfigManager {
       skipApproval: agentProfile.tools.approvalLevel === 'none',
       isChildAgent: agentProfile.role === 'worker',
       socialMode: agentProfile.role === 'worker',
+      // intern 的 personaId 仍保留原 intern ID（日志/追踪用），但凭证/配置来自 owner
+      personaId: agentId,
       ...overrides,
     }
   }
 
   /** 构建默认 AgentProfile (P3-1) */
   private _buildDefaultProfile(agentId: AgentId): AgentProfile {
+    // 🆕 v3.0: intern 感知 —— 复用 owner 的 profile 模板，再叠加 worker/intern 约束。
+    // 工具集严格继承 owner 的 rolePolicy 边界（yak 可写可跑 / recha 只读 / lumina 全量）。
+    const internOwner = this._internOwner(agentId)
+    if (internOwner) {
+      const ownerProfile = this._buildDefaultProfile(internOwner as AgentId)
+      return {
+        ...ownerProfile,
+        id: agentId,
+        name: `${ownerProfile.name}·子智能体`,
+        // intern 永远是 worker（子智能体），不做 boss
+        role: 'worker',
+        enabled: true,
+      } as AgentProfile
+    }
+
     const cfg = this._configs[agentId]
     
     const templates: Record<string, Partial<AgentProfile>> = {

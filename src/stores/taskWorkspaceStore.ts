@@ -55,6 +55,35 @@ export interface SubtaskItem {
   completedAt?: number
 }
 
+/**
+ * 🆕 v03: 子智能体运行态（「对话摘要」侧边栏「子智能体」层）。
+ *
+ * 与 SubtaskItem 的区别：SubtaskItem 是挂在父任务卡片下的两层结构数据；
+ * 这里是一份扁平、实时的并行子智能体列表——后端 InternPool（任意 owner
+ * 派生）hire/assign/done/error/fire 时经桥接灌入，用于渲染
+ * 「彩色圆点 + 子任务标题」的纵向并行列表。
+ */
+export interface SubagentItem {
+  /** 子智能体 ID（后端 intern_<owner>_<name>） */
+  id: string
+  /** 子任务标题（assigned 之后才有） */
+  title: string
+  status: TaskStatus
+  /** 派生 owner：'lumina' | 'yak' | 'recha' */
+  owner: string
+  createdAt: number
+  completedAt?: number
+  /** 完成结果摘要（展开可见） */
+  result?: string
+  /** 失败错误（展开可见） */
+  error?: string
+  /** 子智能体展示名（eg. 实习生小陈） */
+  internName?: string
+}
+
+/** 🆕 v03: 面板主视图：对话摘要（默认）/ 详情（旧时间线·工具·产物） */
+export type PanelView = 'summary' | 'detail'
+
 export interface TimelineEvent {
   id: string
   taskId: string
@@ -457,12 +486,114 @@ export function isTextArtifact(kind: ArtifactKind): boolean {
     || kind === 'csv' || kind === 'text'
 }
 
+// ─── 🆕 v03: 「对话摘要」六层聚合纯函数 ──────────────────────
+// 全部从真实 store 状态（artifacts / subagents / board / toolCalls）派生，
+// 不写死任何假数据。每层无数据时由渲染层显示「暂无内容」。
+
+/** 产物 → 侧边栏图标 key（md / html / code / image / pdf / json / file） */
+export function artifactIconKey(kind: ArtifactKind, filename: string): string {
+  const ext = (filename.split('.').pop() || '').toLowerCase()
+  if (ext === 'md' || ext === 'markdown') return 'md'
+  if (ext === 'html' || ext === 'htm') return 'html'
+  if (ext === 'json') return 'json'
+  if (ext === 'csv' || ext === 'tsv') return 'csv'
+  if (kind === 'image') return 'image'
+  if (kind === 'pdf') return 'pdf'
+  if (kind === 'code') return 'code'
+  return 'file'
+}
+
+/**
+ * 「对话产物」层：文档类产物（md/html/code/json/csv/text），按创建时间倒序。
+ * 图片/PDF 等二进制资源归到「对话资源」层，不混在这里。
+ */
+export function deriveConversationArtifacts(artifacts: ArtifactItem[]): ArtifactItem[] {
+  return artifacts
+    .filter((a) => {
+      const kind = a.kind ?? detectArtifactKind(a.filename, a.content)
+      return kind === 'markdown' || kind === 'code' || kind === 'json'
+        || kind === 'csv' || kind === 'text'
+    })
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/** 「对话资源」层：图片/PDF 等资源（缩略图/文件名），按创建时间倒序 */
+export function deriveConversationResources(artifacts: ArtifactItem[]): ArtifactItem[] {
+  return artifacts
+    .filter((a) => {
+      const kind = a.kind ?? detectArtifactKind(a.filename, a.content)
+      return kind === 'image' || kind === 'pdf'
+    })
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/** 「最近文件」层：带磁盘路径的产物，按 mtime/createdAt 倒序，最多 limit 条 */
+export function deriveRecentFiles(artifacts: ArtifactItem[], limit = 8): ArtifactItem[] {
+  return artifacts
+    .filter((a) => !!a.filePath)
+    .slice()
+    .sort((a, b) => (b.mtime ?? b.createdAt) - (a.mtime ?? a.createdAt))
+    .slice(0, limit)
+}
+
+/** 「任务规划」层：进度看板条目（无看板时为空，显示「暂无内容」） */
+export function deriveTaskPlan(board: TaskBoard | null): BoardItem[] {
+  return board?.items ?? []
+}
+
+/** 「技能」层：本次对话用过的工具（按调用先后去重） */
+export function deriveUsedSkills(calls: ToolCallRecord[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const c of calls) {
+    if (!c.name || seen.has(c.name)) continue
+    seen.add(c.name)
+    out.push(c.name)
+  }
+  return out
+}
+
+/**
+ * 「子智能体」层：合并运行态子智能体列表 + 父任务卡片里的 subtasks，
+ * 去重后按创建时间正序（先派的在上），过滤掉 idle（还没领到活的）。
+ */
+export function deriveSubagentList(
+  runtime: SubagentItem[],
+  tasks: TaskWorkspaceTask[],
+): SubagentItem[] {
+  const map = new Map<string, SubagentItem>()
+  for (const s of runtime) {
+    map.set(s.id, s)
+  }
+  // 兼容旧数据模型：父任务卡片里的 subtasks 也进「子智能体」层
+  for (const t of tasks) {
+    for (const sub of t.subtasks ?? []) {
+      if (map.has(sub.id)) continue
+      map.set(sub.id, {
+        id: sub.id,
+        title: sub.title,
+        status: sub.status,
+        owner: sub.agentId ?? t.agentId,
+        createdAt: sub.createdAt,
+        completedAt: sub.completedAt,
+      })
+    }
+  }
+  return Array.from(map.values())
+    .filter((s) => s.status !== 'idle')
+    .sort((a, b) => a.createdAt - b.createdAt)
+}
+
 // ─── 持久化 helper（分组折叠 / 区块折叠 / 宽度 / 最近产物） ──
 
 const COLLAPSED_GROUPS_KEY = 'lumina_tw_collapsed_groups'
 const COLLAPSED_SECTIONS_KEY = 'lumina_tw_collapsed_sections'
 const PANEL_WIDTH_KEY = 'lumina_tw_panel_width'
 const LAST_ARTIFACT_KEY = 'lumina_tw_last_artifact'
+/** 🆕 v03: 主视图（对话摘要/详情）持久化 key */
+const PANEL_VIEW_KEY = 'lumina_tw_panel_view'
 /** 进度看板（图1）持久化 key */
 const BOARD_KEY = 'lumina_tw_board'
 
@@ -495,6 +626,12 @@ function loadStringArray(key: string, fallback: string[] = []): string[] {
 function loadPanelWidth(): number {
   const w = loadJson<number>(PANEL_WIDTH_KEY, 360)
   return typeof w === 'number' && Number.isFinite(w) && w >= 280 && w <= 500 ? w : 360
+}
+
+/** 读取主视图偏好，非法值回退默认 'summary'（对话摘要为新主视图） */
+function loadPanelView(): PanelView {
+  const v = loadJson<string>(PANEL_VIEW_KEY, 'summary')
+  return v === 'detail' ? 'detail' : 'summary'
 }
 
 function saveJson(key: string, value: unknown): void {
@@ -749,6 +886,16 @@ interface TaskWorkspaceState {
   /** 各区块折叠状态（持久化 localStorage） */
   collapsedSections: Record<SectionKey, boolean>
   toggleSection: (section: SectionKey) => void
+
+  /** 🆕 v03: 面板主视图（对话摘要 / 详情），持久化 localStorage */
+  panelView: PanelView
+  setPanelView: (view: PanelView) => void
+
+  /** 🆕 v03: 运行态并行子智能体列表（「子智能体」层实时数据） */
+  subagents: SubagentItem[]
+  upsertSubagent: (item: SubagentItem) => void
+  removeSubagent: (id: string) => void
+  clearSubagents: () => void
 }
 
 let taskSeq = 0
@@ -762,6 +909,8 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
   const initialWidth = loadPanelWidth()
   // 最近一次打开的产物 ID 持久化
   const savedArtifactId = loadJson<string | null>(LAST_ARTIFACT_KEY, null)
+  // 主视图偏好持久化（默认对话摘要）
+  const initialPanelView = loadPanelView()
 
   return {
   panelOpen: false,
@@ -1053,5 +1202,28 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
     saveJson(COLLAPSED_SECTIONS_KEY, collapsedSections)
     return { collapsedSections }
   }),
+
+  // ── v03: 主视图切换 ──
+  panelView: initialPanelView,
+  setPanelView: (view) => {
+    saveJson(PANEL_VIEW_KEY, view)
+    set({ panelView: view })
+  },
+
+  // ── v03: 运行态并行子智能体 ──
+  subagents: [],
+  upsertSubagent: (item) => set((s) => {
+    const idx = s.subagents.findIndex((x) => x.id === item.id)
+    if (idx >= 0) {
+      const next = [...s.subagents]
+      next[idx] = { ...next[idx], ...item }
+      return { subagents: next }
+    }
+    return { subagents: [...s.subagents, item] }
+  }),
+  removeSubagent: (id) => set((s) => ({
+    subagents: s.subagents.filter((x) => x.id !== id),
+  })),
+  clearSubagents: () => set({ subagents: [] }),
   }
 })

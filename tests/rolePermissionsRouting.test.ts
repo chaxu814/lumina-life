@@ -201,12 +201,19 @@ describe('orchestration：职责映射不出现反向硬编码', () => {
     expect(src).not.toMatch(/delegationManager\.delegate\(\s*'recha'/)
   })
 
-  it('internPool：实习生前提是「Yak 招人、热茶审查」，不再是反过来', () => {
+  it('internPool：子智能体由 owner 招人、权限继承 owner、热茶审查（不 owner 自审）', () => {
     const src = readSrc('electron/orchestration/internPool.ts')
-    expect(src).toContain('你是 Yak 招来的临时帮手')
+    // 泛化：任意 owner（Lumina/Yak/热茶）都能招自己的临时子智能体
+    expect(src).toContain('你是被你的直属 owner 招来的临时帮手')
+    // 审查仍由 热茶 做，owner 不审自己的产出
     expect(src).toContain('审查是 热茶（🍵）的职责')
-    expect(src).toContain('Yak（程序员）招的临时实习生')
-    expect(src).not.toContain('你是热茶招来的临时帮手')
+    // 子智能体权限严格继承 owner 的角色边界
+    expect(src).toContain('你的可用工具严格等于你 owner 的可用工具')
+    expect(src).toContain('权限严格继承派生它的 owner')
+    // 各 owner 派生的子智能体边界正确：Yak 可写可跑，热茶只读
+    expect(src).toContain('Yak 派生的子智能体')
+    expect(src).toContain('热茶 派生的子智能体')
+    // 旧的「只有 Yak 能招人」硬编码口径已被泛化取代
     expect(src).not.toContain('那是热茶的事')
   })
 })
@@ -227,7 +234,6 @@ describe('反向断言：旧的反向口径不得残留', () => {
     'Yak — 数据分析师兼审查员，只读不写',
     'Yak 只读不写',
     '委托热茶写代码',
-    '你是热茶招来的临时帮手',
   ]
 
   it('所有归属文件里都搜不到反向文案', () => {

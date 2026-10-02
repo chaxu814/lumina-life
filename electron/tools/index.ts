@@ -168,6 +168,9 @@ import {
   loadContextDef, loadContext,
 } from './impl/team'
 
+// 🆕 v3.0: 主动并行派生子智能体
+import { runSubagentsDef, runSubagents } from './impl/runSubagents'
+
 // 🆕 v3.20: 文件信箱 / 共享任务板 / 动态 worker / 对抗评审 / worktree 隔离（对标 cc-haha）
 // 🆕 v3.30: plan_approval / 待命中转 / 工作流 DSL / Teach 录制回放 / Markdown 工种
 import {
@@ -345,6 +348,8 @@ export function registerAllTools(): void {
 
   // 委托工具
   registerTool(delegateToDef, delegateTo)
+  // 🆕 v3.0: 主动并行派生子智能体
+  registerTool(runSubagentsDef, runSubagents)
 
   // 团队协作增强工具
   registerTool(delegateChainDef, delegateChain)

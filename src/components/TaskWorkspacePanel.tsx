@@ -21,6 +21,7 @@ import TaskTimeline from './TaskTimeline'
 import ToolExecutionFeed from './ToolExecutionFeed'
 import TaskBoardPanel from './TaskBoardPanel'
 import ArtifactViewer from './ArtifactViewer'
+import ConversationSummary from './ConversationSummary'
 // dev-only：产物渲染器自检条；生产构建被静态替换为 false 并 tree-shake
 import ArtifactSelfTest from './ArtifactSelfTest'
 
@@ -30,6 +31,7 @@ const TaskWorkspacePanel: React.FC = () => {
     togglePanel, setPanelOpen,
     tasks, activeTaskId, createTask, closeTask, switchTask,
     addTimelineEvent, syncLoopTasks, setActiveConversation,
+    panelView, setPanelView,
   } = useTaskWorkspace()
 
   const loopTasks = useLoopStore((s) => s.tasks)
@@ -149,6 +151,22 @@ const TaskWorkspacePanel: React.FC = () => {
           >
             <span>🌐 浏览器</span>
           </button>
+
+          {/* 主视图切换：对话摘要（默认）/ 详情（时间线·工具·产物） */}
+          <button
+            className={`tw-tab tw-tab-view ${panelView === 'summary' ? 'active' : ''}`}
+            onClick={() => setPanelView('summary')}
+            title="对话摘要视图"
+          >
+            <span>对话摘要</span>
+          </button>
+          <button
+            className={`tw-tab tw-tab-view ${panelView === 'detail' ? 'active' : ''}`}
+            onClick={() => setPanelView('detail')}
+            title="详情视图（时间线 / 工具执行）"
+          >
+            <span>详情</span>
+          </button>
           {tasks.slice(-5).map((t) => (
             <div
               key={t.id}
@@ -170,10 +188,16 @@ const TaskWorkspacePanel: React.FC = () => {
 
         {/* 内容区 */}
         <div className="tw-content">
-          <AgentStatusCards />
-          <TaskBoardPanel />
-          <ToolExecutionFeed />
-          <TaskTimeline taskId={activeTaskId === '__runtime__' ? null : activeTaskId} />
+          {panelView === 'summary' ? (
+            <ConversationSummary />
+          ) : (
+            <>
+              <AgentStatusCards />
+              <TaskBoardPanel />
+              <ToolExecutionFeed />
+              <TaskTimeline taskId={activeTaskId === '__runtime__' ? null : activeTaskId} />
+            </>
+          )}
         </div>
 
         {/* 产物渲染区（有产物时覆盖内容区显示在上方） */}

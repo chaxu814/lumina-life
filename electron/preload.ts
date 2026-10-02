@@ -355,6 +355,13 @@ const api = {
     return () => { ipcRenderer.removeListener('task:runner-event', handler) }
   },
 
+  // 🆕 v3.0: 子智能体（实习生）生命周期事件 → 「子智能体」侧边栏实时渲染
+  onSubtaskEvent: (callback: (ev: any) => void) => {
+    const handler = (_event: any, ev: any) => callback(ev)
+    ipcRenderer.on('subtask:event', handler)
+    return () => { ipcRenderer.removeListener('subtask:event', handler) }
+  },
+
   // ─── Skill 安装 API ───────────────────────────────────
   skillInstall: (zipPath: string) =>
     ipcRenderer.invoke('skill:install', zipPath) as Promise<{ success: boolean; skillId?: string; error?: string }>,
