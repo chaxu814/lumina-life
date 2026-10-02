@@ -116,6 +116,32 @@ export function newGCSessionId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 }
 
+/**
+ * 持久化群聊时，计算会话列表的下一个状态。
+ *
+ * 关键区分：
+ * - 仅仅「切换/加载」历史会话（消息数 === 该会话加载时的基线）属于只读操作，
+ *   不应把会话置顶、也不应把日期改成今天 → 返回 null（调用方只保存消息，不动列表）。
+ * - 只有真正产生了新消息（消息数 > 基线）才把当前会话置顶，并刷新日期/预览/计数。
+ *
+ * `today` 可注入，便于测试固定日期。
+ */
+export function buildSessionsOnPersist(
+  sessions: GCSession[],
+  activeSessionId: string,
+  messages: Pick<GCMsg, 'from' | 'content'>[],
+  baseline: number | undefined,
+  today: string = new Date().toLocaleDateString('zh-CN'),
+): GCSession[] | null {
+  const base = baseline ?? -1
+  if (messages.length <= base) { return null }
+  const preview = messages.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || ''
+  return [
+    { id: activeSessionId, date: today, preview, count: messages.length },
+    ...sessions.filter(s => s.id !== activeSessionId),
+  ]
+}
+
 // ═══════════════════════════════════════════════════════════
 // Agent 任务 / 帖子 类型
 // ═══════════════════════════════════════════════════════════

@@ -48,7 +48,7 @@ import {
   TTS_VOICES, AGENT_VOICES, AUTONOMY_INTERVAL,
   AGENTS, TEAM_CONV_ID, EMOJI_GROUPS,
   type GCMsg, type GCSession, type AgentTask, type AgentPost, type LLMPanelState, type ThinkingStep,
-  loadGCSessions, saveGCSessions, loadGCMessages, saveGCMessages, newGCSessionId,
+  loadGCSessions, saveGCSessions, loadGCMessages, saveGCMessages, newGCSessionId, buildSessionsOnPersist,
   loadLLMData, saveLLMData, loadAgentVoices, saveAgentVoices,
   setLLMRefreshFn, _llmState, _llmNotify, _startAutonomyTimer, _stopAutonomyTimer, _startAutonomyWithRemaining, _autonomyTimer,
   useLLMPanels,
@@ -885,6 +885,11 @@ export default function GroupChatView() {
     if (thinkRafRef.current) { cancelAnimationFrame(thinkRafRef.current); thinkRafRef.current = 0 }
   }, [])
 
+  // 记录每个会话「加载时」的消息数基线。
+  // 切换会话是只读操作：不应把该会话置顶、也不应把日期改成今天。
+  // 只有真正产生了新消息（消息数 > 该会话基线）时，才更新会话元数据并置顶。
+  const sessionBaselineRef = useRef<Record<string, number>>({})
+
   // 🆕 持久化 — v3.6: 只要有消息在动画中就不保存，让 animateTyping 完成时存
   useEffect(() => {
     if (messages.length <= 1) {return}
@@ -892,15 +897,17 @@ export default function GroupChatView() {
     const hasAnimating = messages.some(m => m.from !== 'system' && !m.content && !(m as any)._animDone)
     if (hasAnimating) {return}
     saveGCMessages(activeSessionId, messages)
-    const preview = messages.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || ''
-    const updated: GCSession[] = [
-      { id: activeSessionId, date: new Date().toLocaleDateString('zh-CN'),
-        preview, count: messages.length },
-      ...sessions.filter(s => s.id !== activeSessionId),
-    ]
-    setSessions(updated)
-    saveGCSessions(updated)
-    window.dispatchEvent(new Event('gc:sessions-updated'))
+    // 仅当消息数真正增加（有新消息）时，才更新会话时间并置顶；
+    // 仅仅切换/加载历史会话（消息数 === 基线）时保持原顺序、原日期。
+    const updated = buildSessionsOnPersist(
+      sessions, activeSessionId, messages, sessionBaselineRef.current[activeSessionId],
+    )
+    if (updated) {
+      setSessions(updated)
+      saveGCSessions(updated)
+      window.dispatchEvent(new Event('gc:sessions-updated'))
+    }
+    sessionBaselineRef.current[activeSessionId] = messages.length
   }, [messages.length, msgCounter, activeSessionId])
 
   useEffect(() => {
@@ -962,6 +969,8 @@ export default function GroupChatView() {
       }
       const msgs = loadGCMessages(newSessionId)
       setActiveSessionId(newSessionId)
+      // 标记加载基线：加载历史会话不算新增消息，不置顶、不改日期
+      sessionBaselineRef.current[newSessionId] = Math.max(msgs.length, 1)
       if (msgs.length > 0) {
         setMessages(msgs)
         const lastAgentMsg = [...msgs].reverse().find(m => AGENTS.some(a => a.id === m.from))
@@ -989,6 +998,7 @@ export default function GroupChatView() {
         saveGCMessages(curId, messagesRef.current)
       }
       setActiveSessionId(newSessionId)
+      sessionBaselineRef.current[newSessionId] = 1
       setMessages([{
         id: '0', from: 'system', fromIcon: '🤖', fromName: '系统',
         content: llmReady
