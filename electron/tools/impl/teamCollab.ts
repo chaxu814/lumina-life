@@ -454,6 +454,12 @@ v3.30 增强：
   // 工具层堵递归委托：子 Agent 拿不到派生类工具，A→B→A 的无限自我派生
   // 在源头就不成立。此前该机制存在但没有任何工具声明过 true，闸门是空转的。
   blockedInChild: true,
+  // v3.34: 委托类工具的真实耗时远超默认 60s。
+  // 依据：首次真实跑打包版时观察到 —— 委托会 fork 子 Agent 跑完整 ReAct，
+  // 必要时再触发 v9.0 自动验证（真的执行 npx tsc + npx vitest），60s 必然打满；
+  // 而「超时」不等于「停止」（Promise.race 只让调用方不再等，底层 promise 继续跑），
+  // 于是重试会再开一条完整委托链，后台同时跑着两条。
+  timeoutMs: 900000,
   toolsets: ['team', 'agent', 'developer'],
   dangerous: true,
 }
@@ -532,6 +538,10 @@ export const adversarialReviewDef: ToolDef = {
   },
   toolsets: ['team', 'agent', 'developer'],
   dangerous: true,
+  // v3.34: 对抗评审会 **并发** 委托多个 worker 独立投票，全部跑完才汇总。
+  // 默认 60s 必然不够（每个 worker 都是一次完整 ReAct），而超时 ≠ 停止 ——
+  // 重试会在后台再开一组 worker，白烧 token。
+  timeoutMs: 900_000,
 }
 
 export async function adversarialReview(args: Record<string, any>): Promise<ToolResult> {
@@ -722,6 +732,12 @@ export const workflowDef: ToolDef = {
   // 工具层堵递归委托：子 Agent 拿不到派生类工具，A→B→A 的无限自我派生
   // 在源头就不成立。此前该机制存在但没有任何工具声明过 true，闸门是空转的。
   blockedInChild: true,
+  // v3.34: 委托类工具的真实耗时远超默认 60s。
+  // 依据：首次真实跑打包版时观察到 —— 委托会 fork 子 Agent 跑完整 ReAct，
+  // 必要时再触发 v9.0 自动验证（真的执行 npx tsc + npx vitest），60s 必然打满；
+  // 而「超时」不等于「停止」（Promise.race 只让调用方不再等，底层 promise 继续跑），
+  // 于是重试会再开一条完整委托链，后台同时跑着两条。
+  timeoutMs: 900000,
   toolsets: ['team', 'agent', 'developer'],
   dangerous: true,
 }

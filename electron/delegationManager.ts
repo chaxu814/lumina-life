@@ -1296,14 +1296,47 @@ ${lastError.slice(0, 1000)}
 
 let _instance: DelegationManager | null = null
 
+/** v3.34: 供 AgentOrchestrator 在 init() 时反向登记自己的实例。
+ *
+ *  【为什么要这个】
+ *  原来 getDelegationManager() 优先 `require('./core/agentOrchestrator')`，
+ *  拿不到就退回本地单例。这在 **dev 模式**下没问题（源文件在磁盘上，相对
+ *  require 能解析），但在**打包后必然失效**：
+ *
+ *      编译产物里那行仍然是
+ *          require("./core/agentOrchestrator")
+ *      而打包器把源码扁平化进了 out/main/index.js，运行时基准目录是 out/main/，
+ *      out/main/core/agentOrchestrator 并不存在 → 抛错 → 被 catch {} 吞掉
+ *      → 退回一个**全新的空实例**（runners 为空）
+ *      → isConfigured('yak') === false
+ *      → 用户看到「Yak 未配置 LLM」，而日志明明写着「yak 独立 Runner 已创建」
+ *
+ *  也就是说：**三 Agent 团队在打包版里是坏的，而在 dev 与 187 个测试里都是好的。**
+ *  这类 bug 只有真跑一次打包产物才会暴露。
+ *
+ *  【修法】不能简单改成静态 import —— agentOrchestrator 本身静态 import 了
+ *  DelegationManager（init() 里 new），反向静态 import 会成环。原本用运行时
+ *  require 正是为了断环。
+ *
+ *  所以改为**双向登记**：orchestrator 建好实例后调用本函数把它存进模块单例，
+ *  两条取实例的路径从此指向**同一个对象**，与 require 是否成功无关。
+ */
+export function registerDelegationManagerInstance(dm: DelegationManager): void {
+  _instance = dm
+}
+
 export function getDelegationManager(): DelegationManager {
-  // 优先从 orchestrator 返回
+  // 优先从 orchestrator 返回（dev 模式）
   try {
     const { getOrchestrator } = require('./core/agentOrchestrator')
     const orch = getOrchestrator()
     if (orch.delegation) {return orch.delegation}
-  } catch {}
-  // fallback: 本地单例
+  } catch {
+    // 打包后必然走到这里（相对 require 解析不到）。这不是异常路径 ——
+    // orchestrator.init() 已经通过 registerDelegationManagerInstance 把同一个
+    // 实例存进了 _instance，所以下面的 fallback 拿到的正是它，runners 不会丢。
+  }
+  // fallback：本地单例（由 init() 或 initDelegationManager() 填充）
   if (!_instance) {_instance = new DelegationManager()}
   return _instance
 }

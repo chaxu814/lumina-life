@@ -17,7 +17,7 @@
 // 各模块内使用 try-catch 包裹的动态 require 不会影响顶层导入
 import { TeamContextManager } from '../agentTeamContext'
 import { ModeManager } from '../agentTeamManager'
-import { DelegationManager } from '../delegationManager'
+import { DelegationManager, registerDelegationManagerInstance } from '../delegationManager'
 import type { AgentSocialEngine } from '../agentSocialEngine'
 import type { AgentRunner } from '../agentRunner'
 
@@ -66,6 +66,20 @@ export class AgentOrchestrator {
 
     // 3. DelegationManager
     this.delegation = new DelegationManager()
+    // v3.34: 反向登记到 delegationManager 的模块单例。
+    //
+    // 【为什么必须有这一步】getDelegationManager() 优先走
+    // `require('./core/agentOrchestrator')`。这行在 **dev 模式**下能解析，
+    // 但**打包后必然失败** —— 打包器把源码扁平化进 out/main/index.js，运行时
+    // 基准目录变成 out/main/，out/main/core/agentOrchestrator 并不存在。
+    // require 抛错被 catch {} 吞掉后，它退回模块单例；如果单例是另一个对象，
+    // 这个实例上注册的 runners（yak / recha）就等于凭空消失 ——
+    // isConfigured('yak') 返回 false，用户看到「Yak 未配置 LLM」，
+    // 而日志刚打印过「yak 独立 Runner 已创建」。
+    //
+    // 也就是说：**三 Agent 团队在打包版里整个是坏的，dev 与 187 个测试却全绿。**
+    // 登记之后，两条取实例的路径指向同一个对象，与 require 成功与否无关。
+    registerDelegationManagerInstance(this.delegation)
 
     console.log('[AgentOrchestrator] ✅ 核心管理器已初始化（delegation + modeManager + teamContext）')
   }
@@ -80,9 +94,27 @@ export class AgentOrchestrator {
   /** 注册 Agent Runner */
   registerRunner(id: string, runner: AgentRunner): void {
     this._runners.set(id, runner)
-    // 同步到 delegationManager 的 runners（如有）
-    if (this.delegation?.registerRunner) {
-      try { this.delegation.registerRunner(id, runner) } catch {}
+    // 同步到 delegationManager 的 runners
+    //
+    // ⚠️ v3.34: 原来这里是 `if (this.delegation?.registerRunner) { try {...} catch {} }`
+    // —— 两层静默：拿不到 delegation 时整个跳过、抛错时也吞掉。而调用方
+    // (main.ts) 在 registerRunner 之后无条件打印「✅ 已创建」，于是日志说成功、
+    // 实际 runners 是空的，委托时报「Yak 未配置 LLM」。
+    // 现在失败一律出声：宁可吵，也不要静默地把一个功能弄坏还假装正常。
+    if (!this.delegation) {
+      console.error(
+        `[AgentOrchestrator] ❌ registerRunner("${id}") 失败：delegation manager 尚未初始化。` +
+        `该 agent 的 runner 不会出现在委派链路里。请检查 init() 是否在注册之前被调用。`,
+      )
+      return
+    }
+    try {
+      this.delegation.registerRunner(id, runner)
+    } catch (e: any) {
+      console.error(
+        `[AgentOrchestrator] ❌ registerRunner("${id}") 抛错：${e?.message || e}。` +
+        `该 agent 的 runner 不会出现在委派链路里。`,
+      )
     }
   }
 
