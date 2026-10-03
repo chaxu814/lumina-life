@@ -26,9 +26,10 @@ export const fileSearchDef: ToolDef = {
     rootDir: {
       type: 'string',
       description:
-        '搜索起始目录。留空则搜索所有本地硬盘。' +
-        '支持盘符如 D:\\ 或具体路径 D:\\Games\\。' +
-        '⚠️ 全盘搜索可能较慢（10-60秒），请尽量指定具体盘符或目录。',
+        '搜索起始目录。**省略时只搜「当前项目目录 + 沙箱目录」**（快，推荐）。' +
+        '支持盘符如 D:\\ 或具体路径 D:\\Games\\，' +
+        '或填 "all_drives" 扫全盘。' +
+        '⚠️ 全盘搜索实测要 30-60 秒（光扫完 C 盘就 60s+），请尽量指定具体目录。',
       required: false,
     },
     maxDepth: {
@@ -78,6 +79,16 @@ const SKIP_PREFIXES = [
   'C:\\System Volume Information\\',
   'C:\\Recovery\\',
 ]
+
+/** v3.34: 沙箱根目录（写入重定向发生的地方）。
+ *  用户刚让 agent 写出的文件都落在这里，所以默认搜索必须包含它 ——
+ *  否则用户说「找一下刚生成的那个文件」会搜不到。 */
+function sandboxRoot(): string | null {
+  try {
+    const { app } = require('electron')
+    return path.join(app.getPath('userData'), 'sandbox')
+  } catch { return null }
+}
 
 function isSkippableDir(dirPath: string): boolean {
   const normalized = path.normalize(dirPath).toUpperCase()
@@ -322,19 +333,33 @@ export async function fileSearch(args: Record<string, any>): Promise<ToolResult>
     const allResults: SearchResult[] = []
 
     // 确定搜索根目录
+    // ── v3.34: 默认作用域从「全盘」改为「当前工作目录 + 沙箱」 ─────────
+    //
+    // 旧行为：rootDir 省略时直接 getAllDriveRoots() 逐盘扫。实测单次调用
+    //   [fileSearch] C:\  1 结果, 63806ms
+    //   [fileSearch] F:\  0 结果, 15049ms
+    //   [fileSearch] J:\  0 结果, 16180ms
+    // 用户一句「帮我找下那个文件」可能让对话卡住一分钟以上，而且大概率什么都
+    // 找不到 —— 真正想要的结果通常就在项目目录里。
+    //
+    // 现在的行为：
+    //   · 给了 rootDir        → 照旧
+    //   · 省略                → 只搜「项目目录 + 沙箱目录」（用户刚放过文件的地方）
+    //   · rootDir="all_drives" → 显式要求全盘（代价已在参数说明里写明）
     let searchRoots: string[]
-    if (rootDir) {
-      searchRoots = [rootDir]
-    } else {
+    if (rootDir === 'all_drives' || rootDir === '*') {
       searchRoots = await getAllDriveRoots()
       if (searchRoots.length === 0) {
-        return {
-          callId: '',
-          ok: false,
-          content: '',
-          error: '无法检测到任何硬盘驱动器。请尝试指定 rootDir 参数。',
-        }
+        return { callId: '', ok: false, content: '', error: '无法检测到任何硬盘驱动器。' }
       }
+    } else if (rootDir) {
+      searchRoots = [rootDir]
+    } else {
+      searchRoots = []
+      for (const cand of [process.cwd(), sandboxRoot()]) {
+        if (cand && fs.existsSync(cand) && !searchRoots.includes(cand)) searchRoots.push(cand)
+      }
+      if (searchRoots.length === 0) searchRoots = [process.cwd()]
     }
 
     // 逐个盘搜索

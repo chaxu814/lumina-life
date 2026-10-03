@@ -409,8 +409,13 @@ export class SandboxManager {
       const driveMatch = absolutePath.match(/^([A-Za-z]):\\?/)
       let relativePath: string
       if (driveMatch) {
-        // Windows: C:\Users\file.txt → C/Users/file.txt
-        relativePath = driveMatch[1] + absolutePath.slice(driveMatch[0].length).replace(/\\/g, '/')
+        // v3.34 修复：原来漏了盘符与后续路径之间的分隔符。
+        //   旧：driveMatch[1] + slice(...)  →  D:lumina-quality/fib.py
+        //   新：补上 '/'                   →  D/lumina-quality/fib.py
+        // 后果是重定向后目录变成 sandbox/lumina/Dlumina-quality/ —— 用户按提示
+        // 去 D:\lumina-quality 找文件永远找不到。注释里写的意图本来就是
+        // 「C:\Users\file.txt → C/Users/file.txt」，实现与意图不符。
+        relativePath = driveMatch[1] + '/' + absolutePath.slice(driveMatch[0].length).replace(/\\/g, '/')
       } else if (absolutePath.startsWith('/')) {
         // Unix: /home/user/file.txt → home/user/file.txt
         relativePath = absolutePath.slice(1)

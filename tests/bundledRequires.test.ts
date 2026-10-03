@@ -94,7 +94,7 @@ describe('DelegationManager 单例一致性（防脑裂复发）', () => {
     const src = fs.readFileSync(join(root, 'electron', 'core', 'agentOrchestrator.ts'), 'utf8')
     const i = src.indexOf('registerRunner(id: string')
     const rest = src.slice(i + 10)
-    const nextMethod = rest.search(/\n  \w+\s*\(/)
+    const nextMethod = rest.search(/\n {2}\w+\s*\(/)
     const raw = nextMethod > 0 ? rest.slice(0, nextMethod) : rest
     // 剥离行注释 —— v3.34 的说明性注释里会引用旧的代码形态，
     // 不剥离就会把「注释里提到了旧写法」误判成「旧写法还在」
