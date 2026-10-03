@@ -107,6 +107,8 @@ import {
   KNOWN_MODEL_WINDOWS as _KNOWN_MODEL_WINDOWS,
 } from './core/agentUtils'
 import { cleanToolNoiseText } from './agent/toolNoise'
+// v3.34: 「声称做了但没做」检测（质量基准实测抓到的幻觉缺口）
+import { checkActionClaims } from './actionClaimGuard'
 
 // ⚠️ 工具注册已从模块顶层移除（v3.34 断环修复）
 //
@@ -1834,6 +1836,7 @@ private summarizer: ConversationSummarizer | null = null
     const maxRounds = this.config.maxToolCalls ?? 30
     //                    ↑ 从 200 降为 30 — 正常对话 3-8 轮足矣，防止工具循环空转
     let finalText = ''
+    let claimGuardChecked = false
     let consecutiveEmptyCount = 0  // 🔧 v2.11: 连续空回复计数，防止空回复消耗所有轮次
     let slowThinkingRetries = 0    // 🆕 v5.3: 慢速思考重试计数，防止无限 retry
     let lastToolNames: string[] = []    // 🆕 v14.2: 最近 N 轮调用的工具名，用于检测重复
@@ -2384,6 +2387,29 @@ private summarizer: ConversationSummarizer | null = null
           }
           finalText = ''
           continue
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // v3.34: 「声称做了但没做」检测
+        //
+        // 质量基准实测（1.4B）抳到：让它 memory_save 记住一件事，它回复
+        // 「✅ 记住了！」，而本轮**一个工具都没调**。
+        // 本项目已有的防幻觉（记忆权威性只由 source 决定 / 工具失败显式
+        // ok:false / worker 空产出转失败）都假设「工具确实被调过」，
+        // 而这里是**一次都没调**。
+        //
+        // 本轮只要调用过任何工具就不判（避免对「先搜索再回答」误报），
+        // 只在「有完成态措辞 + 零工具调用 + 能对应到具体动作」时追加提醒。
+        if (!claimGuardChecked && finalText && lastToolNames.length === 0) {
+          const verdict = checkActionClaims({ text: finalText, toolsUsedThisTurn: [] })
+          if (verdict.suspected) {
+            finalText += verdict.notice
+            console.warn(
+              `[AgentRunner] ⚠️ 动作声明未兑现: 声称「${verdict.labels.join('、')}」` +
+              `但本轮零工具调用。已向用户追加提醒。`,
+            )
+          }
+          claimGuardChecked = true
         }
 
         // 🆕 Lucky 模式检测：文本回复后 — 检查完成度 / 死循环
