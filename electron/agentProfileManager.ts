@@ -22,6 +22,20 @@ export interface AgentToolConfig {
   whitelist: string[]
   blacklist: string[]
   approvalLevel: 'auto' | 'none' | 'strict'
+  /** v3.34: 是否让 whitelist 真正生效。
+   *
+   *  【为什么要这个开关，而不是直接启用 whitelist】
+   *  whitelist 从写下来那天起就没被任何代码读过（buildRunConfig 只读 blacklist）。
+   *  而仓库里三个 agent.json 的 whitelist 是当**说明文档**写的，且与 rolePolicy
+   *  差距很大（yak 列 10 项，rolePolicy 实际允许 27 项）。如果在某个版本里突然
+   *  让它生效，yak 会当场失去 17 个工具，而配置作者完全不知情 —— 这是典型的
+   *  「修 bug 修出更大回归」。
+   *
+   *  所以：默认 false（行为与升级前完全一致），要开启请显式设 true。
+   *  开启后 whitelist 仍然**只能收窄不能放宽**，rolePolicy.ts 保持唯一权限
+   *  事实源。判断逻辑见 agentConfig.ts 的 _resolveDisabledTools。
+   */
+  enforceWhitelist?: boolean
 }
 
 export interface AgentSocialConfig {

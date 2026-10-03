@@ -1,6 +1,6 @@
 {
   "errors": 0,
-  "warnings": 5075,
+  "warnings": 5042,
   "note": "基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。",
   "updatedAt": "2026-10-03"
 }

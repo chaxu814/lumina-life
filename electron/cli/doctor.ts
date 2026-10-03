@@ -12,10 +12,9 @@ import * as os from 'os'
 
 export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data?: any; error?: string }> {
   const checks: { name: string; pass: boolean; detail: string }[] = []
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 1. 运行时版本
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   checks.push({
     name: 'Node.js 版本',
     pass: process.versions.node ? true : false,
@@ -26,10 +25,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
     pass: process.versions.electron ? true : false,
     detail: process.versions.electron || '未知',
   })
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 2. 系统信息
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   const platform = os.platform()
   const release = os.release()
   const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1)
@@ -39,10 +37,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
     pass: true,
     detail: `${platform} ${release} | 内存 ${freeMem}GB / ${totalMem}GB`,
   })
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 3. 工作目录
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const cwd = process.cwd()
     const exists = fs.existsSync(cwd)
@@ -63,10 +60,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '工作目录', pass: false, detail: err.message })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 4. 磁盘空间
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const drive = path.parse(process.cwd()).root || '/'
 
@@ -106,10 +102,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch {
     checks.push({ name: '磁盘空间', pass: true, detail: '无法检测' })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 5. .env 配置
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const envPath = path.join(process.cwd(), '.env')
     const exists = fs.existsSync(envPath)
@@ -126,10 +121,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '.env 配置文件', pass: false, detail: err.message })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 6. 🆕 SSL 安全配置检查
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   const allowInsecure = process.env.LUMINA_ALLOW_INSECURE_SSL === '1'
   const oldEnvVar = process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
   checks.push({
@@ -141,10 +135,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
         ? '⚠️ NODE_TLS_REJECT_UNAUTHORIZED=0 — 关闭了 SSL 验证'
         : '已启用（安全）',
   })
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 7. Agent 配置
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const { getAgentConfig } = await import('../agentConfig')
     const config = getAgentConfig()
@@ -158,10 +151,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: 'Agent 配置', pass: false, detail: err.message })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 8. 🆕 LLM 连接测试（只做配置检查，不做真实请求以免耗时）
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const { getAgentConfig } = await import('../agentConfig')
     const config = getAgentConfig()
@@ -191,10 +183,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: 'LLM 配置', pass: false, detail: err.message })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 9. 审批服务
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const { getApprovalService } = await import('../approvalService')
     const svc = getApprovalService()
@@ -207,10 +198,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '审批服务', pass: false, detail: err.message })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 10. 记忆系统
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const { getMemoryStore } = await import('../memory/memoryStore')
     const store = getMemoryStore()
@@ -223,10 +213,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '记忆系统', pass: false, detail: err.message })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // 11. 🆕 工具加载完整性
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   try {
     const toolsDir = path.join(__dirname, '..', 'tools', 'impl')
     let implFiles: string[] = []
@@ -246,10 +235,44 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '工具完整性', pass: true, detail: `检查跳过: ${err.message}` })
   }
-
-  // ═══════════════════════════════════════════════════════════
-  // 12. 定时任务
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
+  // 12. v3.34: agent.json 工具白名单是否真的生效
+  // ══════════════════════════════════════════════════════════════
+  //
+  // 【为什么要这项检查】agent.json 的 tools.whitelist 在 v3.34 之前是死字段 ——
+  // 用户改了半天以为在收窄权限，实际什么都没发生。这是最容易骗过人的一种配置。
+  // v3.34 把它接上了，但默认不启用（enforceWhitelist 默认 false），
+  // 因为仓库里三个 agent.json 的 whitelist 是当文档写的，内容与 rolePolicy
+  // 差距很大；突然生效会让 yak 丢掉十几个工具。
+  //
+  // 所以这里显式报出来：「你写了白名单，但它当前不生效」—— 杜绝静默陷阱。
+  try {
+    const notes: string[] = []
+    for (const id of ['lumina', 'yak', 'recha']) {
+      const p = path.join(process.cwd(), 'agents', id, 'agent.json')
+      if (!fs.existsSync(p)) {continue}
+      let cfg: any
+      try { cfg = JSON.parse(fs.readFileSync(p, 'utf-8')) } catch {continue}
+      const wl: string[] = cfg?.tools?.whitelist ?? []
+      if (wl.length === 0) {continue}
+      const enforced = cfg?.tools?.enforceWhitelist === true
+      notes.push(
+        enforced
+          ? `${id}: 白名单已启用（${wl.length} 项）`
+          : `${id}: 白名单写了 ${wl.length} 项但**未生效**（加 "enforceWhitelist": true 启用）`,
+      )
+    }
+    checks.push({
+      name: 'agent 工具白名单',
+      pass: true,
+      detail: notes.length ? notes.join(' | ') : '未配置白名单（正常）',
+    })
+  } catch (err: any) {
+    checks.push({ name: 'agent 工具白名单', pass: true, detail: `检查跳过: ${err.message}` })
+  }
+  // ══════════════════════════════════════════════════════════════
+  // 13. 定时任务
+  // ══════════════════════════════════════════════════════════════
   try {
     const { getCronStats } = await import('../tools/impl/cron')
     const stats = getCronStats()
@@ -261,10 +284,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '定时任务', pass: true, detail: '0 个 (服务不可用)' })
   }
-
-  // ═══════════════════════════════════════════════════════════
-  // 13. 🆕 日志与错误检查
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
+  // 14. 🆕 日志与错误检查
+  // ══════════════════════════════════════════════════════════════
   try {
     const logDir = path.join(process.cwd(), 'logs')
     const exists = fs.existsSync(logDir)
@@ -292,10 +314,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch {
     checks.push({ name: '日志状态', pass: true, detail: '检查跳过' })
   }
-
-  // ═══════════════════════════════════════════════════════════
-  // 14. 委托管理器
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
+  // 15. 委托管理器
+  // ══════════════════════════════════════════════════════════════
   try {
     const { getDelegationManager } = await import('../delegationManager')
     const dm = getDelegationManager()
@@ -312,10 +333,9 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
   } catch (err: any) {
     checks.push({ name: '委托管理器', pass: true, detail: `不可用: ${err.message}` })
   }
-
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // ═══ 输出 ═══
-  // ═══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   const passCount = checks.filter(c => c.pass).length
   const failCount = checks.filter(c => !c.pass).length
   const warnCount = checks.filter(c => c.pass && c.detail.includes('⚠️')).length

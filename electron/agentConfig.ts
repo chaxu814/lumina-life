@@ -563,7 +563,7 @@ class AgentConfigManager {
       temperature: agentProfile.llm.temperature ?? 0.7,
       maxTokens: cfg.maxContextTokens || 256000,
       timeout: (cfg.timeout || 600) * 1000,
-      disabledTools: agentProfile.tools.blacklist,
+      disabledTools: AgentConfigManager._resolveDisabledTools(agentId, agentProfile),
       skipApproval: agentProfile.tools.approvalLevel === 'none',
       isChildAgent: agentProfile.role === 'worker',
       socialMode: agentProfile.role === 'worker',
@@ -571,6 +571,75 @@ class AgentConfigManager {
       personaId: agentId,
       ...overrides,
     }
+  }
+
+  /** v3.34: 汇总本 agent 的禁用工具集 —— 修「agent.json 的 whitelist 是死字段」
+   *
+   *  【修复前】buildRunConfig 只读 `agentProfile.tools.blacklist`，
+   *  而 `agents/<id>/agent.json` 里写的 `tools.whitelist` 全仓无人消费 ——
+   *  用户改了白名单以为在收窄权限，实际上什么都没发生。
+   *
+   *  【为什么不直接启用】这是一次刻意加的保守选择。
+   *  三个 agent.json 里的 whitelist 是当**文档**写的，从未生效过，而且内容
+   *  与 rolePolicy 差很多 —— yak 的 whitelist 列 10 项，rolePolicy 实际允许 27 项。
+   *  若在本次升级里突然让它变权威，yak 会当场失去 17 个工具（包括 memory_search、
+   *  todo 等日常要用的），而配置文件作者完全不知情。这是典型的「修 bug 修出
+   *  更大回归」，所以不这么做。
+   *
+   *  【采用的语义】
+   *    默认（enforceWhitelist 未开启，或 whitelist 为空）：
+   *      禁用集 = rolePolicy 硬边界 ∪ agent.json.blacklist   ← 与修复前行为一致
+   *    显式开启（tools.enforceWhitelist === true 且 whitelist 非空）：
+   *      再加上 (rolePolicy 允许集 − whitelist)
+   *
+   *  关键不变式：**whitelist 只能收窄，永不放宽**。想放宽权限仍然只能改
+   *  rolePolicy.ts（唯一事实源），因此不会出现第二套权限事实源。
+   */
+  private static _resolveDisabledTools(agentId: AgentId, profile: AgentProfile): string[] {
+    const disabled = new Set<string>()
+    const whitelist: string[] = profile.tools?.whitelist ?? []
+    const enforce = profile.tools?.enforceWhitelist === true && whitelist.length > 0
+
+    // 1) rolePolicy 的硬边界
+    let allToolNames: string[] = []
+    try {
+      const { getToolNames } = require('./tools/registry')
+      allToolNames = [...getToolNames()]
+    } catch {
+      // 注册表尚未就绪（极早期调用）——退化为只用显式拒绝表
+      try {
+        const { getExplicitDeniedTools } = require('./rolePolicy')
+        for (const t of getExplicitDeniedTools(agentId)) {disabled.add(t)}
+        return [...disabled]
+      } catch {return []}
+    }
+
+    try {
+      const { getDisabledToolsForRole } = require('./rolePolicy')
+      for (const t of getDisabledToolsForRole(agentId, allToolNames)) {disabled.add(t)}
+    } catch { /* rolePolicy 不可用时跳过 */ }
+
+    // 2) agent.json 自己的 blacklist
+    for (const t of profile.tools?.blacklist ?? []) {disabled.add(t)}
+
+    // 3) agent.json 的 whitelist —— 需显式开启，且只收窄不放宽
+    if (enforce) {
+      const allowed = new Set(whitelist)
+      try {
+        const { getAllowedToolsForRole } = require('./rolePolicy')
+        for (const t of getAllowedToolsForRole(agentId, allToolNames)) {
+          if (!allowed.has(t)) {disabled.add(t)}
+        }
+      } catch {
+        // rolePolicy 不可用：退化为「白名单之外全禁」
+        for (const t of allToolNames) {
+          if (!allowed.has(t)) {disabled.add(t)}
+        }
+      }
+    }
+
+    disabled.delete('*')
+    return [...disabled]
   }
 
   /** 构建默认 AgentProfile (P3-1) */
