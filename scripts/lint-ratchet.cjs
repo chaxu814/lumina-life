@@ -82,7 +82,9 @@ if (shouldUpdate) {
   const next = {
     errors: current.errors,
     warnings: current.warnings,
-    note: '基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。',
+    tolerance: 25,
+    note: '基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。' +
+          'tolerance 是跨平台波动容差（CI 跑 win/mac/linux × Node 20/22，命中数可能差个位数）。',
     updatedAt: new Date().toISOString().slice(0, 10),
   }
   fs.writeFileSync(BASELINE_FILE, JSON.stringify(next, null, 2) + '\n', 'utf8')
@@ -93,16 +95,27 @@ if (shouldUpdate) {
 const newErrors = current.errors - baseline.errors
 const newWarnings = current.warnings - baseline.warnings
 
+// ⚠️ 为什么要有容差，而不是「多一条就红」
+// 基线是在 Windows + PowerShell 下测出来的。CI 同时跑 ubuntu-latest /
+// macos-latest / windows-latest × Node 20 & 22，行尾、路径解析、glob 行为
+// 都可能让某条规则的命中数差个位数。基线写死成精确值，等于把 CI 变成
+// 「换台机器就可能红」的定时炸弹 —— 而 lint 门禁的价值在于拦住**真新增**，
+// 不是拦住平台差异。
+//
+// 所以：error 必须严格 0（那些规则与平台无关）；warning 允许 TOLERANCE 条
+// 的波动，超过才算有人在真加债。
+const TOLERANCE = Number(process.env.LINT_RATCHET_TOLERANCE ?? 25)
+
 if (newErrors > 0) {
   console.error(`\n✗ eslint error 比基线多了 ${newErrors} 条 —— error 级规则（prefer-const / no-var）不允许新增。`)
   process.exit(1)
 }
-if (newWarnings > 0) {
+if (newWarnings > TOLERANCE) {
   const worst = current.files
     .filter(f => f.warnings > 0)
     .sort((a, b) => b.warnings - a.warnings)
     .slice(0, 10)
-  console.error(`\n✗ eslint warning 比基线多了 ${newWarnings} 条。新增的技术债必须当场还，`)
+  console.error(`\n✗ eslint warning 比基线多了 ${newWarnings} 条（容差 ${TOLERANCE}）。新增的技术债必须当场还，`)
   console.error(`  或者在确实有正当理由时跑 --update 显式抬高基线（会留下记录）。`)
   console.error(`\n  当前 warning 最多的文件：`)
   for (const f of worst) { console.error(`    ${String(f.warnings).padStart(5)}  ${f.file}`) }

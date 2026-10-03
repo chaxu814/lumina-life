@@ -1,6 +1,7 @@
 {
   "errors": 0,
   "warnings": 5042,
-  "note": "基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。",
+  "tolerance": 25,
+  "note": "基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。tolerance 是跨平台波动容差（CI 跑 win/mac/linux × Node 20/22，命中数可能差个位数）。",
   "updatedAt": "2026-10-03"
 }

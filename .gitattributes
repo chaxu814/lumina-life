@@ -1,0 +1,75 @@
+# ============================================================
+# .gitattributes — 显式声明行尾与文件类型策略
+#
+# 【为什么要加这个】
+# 仓库里 942 个文本文件在 git 索引中**恰好**全是纯 LF，但这是**偶然的**：
+# 它依赖作者本机设了 core.autocrlf=true（提交时归一化成 LF，检出时转 CRLF）。
+# 换个没有这个设置的贡献者检出，或有人手工改了行尾，diff 噪音就会出现。
+# CI 在 ubuntu/macos 上跑，看到的形态与 Windows 开发者看到的不一致。
+#
+# 所以把策略写进仓库，而不是靠每个人本机的 git 配置。
+# ============================================================
+
+# ── 默认：文本文件统一 LF 入库，检出时由下面的规则决定 ──────────
+* text=auto eol=lf
+
+# ── Windows 原生文件：检出时用 CRLF ──────────────────────────
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# ── 明确是 LF 的（编辑器/工具强约束）──────────────────────────
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.cjs  text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
+
+# ── 二进制：必须显式声明，不能靠 git 猜 ──────────────────────
+# electron/pet/assets/ 下是 Live2D / three.js 等第三方资源，
+# electron-builder 的 asarUnpack 也会用到它们。按内容猜二进制有风险，
+# 这里显式关掉一切转换。
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.mp3   binary
+*.wav   binary
+*.ogg   binary
+*.mp4   binary
+*.webm  binary
+*.pdf   binary
+*.zip   binary
+*.7z    binary
+*.exe   binary
+*.blockmap binary
+*.moc3  binary
+*.moc  binary
+*.model3.json text eol=lf
+*.moc3.json text eol=lf
+*.exp   binary
+*.moc   binary
+*.physics.json text eol=lf
+*.cdi3d  binary
+*.cdi   binary
+
+# ── 锁文件：交给包管理器，不参与 diff 噪音 ────────────────────
+package-lock.json text eol=lf -diff linguist-generated=true
+
+# ── 让 diff 更可读 ──────────────────────────────────────────
+*.md   diff=markdown
+*.ts   diff=typescript
+*.tsx  diff=typescript
+
+# ── 语言统计：把生成物与依赖排除 ─────────────────────────────
+docs/_ref/**      linguist-generated=true
+electron/pet/assets/libs/** linguist-vendored=true
+public/fonts/**    linguist-vendored=true
+*.min.js           linguist-vendored=true

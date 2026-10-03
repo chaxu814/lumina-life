@@ -2,7 +2,7 @@
 // impl/pathResolver.ts — 智能路径解析 (v4.0.1)
 //
 // 问题: Agent（如热茶）可能使用错误/占位的用户名路径
-//   C:\Users\hottea\Desktop\摄影作品集网站 → 不存在
+//   C:\Users\some-user\Desktop\作品集网站 → 不存在
 // 解决: 自动修正为真实用户路径
 //   C:\Users\<真实用户名>\Desktop\摄影作品集网站
 // ============================================================
@@ -37,8 +37,8 @@ function getUserPathMappings(): Record<string, string> {
  * 尝试解析路径中的占位用户名
  *
  * 例如:
- *   C:\Users\hottea\Desktop\摄影作品集网站
- *   → C:\Users\<真实用户名>\Desktop\摄影作品集网站
+ *   C:\Users\some-user\Desktop\作品集网站
+ *   → C:\Users\<真实用户名>\Desktop\作品集网站
  */
 export function resolveUserPath(rawPath: string): string {
   let resolved = rawPath

@@ -23,7 +23,10 @@
 ## 第一步：合并到 master
 
 ```bash
-cd "K:\2\Lumina AI"
+# 换到你自己的克隆路径
+cd /path/to/lumina-life
+# Windows PowerShell 示例：
+#   cd "D:\code\lumina-life"
 
 # 确认当前状态干净
 git status

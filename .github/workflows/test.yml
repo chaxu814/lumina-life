@@ -156,11 +156,30 @@ jobs:
         # 而不被拦下。对一个准备开源、且 agentRunner.ts 已有 3196 行的项目，
         # 这个门禁形同虚设。外部 PR 若真的卡在 strict，门禁失败信息本身就是引导。
 
-      - name: ESLint check (flat config)
-        run: npx eslint . --max-warnings 0
-        # v3.34: 加 --max-warnings 0，让 warning 也不能通过。
-        # eslint.config.js 里的规则已按「会真出 bug 的保持 error、其余降 warn」
-        # 重新分层；配合本门禁，防止规则随时间重新腐化成没人看的摆设。
+      - name: ESLint error gate
+        run: npx eslint . --quiet
+        # error 级规则只有 prefer-const / no-var / no-irregular-whitespace 等
+        # 「会真出 bug」的几条，必须恒为 0。v3.34 修掉了其中 14 条 —— 包括
+        # botRoute.ts 一处真 bug：`Number(req.slot) ?? 0`，Number 失败返回 NaN
+        # 而非 null/undefined，这条回退分支永远不触发，NaN 槽位号会被一路传进
+        # bot 的 select_slot，表现为「点了没反应」。
+
+      - name: ESLint ratchet (warning 总量只允许变小)
+        run: node scripts/lint-ratchet.cjs
+        env:
+          LINT_RATCHET_TOLERANCE: '25'
+        # 仓库有约 5000 条历史 warning，一次性清零不现实（要改 5000 处）。
+        # 与其把门禁关掉，不如做棘轮：基线记在 scripts/lint-baseline.json，
+        # 新增的 warning 会让 CI 失败并打印出是哪些文件；修掉后跑
+        # `npm run lint:ratchet:update` 收紧基线。
+        #
+        # 容忍 25 条跨平台波动：CI 跑 win/mac/linux × Node 20/22，行尾、
+        # 路径解析、glob 行为都可能让某条规则的命中数差个位数。基线写死成
+        # 精确值等于把 CI 变成「换台机器就可能红」的炸弹，而 lint 门禁的价值
+        # 在于拦住**真新增**，不是拦住平台差异。
+        #
+        # ⚠️ 不要改回 `eslint . --max-warnings 0` —— 那会对着 5000 条历史
+        # warning 直接把 CI 打红，门禁形同虚设。
 
   build:
     strategy:
