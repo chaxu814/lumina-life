@@ -19,9 +19,9 @@ import * as fspath from 'node:path'
  *   pngtuber 已实现：静态立绘 + 口型切换（.png）
  *   cat      已实现：Canvas 2D 程序化小猫（无外部素材，entryRel='__cat__'）
  */
-export type AvatarKind = 'live2d' | 'vrm' | 'mmd' | 'pngtuber' | 'cat'
+export type AvatarKind = 'live2d' | 'vrm' | 'mmd' | 'pngtuber' | 'cat' | 'spritesheet'
 
-export const AVATAR_KINDS: AvatarKind[] = ['live2d', 'vrm', 'mmd', 'pngtuber', 'cat']
+export const AVATAR_KINDS: AvatarKind[] = ['live2d', 'vrm', 'mmd', 'pngtuber', 'cat', 'spritesheet']
 
 /** 各形态对应的入口文件后缀（小写，不含点）；cat 为程序化特殊入口 */
 export const KIND_ENTRY_EXT: Record<AvatarKind, string[]> = {
@@ -30,6 +30,9 @@ export const KIND_ENTRY_EXT: Record<AvatarKind, string[]> = {
   mmd: ['pmx', 'pmd'],
   pngtuber: ['png'],
   cat: ['__cat__'],
+  // 8×9 精灵表（见 pet/spriteSheet.ts）—— 门槛最低的 UGC 形态：
+  // 不用会 Blender 也能做一只自己的桌宠。
+  spritesheet: ['png'],
 }
 
 export function isValidAvatarKind(kind: unknown): kind is AvatarKind {

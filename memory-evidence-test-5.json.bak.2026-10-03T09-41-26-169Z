@@ -1,22 +1,22 @@
 {
   "memories": [
     {
-      "id": "mem_1791013644453_kw8aoam",
-      "content": "First",
+      "id": "mem_1791020486168_oy716dh",
+      "content": "important",
       "type": "fact",
       "scores": {
-        "confidence": 0.7,
+        "confidence": 1,
         "recency": 1,
         "frequency": 0.1,
         "corroboration": 0,
-        "importance": 0.3
+        "importance": 0.9
       },
-      "compositeScore": 0.46499999999999997,
-      "createdAt": 1791013644453,
-      "updatedAt": 1791013644453,
+      "compositeScore": 0.735,
+      "createdAt": 1791020486168,
+      "updatedAt": 1791020486168,
       "mentionCount": 1,
       "sourceCount": 1,
-      "status": "pending"
+      "status": "confirmed"
     }
   ],
   "config": {

@@ -1,7 +1,7 @@
 {
   "memories": [
     {
-      "id": "mem_1791013644491_dld3k0q",
+      "id": "mem_1791020486213_qyow468",
       "content": "to be contradicted",
       "type": "fact",
       "scores": {
@@ -12,8 +12,8 @@
         "importance": 0.8
       },
       "compositeScore": 0.615,
-      "createdAt": 1791013644491,
-      "updatedAt": 1791013644491,
+      "createdAt": 1791020486213,
+      "updatedAt": 1791020486213,
       "mentionCount": 1,
       "sourceCount": 1,
       "status": "confirmed"

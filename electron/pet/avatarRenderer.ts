@@ -64,6 +64,18 @@ export const RENDERER_REGISTRY: Record<AvatarKind, RendererInfo> = {
     displayName: '小猫（程序化）',
     supported: true,
   },
+  // 8×9 精灵表：门槛最低的 UGC 形态（不用会 Blender）。
+  // 渲染器 HTML 尚未产出，标 supported: false —— 宁可明说不可用，
+  // 也不让它出现在可选列表里点进去才发现是空的。
+  spritesheet: {
+    kind: 'spritesheet',
+    htmlFile: '',
+    displayName: '精灵表（8×9 · 自制桌宠）',
+    supported: false,
+    unsupportedNote:
+      '精灵表规格与导入校验已就绪（见 electron/pet/spriteSheet.ts），' +
+      '但渲染器页面尚未产出，暂不可用。已列入 ROADMAP v0.2.0。',
+  },
 }
 
 /** 按 kind 查渲染器信息 */
@@ -92,6 +104,14 @@ export const AVATAR_RENDERERS: Record<AvatarKind, AvatarRendererInfo> = {
   mmd: { kind: 'mmd', label: 'MMD（3D 模型）', status: 'beta', roadmapNote: 'MMD 支持为 beta（.pmx），暂不支持物理/表情/.pmd 老格式。', entryExts: ['pmx', 'pmd'] },
   pngtuber: { kind: 'pngtuber', label: 'PNGTuber（静态立绘）', status: 'ready', entryExts: ['png'] },
   cat: { kind: 'cat', label: '小猫（程序化）', status: 'ready', entryExts: ['__cat__'] },
+  spritesheet: {
+    kind: 'spritesheet',
+    label: '精灵表（8×9 · 自制桌宠）',
+    status: 'roadmap',
+    roadmapNote:
+      '规格、切片、AI 生成提示词与导入校验已就绪，渲染器待产出（ROADMAP v0.2.0）。',
+    entryExts: ['png'],
+  },
 }
 
 /** 某形态当前是否真正可渲染 */

@@ -22,76 +22,80 @@ hero:
 features:
   - icon: 🖥️
     title: Electron 桌面
-    details: 基于 Electron 构建，支持 Windows/Mac/Linux，可通过 tray 常驻系统托盘。
+    details: 基于 Electron 40 构建，Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta，Linux 为 roadmap。托盘常驻。
+  - icon: 👥
+    title: 多 Agent 团队
+    details: Lumina（老板）+ Yak（代码工程师）+ 热茶（审查员）。流水线委派、三视角对抗式评审、动态雇实习生、无依赖任务并行。
+  - icon: 😊
+    title: 情感系统
+    details: 5 维情绪 + 心情/精力/亲密度连续值，带惯性、随机漂移与昼夜节律。亲密度由真实委派事件驱动并持久化。
+  - icon: 🎭
+    title: 桌宠五形态
+    details: Live2D / VRM / PNGTuber / MMD / 猫咪。表情实时由模型输出驱动，并可绑定**真实 Agent 执行状态**。
   - icon: 🧠
-    title: 多 Agent 协作
-    details: 内置 Agent 池，支持主 Agent 委托子 Agent，协作完成任务。
-  - icon: 🎮
-    title: Live2D 桌宠
-    details: 集成 Live2D 看板娘（Kanban），支持交互反馈与表情切换。
+    title: 真实记忆
+    details: 三层记忆（事实/反思/人格）+ BM25 与 TF-IDF 经 RRF 融合的零依赖混合召回，含**防幻觉固化**的来源置信度机制。
   - icon: 🛠️
-    title: 工具系统
-    details: 可扩展的 Tool 系统，支持 MCP、搜索、编码等能力的灵活组合。
+    title: 132 个工具
+    details: 三档模式按需加载，支持 MCP 扩展与技能商店。
+  - icon: 🛡️
+    title: 智能沙箱
+    details: 双层安全审查（消息/参数级 + 命令级 26 条规则）、审批流、权限白名单、隐私遮罩。
   - icon: 🎤
     title: 语音交互
-    details: 支持麦克风录音、Whisper ONNX 本地语音识别、Edge-TTS 语音输出。
+    details: 麦克风录音 + Whisper ONNX 本地识别 + 多 provider TTS 输出。
   - icon: 🔄
     title: MCP 集成
-    details: 支持通过 MCP 协议扩展工具与模型服务，灵活接入外部 AI 能力。
+    details: 支持通过 MCP 协议扩展工具，接入外部 Agent 服务。
 ---
 
 ## 项目结构
 
 ```
-<项目目录>
-├── electron/           # Electron 主进程
-│   ├── main.ts         # 入口（BrowserWindow、IPC、tray）
-│   ├── tools/          # 工具注册与实现
-│   │   ├── index.ts         # 工具路由 + 注册
-│   │   ├── registry.ts      # 工具定义、类型、schema
-│   │   ├── impl/            # 工具实现
-│   │   │   ├── file.ts      # 文件读写相关
-│   │   │   ├── tool_agent.ts # Agent 间通信工具
-│   │   │   ├── web.ts       # 搜索 / fetch 工具
-│   │   │   └── whisper.ts   # 语音识别工具
-│   ├── whisper/        # Whisper ONNX 语音模块
-│   │   ├── index.ts         # 对外接口
-│   │   ├── transcriber.ts   # ONNX 推理封装
-│   │   └── recorder.ts      # 麦克风录音
-│   └── services/       # 后台服务
-├── src/                # React 前端
-│   ├── App.tsx
-│   ├── components/
-│   └── hooks/
-├── public/
-│   └── kanban/         # Live2D 模型
-├── docs/               # VitePress 文档站
-│   ├── .vitepress/
-│   ├── index.md
-│   ├── FAQ.md
-│   └── TROUBLESHOOTING.md
-├── package.json
-├── tsconfig.json
-├── vite.config.ts      # Vite + React + Electron
-└── electron-builder.yml
+lumina-life/
+├── electron/                  # 主进程 —— Agent 引擎
+│   ├── main.ts                # 入口（窗口、IPC、tray）
+│   ├── agentRunner.ts         # Agent 主循环（ReAct）
+│   ├── delegationManager.ts   # 委派编排 + 自动验证修复闭环
+│   ├── tools/                 # 132 个工具（registry + impl/）
+│   ├── team/                  # 团队：动态雇工 / 对抗评审 / 自主性 / 教学
+│   ├── orchestration/         # 任务看板 / 阶段门控 / 路由 / 并行引擎
+│   ├── memory/                # 三层记忆 + 混合召回 + 防幻觉
+│   ├── proactive/             # 主动发言门控（打扰预算）
+│   ├── pet/                   # 桌宠：五形态 + 精灵表 + 状态桥接
+│   ├── security/              # 双层安全审查
+│   └── core/platform/         # Windows / macOS / Linux 适配层
+├── src/                       # 渲染进程（React 19 + Zustand）
+├── tests/                     # 2472 个测试用例（Vitest）
+├── agents/                    # 三个 Agent 的配置（工具白/黑名单）
+├── skills/                    # 技能目录
+├── docs/                      # 文档站（VitePress）
+└── package.json
 ```
 
 ## 功能一览
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| 基础对话 | ✅ | WebSocket 连接 LLM，即时对话 |
-| Agent 池 | ✅ | 主 Agent + 子 Agent 委托机制 |
-| 拖拽文件 | ✅ | IPC 拖拽文件到 Agent |
-| Live2D 桌宠 | ✅ | Kanban 看板娘 + 表情交互 |
-| 文件工具 | ✅ | 读写、搜索、编辑 |
-| Web 搜索 | ✅ | DuckDuckGo + Sogou |
-| 定时任务 | ✅ | Cron Agent 计划任务 |
-| MCP 工具 | ✅ | MCP Server 集成 |
-| 语音输入 | 🚧 | Whisper + ONNX 本地识别 |
-| TTS 输出 | 🚧 | Edge-TTS / 本地 TTS |
-| 文档站 | ✅ | VitePress + GitHub Pages |
-| 群聊模式 | 🚧 | 多 Agent 群聊 |
+| 基础对话 | ✅ | 多 provider LLM（LM Studio / Ollama / 云端 API），流式输出 |
+| 三 Agent 团队 | ✅ | 流水线委派 + 三视角对抗评审 + 动态雇工 + 无依赖任务并行 |
+| 桌宠五形态 | ✅ | Live2D / VRM / PNGTuber / MMD / 猫咪 |
+| 桌宠绑定 Agent 状态 | ✅ | 写代码敲键盘、审查皱眉、失败捂脸；零 LLM 开销 |
+| 精灵表 UGC | ✅ | 8×9 规格 + AI 生成提示词 + 导入校验器 |
+| 长期记忆 | ✅ | 三层 + BM25/TF-IDF RRF 混合召回 + 防幻觉固化 + 证据链 |
+| 主动发言 | ✅ | 门控 + 配额 + 退避 + 夜间勿扰 + 精力兜底 |
+| Computer Use | ✅ | 截图 / OCR / 键鼠 / UIA 元素树 / 隐私遮罩 |
+| 安全沙箱 | ✅ | 双层审查（26 条命令规则）+ 审批流 + 权限白名单 |
+| 工具系统 | ✅ | 132 个工具，三档模式按需加载 + MCP + 技能商店 |
+| 桌面自动化 | ✅ | 跨平台适配层（**仅 Windows 实机验证**） |
+| 游戏陪伴 | ⚠️ 可选扩展 | Minecraft / Factorio，需额外安装插件 |
+| 语音输入输出 | ✅ | Whisper ONNX 本地识别 + 多 provider TTS |
+| REST API / CLI | ✅ | 10+ 端点 + `lumina` 命令行 |
+| 团队社交 | ✅ | 群聊 + Moments 朋友圈 + 早安仪式 |
+| 定时任务 | ✅ | Cron 风格调度 |
+| macOS 桌面操控 | ⚠️ beta | 代码已适配，**从未在真机验证** |
+| Linux | 🔜 | Roadmap（Wayland 禁止全局键鼠注入） |
+| 应用内本地推理 | 🔜 | 当前需外挂 LM Studio |
 
 ---
 

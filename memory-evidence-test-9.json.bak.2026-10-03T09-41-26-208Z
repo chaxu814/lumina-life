@@ -1,7 +1,7 @@
 {
   "memories": [
     {
-      "id": "mem_1791013644464_c4xejpo",
+      "id": "mem_1791020486206_jzobiw3",
       "content": "adjustable",
       "type": "fact",
       "scores": {
@@ -12,8 +12,8 @@
         "importance": 0.3
       },
       "compositeScore": 0.46499999999999997,
-      "createdAt": 1791013644464,
-      "updatedAt": 1791013644464,
+      "createdAt": 1791020486206,
+      "updatedAt": 1791020486206,
       "mentionCount": 1,
       "sourceCount": 1,
       "status": "pending"

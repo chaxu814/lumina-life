@@ -1,22 +1,22 @@
 {
   "memories": [
     {
-      "id": "mem_1791020157342_pd01ueh",
-      "content": "important",
-      "type": "fact",
+      "id": "mem_1791020486156_wut1fxi",
+      "content": "喜欢热茶",
+      "type": "preference",
       "scores": {
-        "confidence": 1,
+        "confidence": 0.7,
         "recency": 1,
         "frequency": 0.1,
         "corroboration": 0,
-        "importance": 0.9
+        "importance": 0.7
       },
-      "compositeScore": 0.735,
-      "createdAt": 1791020157342,
-      "updatedAt": 1791020157342,
+      "compositeScore": 0.585,
+      "createdAt": 1791020486156,
+      "updatedAt": 1791020486156,
       "mentionCount": 1,
       "sourceCount": 1,
-      "status": "confirmed"
+      "status": "pending"
     }
   ],
   "config": {

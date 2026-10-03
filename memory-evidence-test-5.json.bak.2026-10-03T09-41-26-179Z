@@ -1,7 +1,7 @@
 {
   "memories": [
     {
-      "id": "mem_1791019505329_u5oxxw6",
+      "id": "mem_1791020486168_oy716dh",
       "content": "important",
       "type": "fact",
       "scores": {
@@ -12,14 +12,14 @@
         "importance": 0.9
       },
       "compositeScore": 0.735,
-      "createdAt": 1791019505329,
-      "updatedAt": 1791019505329,
+      "createdAt": 1791020486168,
+      "updatedAt": 1791020486168,
       "mentionCount": 1,
       "sourceCount": 1,
       "status": "confirmed"
     },
     {
-      "id": "mem_1791019505332_32p1ozq",
+      "id": "mem_1791020486169_a3rpz0o",
       "content": "mid",
       "type": "fact",
       "scores": {
@@ -30,8 +30,8 @@
         "importance": 0.4
       },
       "compositeScore": 0.435,
-      "createdAt": 1791019505332,
-      "updatedAt": 1791019505332,
+      "createdAt": 1791020486169,
+      "updatedAt": 1791020486169,
       "mentionCount": 1,
       "sourceCount": 1,
       "status": "pending"
