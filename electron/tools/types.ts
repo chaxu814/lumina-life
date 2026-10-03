@@ -20,6 +20,10 @@ export interface ToolDef {
   toolsets: string[]
   dangerous?: boolean
   blockedInChild?: boolean
+  /** v3.34: 本工具专属的超时上限（毫秒）。缺省用 RetryConfig.timeoutMs（60s）。
+   *  长耗时编排类工具必须声明 —— 超时 + 重试 + Promise.race 不取消底层 promise
+   *  意味着「超时」不等于「停止」，每次超时会重跑整个流程而上一轮还在跑。 */
+  timeoutMs?: number
 }
 
 export interface ToolCall {

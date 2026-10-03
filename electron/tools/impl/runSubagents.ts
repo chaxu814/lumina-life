@@ -167,6 +167,10 @@ export const runSubagentsDef: ToolDef = {
       required: false,
     },
   },
+  // v3.34: 标记为「不可用于子 Agent」。
+  // 工具层堵递归委托：子 Agent 拿不到派生类工具，A→B→A 的无限自我派生
+  // 在源头就不成立。此前该机制存在但没有任何工具声明过 true，闸门是空转的。
+  blockedInChild: true,
   toolsets: ['team', 'agent', 'developer'],
 }
 

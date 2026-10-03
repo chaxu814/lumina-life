@@ -450,6 +450,10 @@ v3.30 增强：
     jobs: { type: 'string', description: '多个任务：JSON 数组 [{role, task, title, path, tier}]', required: false },
     keep_alive: { type: 'boolean', description: 'true 时干完不解散、进入 idle 待命（默认 false）', required: false },
   },
+  // v3.34: 标记为「不可用于子 Agent」。
+  // 工具层堵递归委托：子 Agent 拿不到派生类工具，A→B→A 的无限自我派生
+  // 在源头就不成立。此前该机制存在但没有任何工具声明过 true，闸门是空转的。
+  blockedInChild: true,
   toolsets: ['team', 'agent', 'developer'],
   dangerous: true,
 }
@@ -714,6 +718,10 @@ export const workflowDef: ToolDef = {
     spec: { type: 'string', description: 'run 时的工作流 JSON（字符串）', required: false },
     id: { type: 'string', description: 'resume/get 时的工作流 id', required: false },
   },
+  // v3.34: 标记为「不可用于子 Agent」。
+  // 工具层堵递归委托：子 Agent 拿不到派生类工具，A→B→A 的无限自我派生
+  // 在源头就不成立。此前该机制存在但没有任何工具声明过 true，闸门是空转的。
+  blockedInChild: true,
   toolsets: ['team', 'agent', 'developer'],
   dangerous: true,
 }

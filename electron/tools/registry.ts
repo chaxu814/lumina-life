@@ -596,6 +596,13 @@ export async function executeToolWithRetry(
   else if (ocrTools.includes(name)) {timeoutMs = cfg.toolTimeouts?.[name] || 20000}
   else if (fileSearchTools.includes(name)) {timeoutMs = cfg.toolTimeouts?.[name] || 120000}  // 🔧 v3.8.1: 大项目搜索需更长时间
 
+  // v3.34: 工具自带的 timeoutMs 优先级最高（写在 ToolDef 上，跟着工具走）。
+  //   起因：phase_gate_delegate 跑完整五阶段编排（每阶段都可能 LLM 调用 60s+），
+  //   走默认 60s 必然超时。而「超时」不等于「停止」—— Promise.race 只是不等了，
+  //   底层 promise 并没被取消，重试会叠加出一串仍在后台跑的任务。
+  const selfTimeout = toolDefinitions.get(name)?.timeoutMs
+  if (typeof selfTimeout === 'number' && selfTimeout > 0) {timeoutMs = selfTimeout}
+
   let lastError: string | undefined
   let lastResult: ToolResult | undefined
 

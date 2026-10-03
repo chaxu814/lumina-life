@@ -20,6 +20,8 @@ import type {
   AgentLoopConfig, AgentLoopContext, LoopStepRecord, LoopStopCondition, LoopPhase,
 } from './agentTeamTypes'
 import { DEFAULT_AGENT_LOOP_CONFIG } from './agentTeamTypes'
+// v3.34: 委托深度用 AsyncLocalStorage 跟踪（并发分支必须互不干扰，见类内注释）
+import { AsyncLocalStorage } from 'async_hooks'
 import { TEAM_MEMBERS } from './agentTeamPersonas'
 import { matchSkill } from './agentSkills'
 import { getTeamRegistry } from './core/teamRegistry'
@@ -95,6 +97,23 @@ function _cacheKey(from: string, to: string, task: string, taskType: string, con
 // ═══════════════════════════════════════════════════════════
 
 export class DelegationManager {
+  /** v3.34: 委托深度上限。
+   *
+   *  本项目的正常链路是 Lumina → Yak → 热茶（对抗评审）= 2 层，
+   *  而 phaseGatedDelegate 内部还会再委托一轮。给到 3 留出余量，
+   *  同时把「无限」变成「有界」。 */
+  static readonly MAX_DELEGATION_DEPTH = 3
+
+  /** v3.34: 委托深度的异步上下文。
+   *
+   *  【为什么必须用 AsyncLocalStorage 而不是实例字段】
+   *  深度是**调用链**的属性，不是实例的属性。同一时刻可能有多个并行的
+   *  委托（adversarialReview 就是 Promise.all 同时派好几个），
+   *  用实例字段计深度会互相干扰 —— 先返回的那个把计数器减回去，
+   *  结果另一个还在跑就被误判成「深度已释放」。
+   *  AsyncLocalStorage 随异步调用链自动传播与隔离，并发分支互不干扰。 */
+  private static readonly _als = new AsyncLocalStorage<number>()
+
   /**
    * v8.0: 独立 Agent Runner 映射
    * 每个团队成员有自己的 Runner，独立 LLM、独立上下文、独立记忆
@@ -362,6 +381,58 @@ ${lastError.slice(0, 1000)}
    */
   async delegate(from: string, request: DelegationRequest): Promise<DelegationResult> {
     const startTime = Date.now()
+    const { to, task, taskType, context, filePaths, timeout } = request
+
+    // ═══════════════════════════════════════════════════════════
+    // v3.34: 委托深度上限（第二层防递归）
+    //
+    // 【为什么要这道闸】v3.34 之前，全仓没有任何地方限制委托深度：
+    //   · ToolDef.blockedInChild 机制**存在但从未启用**（唯三声明的工具写的
+    //     都是 false），子 Agent 拿到的工具集与父 Agent 相同
+    //   · grep 不到任何 maxDepth / depth 限制
+    //   · rolePolicy 只对 yak / recha 禁了二次委托，而 **lumina 是全放行角色**
+    //
+    // 于是理论上存在 lumina → worker → lumina → worker → … 的无限自我派生。
+    // 叠加「超时 + 重试 + Promise.race 不取消底层 promise」，每次超时都会
+    // 重跑整个编排，而上一轮的派生还在后台继续 —— 烧 token 且无法自停。
+    //
+    // 【两层防护】本方法是第二层。第一层在工具层（6 个派生类工具已标
+    // blockedInChild: true，子 Agent 根本拿不到它们）。两层都要有：
+    // 工具层可以被配置绕过，这一层不能。
+    //
+    // 【为什么默认 3 而不是 1】本项目的正常链路是
+    //   Lumina → Yak → 热茶（对抗评审）= 2 层，
+    // 而 phaseGatedDelegate 内部还会再委托一轮。给到 3 留出余量，
+    // 同时把「无限」变成「有界」。
+    const depth = this._depthOf()
+    if (depth >= DelegationManager.MAX_DELEGATION_DEPTH) {
+      const msg =
+        `委托深度已达上限（${depth}/${DelegationManager.MAX_DELEGATION_DEPTH}），拒绝继续派活。` +
+        `这条链已经嵌套太深，继续下去会变成无界的自我派生（烧 token 且无法自停）。` +
+        `请让当前 Agent 直接完成它手上的工作，或由你重新发起一个独立任务。`
+      console.warn(`[DelegationManager] 🛑 深度超限: ${from} → ${to}（${depth}/${DelegationManager.MAX_DELEGATION_DEPTH}）`)
+      return {
+        success: false, content: '', error: msg,
+        toolCallsCount: 0, elapsedMs: Date.now() - startTime,
+      }
+    }
+    // 用 AsyncLocalStorage 包裹：深度随异步调用链传播与隔离。
+    // 【为什么不能用实例字段】深度是**调用链**的属性而非实例的属性。
+    // adversarialReview 会 Promise.all 同时派好几个评审分支 —— 用实例字段计
+    // 深度会互相干扰：先返回的分支把计数器减回去，另一个还在跑就被误判成
+    // 「深度已释放」，递归闸门形同虚设。
+    return DelegationManager._als.run(
+      depth + 1,
+      () => this._delegateInner(from, request, startTime),
+    )
+  }
+
+  /** v3.34: 当前调用链的委托深度（基于 AsyncLocalStorage） */
+  private _depthOf(): number {
+    return (DelegationManager._als.getStore() as number | undefined) ?? 0
+  }
+
+  private async _delegateInner(from: string, request: DelegationRequest, startTime: number): Promise<DelegationResult> {
     const { to, task, taskType, context, filePaths, timeout } = request
 
     // 先查内置成员，再查动态成员

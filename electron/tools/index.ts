@@ -466,17 +466,29 @@ export function registerAllTools(): void {
     `developer=${resolveToolset('developer').length} ` +
     `full=${registeredNames.length}`,
   )
-  // 注册了但任何 toolset 都到不了的工具 —— 属于「写了但用户用不上」，需要人工确认
+  // 注册了但任何**真实能力档**都到不了的工具 —— 属于「写了但用户用不上」。
+  //
+  // 🔧 v3.34-fix2: 原实现遍历 Object.keys(TOOLSETS)，而 TOOLSETS 里含 `full`，
+  // `resolveToolset('full')` 直接返回全部已注册工具 —— 于是 `orphans` **数学上恒等于
+  // []**，这条守卫永远不可能响。它是 v3.34 专门加来「防止工具再次静默沉底」的，
+  // 结果因为一个全集把自己短路了，还被当作「当前 0 个」写进了 README。
+  //
+  // 教训（写在这里防止重犯）：**加了告警 ≠ 有了防护**。守卫必须先自证它能失败。
   const reachable = new Set<string>()
   for (const setName of Object.keys(TOOLSETS)) {
+    if (setName === 'full') {continue}   // 全集不能用于判定「可达」
     for (const t of resolveToolset(setName)) {reachable.add(t)}
   }
   const orphans = registeredNames.filter(n => !reachable.has(n))
   if (orphans.length > 0) {
     console.warn(
-      `[Tools] ⚠️ ${orphans.length} 个已注册工具不在任何 toolset 中（模型无法调用）: ` +
-      orphans.join(', '),
+      `[Tools] ⚠️ ${orphans.length} 个已注册工具不在任何能力档中（模型无法调用）: ` +
+      `${orphans.join(', ')}\n` +
+      `        修法二选一：给该工具的 ToolDef 加上正确的 toolsets 声明，` +
+      `或把它列进对应的静态 TOOLSETS。`,
     )
+  } else {
+    console.log('[Tools] ✅ 无孤儿工具：每个已注册工具都能被至少一个能力档看到')
   }
 
   // 🔧 P0-fix: 工具注册表校验

@@ -14,11 +14,14 @@
 
 ```
 用户: "帮我统计一下这个仓库今天写了多少代码"
-  → code_daily_generate(cwd="K:/2/Lumina AI")
+  → code_daily_generate(cwd=<用户当前项目路径>)
 
 用户: "出一份本周的代码周报"
-  → code_daily_weekly(cwd="K:/2/Lumina AI")
+  → code_daily_weekly(cwd=<用户当前项目路径>)
 ```
+
+> ⚠️ 不要把绝对路径写死在示例里。SKILL.md 会被拼进 system prompt 送进模型
+> 上下文 —— 里面出现的任何路径都会被当成「建议值」影响用户的实际调用。
 
 ## 使用守则
 
