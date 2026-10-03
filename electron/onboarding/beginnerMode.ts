@@ -114,7 +114,7 @@ export function recommendPath(probe: LocalProbe): BeginnerRecommendation {
       'B. 只想立刻体验 → 填一个云端 API Key（DeepSeek 最便宜，OpenAI/通义千问/硅基流动也行）',
       '两条路随时可以切换，设置里一键换。',
     ],
-    cost: 'A 完全免费；B 按量付费',
+    cost: '取决于你选的云服务',
     limitations: [
       '当前版本不支持"开箱即用"—— 至少需要 A 或 B 其中之一。',
       '这是我们 v0.1 已知的主要门槛，已列入 ROADMAP 的新手模式路线。',

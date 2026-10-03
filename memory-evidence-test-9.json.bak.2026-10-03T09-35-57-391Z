@@ -1,8 +1,8 @@
 {
   "memories": [
     {
-      "id": "mem_1790964382002_ikuumlo",
-      "content": "First",
+      "id": "mem_1791020157389_e22whcb",
+      "content": "adjustable",
       "type": "fact",
       "scores": {
         "confidence": 0.7,
@@ -12,8 +12,8 @@
         "importance": 0.3
       },
       "compositeScore": 0.46499999999999997,
-      "createdAt": 1790964382002,
-      "updatedAt": 1790964382002,
+      "createdAt": 1791020157389,
+      "updatedAt": 1791020157389,
       "mentionCount": 1,
       "sourceCount": 1,
       "status": "pending"

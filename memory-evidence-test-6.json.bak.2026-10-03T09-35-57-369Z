@@ -1,19 +1,19 @@
 {
   "memories": [
     {
-      "id": "mem_1790964381974_ljxg7f3",
-      "content": "喜欢热茶",
-      "type": "preference",
+      "id": "mem_1791020157368_wv1qhks",
+      "content": "First",
+      "type": "fact",
       "scores": {
         "confidence": 0.7,
         "recency": 1,
         "frequency": 0.1,
         "corroboration": 0,
-        "importance": 0.7
+        "importance": 0.3
       },
-      "compositeScore": 0.585,
-      "createdAt": 1790964381974,
-      "updatedAt": 1790964381974,
+      "compositeScore": 0.46499999999999997,
+      "createdAt": 1791020157368,
+      "updatedAt": 1791020157368,
       "mentionCount": 1,
       "sourceCount": 1,
       "status": "pending"

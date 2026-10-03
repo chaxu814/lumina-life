@@ -89,15 +89,17 @@ export function deriveAgentState(now = Date.now()): AgentStateSnapshot {
 
   // 腿 2：实习生池（并行 worker 的真实状态）
   try {
-    const busy = getInternPool().getAll().filter(i => i.status === 'busy')
-    for (const i of busy) {
+    const pool = getInternPool()
+    const all = pool.getAll()
+    for (const i of all.filter(x => x.status === 'busy')) {
       running.push({
-        id: i.id, title: i.task || '并行任务', description: i.task || '',
+        id: i.id, title: i.currentTask || '并行任务', description: i.currentTask || '',
         status: 'running', assignTo: i.id, dependsOn: [], result: '',
       } as unknown as TaskNode)
     }
-    if (getInternPool().getAll().some(i => i.status === 'failed') && !failed) {
-      failed = { title: '并行任务失败' } as unknown as TaskNode
+    if (all.some(i => i.status === 'failed') && !failed) {
+      const bad = all.find(i => i.status === 'failed')
+      failed = { title: bad?.currentTask || '并行任务失败', error: bad?.error } as unknown as TaskNode
     }
   } catch { /* 池不可用则忽略 */ }
 

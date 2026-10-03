@@ -1,22 +1,22 @@
 {
   "memories": [
     {
-      "id": "mem_1790964382014_jj2q40c",
-      "content": "adjustable",
+      "id": "mem_1791020157342_pd01ueh",
+      "content": "important",
       "type": "fact",
       "scores": {
-        "confidence": 0.7,
+        "confidence": 1,
         "recency": 1,
         "frequency": 0.1,
         "corroboration": 0,
-        "importance": 0.3
+        "importance": 0.9
       },
-      "compositeScore": 0.46499999999999997,
-      "createdAt": 1790964382014,
-      "updatedAt": 1790964382014,
+      "compositeScore": 0.735,
+      "createdAt": 1791020157342,
+      "updatedAt": 1791020157342,
       "mentionCount": 1,
       "sourceCount": 1,
-      "status": "pending"
+      "status": "confirmed"
     }
   ],
   "config": {
