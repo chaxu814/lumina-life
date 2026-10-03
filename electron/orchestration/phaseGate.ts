@@ -19,6 +19,7 @@
 
 import type { TaskNode, TaskProject } from './taskBoard'
 import { getTaskBoard } from './taskBoard'
+import { getYakParallel, type SubTask } from './yakParallel'
 
 // ═══════════════════════════════════════════════════════════
 // 类型定义
@@ -40,6 +41,8 @@ export interface PhaseOptions {
   verifyCommands?: string[]
   /** 委托函数（由 DelegationManager 注入） */
   delegateFn?: (to: string, task: string, taskType: string) => Promise<{ success: boolean; content: string }>
+  /** 项目背景（并行派活时带给每个 worker，避免两眼一抹黑） */
+  context?: string
 }
 
 /** 阶段执行结果 */
@@ -365,6 +368,12 @@ ${options.task}
   /**
    * ⚡ 执行阶段：按 DAG 顺序/并行执行
    */
+  /** 同批次 ready 任务之间是否存在依赖边（有则必须串行） */
+  private _hasIntraBatchDependency(tasks: Array<{ id: string; dependsOn?: string[] }>): boolean {
+    const ids = new Set(tasks.map(t => t.id))
+    return tasks.some(t => (t.dependsOn || []).some(d => ids.has(d)))
+  }
+
   private async _doExecute(options: PhaseOptions): Promise<PhaseResult> {
     const start = Date.now()
     const artifacts: string[] = []
@@ -407,23 +416,56 @@ ${options.task}
       }
     }
 
-    // 依次执行 ready 任务（未来可改为并行）
-    for (const task of readyTasks) {
-      board.updateTaskStatus(task.id, 'running')
-      console.log(`[PhaseGate] ⚡ 执行任务: ${task.title}`)
+    // 并行执行 ready 任务（彼此无依赖时才并行；单任务走串行）
+    // 历史：本阶段是严格串行的（源码里写着「未来可改为并行」），
+    // 导致 orchestration/yakParallel.ts 这个并行引擎完全没有调用方、成了 16KB 死代码。
+    // 现在：当 ready 任务数 > 1 且任务之间无依赖边时，交给 YakParallel 并行执行。
+    const parallelSafe = readyTasks.length > 1 && !this._hasIntraBatchDependency(readyTasks)
 
-      const result = await options.delegateFn(
-        task.assignTo,
-        task.description,
-        'code_write',
-      )
+    if (parallelSafe) {
+      console.log(`[PhaseGate] ⚡ ${readyTasks.length} 个任务无相互依赖 → 并行执行`)
+      for (const task of readyTasks) {
+        board.updateTaskStatus(task.id, 'running')
+      }
+      const engine = getYakParallel()
+      // 招够人数（受 InternPool 上限保护，见 internPool DEFAULT_MAX）
+      engine.hireTeam(Math.min(readyTasks.length, 3))
+      const subTasks: SubTask[] = readyTasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        deliverable: (t as any).deliverable || '',
+        dependsOn: [],
+        assignee: t.assignTo,
+      }))
+      const results = await engine.executeGroup(subTasks, options.context)
+      for (const r of results) {
+        board.updateTaskStatus(r.subTaskId, r.success ? 'done' : 'failed', {
+          result: r.content,
+          error: r.success ? undefined : (r.error || '执行失败'),
+        })
+        if (r.success) artifacts.push(r.subTaskId)
+      }
+      engine.getPool().dismissAll()
+    } else {
+      // 依次执行 ready 任务（有依赖关系时必须串行）
+      for (const task of readyTasks) {
+        board.updateTaskStatus(task.id, 'running')
+        console.log(`[PhaseGate] ⚡ 执行任务: ${task.title}`)
 
-      board.updateTaskStatus(task.id, result.success ? 'done' : 'failed', {
-        result: result.content,
-        error: result.success ? undefined : ((result as any).error || '执行失败'),
-      })
+        const result = await options.delegateFn(
+          task.assignTo,
+          task.description,
+          'code_write',
+        )
 
-      artifacts.push(task.id)
+        board.updateTaskStatus(task.id, result.success ? 'done' : 'failed', {
+          result: result.content,
+          error: result.success ? undefined : ((result as any).error || '执行失败'),
+        })
+
+        artifacts.push(task.id)
+      }
     }
 
     // 检查是否有新的 ready 任务（依赖链展开）

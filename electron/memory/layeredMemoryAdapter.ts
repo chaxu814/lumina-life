@@ -44,13 +44,27 @@ export function createMemoryStoreAdapter(store: MemoryStore | null | undefined):
           .slice(0, limit)
           .reverse()
           .map(r => ({ role: r.role, content: r.content, createdAt: r.created_at }))
-      } catch {
+      } catch (e) {
+        // 🔧 原为静默返回 []：记忆故障被伪装成「用户没有记忆」，
+        // Agent 于是表现得像初次见面那样继续对话，
+        // 而用户只会觉得「它怎么什么都不记得了」，且无任何线索可查。
+        // 这里不能抛错（记忆故障不该拖垮整个 Agent），
+        // 但必须留痕：至少让诊断面板能看出「记忆系统出过问题」。
+        console.warn('[layeredMemory] 读取记忆数据失败（已按空处理，疑似 DB 损坏或被占用）:', e)
         return []
       }
     },
 
     getRecentSummaries(limit: number): string[] {
-      try { return store.getRecentSummaries(limit) } catch { return [] }
+      try { return store.getRecentSummaries(limit) } catch (e) {
+        // 🔧 原为静默返回 []：记忆故障被伪装成「用户没有记忆」，
+        // Agent 于是表现得像初次见面那样继续对话，
+        // 而用户只会觉得「它怎么什么都不记得了」，且无任何线索可查。
+        // 这里不能抛错（记忆故障不该拖垮整个 Agent），
+        // 但必须留痕：至少让诊断面板能看出「记忆系统出过问题」。
+        console.warn('[layeredMemory] 读取记忆数据失败（已按空处理，疑似 DB 损坏或被占用）:', e)
+        return []
+      }
     },
 
     getFacts(limit: number) {
@@ -63,19 +77,51 @@ export function createMemoryStoreAdapter(store: MemoryStore | null | undefined):
           source: r.source,
           timestamp: r.timestamp,
         }))
-      } catch { return [] }
+      } catch (e) {
+        // 🔧 原为静默返回 []：记忆故障被伪装成「用户没有记忆」，
+        // Agent 于是表现得像初次见面那样继续对话，
+        // 而用户只会觉得「它怎么什么都不记得了」，且无任何线索可查。
+        // 这里不能抛错（记忆故障不该拖垮整个 Agent），
+        // 但必须留痕：至少让诊断面板能看出「记忆系统出过问题」。
+        console.warn('[layeredMemory] 读取记忆数据失败（已按空处理，疑似 DB 损坏或被占用）:', e)
+        return []
+      }
     },
 
     getReflections(limit: number) {
-      try { return store.getReflections(limit) } catch { return [] }
+      try { return store.getReflections(limit) } catch (e) {
+        // 🔧 原为静默返回 []：记忆故障被伪装成「用户没有记忆」，
+        // Agent 于是表现得像初次见面那样继续对话，
+        // 而用户只会觉得「它怎么什么都不记得了」，且无任何线索可查。
+        // 这里不能抛错（记忆故障不该拖垮整个 Agent），
+        // 但必须留痕：至少让诊断面板能看出「记忆系统出过问题」。
+        console.warn('[layeredMemory] 读取记忆数据失败（已按空处理，疑似 DB 损坏或被占用）:', e)
+        return []
+      }
     },
 
     getUserProfile() {
-      try { return store.getUserProfile() } catch { return null }
+      try { return store.getUserProfile() } catch (e) {
+        // 🔧 原为静默返回 null：记忆故障被伪装成「用户没有记忆」，
+        // Agent 于是表现得像初次见面那样继续对话，
+        // 而用户只会觉得「它怎么什么都不记得了」，且无任何线索可查。
+        // 这里不能抛错（记忆故障不该拖垮整个 Agent），
+        // 但必须留痕：至少让诊断面板能看出「记忆系统出过问题」。
+        console.warn('[layeredMemory] 读取用户档案失败（已按空处理，疑似 DB 损坏或被占用）:', e)
+        return null
+      }
     },
 
     getPersona() {
-      try { return store.getPersona() } catch { return null }
+      try { return store.getPersona() } catch (e) {
+        // 🔧 原为静默返回 null：记忆故障被伪装成「用户没有记忆」，
+        // Agent 于是表现得像初次见面那样继续对话，
+        // 而用户只会觉得「它怎么什么都不记得了」，且无任何线索可查。
+        // 这里不能抛错（记忆故障不该拖垮整个 Agent），
+        // 但必须留痕：至少让诊断面板能看出「记忆系统出过问题」。
+        console.warn('[layeredMemory] 读取用户档案失败（已按空处理，疑似 DB 损坏或被占用）:', e)
+        return null
+      }
     },
   }
 }

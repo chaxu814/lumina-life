@@ -71,13 +71,26 @@ describe('SecurityGuard', () => {
       expect(result.allowed).toBe(true)
     })
 
-    it('handles malformed JSON arguments', () => {
+    it('handles malformed JSON arguments（fail-closed）', () => {
+      // 🔧 行为变更（真实安全修复）：
+      //   旧断言是 expect(allowed).toBe(true) —— 也就是把 fail-open 当成正确行为。
+      //   这与 tests/securityGuardFailClosed.test.ts 是同一个 bug 的两面：
+      //   一个从「安全不变量」角度写，一个从「旧行为描述」角度写。
+      //
+      //   现在：参数无法解析 = 无法完成安全审查 = 必须拦截。
+      //   理由：攻击者可把恶意 payload 藏在非法 JSON 里
+      //   （如 {"cmd":"rm -rf /",  ← 截断），
+      //   让 JSON.parse 失败从而跳过全部规则检查。
+      //   「让检查失败」不能成为绕过检查的手段。
       const result = guard.checkToolCall({
         id: 'bad',
         type: 'function',
         function: { name: 'test', arguments: 'not-json' },
       })
-      expect(result.allowed).toBe(true)
+      expect(result.allowed).toBe(false)
+      expect(result.requiresApproval).toBe(true)
+      expect(result.findings.length).toBeGreaterThan(0)
+      expect(result.findings[0].title).toContain('JSON')
     })
   })
 

@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion%20System-5D-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-130-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="130 Built-in Tools">
+  <img src="https://img.shields.io/badge/Tools-132-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="132 Built-in Tools">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -194,9 +194,9 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ---
 
-### 🔧 130 Built-in Tools · 三档模式按需加载（另可经 MCP / 技能市场扩展）
+### 🔧 132 Built-in Tools · 三档模式按需加载（另可经 MCP / 技能市场扩展）
 
-<sub>口径：注册表共注册 130 个真实工具（含 Computer Use / 团队 / 语音 / 新闻 / 创作者等；启动日志打印精确数）；按模式分档加载——chat 纯对话 0 个、agent 日常约 32 个、developer 约 36 个，其余在对应功能与设置中启用，另可经 MCP 协议动态扩展。</sub>
+<sub>口径：注册表实际注册并通过校验的**132** 个工具（含 Computer Use / 团队 / 语音 / 新闻 / 创作者等；`electron/tools/index.ts` 启动时打印精确数 `getToolNames().size`，`tests/` 下有断言守护这个数字）。按模式分档加载——chat 纯对话 0 个、agent 日常约 32 个、developer 约 36 个，其余在对应功能与设置中启用，另可经 MCP 协议动态扩展。</sub>
 
 `搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `翻译` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `MCP` · `技能系统` · ……
 
@@ -207,20 +207,43 @@ Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
 
 ## 💡 Why Lumina? · 为什么选 Lumina
 
-不是又一个 AI 聊天窗口。Lumina 是 **唯一一个同时具备这三样东西的开源项目**：
+Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有干活的 Agent 能力，有 Agent 能力的工具大多没有人格。**
 
-| 能力 | 市面上其他项目 | Lumina |
-|------|-------------|--------|
-| **🤖 多 Agent 协作** | ❌ 单 Agent / 纯工具编排 | ✅ **3 人团队，流水线作业** |
-| **😊 情感系统** | ❌ 几乎没有 | ✅ **5 维情绪 + 可视化 + 亲密度** |
-| **🖥️ Computer Use** | ❌ 只有闭源产品有 | ✅ **截图→理解→操作** |
-| **💬 团队社交** | ❌ 没见过 | ✅ **群聊 + 朋友圈 + 早安仪式** |
-| **📚 真实记忆** | ⚠️ 简单上下文 | ✅ **SQLite + BM25/TF-IDF 混合召回（RRF 融合）+ 证据链** |
-| **🛡️ 智能沙箱** | ❌ 基本没有 | ✅ **双层安全审查 + 审批流** |
-| **🔧 工具生态** | ⭐ 看项目 | ✅ **130 个工具（日常约 32）+ MCP + 技能商店** |
-| **🎭 人格切换** | ❌ 少见 | ✅ **4 种人格模式** |
+下面是与几个同类开源项目的**中性对比**。数据采集于 2026-10-03（来源：各项目 GitHub API / 官方文档）。我们特意把**别人比我们强的地方也列出来**——因为夸大成「全面碾压」既不真实，也容易让人不信。
+
+| 能力 | Lumina | [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) | [AIRI](https://github.com/moeru-ai/airi) | [openclaw](https://github.com/openclaw/openclaw) | [cc-haha](https://github.com/NanmiCoder/cc-haha) |
+|------|--------|------------------|----------------|----------------------|------------------|
+| **多 Agent 团队编排** | ✅ 3 人流水线 + 对抗评审 + 动态雇工 | ❌ 单体 | ❌ 无编排层 | ✅ 成熟的 session/subagent | ✅ 成熟 |
+| **拟人情感** | ✅ 5 维 + 亲密度 + 昼夜节律 | ✅ 会主动 | ✅ 表情丰富 | ❌ 零人格 | ⚠️ 状态提示 |
+| **桌宠形象形态** | ✅ Live2D/VRM/PNGTuber/MMD/猫咪 | ✅ **五形态** | ✅ **五种（含 Spine/立绘）** | ❌ | ⚠️ 8×9 精灵表 |
+| **多端支持** | ❌ **仅 Windows 实测** | ✅ Steam + 移动端 | ✅ Web/Electron/iOS/Android/PWA | ✅ 跨端 | ✅ |
+| **本地推理** | ⚠️ 需外挂 LM Studio | ⚠️ | ✅ **WebGPU 真本地** | ⚠️ | ⚠️ |
+| **Computer Use** | ✅ 键鼠/OCR/UIA/沙箱 | ⚠️ 截图 | ✅ 看屏幕 | ⚠️ | ✅ |
+| **桌面安全沙箱** | ✅ 双层 26 规则 + 能力白名单 | ❌ | ❌ | ⚠️ | ⚠️ |
+| **团队社交** | ✅ 群聊 + 朋友圈 + 早安仪式 | ✅ | ⚠️ | ❌ | ❌ |
+| **主动打扰预算** | ✅ 门控 + 配额 + 退避 + 夜间勿扰 | ✅ 主动话题 | ⚠️ | ❌ | ✅ 三态 |
+
+**一句话总结各自的长处**：
+
+- **N.E.K.O / AIRI**：形象与形态做得比我们好，多端也比我们全（AIRI 甚至有 WebGPU 本地推理）。它们缺的是 Agent 编排层。
+- **openclaw**：生态规模比我们大几个数量级，但**零人格**。
+- **cc-haha**：Agent 能力成熟，但作者自己写明其桌宠「只是个状态提示和跳转入口，不能替你批准权限，也不能在悬浮窗里直接提问」——**我们恰好越过了这条线**：审查员真的在审查代码产出，你也能直接在桌宠窗口对话。
+
+**我们仍然不如别人的地方**（说在前面）：多端覆盖（AIRI/N.E.K.O 更强）、本地推理（AIRI 更强）、社区体量（openclaw 大三个数量级）、桌宠形态广度（AIRI/N.E.K.O 更强）。Lumina 的赌注是：**先做实「能干活且有分寸」这件事，再补多端。**
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
+
+### 📊 我们的诚实能力边界
+
+不夸大，能做什么就写什么：
+
+| 状态 | 能力 |
+|------|------|
+| ✅ **能稳定做好** | 写/改/调试/重构代码（自动跑 tsc+测试，不通过自己修）· 代码审查与风险评估（三视角对抗评审）· 桌面操作（点击/输入/快捷键/截图 OCR）· 文件与搜索 · 跨会话记忆 · 长对话不失忆 · 主动关心（话头未完、久坐提醒） |
+| ⚠️ **尽力但不保证** | 开放式模糊任务（「优化一下这个项目」）· 多轮复杂重构 · 需要品味的任务（UI 设计、文案润色）· 游戏陪伴（需额外安装插件） |
+| ❌ **目前做不到** | macOS / Linux 桌面操控（代码已适配但**从未在真机验证**）· 应用内本地模型推理 · IM 渠道接入 · 云同步 / 多设备 |
+
+<sub>验证状态：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；Linux 为 roadmap。测试规模：2400+ 用例，`tsc --strict` 零错误。</sub>
 
 ---
 
@@ -402,7 +425,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  130 tools · MCP          │  Plugin SDK · Skill Store      │ │
+│  │  132 tools · MCP          │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -453,7 +476,7 @@ lumina-life/
 
 ## 🗺️ Roadmap · 路线图
 
-- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统（BM25/TF-IDF 混合召回）+ 130 个工具 + 真·屏幕视觉 + 全屏注视 / 全双工对话 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
+- ✅ **当前开发版** — 三 Agent 团队 + 情感系统 + 记忆系统（BM25/TF-IDF 混合召回）+ 132 个工具 + 真·屏幕视觉 + 全屏注视 / 全双工对话 + Computer Use + 🛡️ 智能沙箱（首个公开版本 v0.1 待发布）
 - 🔜 **v1.1.0** — 自定义 Agent 创建（定义新角色加入团队）
 - 🔜 **v1.2.0** — 插件生态开放（社区技能商店）
 - 🔜 **v1.3.0** — macOS / Linux 支持

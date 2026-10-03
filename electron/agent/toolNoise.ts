@@ -30,10 +30,29 @@ export const TOOL_NOISE_PATTERNS: RegExp[] = [
 ]
 
 /**
- * 清理 LLM 输出中的工具调用噪声文本
- * 这些内容本应由思考面板展示，不应出现在用户可见的气泡中
+ * 清理 LLM 输出中的工具调用噪声文本。
+ * 这些内容本应由思考面板展示，不应出现在用户可见的气泡中。
+ *
+ * 🔒 核心不变量：**非空输入永远不返回空串。**
+ *
+ * 为什么会把这条写在这里：
+ * 下游的 agentRunner 有一个「连续空回复」保护——连续 3 轮拿到空内容
+ * 就会中断循环、启动恢复流程、最后吐出「抱歉，我暂时无法生成有效回复」。
+ * 旧实现在「原文全是 tool_call XML」时直接 return ''，
+ * 于是模型这一轮的输出就凭空消失了，
+ * 而用户看到的只是一句无法归因的报错。
+ *
+ * 内容凭空消失是最糟的失败方式：
+ *   · 用户无法截图反馈「我发的是这个」
+ *   · 开发者无法从日志反推模型到底输出了什么
+ *   · 表现为「软件时好时坏」，极难定位
+ *
+ * 所以现在：整段被删光时，返回一句诚实的说明，
+ * 告诉用户「我尝试调用了工具，但没能完成」，
+ * 既不污染成 XML 噪音，也不让内容凭空蒸发。
  */
 export function cleanToolNoiseText(text: string): string {
+  if (!text) {return ''}
   let cleaned = text
   for (const pattern of TOOL_NOISE_PATTERNS) {
     cleaned = cleaned.replace(pattern, '')
@@ -42,14 +61,14 @@ export function cleanToolNoiseText(text: string): string {
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
   // 去除首尾空白
   cleaned = cleaned.trim()
-  // 安全兜底 — 如果清理后为空但原文不为空，保留原文
+
+  // 兜底一：删得太狠但原文有内容 → 保留原文
   //   防止 TOOL_NOISE_PATTERNS 过度匹配导致合法回复被误删
-  // 原文全是 tool_call XML 标签时→不还原（否则 raw XML 泄漏到气泡）
   if (!cleaned && text.trim()) {
-    if (/^<tool_call>[\s\S]*<\/tool_call>\s*$/i.test(text.trim())) {
-      return ''
-    }
-    return text.trim()
+    // 兜底二（v2）：原文是纯工具标记 → **不返回空串**
+    //   旧实现在这里 return ''，是「暂时无法生成有效回复」故障的直接成因之一。
+    //   现在返回一句说明：既不吐 XML 噪音，也不让内容凭空消失。
+    return '（我这轮只输出了工具调用标记，没能给出实际内容。你可以让我再说一次，或换个说法。）'
   }
   return cleaned
 }

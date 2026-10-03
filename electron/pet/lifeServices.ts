@@ -17,7 +17,7 @@
 // ============================================================
 
 import { app, ipcMain, dialog, BrowserWindow, type NativeImage } from 'electron'
-import { promises as fsp, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { promises as fsp, readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs'
 import path from 'path'
 import { pathToFileURL } from 'url'
 
@@ -70,10 +70,37 @@ function libraryJsonPath(): string {
 
 export function loadLibrary(): ModelLibrary {
   if (library) {return library}
+  const file = libraryJsonPath()
   let data: unknown = null
+
+  // 🔧 P0 修复（模型注册表被清空）
+  // 旧实现：`catch { /* 首次运行无清单文件 */ }` 把两种状态合并了：
+  //   · 文件不存在     → data = null  （合法）
+  //   · 文件存在但损坏 → data = null  （危险）
+  // 而 library 是**模块级缓存**，空结果会被永久缓存；
+  // 之后任意一次 saveLibrary()（本文件有 5 处调用）都会把
+  // 用户所有已装模型记录覆盖成近空。
+  //
+  // 现在：区分「不存在」与「损坏」。损坏时备份原文并抛错，
+  // 避免空注册表被固化。
+  if (!existsSync(file)) {
+    library = ModelLibrary.deserialize(null)
+    return library
+  }
+
   try {
-    data = JSON.parse(readFileSync(libraryJsonPath(), 'utf8'))
-  } catch { /* 首次运行无清单文件 */ }
+    data = JSON.parse(readFileSync(file, 'utf8'))
+  } catch (e) {
+    const backup = `${file}.corrupted`
+    try {
+      if (!existsSync(backup)) {copyFileSync(file, backup)}
+      console.error(
+        `[lifeServices] 模型库已损坏，原文备份至 ${backup}。` +
+        '为避免覆盖已装模型记录，本次不写入。'
+      )
+    } catch { /* 备份失败也必须继续抛错 */ }
+    throw new Error(`ModelLibrary: 桌宠模型库已损坏（备份于 ${backup}），已中止写入`)
+  }
   library = ModelLibrary.deserialize(data)
   return library
 }

@@ -210,7 +210,7 @@ export default function TasksPanel({ embedded }: { embedded?: boolean } = {}) {
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: task.enabled ? 'var(--green-500)' : 'var(--text-disabled)' }} />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{task.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
                       {task.schedule} · {task.action}
                     </div>
                   </div>

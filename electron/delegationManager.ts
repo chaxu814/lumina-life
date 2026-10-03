@@ -26,8 +26,10 @@ import { getTeamRegistry } from './core/teamRegistry'
 import { getTeamContextManager } from './agentTeamContext'
 import { AgentRunner } from './agentRunner'
 // 验证闭环 & 阶段门控
-import { autoFixLoop, runVerification, detectProjectRoot, detectProjectProfile, taskMayNeedVerification } from './orchestration/verifyLoop'
+import { autoFixLoop, runVerification, detectProjectRoot, detectProjectProfile, taskMayNeedVerification, defaultConvergenceCheck } from './orchestration/verifyLoop'
 import { assessComplexity } from './orchestration/complexityAnalyzer'
+import { emitTheaterBeat, getCurrentEmotion3D } from './orchestration/theaterBridge'
+import type { TheaterRole } from './orchestration/theater'
 import { PhaseGate, getPhasesFromComplexity } from './orchestration/phaseGate'
 // v02: Worker 委托 Prompt 构建（传递完整上下文）
 import { buildWorkerSystemPrompt, buildWorkerFirstMessage, type WorkerPromptContext } from './orchestration/delegationPrompt'
@@ -384,6 +386,16 @@ ${lastError.slice(0, 1000)}
 
     console.log(`[DelegationManager] 🔀 ${from} → ${member.name}(${to}): "${task.slice(0, 80)}..."`)
 
+    // 🆕 创新功能 2：团队可见性剧场 — 记录「派活」这一幕
+    //   情绪取当前真实 mood 换算出的三维，不编造。
+    emitTheaterBeat({
+      kind: 'delegate',
+      role: (from === 'lumina' || from === 'yak' || from === 'recha') ? from : 'lumina',
+      text: task.slice(0, 120),
+      emotion: getCurrentEmotion3D(),
+      detail: `${from} → ${to}`,
+    })
+
     // 🆕 P4: 缓存命中检查
     const cacheKey = _cacheKey(from, to, task, taskType, context)
     const cached = this.runnerResultCache.get(cacheKey)
@@ -591,6 +603,14 @@ ${lastError.slice(0, 1000)}
           retryInfo,
         }
         this.runnerResultCache.set(cacheKey, { result: resultVal, expiresAt: Date.now() + CACHE_TTL_MS })
+        // 🆕 创新功能 2：剧场收尾幕（真实耗时 + 真实结论，不编造）
+        emitTheaterBeat({
+          kind: finalToolCallsCount > 0 ? 'worker_done' : 'speech',
+          role: to as TheaterRole,
+          text: finalCleanText.slice(0, 120) || '已完成',
+          emotion: getCurrentEmotion3D(),
+          detail: `${Math.round((Date.now() - startTime) / 100) / 10}s · ${finalToolCallsCount} 次工具调用`,
+        })
         return resultVal
       } catch (err: any) {
         lastError = err.message
@@ -599,6 +619,14 @@ ${lastError.slice(0, 1000)}
 
         if (attempt >= maxAttempts) {
           this._notifyEngine('end')
+          // 🆕 创新功能 2：失败也是一幕（事故也是剧情，且必须诚实记录）
+          emitTheaterBeat({
+            kind: 'incident',
+            role: to as TheaterRole,
+            text: err.message.slice(0, 120),
+            emotion: getCurrentEmotion3D(),
+            detail: `重试 ${attempt} 次仍未成功`,
+          })
           return {
             success: false, content: '',
             error: err.message,
@@ -988,128 +1016,82 @@ ${lastError.slice(0, 1000)}
         cwd: projectRoot,
       }
 
-      const verifyResult = runVerification(verifyConfig)
+      // 3. 自动修复循环 —— 委托给 verifyLoop.autoFixLoop（唯一实现）
+      //    本文件只提供钩子：情绪前缀、LuckyMode 停止条件、收敛检测、修复委托。
+      //    历史上这里是整段内联拷贝，与 verifyLoop 的 autoFixLoop 形成双实现，
+      //    导致修 bug 要改两处；现已收敛为单一实现。
+      const workspace = getAgentWorkspaceManager()
+      const targetProfile = workspace.profiles.get(to)
+      const asyncManager = getAsyncTaskManager()
 
-      if (verifyResult.passed) {
-        console.log(`[DelegationManager] ✅ 验证通过 (${verifyResult.elapsedMs}ms)`)
-        return { autoFixed: false, fixLog: '✅ 验证通过' }
-      }
+      // v02: 自动修复 Worker 也注入完整上下文（项目根目录+可用工具），
+      //   不再只给一句"请修复"，否则它和首轮 Worker 一样两眼一抹黑。
+      let fixTools: string[] = []
+      try { fixTools = resolveToolset('agent', new Set(), true) } catch { /* ignore */ }
 
-      console.log(`[DelegationManager] ❌ 验证失败，启动自动修复循环...`)
+      const moodPrefix = mood === 'impatient'
+        ? '【紧急】请立即修复以下问题，不要解释原因，只要给出修复代码：\n'
+        : mood === 'stressed'
+          ? '【简洁修复】请只修复报错指向的问题，不要做额外优化：\n'
+          : ''
 
-      // 3. 自动修复循环
-      const fixAttempts: string[] = []
-      let currentVerify = verifyResult
+      let lastFixOutput = ''
 
-      for (let round = 1; round <= verifyConfig.maxFixRounds; round++) {
-        // 检查是否达到停止条件
-        const stopCheck = shouldStopDelegationLoop(round, verifyConfig.maxFixRounds)
-        if (stopCheck.shouldStop) {
-          console.log(`[LuckyMode] ⏹ 团队循环停止: ${stopCheck.reason}`)
-          return {
-            autoFixed: true,
-            fixLog: `⏹ ${stopCheck.reason}`,
-            attempts: fixAttempts,
+      const fixResult = await autoFixLoop(
+        verifyConfig,
+        task,
+        async (fixTask) => {
+          console.log(`[DelegationManager] 🔧 修复委托 (给 ${member.name})...`)
+          const fixCtx: WorkerPromptContext = {
+            to, from, taskType: 'code_debug',
+            task: fixTask,
+            taskGoal: task,
+            availableTools: fixTools,
+            projectContext: { cwd: projectRoot },
           }
-        }
-
-        // 🆕 Phase 3: 情绪感知修复助手 — 不耐烦时让修复指令更明确、更短
-        const moodPrefix = mood === 'impatient'
-          ? '【紧急】请立即修复以下问题，不要解释原因，只要给出修复代码：\n'
-          : mood === 'stressed'
-            ? '【简洁修复】请只修复报错指向的问题，不要做额外优化：\n'
-            : ''
-
-        const fixTask = `【🔄 第 ${round}/${verifyConfig.maxFixRounds} 轮自动修复 — 验证未通过】
-${moodPrefix}
-原始任务: ${task}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-验证失败输出:
-\`\`\`
-${currentVerify.errors.join('\n').slice(0, 3000)}
-\`\`\`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-【修复要求】
-1. 仔细阅读以上报错，定位到具体文件和行号
-2. 修复导致编译/类型/测试失败的问题
-3. 不要破坏已有的功能
-4. 只改必须改的地方，最小改动原则
-5. 修复完成后我会重新验证，${verifyConfig.maxFixRounds - round} 轮修复机会`
-
-        console.log(`[DelegationManager] 🔧 第 ${round} 轮修复 (委托给 ${member.name})...`)
-
-        // 🆕 P3-5: 使用 asyncTaskManager fork 模式
-        const workspace = getAgentWorkspaceManager()
-        const targetProfile = workspace.profiles.get(to)
-        const asyncManager = getAsyncTaskManager()
-        
-        // v02: 自动修复 Worker 也注入完整上下文（项目根目录+可用工具），
-        //   不再只给一句"请修复"，否则它和首轮 Worker 一样两眼一抹黑。
-        let fixTools: string[] = []
-        try { fixTools = resolveToolset('agent', new Set(), true) } catch { /* ignore */ }
-        const fixCtx: WorkerPromptContext = {
-          to, from, taskType: 'code_debug',
-          task: fixTask,
-          taskGoal: task,
-          availableTools: fixTools,
-          projectContext: { cwd: projectRoot },
-        }
-        const fixChildConfig = workspace.config.buildRunConfig(to as any, targetProfile, {
-          systemPrompt: buildWorkerSystemPrompt(fixCtx),
-          personaId: to,
-        })
-
-        const fixTaskId = asyncManager.submit(
-          fixTask,
-          fixChildConfig,
-          { title: `AutoFix[${round}/${verifyConfig.maxFixRounds}]: ${to}`, tags: ['autofix', `${to}`], assignee: to }
-        )
-        
-        const fixResult = await this._waitForTaskCompletion(asyncManager, fixTaskId, 120_000)
-        
-        if (!fixResult.result) {
-          fixAttempts.push(`第 ${round} 轮: 修复任务失败 - ${fixResult.error}`)
-          continue
-        }
-
-        console.log(`[DelegationManager] 🔍 第 ${round} 轮修复后验证...`)
-
-        // 重新验证
-        currentVerify = runVerification(verifyConfig)
-
-        if (currentVerify.passed) {
-          console.log(`[DelegationManager] ✅ 第 ${round} 轮修复后验证通过`)
-          return {
-            autoFixed: true,
-            fixLog: `✅ 第 ${round} 轮修复后通过`,
-            finalContent: fixResult.result || delegateOutput,
-            attempts: fixAttempts,
-          }
-        }
-
-        fixAttempts.push(`第 ${round} 轮: 修复后仍失败`)
-
-        // 🆕 Phase 2: 收敛检测 — 连续多轮一样的错误 → 没必要继续试
-        if (round >= 3) {
-          const lastTwoSame = currentVerify.errors.every((e, i) =>
-            verifyResult.errors[i] && e.includes(verifyResult.errors[i].slice(0, 100))
+          const fixChildConfig = workspace.config.buildRunConfig(to as any, targetProfile, {
+            systemPrompt: buildWorkerSystemPrompt(fixCtx),
+            personaId: to,
+          })
+          const fixTaskId = asyncManager.submit(
+            fixTask,
+            fixChildConfig,
+            { title: `AutoFix: ${to}`, tags: ['autofix', `${to}`], assignee: to }
           )
-          if (lastTwoSame) {
-            console.log(`[DelegationManager] ⏹ 错误模式无变化（连续相同错误），提前终止修复循环`)
-            fixAttempts.push('提前终止: 错误模式无变化')
-            break
+          const r = await this._waitForTaskCompletion(asyncManager, fixTaskId, 120_000)
+          if (!r.result) {
+            return { success: false, content: r.error || '修复任务无结果' }
           }
+          lastFixOutput = r.result
+          return { success: true, content: r.result }
+        },
+        {
+          moodPrefix: () => moodPrefix,
+          shouldStop: (round) => shouldStopDelegationLoop(round, verifyConfig.maxFixRounds),
+          isConverged: defaultConvergenceCheck,
+        },
+      )
+
+      const attempts = fixResult.attempts.map(a => a.note ? `第 ${a.round} 轮: ${a.note}` : `第 ${a.round} 轮: ${a.delegateSuccess ? '已修复但验证仍失败' : '修复任务失败'}`)
+
+      if (fixResult.success) {
+        return {
+          autoFixed: true,
+          fixLog: fixResult.content,
+          finalContent: lastFixOutput || delegateOutput,
+          attempts,
         }
       }
 
-      // 超过最大轮次
-      console.log(`[DelegationManager] ❌ 自动修复失败，已达 ${verifyConfig.maxFixRounds} 轮上限`)
+      // 失败：区分「提前终止」与「轮数耗尽」，都交给上层如实呈现
+      const stopped = fixResult.content.startsWith('⏹')
+      console.log(`[DelegationManager] ${stopped ? '⏹' : '❌'} 自动修复未通过: ${fixResult.content}`)
       return {
         autoFixed: true,
-        fixLog: `❌ 自动修复失败（${verifyConfig.maxFixRounds} 轮），最终错误:\n${currentVerify.errors.join('\n').slice(0, 2000)}`,
-        attempts: fixAttempts,
+        fixLog: stopped
+          ? fixResult.content
+          : `❌ 自动修复失败（${verifyConfig.maxFixRounds} 轮），最终错误:\n${(fixResult.error || '').slice(0, 2000)}`,
+        attempts,
       }
 
     } catch (err: any) {

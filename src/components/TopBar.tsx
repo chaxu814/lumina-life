@@ -155,7 +155,7 @@ export default function TopBar() {
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <span className="topbar-logo"><span>✦</span> Lumina Life</span>
+        <span className="topbar-logo brand-logo"><span>✦</span> Lumina Life</span>
         <span className="topbar-version">1.0</span>
         {/* 语言切换 */}
         <button onClick={() => {
@@ -182,7 +182,7 @@ export default function TopBar() {
           cursor: 'pointer',
         }} onClick={checkLLMHealth} title={t('topbar.health_title')}>
           {llmChecked && llmOnline ? <IconWifi size={12} /> : <IconWifiOff size={12} />}
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+          <span style={{ fontSize: 'var(--font-size-2xs)' }}>
             {llmChecked ? (llmOnline ? t('topbar.online') : t('topbar.offline')) : t('topbar.checking')}
           </span>
         </div>

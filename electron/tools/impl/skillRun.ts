@@ -112,13 +112,16 @@ export async function useSkillHandler(args: Record<string, any>): Promise<ToolRe
     const { app } = require('electron')
 
     // 搜索 skills/{skillId}/SKILL.md
+    // 旧列表里有一条 path.join('J:\\LuminaLife2.0\\skills', ...) —— 那是作者
+    // 本机的安装路径，对其他用户永远不存在，属于开发环境残留，已移除。
+    // 需要指向自定义 skills 目录时用 LUMINA_SKILLS_DIR 环境变量。
+    const skillsRoot = process.env.LUMINA_SKILLS_DIR || ''
     const candidates = [
       path.join(app.getPath('userData'), 'skills', skillId, 'SKILL.md'),
       path.join(app.getAppPath(), 'skills', skillId, 'SKILL.md'),
       path.join(process.cwd(), 'skills', skillId, 'SKILL.md'),
-      // 也检查 J:\LuminaLife2.0\skills\
-      path.join('J:\\LuminaLife2.0\\skills', skillId, 'SKILL.md'),
-    ]
+      skillsRoot ? path.join(skillsRoot, skillId, 'SKILL.md') : '',
+    ].filter(Boolean)
 
     for (const mdPath of candidates) {
       try {

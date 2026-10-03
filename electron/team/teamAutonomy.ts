@@ -55,7 +55,27 @@ export const ROLE_INITIATIVE: Record<string, number> = {
 /** 待命多久后主动性打满（ms） */
 const IDLE_RAMP_MS = 3 * 60 * 1000
 const HEARTBEAT_MS = 45 * 1000
-const DEFAULT_MAX_CONCURRENT = 2
+
+/**
+ * 同时最大并发任务数。
+ *
+ * 默认 2 是**刻意保守**的：桌宠常驻用户桌面，夜间自己跑一堆任务会烧 token、
+ * 耗电、占 CPU，用户会直接卸载。专业用户做多项目时需要更高上限，
+ * 所以允许通过环境变量 `LUMINA_MAX_CONCURRENT` 覆盖（1~8，防止手滑设成 100）。
+ * 运行时 `teamAutonomy.start({ maxConcurrent })` 仍可再覆盖一次。
+ */
+function resolveDefaultMaxConcurrent(): number {
+  const raw = process.env.LUMINA_MAX_CONCURRENT
+  if (!raw) return 2
+  const n = parseInt(raw, 10)
+  if (!Number.isFinite(n)) {
+    console.warn(`[teamAutonomy] ⚠️ LUMINA_MAX_CONCURRENT="${raw}" 不是数字，回退默认 2`)
+    return 2
+  }
+  return Math.max(1, Math.min(8, n))
+}
+
+const DEFAULT_MAX_CONCURRENT = resolveDefaultMaxConcurrent()
 
 export interface AutonomyStatus {
   running: boolean

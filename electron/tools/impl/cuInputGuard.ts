@@ -15,12 +15,19 @@
 //   W <tick>   鼠标滚轮
 //   K <tick> <vk> 键盘按下（已过滤 UP 与注入）
 //
-// 纯逻辑部分（InputState / LeaseBookkeeper）不依赖运行时，可单测。
+// ⚠️ 平台现状：本模块的运行时实现（常驻 PowerShell 钩子）**仅 Windows 可用**。
+//   • win32  ：WH_MOUSE_LL / WH_KEYBOARD_LL + LLMHF_INJECTED/LLKHF_INJECTED 过滤注入事件
+//   • darwin ：**未实现**（等价物是 CGEventTap 原生 helper，需单独签名/公证）
+//              gateHumanInput 会登记 unsupported 状态并只记一次日志，
+//              而不是静默返回「未打断」让用户误以为保护开着。
+//   • linux  ：同理未实现（需 XRecord / libinput 钩子）。
+//   纯逻辑部分（InputState / LeaseBookkeeper / checkLeaseInterrupt）与平台无关，可单测。
 // ============================================================
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { join } from 'path'
 import { mkdirSync, writeFileSync, existsSync } from 'fs'
+import { reportCapabilityStatus, unsupported } from '../../core/platform/platformStatus'
 
 // ──────────────────────────────────────────────────────────
 // 纯逻辑：输入状态
@@ -278,7 +285,24 @@ const book = new LeaseBookkeeper()
  * 之后任何真人输入都打断租约，被打断的会话所有后续动作一律拒绝。
  */
 export function gateHumanInput(sessionId?: string | null): InterruptVerdict {
-  if (!sessionId || process.platform !== 'win32') {
+  if (!sessionId) {
+    return { interrupted: false, reason: '' }
+  }
+  if (process.platform === 'darwin') {
+    // macOS 诚实降级：没有等价实现。
+    // Windows 靠 WH_MOUSE_LL/WH_KEYBOARD_LL 且用 LLMHF_INJECTED/LLKHF_INJECTED
+    // 过滤掉自家注入事件；macOS 的等价物是 CGEventTap（kCGHIDEventTap），
+    // 必须写原生 helper（C/Swift/Objective-C）+ 单独签名公证，
+    // 在本次交付范围内**未实现**。
+    //
+    // 为什么不静默返回「未打断」：那样用户以为「一碰鼠标就自动中止」的保护
+    // 开着，实际上开着的是空气——自动操作会跟真人抢鼠标而不自知。
+    // 这里只在本会话首次建约时登记一次 needs_permission/unsupported 状态，
+    // 让设置页能诚实地展示「真人接管守卫：macOS 不支持」。
+    reportHumanGuardUnsupported()
+    return { interrupted: false, reason: '' }
+  }
+  if (process.platform !== 'win32') {
     return { interrupted: false, reason: '' }
   }
   const guard = getHumanInputGuard()
@@ -295,6 +319,22 @@ export function gateHumanInput(sessionId?: string | null): InterruptVerdict {
   const v = checkLeaseInterrupt(baseline, snap)
   if (v.interrupted) {book.markBroken(sessionId)}
   return v
+}
+
+let _macUnsupportedLogged = false
+/**
+ * 登记「macOS 无真人接管守卫」这一事实（每次进程只登记一次，避免刷日志）。
+ * 不抛异常、不阻断 CU——只是把「没这个保护」如实告诉上层。
+ */
+function reportHumanGuardUnsupported(): void {
+  if (_macUnsupportedLogged) {return}
+  _macUnsupportedLogged = true
+  reportCapabilityStatus('human_input_guard', unsupported(
+    'macOS 尚无「真人接管守卫」：该能力依赖 Windows 低级钩子（WH_MOUSE_LL/WH_KEYBOARD_LL）过滤注入事件，'
+    + 'macOS 的等价实现需 CGEventTap 原生 helper（需单独签名/公证），本版未实现。',
+    '因此在 macOS 上自动操作期间手动碰鼠标/键盘**不会**中止当前批次。',
+  ))
+  console.info('[cuInputGuard] macOS：真人接管守卫未实现（需 CGEventTap 原生 helper），自动操作不会因手动输入而中止')
 }
 
 export function releaseHumanLease(sessionId?: string | null): void {

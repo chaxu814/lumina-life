@@ -344,7 +344,14 @@ export default function App() {
     window.luminaAPI.cronSyncAll(entries).then(r => {
       if (r.ok) {console.log(`[Cron] 已同步 ${r.count} 个任务到主进程`)}
     }).catch((e: any) => console.warn('[Cron] 同步失败:', e.message))
-  }, []) // 只在启动时执行一次
+  },
+  // 🔧 修复：原来依赖数组是 []，只在启动时同步一次。
+  // 而 cronSyncAll 在主进程是**全量替换**语义（replaceAllCronEntries），
+  // 于是 TasksPanel 里的「⏸ 暂停 / 删除 / 新建」只写了 localStorage，
+  // 主进程调度器里的任务**仍然武装着照常触发** —— 新建的任务要重启才生效。
+  // 这比丢数据更糟：用户以为暂停了，它照跑。
+  // 依赖 cronTasks：任何增删改都重新同步一次。
+  [cronTasksForSync])
 
   // 启动时从后端 ProviderManager 同步已保存的供应商配置 + 检测连通性
   const syncProviderFromBackend = useStore((s) => s.syncProviderFromBackend)

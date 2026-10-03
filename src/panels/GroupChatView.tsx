@@ -53,11 +53,12 @@ import {
   loadLLMData, saveLLMData, loadAgentVoices, saveAgentVoices,
   setLLMRefreshFn, _llmState, _llmNotify, _startAutonomyTimer, _stopAutonomyTimer, _startAutonomyWithRemaining, _autonomyTimer,
   useLLMPanels,
-  cleanTtsText, formatTime, insertAtCursor, getAgentSystemPrompt, getAgentSystemPromptLite,
+  cleanTtsText, formatDateLabel, insertAtCursor, getAgentSystemPrompt, getAgentSystemPromptLite,
 } from '../chat/chatShared'
 import { useLoopStore } from '../stores/loopStore'
 import { detectLoopIntent } from '../services/loopEngine'
 import TaskDispatcher from '../components/TaskDispatcher'
+import SubagentCards from '../components/SubagentCards'
 import { TASK_TYPE_CARDS, TEAM_MEMBERS, TaskType, getRecommendedAgent } from '../data/agentRoles'
 import ContextUsageIndicator from '../components/ContextUsageIndicator'
 import { useAgentRuntime } from '../stores/agentRuntimeStore'
@@ -521,7 +522,7 @@ export default function GroupChatView() {
         content: llmReady
           ? `👋 欢迎来到团队群聊！你 + Lumina🐱 + 热茶🍵 + Yak📊 都在这里。\n\n💡 直接发消息，Lumina 会帮你叫合适的队友回复\n💡 @某人：输入 @Lumina / @热茶 / @Yak 指定回复者`
           : `👋 欢迎来到团队群聊！你 + Lumina🐱 + 热茶🍵 + Yak📊 都在这里。\n\n⚠️ 未配置 LLM，当前为模拟回复模式。请在设置中配置 API Key 解锁真实 AI 对话。`,
-        time: new Date().toLocaleTimeString('zh-CN') },
+        time: formatDateLabel(Date.now()) },
     ]
   })
   const [input, setInput] = useState('')
@@ -984,7 +985,7 @@ export default function GroupChatView() {
           content: llmReady
             ? `👋 新的团队群聊！你 + Lumina🐱 + 热茶🍵 + Yak📊 都在这里。\n\n💡 直接发消息，Lumina 会帮你叫合适的队友回复\n💡 @某人：输入 @Lumina / @热茶 / @Yak 指定回复者`
             : `👋 新的团队群聊！\n\n⚠️ 未配置 LLM，当前为模拟回复模式。`,
-          time: new Date().toLocaleTimeString('zh-CN'),
+          time: formatDateLabel(Date.now()),
         }])
         setLastAgent(null)
       }
@@ -1005,7 +1006,7 @@ export default function GroupChatView() {
         content: llmReady
           ? `👋 新的团队群聊！你 + Lumina🐱 + 热茶🍵 + Yak📊 都在这里。\n\n💡 直接发消息，Lumina 会帮你叫合适的队友回复\n💡 @某人：输入 @Lumina / @热茶 / @Yak 指定回复者`
           : `👋 新的团队群聊！\n\n⚠️ 未配置 LLM，当前为模拟回复模式。`,
-        time: new Date().toLocaleTimeString('zh-CN'),
+        time: formatDateLabel(Date.now()),
       }])
       setLastAgent(null)
       setSessions(loadGCSessions())
@@ -1586,7 +1587,7 @@ export default function GroupChatView() {
       fromIcon: '📋',
       fromName: '任务派发',
       content: dispatchMsg,
-      time: new Date().toLocaleTimeString('zh-CN'),
+      time: formatDateLabel(Date.now()),
     }])
     setMsgCounter(c => c + 1)
 
@@ -1617,13 +1618,13 @@ export default function GroupChatView() {
         setMessages(prev => [...prev, {
           id: `cmd-${Date.now()}`, from: 'system', fromIcon: '⚡', fromName: '命令',
           content: result?.content || result?.error || `命令已执行: ${userText}`,
-          time: new Date().toLocaleTimeString('zh-CN'),
+          time: formatDateLabel(Date.now()),
         }])
       } catch (err: any) {
         setMessages(prev => [...prev, {
           id: `cmd-${Date.now()}`, from: 'system', fromIcon: '⚠️', fromName: '命令',
           content: `命令执行失败: ${err.message}`,
-          time: new Date().toLocaleTimeString('zh-CN'),
+          time: formatDateLabel(Date.now()),
         }])
       }
       return
@@ -1651,7 +1652,7 @@ export default function GroupChatView() {
         text: a.text,
         imageDataUrl: (a as any).imageDataUrl,  // v10.9: base64 图片数据
       })) : undefined,
-      time: new Date().toLocaleTimeString('zh-CN'),
+      time: formatDateLabel(Date.now()),
     }
     setMessages(prev => [...prev, userMsg])
     setInput('')
@@ -1691,7 +1692,7 @@ export default function GroupChatView() {
             `🎯 目标：${loopIntent.goal}\n⏰ 触发：${freqLabel}\n\n` +
             `我会帮你做这些事：\n${plan}\n\n` +
             `去「团队群聊 → Loop → 确认启动」后即可开始运转。`,
-          time: new Date().toLocaleTimeString('zh-CN'),
+          time: formatDateLabel(Date.now()),
         }])
         setMsgCounter(c => c + 1)
       }
@@ -1965,7 +1966,7 @@ export default function GroupChatView() {
           const coderMsg: GCMsg = {
             id: coderMsgId,
             from: 'recha', fromIcon: '🍵', fromName: '热茶',
-            content: '', time: new Date().toLocaleTimeString('zh-CN'),
+            content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, coderMsg])
           setMsgCounter(c => c + 1)
@@ -2033,7 +2034,7 @@ export default function GroupChatView() {
           const reviewMsg: GCMsg = {
             id: reviewMsgId,
             from: 'yak', fromIcon: '📊', fromName: 'Yak',
-            content: '', time: new Date().toLocaleTimeString('zh-CN'),
+            content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, reviewMsg])
           setMsgCounter(c => c + 1)
@@ -2096,7 +2097,7 @@ export default function GroupChatView() {
             const fixMsg: GCMsg = {
               id: fixMsgId,
               from: 'recha', fromIcon: '🍵', fromName: '热茶',
-              content: '', time: new Date().toLocaleTimeString('zh-CN'),
+              content: '', time: formatDateLabel(Date.now()),
             }
             setMessages(prev => [...prev, fixMsg])
             setMsgCounter(c => c + 1)
@@ -2161,7 +2162,7 @@ export default function GroupChatView() {
           const testMsg: GCMsg = {
             id: testMsgId,
             from: 'lumina', fromIcon: '🐱', fromName: 'Lumina',
-            content: '', time: new Date().toLocaleTimeString('zh-CN'),
+            content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, testMsg])
           setMsgCounter(c => c + 1)
@@ -2225,7 +2226,7 @@ export default function GroupChatView() {
                 id: `sys-${Date.now()}`,
                 from: 'system', fromIcon: '⚠️', fromName: '系统',
                 content: `⚠️ 已尝试 ${MAX_CODING_ITERATIONS} 轮修复，测试仍有问题。建议手动查看代码。`,
-                time: new Date().toLocaleTimeString('zh-CN'),
+                time: formatDateLabel(Date.now()),
               }])
             }
             break  // 退出循环
@@ -2242,7 +2243,7 @@ export default function GroupChatView() {
         setMessages(prev => [...prev, {
           id: `err-${Date.now()}`, from: 'system', fromIcon: '⚠️', fromName: '系统',
           content: `协作编程出错: ${err.message}`,
-          time: new Date().toLocaleTimeString('zh-CN'),
+          time: formatDateLabel(Date.now()),
         }])
       } finally {
         unsubTool()
@@ -2432,7 +2433,7 @@ export default function GroupChatView() {
           const coderMsg: GCMsg = {
             id: coderMsgId,
             from: 'recha', fromIcon: '🍵', fromName: '热茶',
-            content: '', time: new Date().toLocaleTimeString('zh-CN'),
+            content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, coderMsg])
           setMsgCounter(c => c + 1)
@@ -2497,7 +2498,7 @@ export default function GroupChatView() {
           const reviewMsg: GCMsg = {
             id: reviewMsgId,
             from: 'yak', fromIcon: '📊', fromName: 'Yak',
-            content: '', time: new Date().toLocaleTimeString('zh-CN'),
+            content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, reviewMsg])
           setMsgCounter(c => c + 1)
@@ -2557,7 +2558,7 @@ export default function GroupChatView() {
             const fixMsg: GCMsg = {
               id: fixMsgId,
               from: 'recha', fromIcon: '🍵', fromName: '热茶',
-              content: '', time: new Date().toLocaleTimeString('zh-CN'),
+              content: '', time: formatDateLabel(Date.now()),
             }
             setMessages(prev => [...prev, fixMsg])
             setMsgCounter(c => c + 1)
@@ -2621,7 +2622,7 @@ export default function GroupChatView() {
             id: `sys-${Date.now()}`,
             from: 'system', fromIcon: '⚠️', fromName: '系统',
             content: `⚠️ 已尝试 ${MAX_CODING_ITERATIONS} 轮，审查仍有问题。建议手动查看代码或@Yak 进行详细审查。`,
-            time: new Date().toLocaleTimeString('zh-CN'),
+            time: formatDateLabel(Date.now()),
           }])
         }
 
@@ -2633,7 +2634,7 @@ export default function GroupChatView() {
         setMessages(prev => [...prev, {
           id: `err-${Date.now()}`, from: 'system', fromIcon: '⚠️', fromName: '系统',
           content: `中型编程出错: ${err.message}`,
-          time: new Date().toLocaleTimeString('zh-CN'),
+          time: formatDateLabel(Date.now()),
         }])
       } finally {
         unsubTool()
@@ -2681,7 +2682,7 @@ export default function GroupChatView() {
       const replyMsg: GCMsg = {
         id: replyId,
         from: responder.id, fromIcon: responder.icon, fromName: responder.name,
-        content: '', time: new Date().toLocaleTimeString('zh-CN'),
+        content: '', time: formatDateLabel(Date.now()),
       }
       setMessages(prev => [...prev, replyMsg])
       setMsgCounter(c => c + 1)
@@ -2989,7 +2990,7 @@ export default function GroupChatView() {
               id: `lucky-doom-${Date.now()}`,
               from: 'system', fromIcon: '⚠️', fromName: 'Lucky 模式',
               content: checkResult.doomLoopMessage ?? '',
-              time: new Date().toLocaleTimeString('zh-CN'),
+              time: formatDateLabel(Date.now()),
             }])
             setMsgCounter(c => c + 1)
           }
@@ -3000,7 +3001,7 @@ export default function GroupChatView() {
               id: `lucky-pause-${Date.now()}`,
               from: 'system', fromIcon: '⏸️', fromName: 'Lucky 模式',
               content: checkResult.pauseReason ?? '',
-              time: new Date().toLocaleTimeString('zh-CN'),
+              time: formatDateLabel(Date.now()),
             }])
             setMsgCounter(c => c + 1)
             luckyMode.pause(checkResult.pauseReason)
@@ -3093,7 +3094,7 @@ export default function GroupChatView() {
             const hMsg: GCMsg = {
               id: hId,
               from: helper.id, fromIcon: helper.icon, fromName: helper.name,
-              content: '', time: new Date().toLocaleTimeString('zh-CN'),
+              content: '', time: formatDateLabel(Date.now()),
             }
             setMessages(prev => [...prev, hMsg])
             setMsgCounter(c => c + 1)
@@ -3255,7 +3256,7 @@ export default function GroupChatView() {
           setMessages(prev => [...prev, {
             id: `err-${Date.now()}`, from: 'system', fromIcon: '⚠️', fromName: '系统',
             content: `${responder.name} 这次没回上来${hint}，稍后我让她再试一次`,
-            time: new Date().toLocaleTimeString('zh-CN'),
+            time: formatDateLabel(Date.now()),
           }])
           setMsgCounter(c => c + 1)
         }
@@ -3277,7 +3278,7 @@ export default function GroupChatView() {
       setMessages(prev => [...prev, {
         id: mockId,
         from: responder.id, fromIcon: responder.icon, fromName: responder.name,
-        content: '', time: new Date().toLocaleTimeString('zh-CN'),
+        content: '', time: formatDateLabel(Date.now()),
       }])
       setMsgCounter(c => c + 1)
       animateTyping(mockId, mockReply)
@@ -3302,7 +3303,7 @@ export default function GroupChatView() {
       id: `dec-${Date.now()}`,
       from: 'user', fromIcon: '👤', fromName: '你',
       content: `🎯 **团队决策讨论**\n\n📋 议题：${decQuestion}${decContext ? `\n\n📝 背景：${decContext}` : ''}\n\n请三位各抒己见，互相讨论，帮我分析出最佳方案。`,
-      time: new Date().toLocaleTimeString('zh-CN'),
+      time: formatDateLabel(Date.now()),
     }
     const updated = [...messages, decisionMsg]
     setMessages(updated)
@@ -3350,7 +3351,7 @@ export default function GroupChatView() {
             id: decMsgId,
             from: agentId, fromIcon: agent.icon, fromName: agent.name,
             content: '', thinkingSteps: [],
-            time: new Date().toLocaleTimeString('zh-CN'),
+            time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, decPlaceholder])
           setMsgCounter(c => c + 1)
@@ -3510,7 +3511,7 @@ export default function GroupChatView() {
       // v6.0: LLM 未配置时只让 Lumina 说话，Yak/热茶 是后台工作者不直接面对用户
       const simReplies: GCMsg[] = [
         { id: `sim-${Date.now()}-lumina`, from: 'lumina', fromIcon: '🐱', fromName: 'Lumina',
-          content: `嗯…${decQuestion}这个问题让我想想呢~\n不过我现在还没有配置 LLM 大脑，说不出太多想法呢 😴\n\n> 💡 在设置里给 Lumina 配置好 LLM，我就能和 Yak、热茶一起帮你分析了！`, time: new Date().toLocaleTimeString('zh-CN') },
+          content: `嗯…${decQuestion}这个问题让我想想呢~\n不过我现在还没有配置 LLM 大脑，说不出太多想法呢 😴\n\n> 💡 在设置里给 Lumina 配置好 LLM，我就能和 Yak、热茶一起帮你分析了！`, time: formatDateLabel(Date.now()) },
       ]
       for (const reply of simReplies) {
         setMessages(prev => [...prev, reply])
@@ -3525,7 +3526,7 @@ export default function GroupChatView() {
     const clearedMessages = [{
       id: '0', from: 'system', fromIcon: '🤖', fromName: '系统',
       content: '🗑️ 聊天记录已清空。',
-      time: new Date().toLocaleTimeString('zh-CN'),
+      time: formatDateLabel(Date.now()),
     }]
     setMessages(clearedMessages)
     // 同步保存到 localStorage，防止加载旧消息
@@ -3704,7 +3705,7 @@ export default function GroupChatView() {
         fromIcon: '\uD83D\uDC31',  // 🐱
         fromName: 'Lumina',
         content: message,
-        time: new Date().toLocaleTimeString('zh-CN'),
+        time: formatDateLabel(Date.now()),
       }
       setMessages(prev => [...prev, proactiveMsg])
       if (isUserAtBottomRef.current) {
@@ -4853,25 +4854,6 @@ export default function GroupChatView() {
               boxSizing: 'border-box', lineHeight: 1.5,
             }}
           />
-          {/* ── 📋 任务派发按钮（发送按钮左侧） ── */}
-          <div style={{
-            position: 'absolute', right: 80, bottom: 8,
-          }}>
-            <button
-              onClick={() => setShowTaskDispatcher(true)}
-              style={{
-                width: 32, height: 32, borderRadius: 8,
-                border: '1.5px solid var(--border-light)', background: 'var(--surface-100)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 15, transition: 'all 0.2s',
-              }}
-              title="任务派发中心"
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-200)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--surface-100)' }}
-            >
-              📋
-            </button>
-          </div>
           {/* ── 发送 / 中断（输入框内右下角） ── */}
           <div style={{
             position: 'absolute', right: 10, bottom: 8,
@@ -5149,6 +5131,35 @@ export default function GroupChatView() {
           </button>
 
         </div>
+
+        {/* ── 📋 任务派发中心入口（工具条下方） ── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontFamily: 'var(--font-sans)',
+        }}>
+          <button
+            onClick={() => setShowTaskDispatcher(true)}
+            title="任务派发中心"
+            style={{
+              padding: '4px 10px', borderRadius: 6,
+              border: '1.5px solid var(--border-light)',
+              background: 'var(--surface-50)',
+              cursor: 'pointer', fontSize: 12, display: 'flex',
+              alignItems: 'center', gap: 3, fontFamily: 'inherit',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-100)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--surface-50)' }}
+          >
+            📋 任务派发中心
+          </button>
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+            选择任务类型 → 选择执行者 → 一键派发给团队成员
+          </span>
+        </div>
+
+        {/* 子智能体（实习生）进度卡片：入口条正下方，与单聊一致 */}
+        <SubagentCards sessionId={activeSessionId} />
       </div>
 
       {/* ═══ v2.7.1: 状态栏（已移除重复TTS音色选择器）═══ */}

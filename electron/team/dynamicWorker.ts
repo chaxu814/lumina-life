@@ -362,15 +362,17 @@ export async function hireWorker(opts: HireOptions = {}): Promise<DynamicWorker>
   })
 
   // 通知 Lumina：后台多了一个临时工（不直接打扰用户）
-  try {
-    void getTeamMailbox().send({
+  // 🔧 修复：原来的 try/catch 抓不到 Promise reject
+//（try 只捕获同步抛出）。send() 内部 reject 时会变成 unhandledRejection，
+// 而 Electron 主进程遇到它的默认行为是**直接终止进程**。
+    getTeamMailbox().send({
       from: 'lumina', to: 'lumina',
       subject: `系统：已雇佣 ${spec.icon} ${name}`,
       body: `动态 worker 上线：id=${id}，角色=${spec.name}，职责=${spec.description}`
         + `${modelOverride ? `，小模型=${modelOverride}` : ''}${workdir ? `，工作区=${workdir}` : ''}`,
       kind: 'system',
     })
-  } catch { /* 信箱未就绪不阻塞 */ }
+      .catch((e) => { /* 信箱未就绪不阻塞 */ })
 
   console.log(`[dynamicWorker] 🤝 雇佣 ${spec.icon} ${name} (${id}) ${describeTier(role, modelOverride)}`)
   return worker
@@ -431,19 +433,19 @@ export function dismissWorker(id: string): boolean {
   workers.delete(id)
   unregisterTeamMember(id)
   // v3.33 散伙留遗产：按工种沉淀一张经验卡（没有画像则跳过）
-  try {
-    void getWorkerStats().shutdownCard(w.role).then(card => {
+  void getWorkerStats().shutdownCard(w.role).then(card => {
       if (card) {console.log(`[dynamicWorker] 📝 ${w.name} 留下经验卡：${card.title}`)}
-    })
-  } catch { /* 画像未就绪不阻塞 */ }
-  try {
-    void getTeamMailbox().send({
+    }).catch(() => { /* 画像未就绪不阻塞 */ })
+  // 🔧 修复：原来的 try/catch 抓不到 Promise reject
+//（try 只捕获同步抛出）。send() 内部 reject 时会变成 unhandledRejection，
+// 而 Electron 主进程遇到它的默认行为是**直接终止进程**。
+    getTeamMailbox().send({
       from: 'lumina', to: 'lumina',
       subject: `系统：已解散 ${w.icon} ${w.name}`,
       kind: 'system',
       body: `动态 worker 下线：id=${id}` + (w.workdir && w.worktree?.isGit ? `，隔离工作区保留：${w.workdir}（尚未自动合并）` : ''),
     })
-  } catch { /* ignore */ }
+      .catch((e) => { /* ignore */ })
   console.log(`[dynamicWorker] 👋 解散 ${w.icon} ${w.name} (${id})`)
   return true
 }

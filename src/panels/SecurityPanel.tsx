@@ -466,7 +466,7 @@ export default function SecurityPanel({ embedded }: { embedded?: boolean } = {})
                     log.type === 'skill' ? 'var(--green-500)' :
                     log.type === 'security' ? 'var(--red-500)' : 'var(--text-disabled)',
                 }} />
-                <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 10, minWidth: 36 }}>
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 10, minWidth: 36 }}>
                   {log.time}
                 </span>
                 <span style={{ flex: 1, color: 'var(--text-primary)' }}>{log.action}</span>

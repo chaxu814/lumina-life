@@ -82,7 +82,9 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   tasks_core: {
     description: '任务与定时器',
-    tools: ['todo', 'cron_schedule', 'cron_list', 'cron_cancel'],
+    // ask_decision 放在这里而不是 team：它对**任何** agent 都可用（包括单 agent 模式），
+    // 协作性质但不是团队专属。
+    tools: ['todo', 'cron_schedule', 'cron_list', 'cron_cancel', 'ask_decision'],
   },
 
   system_core: {
@@ -612,7 +614,23 @@ export async function executeToolsParallel(
   if (toolCalls.length === 1) {
     const call = toolCalls[0]
     let args: Record<string, any> = {}
-    try { args = JSON.parse(call.function.arguments || '{}') } catch { /* keep empty */ }
+    try {
+      args = JSON.parse(call.function.arguments || '{}')
+    } catch {
+      // 🔧 P0 修复（假成功）
+      // 旧实现：解析失败就用空对象继续执行，工具会「正常跑完」并返回 ok:true，
+      // 违反本文件自己写的铁律：「没做成」必须显式失败 ok:false，
+      // 否则模型会把空参数执行当成真实结果继续推理（编造就是这么来的）。
+      //
+      // securityGuard 已在执行前拦截这类调用并要求审批，
+      // 但用户在审批时点「同意」是合理选择——那时应明确告诉模型
+      // 「参数有问题，没执行」，而不是悄悄跑个空参数版。
+      const result = buildNotExecutedResult(
+        `工具 "${call.function.name}" 的参数不是合法 JSON，未执行。`,
+        '模型输出格式异常，请让它重新生成参数后重试。',
+      )
+      return [{ call, result }]
+    }
     const result = await executeToolWithRetry(call.function.name, args, retryConfig)
     return [{ call, result }]
   }
@@ -626,14 +644,46 @@ export async function executeToolsParallel(
       // 单工具批次: 直接用 executeToolWithRetry
       const call = batch[0]
       let args: Record<string, any> = {}
-      try { args = JSON.parse(call.function.arguments || '{}') } catch { /* keep empty */ }
+        try {
+        args = JSON.parse(call.function.arguments || '{}')
+      } catch {
+        // 🔧 P0 修复（假成功）
+        // 旧实现：解析失败就用空对象继续执行，工具会「正常跑完」并返回 ok:true，
+        // 违反本文件自己写的铁律：「没做成」必须显式失败 ok:false，
+        // 否则模型会把空参数执行当成真实结果继续推理（编造就是这么来的）。
+        //
+        // securityGuard 已在执行前拦截这类调用并要求审批，
+        // 但用户在审批时点「同意」是合理选择——那时应明确告诉模型
+        // 「参数有问题，没执行」，而不是悄悄跑个空参数版。
+        const result = buildNotExecutedResult(
+          `工具 "${call.function.name}" 的参数不是合法 JSON，未执行。`,
+          '模型输出格式异常，请让它重新生成参数后重试。',
+        )
+        return [{ call, result }]
+      }
       const result = await executeToolWithRetry(call.function.name, args, retryConfig)
       allResults.push({ call, result })
     } else {
       // 多工具批次: 并行执行
       const promises = batch.map(async (call) => {
         let args: Record<string, any> = {}
-        try { args = JSON.parse(call.function.arguments || '{}') } catch { /* keep empty */ }
+            try {
+          args = JSON.parse(call.function.arguments || '{}')
+        } catch {
+          // 🔧 P0 修复（假成功）
+          // 旧实现：解析失败就用空对象继续执行，工具会「正常跑完」并返回 ok:true，
+          // 违反本文件自己写的铁律：「没做成」必须显式失败 ok:false，
+          // 否则模型会把空参数执行当成真实结果继续推理（编造就是这么来的）。
+          //
+          // securityGuard 已在执行前拦截这类调用并要求审批，
+          // 但用户在审批时点「同意」是合理选择——那时应明确告诉模型
+          // 「参数有问题，没执行」，而不是悄悄跑个空参数版。
+          const result = buildNotExecutedResult(
+            `工具 "${call.function.name}" 的参数不是合法 JSON，未执行。`,
+            '模型输出格式异常，请让它重新生成参数后重试。',
+          )
+          return { call, result }
+        }
         const result = await executeToolWithRetry(call.function.name, args, retryConfig)
         return { call, result }
       })

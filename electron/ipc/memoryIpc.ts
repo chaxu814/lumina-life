@@ -17,9 +17,71 @@ const memoryPath = join(app.getPath('userData'), 'lumina-memory.db')
 // 全局向量存储实例
 const vectorStore = new MemoryVectorStore()
 
+/**
+ * 配置默认值。
+ *
+ * 【为什么要显式写死一份默认值，而不是靠各处 `=== true` 判空】
+ * `autoOpenLinks` 的产品决策是「默认开启」（用户明确要求）。
+ * 如果只改设置面板的初始 UI 状态，而不改读取侧，那么：
+ *   · 新用户：配置文件里没这个键 → 读取得到 undefined → 实际不生效
+ *   · 老用户：已写过 false → 保持 false（这个是对的，尊重用户的选择）
+ * 于是「界面上显示开着，实际不工作」——最糟的一类 bug。
+ *
+ * 所以规则是：
+ *   **键不存在 → 取默认值；键存在 → 尊重用户显式设置**（含显式 false）。
+ * 这个函数只负责前者，且不写入文件，避免污染用户配置。
+ */
+export const CONFIG_DEFAULTS: Record<string, any> = {
+  browser: {
+    autoOpenLinks: true,
+  },
+  // 创新功能开关组（任务剧场 / 情绪门控 / 关系衰减）。
+  // 三者都是「默认开」的产品选择，且都是观赏/增强层，不影响基本可用性。
+  // 键缺失 = 开；用户显式关过才为 false。
+  features: {
+    theater: true,
+    emotionGating: true,
+    affinityDecay: true,
+  },
+}
+
+/** 深合并默认值到用户配置上（不修改入参，不写盘） */
+export function withConfigDefaults(cfg: Record<string, any> | null | undefined): Record<string, any> {
+  const base = (cfg && typeof cfg === 'object') ? cfg : {}
+  const out: Record<string, any> = { ...base }
+  for (const [k, v] of Object.entries(CONFIG_DEFAULTS)) {
+    const isPlainObj = typeof v === 'object' && v !== null
+    const cur = out[k]
+    // 子键缺失/为 null/类型不对（如被写成字符串）→ 整体用默认值
+    if (cur === undefined || cur === null || (isPlainObj && typeof cur !== 'object')) {
+      out[k] = isPlainObj ? { ...v } : v
+    } else if (isPlainObj) {
+      // 类型对但子键缺失时也要补（如 browser 已存在但缺 autoOpenLinks）
+      out[k] = { ...v, ...cur }
+    }
+  }
+  return out
+}
+
 function loadConfig(): Record<string, any> {
-  try { if (fs.existsSync(configPath)) {return JSON.parse(fs.readFileSync(configPath, 'utf-8'))} } catch {}
-  return {}
+  if (!fs.existsSync(configPath)) {return {} }   // 首次启动：空配置是正常的
+  const raw = fs.readFileSync(configPath, 'utf-8')
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    // 🔧 配置损坏时**抛出**而非静默返回 {}
+    //
+    // 原因：调用方拿到 {} 后会往里塞一项再写回，
+    // 于是一份损坏的文件被「修复」成了「只剩那一项」——
+    // 用户的其他配置（主题、功能开关、角色配置）全部消失，
+    // 而且没有任何提示。整份配置被静默清空比报错糟糕得多。
+    //
+    // 抛出后由调用方的 try/catch 兜住：文件保持原样，
+    // 用户至少还能手动抢救，也让开发者看得到日志。
+    const err = new Error(`配置文件已损坏，已拒绝写入以免覆盖：${configPath} — ${(e as Error)?.message}`);
+    console.error('[Config] 配置文件解析失败：', (e as Error)?.message)
+    throw err
+  }
 }
 
 function saveConfig(config: Record<string, any>): void {
@@ -29,11 +91,18 @@ function saveConfig(config: Record<string, any>): void {
 export function registerMemoryIpc(): void {
   // ─── Config ──────────────────────────────────────
 
-  ipcMain.handle('config:get', () => loadConfig())
+  ipcMain.handle('config:get', () => withConfigDefaults(loadConfig()))
   ipcMain.handle('config:set', (_event, updates: Record<string, any>) => {
-    const merged = { ...loadConfig(), ...updates }
-    saveConfig(merged)
-    return merged
+    // 🔧 try/catch：loadConfig 在配置损坏时抛错，避免把损坏文件
+    // 覆盖成只含本次更新的残缺版本（用户其他设置会全部消失）。
+    try {
+      const merged = { ...loadConfig(), ...updates }
+      saveConfig(merged)
+      return merged
+    } catch (e: any) {
+      console.error('[Config] config:set 失败：', e?.message)
+      return { __error: e?.message || '配置文件损坏，未保存（已保留原文件）' }
+    }
   })
   ipcMain.handle('config:saveToDb', async (_event, key: string, value: any) => {
     const store = getMemoryStore(memoryPath)

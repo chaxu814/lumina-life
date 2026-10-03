@@ -60,7 +60,7 @@ npm run pack:win
 ## 🧱 项目架构
 
 ```
-H:\LuminaLife2.0\
+<项目目录>\
 ├── electron/              # 主进程源码 (TypeScript)
 │   ├── main.ts            # 入口 — 窗口、IPC 注册
 │   ├── preload.ts         # preload 桥接 — 渲染↔主进程

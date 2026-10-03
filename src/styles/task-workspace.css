@@ -129,7 +129,7 @@
   gap: 6px;
   padding: 5px 10px;
   border-radius: 8px 8px 0 0;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   background: transparent;
   border: none;
@@ -151,7 +151,7 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
 }
 .tw-tab-close:hover {
@@ -164,7 +164,7 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-md);
   border-radius: 6px;
 }
 .tw-tab-new:hover { background: var(--surface-100); }
@@ -178,7 +178,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-md);
 }
 .tw-panel-close:hover { background: var(--surface-100); }
 
@@ -193,7 +193,7 @@
 }
 
 .tw-section-title {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--text-tertiary);
   letter-spacing: 0.5px;
@@ -221,7 +221,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 .tw-agent-avatar {
-  font-size: 18px;
+  font-size: var(--font-size-xl);
   flex-shrink: 0;
 }
 .tw-agent-info {
@@ -229,12 +229,12 @@
   min-width: 0;
 }
 .tw-agent-name {
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 .tw-agent-status-text {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -306,13 +306,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
 }
-.tw-tl-icon { font-size: 12px; }
+.tw-tl-icon { font-size: var(--font-size-sm); }
 .tw-tl-time { font-variant-numeric: tabular-nums; }
 .tw-tl-text {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
   margin-top: 2px;
   word-break: break-word;
@@ -324,7 +324,7 @@
   margin-bottom: 6px;
 }
 .tw-filter-btn {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 8px;
   border-radius: 10px;
   border: 1px solid var(--border-light);
@@ -348,14 +348,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 4px 6px;
   border-radius: 6px;
   background: var(--surface-50);
 }
 .tw-tool-name {
   color: var(--text-primary);
-  font-family: ui-monospace, monospace;
+  font-family: inherit;
 }
 .tw-tool-args {
   color: var(--text-tertiary);
@@ -365,7 +365,7 @@
   flex: 1;
 }
 .tw-tool-toggle {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--accent-600);
   background: none;
   border: none;
@@ -398,7 +398,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   border-radius: 6px 6px 0 0;
   background: var(--surface-100);
   color: var(--text-secondary);
@@ -433,7 +433,7 @@
   flex-shrink: 0;
 }
 .tw-artifact-btn {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 3px 8px;
   border-radius: 6px;
   border: 1px solid var(--border-light);
@@ -452,7 +452,7 @@
 .tw-code {
   display: flex;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1.5;
 }
 .tw-code-lines {
@@ -471,14 +471,14 @@
 }
 .tw-md-view {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.6;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
 }
 .tw-truncated-note {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--tw-error);
   padding: 6px 10px;
   border-top: 1px solid var(--border-light);
@@ -499,7 +499,7 @@
   border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 8px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   background: var(--surface-0);
   color: var(--text-primary);
   min-height: 56px;
@@ -520,7 +520,7 @@
   border-radius: 8px;
   background: var(--accent-500);
   color: #fff;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -529,14 +529,14 @@
   position: absolute;
   bottom: 70px;
   right: 8px;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
   opacity: 0.5;
   pointer-events: none;
   user-select: none;
 }
 
 .tw-empty {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
   text-align: center;
   padding: 20px 10px;
@@ -580,7 +580,7 @@
   border-radius: 4px;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   cursor: pointer;
   opacity: 0;
@@ -611,7 +611,7 @@
   border-radius: 4px;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   cursor: pointer;
   opacity: 0;
@@ -629,7 +629,7 @@
 
 /* 通用小清空按钮 */
 .tw-clear-btn {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   background: transparent;
   border: none;
@@ -648,7 +648,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   background: var(--surface-50);
   border: 1px solid var(--border-light);
@@ -660,7 +660,7 @@
   border: none;
   background: transparent;
   color: var(--tw-error);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -672,7 +672,7 @@
   border: none;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -690,11 +690,11 @@
   gap: 8px;
   padding: 24px 10px;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   text-align: center;
 }
 .tw-empty-icon {
-  font-size: 24px;
+  font-size: var(--font-size-2xl);
   opacity: 0.5;
 }
 
@@ -746,7 +746,7 @@
 .tw-tl-item.artifact { border-left-color: var(--accent-500); }
 .tw-tl-item.system { border-left-color: var(--text-tertiary); }
 .tw-tl-text {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.45;
 }
 .tw-tl-head {
@@ -820,7 +820,7 @@
 }
 .tw-chevron {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   transition: transform 0.2s ease;
   color: var(--text-tertiary);
 }
@@ -846,11 +846,11 @@
   cursor: pointer;
 }
 .tw-group-emoji {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   flex-shrink: 0;
 }
 .tw-group-title {
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--text-primary);
   flex: 1;
@@ -860,13 +860,13 @@
   text-overflow: ellipsis;
 }
 .tw-group-meta {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .tw-group-chevron {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   transition: transform 0.2s ease;
   flex-shrink: 0;
@@ -892,7 +892,7 @@
 .tw-group-progress-fill.error { background: var(--tw-error); }
 .tw-group-progress-fill.idle { background: var(--tw-idle); }
 .tw-group-progress-text {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   margin-top: 3px;
 }
@@ -931,7 +931,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   padding: 2px 0;
   border-radius: 4px;
 }
@@ -985,7 +985,7 @@
   border-radius: 4px;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   cursor: pointer;
   opacity: 0;
@@ -1006,7 +1006,7 @@
   color: var(--text-primary);
 }
 .tw-subtask-agent {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   background: var(--surface-100);
   padding: 1px 5px;
@@ -1014,12 +1014,12 @@
   flex-shrink: 0;
 }
 .tw-subtask-status {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-secondary);
   flex-shrink: 0;
 }
 .tw-subtask-empty {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   padding: 4px 0;
 }
@@ -1034,7 +1034,7 @@
   gap: 6px;
   padding: 3px 0;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   user-select: none;
 }
@@ -1042,7 +1042,7 @@
   font-weight: 600;
 }
 .tw-tl-group-count {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   background: var(--surface-100);
   padding: 0 5px;
@@ -1078,7 +1078,7 @@
 }
 .tw-csv-table {
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   width: 100%;
 }
 .tw-csv-table th {
@@ -1120,13 +1120,13 @@
   opacity: 0.6;
 }
 .tw-binary-name {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-all;
 }
 .tw-binary-meta {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 .tw-binary-actions {
@@ -1141,7 +1141,7 @@
   align-items: center;
   justify-content: center;
   padding: 40px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
 }
 .tw-artifact-error {
@@ -1150,11 +1150,11 @@
   justify-content: center;
   gap: 8px;
   padding: 40px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--tw-error);
 }
 .tw-artifact-note {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   padding: 8px 12px;
   border-top: 1px solid var(--border-light);
@@ -1197,8 +1197,8 @@
 .tw-status-dot.running {
   box-shadow: 0 0 0 2px var(--surface-50), 0 0 0 3px rgba(59, 130, 246, 0.2), 0 0 6px var(--tw-running);
 }
-.tw-subtask-dur { font-size: 10px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.tw-md-table { border-collapse: collapse; font-size: 12px; margin: 6px 0; max-width: 100%; }
+.tw-subtask-dur { font-size: var(--font-size-2xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.tw-md-table { border-collapse: collapse; font-size: var(--font-size-sm); margin: 6px 0; max-width: 100%; }
 .tw-md-table th, .tw-md-table td { border: 1px solid var(--border-light); padding: 4px 10px; text-align: left; }
 .tw-md-table th { background: var(--surface-100); font-weight: 600; }
 .tw-pdf-view { position: relative; }
@@ -1247,7 +1247,7 @@
   transition: width 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .tw-board-progress-text {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -1282,7 +1282,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -1292,7 +1292,7 @@
 .tw-board-item.done .tw-board-marker {
   background: transparent;
   color: #16a34a;
-  font-size: 13px;
+  font-size: var(--font-size-base);
 }
 .tw-board-item.active .tw-board-marker {
   background: var(--accent-500, #6366f1);
@@ -1307,7 +1307,7 @@
   gap: 2px;
 }
 .tw-board-text {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 17px;
   color: var(--text-secondary);
   word-break: break-word;
@@ -1338,7 +1338,7 @@
   border: 1px solid var(--border-light);
   background: var(--surface-50);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   line-height: 15px;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -1363,7 +1363,7 @@
   border-radius: 4px;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s ease, background 0.15s ease;
@@ -1374,7 +1374,7 @@
 /* ── 工具执行 feed（持久记录版） ── */
 .tw-section-count {
   margin-left: 4px;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   font-weight: 500;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
@@ -1408,7 +1408,7 @@
 .tw-tool-icon {
   width: 14px;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   flex-shrink: 0;
 }
 .tw-tool-name {
@@ -1421,13 +1421,13 @@
   text-overflow: ellipsis;
 }
 .tw-tool-duration {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 .tw-tool-args {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   min-width: 0;
   overflow: hidden;
@@ -1443,7 +1443,7 @@
 }
 .tw-tool-detail-row { display: flex; gap: 5px; min-width: 0; }
 .tw-tool-detail-key {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   flex-shrink: 0;
   width: 26px;
@@ -1483,18 +1483,18 @@
   margin-bottom: 6px;
 }
 .tw-sum-section-title {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 .tw-sum-plus {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   color: var(--text-tertiary);
   line-height: 1;
 }
 
 .tw-sum-empty {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
   padding: 2px 0 4px;
 }
@@ -1536,7 +1536,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   font-weight: 700;
 }
 .tw-sum-icon-md {
@@ -1553,7 +1553,7 @@
   color: var(--text-secondary);
   font-family: ui-monospace, monospace;
 }
-.tw-sum-icon-img { font-size: 13px; background: transparent; }
+.tw-sum-icon-img { font-size: var(--font-size-base); background: transparent; }
 .tw-sum-icon-pdf {
   background: #fdecea;
   color: #d93025;
@@ -1564,7 +1564,7 @@
   color: #b06000;
   font-family: ui-monospace, monospace;
 }
-.tw-sum-icon-file { font-size: 13px; background: transparent; }
+.tw-sum-icon-file { font-size: var(--font-size-base); background: transparent; }
 
 .tw-sum-thumb {
   width: 22px;
@@ -1607,7 +1607,7 @@
   text-overflow: ellipsis;
 }
 .tw-sum-sub-chevron {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
@@ -1616,7 +1616,7 @@
   padding: 6px 8px;
   border-radius: 6px;
   background: var(--surface-50);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1.5;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -1633,7 +1633,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   background: var(--surface-100);
   color: var(--text-tertiary);
 }
@@ -1653,12 +1653,12 @@
   gap: 4px;
 }
 .tw-sum-skill-chip {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--surface-100);
   color: var(--text-secondary);
-  font-family: ui-monospace, monospace;
+  font-family: inherit;
 }
 
 /* 视图切换 tab 与历史任务 tab 区分 */

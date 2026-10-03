@@ -351,11 +351,44 @@ export class MemoryEvidenceEngine {
         this.updateCorroboration()
       }
     } catch (err) {
-      console.warn('[MemoryEvidence] 加载失败，使用空数据')
+      // 🔧 P0 修复（静默覆盖整个记忆库）
+      // 旧实现：解析失败 → this.memories 保持 []，只打一条 warn。
+      // 而 addMemory 等操作末尾会无条件 this.save()，
+      // 于是**任何一条新记忆都会把整个佐证记忆库覆盖成只剩它**。
+      // 佐证评分、确认状态、outdated 标记全部丢失，且不可恢复。
+      //
+      // 现在：备份原文 + 抛错。抛错后调用方不会走到 save，
+      // 原文件保持原样，用户还能手动抢救。
+      const backup = this.storagePath + '.corrupted'
+      try {
+        if (fs.existsSync(this.storagePath) && !fs.existsSync(backup)) {
+          fs.copyFileSync(this.storagePath, backup)
+        }
+        console.error(
+          `[MemoryEvidence] 佐证记忆库已损坏，原文备份至 ${backup}。` +
+          '为避免覆盖既有记忆，本次不写入。'
+        )
+      } catch { /* 备份失败也必须继续抛错 */ }
+      throw new Error(`MemoryEvidence: 记忆库已损坏（备份于 ${backup}），已中止写入`)
     }
   }
 
   private save(): void {
+    // 🔧 写入前滚动备份一份（保留最近 3 份）。
+    // 即使是正常路径下的意外覆盖（如某个 bug 写入了残缺数据），
+    // 用户也有机会从备份捞回——这个库是长期积累的，不可再生。
+    try {
+      if (fs.existsSync(this.storagePath)) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+        fs.copyFileSync(this.storagePath, `${this.storagePath}.bak.${stamp}`)
+        const baks = fs.readdirSync(path.dirname(this.storagePath))
+          .filter(f => f.startsWith(path.basename(this.storagePath) + '.bak.'))
+          .sort()
+        for (const old of baks.slice(0, Math.max(0, baks.length - 3))) {
+          try { fs.unlinkSync(path.join(path.dirname(this.storagePath), old)) } catch { /* ignore */ }
+        }
+      }
+    } catch { /* 备份失败不阻塞保存 */ }
     try {
       fs.writeFileSync(this.storagePath, JSON.stringify({
         memories: this.memories,

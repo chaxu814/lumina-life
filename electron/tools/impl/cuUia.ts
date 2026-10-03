@@ -17,6 +17,9 @@ import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import { execFile } from 'child_process'
+import { axRoleToUiType, type AxElement } from '../../core/platform/macAccessibility'
+import { pointRectToPixel, type CaptureGeometry } from '../../core/platform/macCoordinate'
+import { getPlatformAdapter, type PlatformAdapter } from '../../core/platform'
 
 export interface UiaElement {
   /** 本次扫描内的序号（0 起） */
@@ -158,10 +161,10 @@ let _nonWinLogged = false
 function runPS(): Promise<string> {
   return new Promise(resolve => {
     if (process.platform !== 'win32') {
-      // 优雅降级：UIA 仅 Windows 可用，非 Windows 返回空元素树（仅首次提示，避免刷屏）
+      // 优雅降级：真正的 UIA 扫描仅 Windows。非 Windows 走 scanAxMac()（macOS AX）。
       if (!_nonWinLogged) {
         _nonWinLogged = true
-        console.info('[cuUia] UIA 仅支持 Windows，当前平台(' + process.platform + ')返回空元素树')
+        console.info('[cuUia] Windows UIA 仅在 win32 可用，当前平台(' + process.platform + ')不走 PS 扫描')
       }
       resolve('')
       return
@@ -234,7 +237,13 @@ export function setValueByPoint(
   physX: number, physY: number, text: string,
 ): Promise<{ ok: boolean; reason?: string }> {
   return new Promise(resolve => {
-    if (process.platform !== 'win32') {resolve({ ok: false, reason: 'non-windows' }); return}
+    if (process.platform !== 'win32') {
+      // macOS / Linux 无 UIA ValuePattern。macOS 虽可经 AX 设值，但需原生 AXUIElementSetAttributeValue
+      // （AppleScript 不支持），本版未实现——回退到调用方的「点击+全选+输入」复合路径。
+      // 明确返回结构化原因，不静默。
+      resolve({ ok: false, reason: process.platform === 'darwin' ? 'no-ax-valuepattern' : 'non-windows' })
+      return
+    }
     execFile('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
       '-File', ensureSetScript(),
@@ -268,6 +277,21 @@ class UiaCache {
     if (this.snap && key === this.snap.key && Date.now() - this.snap.at < maxAgeMs) {
       return this.snap.elements
     }
+    // macOS：走 AX 扫描（AppleScript System Events），坐标 point→pixel 换算
+    if (process.platform === 'darwin') {
+      const els = await scanAxMac()
+      const adapter = getPlatformAdapter()
+      const toPixelRect = (r: { x: number; y: number; w: number; h: number }) => {
+        try {
+          const geo = (adapter as any).geometry as CaptureGeometry | undefined
+          if (geo) {return pointRectToPixel(r, geo)}
+        } catch { /* 拿不到几何则按 1:1 退化 */ }
+        return r
+      }
+      const normalized = axToNormalized(els, imgW, imgH, vx, vy, toPixelRect)
+      this.snap = { at: Date.now(), key, elements: normalized }
+      return normalized
+    }
     const raw = await runPS()
     const parsed = parseUiaJson(raw)
     const normalized = normalizeElements(parsed, imgW, imgH, vx, vy)
@@ -280,8 +304,59 @@ class UiaCache {
   clear(): void {this.snap = null}
 }
 
+/** 调 macOS AX 扫描（未实现/失败返回空数组，不抛异常） */
+export async function scanAxMac(): Promise<AxElement[]> {
+  try {
+    const adapter = getPlatformAdapter() as PlatformAdapter & { scanAxElements?: (cap?: number) => Promise<AxElement[]> }
+    if (typeof adapter.scanAxElements === 'function') {return await adapter.scanAxElements()}
+    return []
+  } catch (e: any) {
+    console.warn('[cuUia] macOS AX 扫描失败（降级为空树）:', e?.message || e)
+    return []
+  }
+}
+
 let _cache: UiaCache | null = null
 export function getUiaCache(): UiaCache {
   if (!_cache) {_cache = new UiaCache()}
   return _cache
+}
+
+// ═══════════════════════════════════════════════════════════
+// v0.1 macOS 分支：AX（Accessibility）元素树
+//
+// Windows UIA 的 macOS 对应技术是 AX。这里把 MacAdapter 扫到的
+// AxElement（单位 point）归一化成与 UIA 完全一致的 NormalizedUiaElement，
+// 因此 renderElementsText / desktop_element_act / 元素缓存等上层
+// **零改动**就能在 macOS 上跑。
+//
+// 坐标系：imgW/imgH 是本次截图的**像素**宽高，而 AX 矩形是**点**。
+// 归一化时先做 point→pixel 换算（macCoordinate.pointToPixel），
+// 否则在 Retina 上所有元素坐标会偏一半。
+// ═══════════════════════════════════════════════════════════
+
+/** point 坐标的 AX 元素 → 归一化坐标的 UIA 元素（纯函数，可单测） */
+export function axToNormalized(
+  els: AxElement[],
+  imgW: number, imgH: number, vx = 0, vy = 0,
+  toPixelRect?: (r: { x: number; y: number; w: number; h: number }) => { x: number; y: number; w: number; h: number },
+): NormalizedUiaElement[] {
+  const conv = toPixelRect ?? ((r: { x: number; y: number; w: number; h: number }) => r)
+  return els.map(e => {
+    // 整个矩形（含宽高）一起从 point 换到像素，避免中心点计算混用两套单位
+    const p = conv(e.rect)
+    const cx = p.x + p.w / 2 - vx
+    const cy = p.y + p.h / 2 - vy
+    return {
+      index: e.index,
+      name: e.name,
+      automationId: '',
+      type: axRoleToUiType(e.role),
+      rect: { x: p.x, y: p.y, w: p.w, h: p.h },
+      enabled: e.enabled,
+      focused: e.focused,
+      nx: imgW > 0 ? Math.max(0, Math.min(100, (cx / imgW) * 100)) : 0,
+      ny: imgH > 0 ? Math.max(0, Math.min(100, (cy / imgH) * 100)) : 0,
+    }
+  })
 }

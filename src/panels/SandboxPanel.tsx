@@ -184,7 +184,7 @@ export default function SandboxPanel() {
                       borderLeft: `3px solid ${sevColor}`,
                     }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11 }}>
-                        <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                        <span style={{ color: 'var(--text-tertiary)' }}>
                           {fmtTime(entry.at)}
                         </span>
                         <span style={{

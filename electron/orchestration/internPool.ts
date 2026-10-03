@@ -73,6 +73,8 @@ export interface Intern {
   taskCount: number
   /** 🆕 v3.0: 派生（雇佣）这个子智能体的 owner：lumina / yak / recha */
   owner: RoleId
+  /** 🆕 归属会话（由 assign 写入）。用于前端按会话过滤卡片。 */
+  sessionId?: string
 }
 
 export interface InternPoolOptions {
@@ -116,6 +118,8 @@ export interface SubagentLifecycleEvent {
   error?: string
   /** 事件时间（ms） */
   at: number
+  /** 🆕 归属会话；前端据此避免把别的会话的子智能体卡片显示出来 */
+  sessionId?: string
 }
 
 export type SubagentLifecycleListener = (ev: SubagentLifecycleEvent) => void
@@ -207,6 +211,9 @@ export class InternPool {
       status,
       owner: intern.owner,
       at: Date.now(),
+      // 未被 assign 过（刚 hire 出来还没派活）时 sessionId 可能为空，
+      // 前端需把这种当作「不属于任何会话」而不是当前会话
+      sessionId: intern.sessionId,
       ...extra,
     }
   }
@@ -296,7 +303,7 @@ export class InternPool {
    * @param subtaskId 关联的 taskBoard 子任务 ID（可选）
    * @returns 分配结果
    */
-  assign(internId: string, task: string, subtaskId?: string): boolean {
+  assign(internId: string, task: string, subtaskId?: string, sessionId?: string): boolean {
     const intern = this.interns.get(internId)
     if (!intern) {
       console.warn(`[InternPool] ❌ 找不到实习生: ${internId}`)
@@ -313,6 +320,8 @@ export class InternPool {
     intern.result = null
     intern.error = null
     intern.completedAt = null
+    // 每次 assign 都刷新归属会话：同一个实习生可能被不同会话先后复用
+    if (sessionId) {intern.sessionId = sessionId}
 
     console.log(`[InternPool:${this.owner}] 📋 ${intern.name} 领任务: ${task.slice(0, 60)}...`)
     this.emit(this.toEvent(intern, 'assigned'))

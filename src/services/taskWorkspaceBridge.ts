@@ -50,7 +50,6 @@ export function initTaskWorkspaceBridge(): void {
       })
       store.switchTask(wid)
       if (task.status === 'running') {
-        store.setPanelOpen(true)
       }
     }))
   }
@@ -91,8 +90,8 @@ export function initTaskWorkspaceBridge(): void {
             owner: ev.owner || 'lumina',
             createdAt: ev.at || Date.now(),
             internName: ev.name,
+            sessionId: ev.sessionId,
           })
-          store.setPanelOpen(true)
           break
         case 'done':
           store.upsertSubagent({
@@ -104,6 +103,7 @@ export function initTaskWorkspaceBridge(): void {
             completedAt: ev.at || Date.now(),
             result: ev.result,
             internName: ev.name,
+            sessionId: ev.sessionId,
           })
           break
         case 'error':
@@ -116,8 +116,8 @@ export function initTaskWorkspaceBridge(): void {
             completedAt: ev.at || Date.now(),
             error: ev.error,
             internName: ev.name,
+            sessionId: ev.sessionId,
           })
-          store.setPanelOpen(true)
           break
         case 'fired':
           // 用完即走：离职即从侧边栏移除
@@ -192,7 +192,6 @@ export function initTaskWorkspaceBridge(): void {
     _unsubs.push(api.onTaskError((task: any) => {
       const store = ws()
       store.setRemoteTaskStatus(task.id, 'error', `❌ ${task.error || '失败'}`)
-      store.setPanelOpen(true)
       store.addTimelineEvent({
         id: `tl-err-${task.id}-${Date.now()}`,
         taskId: `remote:${task.id}`,

@@ -36,10 +36,12 @@ describe('createAdapter 平台分派', () => {
     expect(a.capabilities.platform).toBe('win32')
   })
 
-  it('darwin → MacAdapter，UIA 关闭', () => {
+  it('darwin → MacAdapter，AX 元素树已实现', () => {
     const a = createAdapter('darwin')
     expect(a).toBeInstanceOf(MacAdapter)
-    expect(a.capabilities.uia).toBe(false)
+    // v0.1：macOS 补上 AX（Accessibility）元素树，对应 Windows UIA。
+    // 依赖辅助功能授权；未授权时降级为空树并登记 needs_permission（见 macAccessibility.ts）。
+    expect(a.capabilities.uia).toBe(true)
     expect(a.capabilities.mouse).toBe(true)
     expect(a.capabilities.keyboard).toBe(true)
     expect(a.capabilities.screenshot).toBe(true)
@@ -83,7 +85,8 @@ describe('MacAdapter capabilities', () => {
   it('含辅助功能/屏幕录制授权提示', () => {
     const c = createAdapter('darwin').capabilities
     expect(c.notes.join('；')).toMatch(/辅助功能|Accessibility|屏幕录制/)
-    expect(c.installedApps).toBe(false)
+    // v0.1：ls /Applications 枚举已实现（原为 false 但方法存在，标志与实现不一致）
+    expect(c.installedApps).toBe(true)
   })
 })
 

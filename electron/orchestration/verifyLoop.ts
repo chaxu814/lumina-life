@@ -55,6 +55,8 @@ export interface FixAttempt {
   output: string
   /** 修复委托是否成功 */
   delegateSuccess: boolean
+  /** 本轮的人类可读说明（成功 / 失败 / 提前终止） */
+  note?: string
 }
 
 /** 自动修复全景结果 */
@@ -198,17 +200,20 @@ export function runVerification(config: VerifyConfig): VerifyResult {
 
 /**
  * 根据验证错误构建自动修复任务
+ *
+ * @param moodPrefix 情绪化指令前缀（Lumina 心情不好时更短更直接），可空
  */
 export function buildFixTask(
   originalTask: string,
   verifyResult: VerifyResult,
   round: number,
   maxRounds: number,
+  moodPrefix = '',
 ): string {
   const errorBlock = verifyResult.errors.join('\n\n')
 
   return `【🔄 第 ${round}/${maxRounds} 轮自动修复 — 验证未通过】
-
+${moodPrefix}
 原始任务:
 ${originalTask}
 
@@ -224,12 +229,12 @@ ${errorBlock.slice(0, 3000)}
 2. 修复导致编译/类型/测试失败的问题
 3. 不要破坏已有的功能
 4. 只改必须改的地方，最小改动原则
+5. 修复完成后我会重新验证，${maxRounds - round} 轮修复机会
 
 【重要】
 - 这不是新任务，是修复任务
 - 不要重写整个文件
-- 修复完成后我会自动再次验证
-- 还剩 ${maxRounds - round} 轮修复机会`
+- 修复完成后我会自动再次验证`
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -241,30 +246,56 @@ export interface DelegateFnOptions {
   skipVerify?: boolean
 }
 
+/** 循环提前终止的判定结果 */
+export interface StopCheck {
+  shouldStop: boolean
+  reason?: string | null
+}
+
+/** autoFixLoop 的可选钩子（全部可注入，便于单测与情绪化策略） */
+export interface AutoFixHooks {
+  /** v02 测试用：替换真实验证执行 */
+  runVerify?: (cfg: VerifyConfig) => VerifyResult | Promise<VerifyResult>
+  /**
+   * 情绪化修复指令前缀（如 '【紧急】请立即修复…'）。由调用方按当前情绪决定，
+   * 保持 verifyLoop 不依赖情绪模块（纯函数 + 依赖注入）。
+   */
+  moodPrefix?: (round: number) => string
+  /** 外部停止条件（如 LuckyMode 的预算/轮数上限），返回 shouldStop 即终止 */
+  shouldStop?: (round: number, maxRounds: number, lastResult: VerifyResult) => StopCheck
+  /** 收敛检测：连续多轮错误模式完全相同 → 提前终止，避免烧 token */
+  isConverged?: (rounds: VerifyResult[], round: number) => boolean
+  /** 委托失败（未产出结果）时的处理；返回 true 表示跳过一次重试 */
+  onDelegateFailure?: (round: number, error: string) => boolean
+}
+
 /**
- * 自动验证 + 修复循环
+ * 自动验证 + 修复循环（唯一实现）
  *
- * @param verifyConfig - 验证配置
- * @param originalTask - 原始任务描述
- * @param delegateFn - 委托函数（由 DelegationManager 注入）
- * @param projectRoot - 项目根目录
- * @returns AutoFixResult
+ * 【为什么这里是唯一实现】
+ * 历史上 `DelegationManager._autoVerifyAfterDelegation` 曾把本函数的逻辑整段
+ * 复制内联，导致两份实现各自演化：内联版多出「情绪调节轮数」「收敛检测」
+ * 「LuckyMode 停止条件」三项能力，而本函数没有 —— 修 bug 必须改两处，
+ * 漏一处就是线上不一致。现已把全部能力收敛到本函数，调用方只负责提供钩子。
+ *
+ * 纯函数 + 依赖注入：不 import 情绪/任务/日志模块，可单测、不绑运行时。
  */
 export async function autoFixLoop(
   verifyConfig: VerifyConfig,
   originalTask: string,
   delegateFn: (fixTask: string, opts?: DelegateFnOptions) => Promise<{ success: boolean; content: string }>,
-  /** 🆕 v02: 可注入验证函数（测试用）；缺省走真实 runVerification */
-  options?: { runVerify?: (cfg: VerifyConfig) => VerifyResult | Promise<VerifyResult> },
+  hooks: AutoFixHooks = {},
 ): Promise<AutoFixResult> {
   const start = Date.now()
   const attempts: FixAttempt[] = []
   const maxRounds = verifyConfig.maxFixRounds
-  const runVerify = options?.runVerify ?? runVerification
+  const runVerify = hooks.runVerify ?? runVerification
+  const history: VerifyResult[] = []
 
   // 步骤 1：首次验证
   console.log(`[VerifyLoop] 🔍 首次验证... (${verifyConfig.commands.join(', ')})`)
   let verifyResult = await runVerify(verifyConfig)
+  history.push(verifyResult)
 
   if (verifyResult.passed) {
     console.log(`[VerifyLoop] ✅ 首次验证通过 (${verifyResult.elapsedMs}ms)`)
@@ -281,27 +312,58 @@ export async function autoFixLoop(
 
   // 步骤 2~N：修复 + 验证循环
   for (let round = 1; round <= maxRounds; round++) {
-    const fixTask = buildFixTask(originalTask, verifyResult, round, maxRounds)
+    // 外部停止条件（LuckyMode 预算等）
+    if (hooks.shouldStop) {
+      const stop = hooks.shouldStop(round, maxRounds, verifyResult)
+      if (stop.shouldStop) {
+        const why = stop.reason ?? '未说明原因'
+        console.log(`[VerifyLoop] ⏹ 提前终止: ${why}`)
+        attempts.push({ round, errorLog: '', output: '', delegateSuccess: false, note: `⏹ ${why}` })
+        return {
+          success: false,
+          content: `⏹ 修复循环提前终止: ${why}`,
+          error: verifyResult.errors.join('\n').slice(0, 5000),
+          attempts,
+          totalElapsedMs: Date.now() - start,
+        }
+      }
+    }
+
+    const fixTask = buildFixTask(
+      originalTask,
+      verifyResult,
+      round,
+      maxRounds,
+      hooks.moodPrefix ? hooks.moodPrefix(round) : '',
+    )
     console.log(`[VerifyLoop] 🔧 第 ${round}/${maxRounds} 轮修复...`)
 
-    const delegateStart = Date.now()
-    const fixResult = await delegateFn(fixTask, { skipVerify: true })
-    const delegateElapsed = Date.now() - delegateStart
+    let fixResult: { success: boolean; content: string }
+    try {
+      fixResult = await delegateFn(fixTask, { skipVerify: true })
+    } catch (err: any) {
+      const msg = err?.message || String(err)
+      attempts.push({ round, errorLog: verifyResult.errors.join('\n').slice(0, 2000), output: '', delegateSuccess: false, note: `修复委托异常: ${msg}` })
+      if (!hooks.onDelegateFailure?.(round, msg)) break
+      continue
+    }
 
-    const attempt: FixAttempt = {
+    attempts.push({
       round,
       errorLog: verifyResult.errors.join('\n').slice(0, 2000),
       output: fixResult.content.slice(0, 2000),
       delegateSuccess: fixResult.success,
-    }
-    attempts.push(attempt)
+    })
 
     // 验证修复结果
     console.log(`[VerifyLoop] 🔍 第 ${round} 轮修复后验证...`)
     verifyResult = await runVerify(verifyConfig)
+    history.push(verifyResult)
 
     if (verifyResult.passed) {
       console.log(`[VerifyLoop] ✅ 第 ${round} 轮修复后验证通过 (${verifyResult.elapsedMs}ms)`)
+      const last = attempts[attempts.length - 1]
+      if (last) last.note = `✅ 第 ${round} 轮修复后通过`
       return {
         success: true,
         content: `✅ 第 ${round} 轮修复后验证通过`,
@@ -311,11 +373,21 @@ export async function autoFixLoop(
       }
     }
 
+    // 收敛检测：错误模式无变化 → 再试也是白烧 token
+    if (hooks.isConverged?.(history, round)) {
+      console.log(`[VerifyLoop] ⏹ 错误模式无变化，提前终止修复循环`)
+      const last = attempts[attempts.length - 1]
+      if (last) last.note = '提前终止: 错误模式无变化'
+      break
+    }
+
     console.log(`[VerifyLoop] ❌ 第 ${round} 轮验证仍失败`)
   }
 
   // 超过最大轮次
   console.log(`[VerifyLoop] ❌ 修复失败，已达最大轮次 ${maxRounds}`)
+  const last = attempts[attempts.length - 1]
+  if (last && !last.note) last.note = `第 ${maxRounds} 轮后仍失败`
   return {
     success: false,
     content: `❌ 自动修复失败，经过 ${maxRounds} 轮修复后验证仍未通过`,
@@ -323,6 +395,18 @@ export async function autoFixLoop(
     attempts,
     totalElapsedMs: Date.now() - start,
   }
+}
+
+/**
+ * 默认收敛检测：连续两轮错误文本高度重合（后一轮包含前一轮的前 100 字符）
+ * 且发生在第 3 轮及以后 → 判定为无进展。
+ */
+export function defaultConvergenceCheck(history: VerifyResult[], round: number): boolean {
+  if (round < 3 || history.length < 2) return false
+  const prev = history[history.length - 2].errors
+  const cur = history[history.length - 1].errors
+  if (!prev.length || !cur.length) return false
+  return cur.every((e, i) => !!prev[i] && e.includes(prev[i].slice(0, 100)))
 }
 
 /**

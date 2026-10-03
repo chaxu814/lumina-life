@@ -46,12 +46,14 @@ function findLuminaRoot(): string {
       }
     }
   } catch {}
-  // 降级遍历驱动器
-  const drives = ['K:', 'I:', 'J:', 'H:', 'C:', 'D:', 'E:']
-  for (const drive of drives) {
-    const candidate = path.join(drive, 'LuminaLife2.0')
-    if (fs.existsSync(path.join(candidate, 'AGENTS.md'))) {return candidate}
-  }
+  // 降级：只在开发态用 cwd 兜底。
+  //
+  // 【为什么不枚举驱动器】
+  // 旧实现会遍历 K:/I:/J:/H:/C:/D:/E: 去拼 `X:\LuminaLife2.0`。
+  // 那是作者本机的安装路径，对任何陌生用户都毫无意义（他们的机器上不存在），
+  // 只会让代码审稿人一眼看出这是个人项目的遗留物。
+  // 正确做法：打包后一律用 app.getAppPath()，开发态用 process.cwd()；
+  // 真正需要指向别处时用 LUMINA_PROJECT_ROOT 环境变量（见 pathResolver）。
   return process.cwd()
 }
 
@@ -472,6 +474,46 @@ export function buildSystemPrompt(
   })
   const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   parts.push(`\n## 📅 当前日期\n${dateStr} ${timeStr}`)
+
+  // ═══════════════════════════════════════════════════════════
+  // 🧭 路由先验提示（纯规则先行 + 异步仲裁缓存）
+  //
+  // 【背景】真实的委派是 LLM 自主决策的——Lumina 读 AGENTS.md 里的委派规则，
+  //   自己决定要不要调 delegate_to。这比正则硬路由好得多（能理解上下文），
+  //   但有个真实失败模式：**模型有时会忘记委派**，或者自己硬揽本该 Yak 干的活。
+  //
+  // 【这里补什么】
+  //   不是替 LLM 做决定，而是在判断出「这活该别人干」时，往 prompt 里加一句温和提醒。
+  //   判断不出就不注入，避免干扰模型自己的判断。
+  //
+  // 【为什么用规则而不是每次都问 LLM】
+  //   路由发生在首字响应之前，**每轮多一次 LLM 调用会直接拖慢体感**。
+  //   所以顺序是：规则高置信 → 直接注入（零成本）；规则歧义 → 后台仲裁一次
+  //   （见 routingDecider.warmRouteHint，1.2s 硬超时），结果写入缓存，
+  //   本函数同步读取。拿不到缓存就退回纯规则，绝不阻塞首字响应。
+  // ═══════════════════════════════════════════════════════════
+  try {
+    const userText = options?.userInput
+    if (userText && userText.trim()) {
+      // 优先读异步仲裁缓存（含 LLM 语义判断）；没有则用纯规则兜底
+      const { peekRouteHint, classifyByRules } = require('../orchestration/routingDecider')
+      let hint = peekRouteHint(userText)
+
+      if (!hint) {
+        const verdict = classifyByRules({ text: userText })
+        if (verdict.target && verdict.target !== 'lumina' && verdict.confidence === 'high') {
+          const who = verdict.target === 'yak' ? 'Yak 💻（代码工程师）' : '热茶 🍵（审查员）'
+          hint = `这条请求命中了${verdict.reason}。` +
+            `如果需要动手，请调用 delegate_to 委派给 ${who}；` +
+            `如果你能直接高质量答完，也可以自己答。`
+        }
+      }
+
+      if (hint) {
+        parts.push(`\n## 🧭 路由提醒\n${hint}`)
+      }
+    }
+  } catch { /* 路由提示失败绝不能影响主流程 */ }
 
   // 情绪状态注入
   // 增强 — 不再是静态标注，而是带风格指引的情绪指令

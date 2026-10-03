@@ -1,5 +1,10 @@
 // ============================================================
-// panels/ModelStorePanel.tsx — 🛒 Live2D 配件商城（本地/离线模式）(v0.2 提案1)
+// panels/ModelStorePanel.tsx — 🪆 Live2D 模型库（本地/离线模式）
+//
+// 【为什么叫「Live2D 模型」而不是「配件商城」】
+// 这里管理的不是帽子/衣服一类饰品，而是**桌宠本体模型**：
+// Cubism 的 .model3.json + .moc3，以及 VRM/MMD/PNT 桌宠。
+// 叫「配件商城」会让用户以为这里能下载装扮，与实际功能不符。
 //
 // 客户端 MVP：本地模型库列表（卡片 + 预览占位）、一键热切换、从文件夹导入。
 // 未配置云端 Worker 时顶部显示「本地/离线模式」提示；导入前主进程已跑
@@ -85,6 +90,14 @@ export default function ModelStorePanel() {
 
   return (
     <div style={{ padding: '4px 2px' }}>
+      {/* 标题 */}
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+        🪆 Live2D 模型
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.6 }}>
+        切换桌宠用的本体模型。模型热加载，切换后立即生效。
+      </div>
+
       {/* 离线/云端模式提示 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
@@ -96,7 +109,7 @@ export default function ModelStorePanel() {
         <span style={{ fontSize: 16 }}>{cloud?.configured ? '☁️' : '📦'}</span>
         <span>
           {cloud?.configured
-            ? `在线商城已接入：${cloud.url}`
+            ? `已接入在线模型库：${cloud.url}`
             : (cloud?.note || '本地/离线模式：仅浏览和导入本机模型')}
         </span>
       </div>
@@ -111,7 +124,7 @@ export default function ModelStorePanel() {
           {busyId === '__import__' ? '导入中…' : '＋ 从文件夹导入模型'}
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          支持 Cubism 3/4/5（.model3.json + .moc3），导入前自动扫描恶意脚本
+          支持 Live2D Cubism 3/4/5（.model3.json + .moc3）· VRM（.vrm）· MMD · PNT 桌宠，导入前自动扫描恶意脚本
         </span>
       </div>
 

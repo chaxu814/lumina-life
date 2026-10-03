@@ -1,0 +1,46 @@
+{
+  "memories": [
+    {
+      "id": "mem_1791019505329_u5oxxw6",
+      "content": "important",
+      "type": "fact",
+      "scores": {
+        "confidence": 1,
+        "recency": 1,
+        "frequency": 0.1,
+        "corroboration": 0,
+        "importance": 0.9
+      },
+      "compositeScore": 0.735,
+      "createdAt": 1791019505329,
+      "updatedAt": 1791019505329,
+      "mentionCount": 1,
+      "sourceCount": 1,
+      "status": "confirmed"
+    },
+    {
+      "id": "mem_1791019505332_32p1ozq",
+      "content": "mid",
+      "type": "fact",
+      "scores": {
+        "confidence": 0.5,
+        "recency": 1,
+        "frequency": 0.1,
+        "corroboration": 0,
+        "importance": 0.4
+      },
+      "compositeScore": 0.435,
+      "createdAt": 1791019505332,
+      "updatedAt": 1791019505332,
+      "mentionCount": 1,
+      "sourceCount": 1,
+      "status": "pending"
+    }
+  ],
+  "config": {
+    "decayHalfLife": 7,
+    "highConfidenceThreshold": 0.6,
+    "lowConfidenceThreshold": 0.3,
+    "maxMemories": 500
+  }
+}

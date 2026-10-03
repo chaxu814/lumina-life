@@ -36,7 +36,12 @@ export function readPRD(loopDir: string): PRD | null {
   if (!fs.existsSync(prdPath)) {return null}
   try {
     return JSON.parse(fs.readFileSync(prdPath, 'utf-8'))
-  } catch {
+  } catch (e) {
+    // 与「文件不存在」区分：前者是正常（还没创建 PRD），
+    // 后者是异常（PRD 存在但解析失败）。
+    // 两者都返回 null 不会丢数据（文件还在），但会让排查者困惑——
+    // 「任务拆解凭空消失」却查不到任何错误。至少留一条日志。
+    console.warn('[mission] PRD 文件损坏，UI 将显示为空任务（文件未删除）:', e)
     return null
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../stores/appStore'
+import { persistLLMConfig, switchAndPersist } from '../../services/llmPersist'
 import { SettingSection, SettingRow, SettingRowLast, SettingBtn, SettingInput, ButtonGroup, StatusBadge } from '../../components/SettingsUI'
 import ModelPickerModal from './ModelPickerModal'
 
@@ -115,17 +116,55 @@ export default function SettingsLLM() {
       setLocalHint('检测失败：' + (e?.message || e))
     } finally { setLocalDetecting(false) }
   }
+  /**
+   * 接入本地模型（一键检测 / 手动点「使用」）
+   *
+   * 🔧 P0 修复（真实故障）
+   *   旧实现只调了 switchLLMProvider()——它仅改内存里的 Zustand store，
+   *   **从不写盘**。于是：
+   *     点「一键检测本地模型」→ 界面变了、提示「已接入」→ 重启又变回去
+   *   用户看到的是「每次打开都固定显示第一次那个模型」。
+   *
+   *   证据：lumina-providers.json 里的 IP/模型长期停留在最初一次，
+   *   而 agent-llm-configs.json 已被另一条保存路径更新——
+   *   两个配置源各说各话，UI 读前者、实际调用用后者。
+   *
+   *   现在：接入成功后立即落盘（providers.json），
+   *   并由 providerManager 同步到 agent-llm-configs.json，
+   *   让两个配置源保持一致。
+   */
   const applyLocal = async (f: any) => {
     setApplyingLocal(f.id); setNotice(null)
     try {
       const r = await window.luminaAPI?.providerApplyLocal?.({ id: f.id, baseUrl: f.baseUrl, model: f.recommendedModel })
-      if (r?.success) {
-        switchLLMProvider(r.id === 'ollama' ? 'ollama' : 'lmstudio', r.baseUrl || '', r.model || '')
-        setNotice('✅ 已接入本地模型 ' + (r.model || '') + '（无需 Key）')
-        setLlmOnline(true); setLlmChecked(true)
-      } else { setNotice('❌ 接入失败：' + (r?.error || '未知错误')) }
-    } catch (e: any) { setNotice('❌ 接入失败：' + (e?.message || e)) }
-    finally { setApplyingLocal('') }
+      if (!r?.success) {
+        setNotice('❌ 接入失败：' + (r?.error || '未知错误'))
+        return
+      }
+      const providerId = r.id === 'ollama' ? 'ollama' : 'lmstudio'
+      switchLLMProvider(providerId, r.baseUrl || '', r.model || '')
+
+      // ── 落盘（关键：不再只改内存） ──────────────────
+      // 统一走 llmPersist 单一入口，避免各处自己拼参数再次分叉。
+      // 本地模型通常无需 Key，但部分部署（如远程 LM Studio）仍需，
+      // 因此保留 store 里已有的 key，不强行清空。
+      const st = useStore.getState()
+      const saved = await persistLLMConfig(providerId, {
+        baseUrl: r.baseUrl || '',
+        apiKey: st.llmConfig.apiKey || '',
+        model: r.model || '',
+        contextWindow: st.llmConfig.contextWindow,
+      })
+      if (!saved.ok) {
+        // 落盘失败必须告知用户：否则又会出现「界面改了但重启丢失」
+        setNotice('⚠️ 已临时接入，但保存到配置失败：' + (saved.error || '未知原因') + '（重启后会失效）')
+      } else {
+        setNotice('✅ 已接入本地模型 ' + (r.model || '') + '（无需 Key，已保存）')
+      }
+      setLlmOnline(true); setLlmChecked(true)
+    } catch (e: any) {
+      setNotice('❌ 接入失败：' + (e?.message || e))
+    } finally { setApplyingLocal('') }
   }
 
   const [maxTokensDraft, setMaxTokensDraft] = useState<string | null>(null)
@@ -194,9 +233,13 @@ export default function SettingsLLM() {
     if (!provider) {return}
     setSavingProvider(true)
     try {
-      await window.luminaAPI?.providerSaveConfig?.(provider, {
-        baseUrl, apiKey: apiKey || '', model, enabled: true, timeout: 600, maxContextTokens: 256000,
-      })
+      // 🔧 修复：原来硬编码 maxContextTokens: 256000，把用户设置的上下文窗口静默丢弃。
+  // llmPersist.ts 里是正确写法（cfg.contextWindow || 256000），这里漏改。
+  const st = useStore.getState()
+  await window.luminaAPI?.providerSaveConfig?.(provider, {
+    baseUrl, apiKey: apiKey || '', model, enabled: true, timeout: 600,
+    maxContextTokens: st.llmConfig.contextWindow || 256000,
+  })
       await window.luminaAPI?.providerSetActive?.(provider)
 
       // 刷新前端缓存，避免界面仍显示旧值
@@ -351,7 +394,7 @@ export default function SettingsLLM() {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.free).map(p => (
                 <ProviderBtn key={p.id} p={p} active={llmConfig.provider === p.id}
-                  onClick={() => { switchLLMProvider(p.id, p.url, p.model); setLlmStatus('idle'); if (p.id === 'opencode-zen') {setLLMConfig({ apiKey: 'public' })} }} />
+                  onClick={() => { void switchAndPersist(useStore.getState(), p.id, p.url, p.model, p.id === 'opencode-zen' ? { apiKey: 'public' } : undefined); setLlmStatus('idle') }} />
               ))}
             </div>
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
@@ -367,7 +410,7 @@ export default function SettingsLLM() {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.id === 'lmstudio' || p.id === 'ollama').map(p => (
                 <ProviderBtn key={p.id} p={p} active={llmConfig.provider === p.id}
-                  onClick={() => { switchLLMProvider(p.id, p.url, p.model); setLlmStatus('idle') }} />
+                  onClick={() => { void switchAndPersist(useStore.getState(), p.id, p.url, p.model); setLlmStatus('idle') }} />
               ))}
               <button onClick={detectLocal} disabled={localDetecting}
                 style={{
@@ -414,7 +457,7 @@ export default function SettingsLLM() {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {LLM_PROVIDERS.filter(p => p.id !== 'lmstudio' && !p.free).map(p => (
                 <ProviderBtn key={p.id} p={p} active={llmConfig.provider === p.id}
-                  onClick={() => { switchLLMProvider(p.id, p.url, p.model); setLlmStatus('idle') }} />
+                  onClick={() => { void switchAndPersist(useStore.getState(), p.id, p.url, p.model); setLlmStatus('idle') }} />
               ))}
             </div>
           </div>

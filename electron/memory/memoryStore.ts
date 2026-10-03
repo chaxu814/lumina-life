@@ -22,6 +22,10 @@ import path from 'path'
 import fs from 'fs'
 import { getMemoryDbPath } from '../paths'
 import { isEnabled } from '../core/featureFlags'
+// 🆕 静态导入 hybridRecall：原先在 searchHybrid() 里写 require('./hybridRecall')，
+// 打包后相对路径会相对 chunk 目录解析而失效（与 systemIpc 的
+// "Cannot find module" 同一类问题）。静态 import 由 Vite 在构建期解析，最稳。
+import { hybridRecall } from './hybridRecall'
 import {
   RelationshipEventStore,
   type RelationshipEventInput,
@@ -818,8 +822,21 @@ export class MemoryStore {
          VALUES (?, ?, ?, ?)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value, metadata=excluded.metadata`
       ).run(entry.key, entry.value, JSON.stringify(entry.metadata || {}), new Date().toISOString())
-    } catch {
-      // 语义记忆表不存在时报错但不崩溃
+    } catch (e) {
+      // 🔧 P0 修复（假成功）
+      // 旧实现：catch 后**什么都不做**，不重抛。
+      // 而调用方 electron/memory/unified.ts:102 是：
+      //     try { store.addMemory(...); return { ok: true, id } } catch { ... }
+      // addMemory 永远不抛 → 那个 catch 永远进不去 →
+      // **数据库写失败时，Agent 仍被告知「记忆已保存」**。
+      //
+      // 记忆是 Lumina 的核心卖点。Agent 以为记住了、于是依赖那段记忆
+      // 推理，而实际库里没有——这是最难察觉的一类数据丢失，
+      // 而且会随对话推进变得越来越明显。
+      //
+      // 现在：记日志并重抛，让上层如实回报失败。
+      console.error('[MemoryStore] 写入语义记忆失败（已上抛，让调用方如实回报）:', e)
+      throw e
     }
   }
 
@@ -869,6 +886,26 @@ export interface SearchResult {
   entry: VectorEntry
   score: number  // 0-1 相似度分数
   snippet: string  // 匹配的文本片段
+}
+
+/**
+ * 把 RRF 分数归一到 0-1。
+ *
+ * RRF 原始分数的量级很怪：k=60、只进了一路时，rank1≈0.0164、rank20≈0.0125；
+ * 两路都进则翻倍。直接当百分比展示会永远是「1%」或「2%」，完全没法看。
+ *
+ * 这里按理论上下界线性拉伸：
+ *   min = 1/(k+perRoute)   （两路都进且刚好掉出预取窗口的最差情况）
+ *   max = 2/(k+1)          （两路都是第一名的最好情况）
+ * 超出区间的一律裁剪到 [0,1]，不抛错。
+ */
+function normalizeRrfScore(raw: number, k = 60, perRoute = 20): number {
+  const min = 1 / (k + Math.max(1, perRoute))
+  const max = 2 / (k + 1)
+  if (!Number.isFinite(raw)) return 0
+  if (max <= min) return 0
+  const norm = (raw - min) / (max - min)
+  return Math.max(0, Math.min(1, norm))
 }
 
 /**
@@ -1142,6 +1179,58 @@ export class MemoryVectorStore {
     this.vocabulary.clear()
     this.idf.clear()
     this.dirty = true
+  }
+
+  /**
+   * 🆕 混合检索：BM25 词法 + 余弦语义 → RRF 融合
+   *
+   * 【为什么要新增而不是改 search()】
+   * `search()` 是纯 TF-IDF 余弦：同一批查询下，「关键词精确命中」和
+   * 「语义相近」只能二选一。中文尤其明显——用户问「赏樱旅行」，
+   * 记忆里写的是「去看樱花」，余弦勉强能救，纯词法完全无能为力；
+   * 反过来用户搜「樱花 签证」这种含具体关键词的，余弦容易被高频泛词带偏。
+   *
+   * 保留 `search()` 不动（向后兼容 + rerank 链路不变），
+   * 新增本方法作为「语义 + 词法」双路的融合入口，由调用方按配置选用。
+   *
+   * @param query  查询文本
+   * @param topK   返回条数
+   * @param options.minCosine 余弦路最低相似度（滤噪声）
+   * @returns 与 `search()` 同构的 SearchResult[]，score 已归一到 0-1 便于沿用既有展示逻辑
+   */
+  async searchHybrid(
+    query: string,
+    topK = 5,
+    options: { minCosine?: number; perRoute?: number } = {},
+  ): Promise<SearchResult[]> {
+    if (this.entries.length === 0) { return [] }
+    if (this.dirty) { this.rebuildIndex() }
+
+    // 入参转换成 hybridRecall 认识的结构
+    const docs = this.entries.map((e, i) => ({
+      id: e.id,
+      text: e.text,
+      vector: e.vector && e.vector.length > 0 ? e.vector : undefined,
+      metadata: { ...e.metadata, __index: i },
+    }))
+
+    const hits = hybridRecall(query, docs, {
+      topK,
+      perRoute: options.perRoute ?? 20,
+      minCosine: options.minCosine ?? 0.05,
+    })
+
+    return hits.map(h => {
+      const idx = (h.metadata?.__index as number) ?? 0
+      const entry = this.entries[idx] ?? { id: h.id, text: h.text, vector: [], metadata: h.metadata }
+      return {
+        entry,
+        // RRF 分数很小（1/(k+rank) 量级），归一到 0-1 以便调用方照旧用百分比展示。
+        // 正常情况下 topK 条里分数会落在 0.016~0.033，归一后集中在 0.4~1.0。
+        score: normalizeRrfScore(h.score),
+        snippet: this.extractSnippet(entry.text, query, 80),
+      }
+    })
   }
 
   /**

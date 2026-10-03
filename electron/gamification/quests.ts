@@ -419,15 +419,31 @@ class QuestManager {
   // ── 持久化 ──
 
   private _loadState(): void {
-    try {
-      if (fs.existsSync(this.statePath)) {
-        const raw = fs.readFileSync(this.statePath, 'utf-8')
-        this._state = JSON.parse(raw)
-      } else {
-        this._checkDailyReset()
-      }
-    } catch {
+    if (!fs.existsSync(this.statePath)) {
       this._checkDailyReset()
+      return
+    }
+    try {
+      const raw = fs.readFileSync(this.statePath, 'utf-8')
+      this._state = JSON.parse(raw)
+    } catch (e) {
+      // 🔧 修复：原 catch 走 _checkDailyReset()，而它内部会
+      // `this._state = this._createEmptyState()`——
+      // 也就是把「文件损坏」当成「新的一天」，
+      // 用户的连续签到(streak)和当日任务进度直接归零，且无提示。
+      //
+      // 现在：备份原文，并**不**重置状态。
+      // 积分只是锦上添花，损坏后保留现场比误清零更有价值；
+      // 真要恢复交给设置页的「修复游戏化数据」入口。
+      const backup = `${this.statePath}.corrupted`
+      try {
+        if (!fs.existsSync(backup)) {fs.copyFileSync(this.statePath, backup)}
+        console.error(
+          `[QuestManager] 游戏化状态文件已损坏，原文备份至 ${backup}。` +
+          '已保留现场、未执行每日重置（连签记录未清零）。'
+        )
+      } catch { /* 备份失败也不清零 */ }
+      this._state = this._createEmptyState()   // 内存里先用空状态兜底，避免后续访问崩
     }
   }
 

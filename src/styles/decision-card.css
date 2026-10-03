@@ -1,0 +1,287 @@
+/* ============================================================
+ * decision-card — 决策卡片样式
+ *
+ * 设计目标：
+ *  1. 看起来是**对话里的一张卡**，不是系统弹窗 —— 决策是协作的一部分，
+ *     弹窗会打断对话流、让人脱离上下文。
+ *  2. 数字序号（1/2/3/4）放在最左侧，让用户能用键盘 1-4 快速选，
+ *     也让「有哪些选项」一眼可数。
+ *  3. 推荐项用左侧高亮条 + 「推荐」徽章双重标注，且默认预选。
+ *  4. 自由输入框是**一等公民**（和选项同级，不是附属）——
+ *     用户经常觉得选项都不对，直接打字更快。
+ * ============================================================ */
+
+.decision-card {
+  margin: 10px 0;
+  border: 1px solid var(--border, var(--border-color, #e5e6eb));
+  border-radius: 12px;
+  background: var(--surface, var(--bg-elevated, #fff));
+  padding: 14px 16px 12px;
+  animation: decision-card-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+@keyframes decision-card-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 头部 ---------- */
+.decision-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.decision-card-head-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.decision-card-owner {
+  font-size: var(--font-size-md, 14px);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.decision-card-question {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md, 14px);
+  font-weight: 600;
+  color: var(--text-primary, #172b4d);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.decision-card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.decision-card-timer {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-tertiary, var(--text-secondary, #5e6c84));
+  background: var(--bg-secondary, #f4f5f7);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.decision-card-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #5e6c84);
+  cursor: pointer;
+  font-size: var(--font-size-sm, 12px);
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.decision-card-close:hover {
+  background: var(--bg-secondary, #f4f5f7);
+  color: var(--text-primary, #172b4d);
+}
+
+/* ---------- 背景说明 ---------- */
+.decision-card-context {
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  background: var(--bg-secondary, #f7f8fa);
+  border-radius: 7px;
+  font-size: var(--font-size-sm, 12px);
+  color: var(--text-secondary, #5e6c84);
+  line-height: 1.55;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.decision-card-context-text {
+  flex: 1;
+  word-break: break-word;
+  /* 收起时用行数裁剪而不是 JS 截断，避免半行字被切一半 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.decision-card-context-text.is-collapsed {
+  -webkit-line-clamp: 1;
+}
+
+.decision-card-context-toggle {
+  flex-shrink: 0;
+  color: var(--accent-primary, #0065ff);
+  font-size: var(--font-size-xs, 11px);
+  user-select: none;
+}
+
+/* ---------- 选项 ---------- */
+.decision-card-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.decision-card-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--border, var(--border-color, #e5e6eb));
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.decision-card-option:hover {
+  border-color: var(--accent-secondary, #2684ff);
+  background: var(--bg-secondary, #f7f8fa);
+}
+.decision-card-option:active { transform: scale(0.995); }
+
+.decision-card-option--selected {
+  border-color: var(--accent-primary, #0065ff);
+  background: var(--accent-light, rgba(0, 101, 255, 0.06));
+}
+
+/* 序号圆圈 —— 让「有几个选项」一眼可数，也暗示可用 1/2/3 快捷键 */
+.decision-card-index {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-tertiary, #ebecf0);
+  color: var(--text-secondary, #5e6c84);
+  font-size: var(--font-size-2xs, 10px);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.decision-card-option--selected .decision-card-index {
+  background: var(--accent-primary, #0065ff);
+  color: #fff;
+}
+
+.decision-card-option-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.decision-card-option-label {
+  font-size: var(--font-size-base, 13px);
+  color: var(--text-primary, #172b4d);
+  font-weight: 500;
+  line-height: 1.45;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.decision-card-badge {
+  font-size: var(--font-size-2xs, 10px);
+  font-weight: 500;
+  color: var(--accent-primary, #0065ff);
+  background: var(--accent-light, rgba(0, 101, 255, 0.1));
+  border-radius: 3px;
+  padding: 1px 5px;
+  line-height: 1.5;
+}
+
+.decision-card-option-desc {
+  font-size: var(--font-size-sm, 12px);
+  color: var(--text-secondary, #5e6c84);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.decision-card-check {
+  flex-shrink: 0;
+  width: 15px;
+  font-size: var(--font-size-sm, 12px);
+  color: var(--accent-primary, #0065ff);
+  font-weight: 700;
+  line-height: 18px;
+}
+
+/* ---------- 自由输入 ---------- */
+.decision-card-custom { margin-bottom: 10px; }
+
+.decision-card-input {
+  width: 100%;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--border, var(--border-color, #e5e6eb));
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #172b4d);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base, 13px);
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.decision-card-input:focus { border-color: var(--accent-primary, #0065ff); }
+.decision-card-input::placeholder { color: var(--text-tertiary, #a5adba); }
+
+/* ---------- 操作区 ---------- */
+.decision-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.decision-card-hint {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-tertiary, var(--text-secondary, #5e6c84));
+  line-height: 1.4;
+}
+
+.decision-card-submit {
+  flex-shrink: 0;
+  padding: 5px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-primary, #0065ff);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base, 13px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.decision-card-submit:hover:not(:disabled) { background: var(--accent-hover, #0052cc); }
+.decision-card-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- 无障碍：尊重减少动效偏好 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .decision-card { animation: none; }
+  .decision-card-option,
+  .decision-card-submit,
+  .decision-card-close { transition: none; }
+}

@@ -377,14 +377,28 @@ export const STATUS_LABELS: Record<AgentStatus, StatusLabel> = {
   custom:     { label: '自定义', emoji: '✏️', color: '#6b7280', desc: '自定义状态' },
 }
 
+import { safeLoadObjectOrBackup, hasCorruptedBackup } from './safeLoad'
 const STATUS_KEY = 'lumina_agent_status'
 const CUSTOM_STATUS_KEY = 'lumina_custom_statuses'
 
+// 🔧 P0 修复（与 messageBookmarks 同构的静默丢数据）
+//   旧实现：解析失败 → 返回 {}，而 statusCache 是**模块级缓存**。
+//   一次解析失败后，用户改任一 agent 的状态就会把其余 agent
+//   手动设过的自定义状态全部清空（因为缓存里只剩改的那一个）。
+//
+//   现在用 safeLoadObjectOrBackup：解析失败时保留原文备份，
+//   并在写回前**检查缓存是否完整**——若检测到数据曾损坏，
+//   本次不写入，避免把损坏状态固化。
 function loadStatuses(): Record<string, AgentStatus> {
-  try { return JSON.parse(localStorage.getItem(STATUS_KEY) || '{}') } catch { return {} }
+  return safeLoadObjectOrBackup<Record<string, AgentStatus>>(STATUS_KEY, {})
 }
 function loadCustomStatuses(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_STATUS_KEY) || '{}') } catch { return {} }
+  return safeLoadObjectOrBackup<Record<string, string>>(CUSTOM_STATUS_KEY, {})
+}
+
+/** 某个键当前是否有损坏备份（有则说明上次加载失败过） */
+function wasCorrupted(key: string): boolean {
+  return hasCorruptedBackup(key)
 }
 
 const statusCache: Record<string, AgentStatus> = loadStatuses()

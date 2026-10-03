@@ -161,12 +161,15 @@ function buildSummary(items: CollectedItem[]): string {
 // ═══════════════════════════════════════════════════════════
 
 function getCollectedDir(): string {
+  // 依次尝试：环境变量指定 → 工作目录 → 用户目录。
+  // 旧实现里还有 'J:\\LuminaLife2.0\\collected' / 'I:\\...' 这两条硬编码盘符，
+  // 那是作者当时的本机路径，对其他用户毫无意义，已移除。
+  const home = require('os').homedir()
   const candidates = [
+    process.env.LUMINA_COLLECTED_DIR || '',
     path.join(process.cwd(), 'collected'),
-    'J:\\LuminaLife2.0\\collected',
-    'I:\\LuminaLife2.0\\collected',
-    path.join(require('os').homedir(), 'Lumina', 'collected'),
-  ]
+    path.join(home, 'Lumina', 'collected'),
+  ].filter(Boolean)
   for (const dir of candidates) {
     try {
       if (fs.existsSync(path.dirname(dir))) {

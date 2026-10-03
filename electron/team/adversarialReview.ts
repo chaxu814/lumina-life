@@ -14,6 +14,7 @@
 
 import { getDelegationManager } from '../delegationManager'
 import { hireAndRun } from './dynamicWorker'
+import { reviewTonePrompt } from './relationshipDrama'
 
 export type Verdict = 'pass' | 'fail' | 'uncertain'
 export type Severity = 'high' | 'medium' | 'low' | 'none'
@@ -110,12 +111,12 @@ function parseVote(perspective: ReviewPerspective, text: string, ok: boolean): S
   }
 }
 
-function skepticTask(p: ReviewPerspective, target: string): string {
+function skepticTask(p: ReviewPerspective, target: string, tone = ''): string {
   return `你是对抗式评审团的「${p.name}」。请带着以下预设去挑刺：
 
 【怀疑视角】
 ${p.lens}
-
+${tone ? `\n【语气约定】\n${tone}\n` : ''}
 【待评审内容】
 ${target}
 
@@ -154,6 +155,12 @@ export async function runAdversarialReview(
   const dm = getDelegationManager()
   const rechaReady = dm.isConfigured('recha')
 
+  // 亲密度 → 审查语气（README「亲密度影响审查语气」的实际接线点）
+  // 以前 reviewTonePrompt() 写好了却没人调用，属于“文档吹了、代码没接”。
+  // 审查员拿到的是真实 LLM 提示词，所以语气约定放在这里才真正生效。
+  let tone = ''
+  try { tone = reviewTonePrompt() } catch { /* 关系库未就绪则不加语气约定 */ }
+
   let votes: SkepticVote[] = []
 
   if (rechaReady) {
@@ -161,7 +168,7 @@ export async function runAdversarialReview(
     const delegations = perspectives.map(p =>
       dm.delegate('lumina', {
         to: 'recha' as any,
-        task: skepticTask(p, target),
+        task: skepticTask(p, target, tone),
         taskType: 'risk_assess' as any,
         context: `对抗式评审视角：${p.name}`,
         timeout,
@@ -174,7 +181,7 @@ export async function runAdversarialReview(
     const jobs = perspectives.map(p => ({
       role: 'review' as const,
       title: p.name,
-      task: skepticTask(p, target),
+      task: skepticTask(p, target, tone),
       timeoutMs: timeout,
     }))
     const results = await hireAndRun(jobs)

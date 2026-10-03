@@ -272,12 +272,13 @@ export function SettingInput({
       style={{
         padding: '6px 10px',
         borderRadius: 6,
-        fontSize: 11,
+        fontSize: 'var(--font-size-xs)',
         border: '1.5px solid var(--border-light)',
         outline: 'none',
         background: 'var(--surface-0)',
         color: 'var(--text-primary)',
-        fontFamily: monospace ? 'monospace' : '"Microsoft YaHei", "微软雅黑", sans-serif',
+        // 仅代码/路径类输入用等宽，其余一律微软雅黑
+        fontFamily: monospace ? 'var(--font-mono)' : 'var(--font-sans)',
         boxSizing: 'border-box',
         width: '100%',
         transition: 'border-color 0.15s',

@@ -6,9 +6,10 @@
 //   2. 选择任务类型后，展示可选的执行者（团队成员）
 //   3. 支持"自动分配"和"手动指定"两种模式
 //   4. 确认派发后，将任务发送到群聊并路由给指定 Agent
+//   5. 挂载/卸载带 opacity + translateY 淡入淡出（CSS animation，见 app.css）
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   TASK_TYPE_CARDS,
   TEAM_MEMBERS,
@@ -26,6 +27,31 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
   const [selectedType, setSelectedType] = useState<TaskType | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<string>('auto')
   const [customPrompt, setCustomPrompt] = useState('')
+  // 卸载由父组件控制，所以关闭时先播 exit 动画，结束后才真正通知父组件卸载
+  const [exiting, setExiting] = useState(false)
+  const closedRef = useRef(false)
+
+  const requestClose = useCallback(() => { setExiting(true) }, [])
+
+  const finishClose = useCallback(() => {
+    if (closedRef.current) { return }
+    closedRef.current = true
+    onClose()
+  }, [onClose])
+
+  // 兜底：动画被 prefers-reduced-motion 关掉、或某些环境不派发 animationend 时仍能关闭
+  useEffect(() => {
+    if (!exiting) { return }
+    const t = setTimeout(finishClose, 320)
+    return () => clearTimeout(t)
+  }, [exiting, finishClose])
+
+  const handleOverlayAnimEnd = (e: React.AnimationEvent<HTMLDivElement>) => {
+    // 只在退场时才关闭：入场动画结束同样会派发 animationend，否则弹窗会被打开后立刻关掉
+    if (!exiting) { return }
+    if (e.target !== e.currentTarget) { return } // 只认遮罩层自己的动画，忽略卡片冒泡上来的
+    finishClose()
+  }
 
   const selectedCard = selectedType ? TASK_TYPE_CARDS.find(c => c.id === selectedType) : null
   const recommendedAgent = selectedType ? TEAM_MEMBERS.find(m => m.id === getRecommendedAgent(selectedType)) : null
@@ -40,11 +66,13 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
     const prompt = customPrompt || selectedCard?.quickPrompts[0] || ''
 
     onDispatch(selectedType, agentId, prompt)
-    onClose()
+    requestClose()
   }
 
   return (
     <div
+      className={`task-dispatcher-overlay${exiting ? ' is-exiting' : ''}`}
+      onAnimationEnd={handleOverlayAnimEnd}
       style={{
         position: 'fixed',
         top: 0, left: 0, right: 0, bottom: 0,
@@ -54,9 +82,9 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
         justifyContent: 'center',
         zIndex: 9999,
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) {onClose()} }}
+      onClick={(e) => { if (e.target === e.currentTarget) {requestClose()} }}
     >
-      <div style={{
+      <div className="task-dispatcher-card" style={{
         background: 'white',
         borderRadius: 14,
         padding: 18,
@@ -68,11 +96,11 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
         {/* ═══ 标题栏 ═══ */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16 }}>📋 任务派发中心</h3>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>选择任务类型 → 选择执行者 → 一键派发</div>
+            <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)' }}>📋 任务派发中心</h3>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginTop: 2 }}>选择任务类型 → 选择执行者 → 一键派发</div>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               width: 28, height: 28, borderRadius: 6,
               border: 'none', background: 'var(--surface-200)',
@@ -86,7 +114,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
 
         {/* ═══ 步骤1：选择任务类型 ═══ */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
             ① 选择任务类型
           </div>
           {/* 两行布局：上4下3，居中对齐 */}
@@ -114,10 +142,10 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
                     }}
                   >
                     <div style={{ fontSize: 22 }}>{card.icon}</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, color: selectedType === card.id ? card.color : 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 'var(--font-size-base)', fontWeight: 600, marginTop: 4, color: selectedType === card.id ? card.color : 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                       {card.name}
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2, whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-secondary)', marginTop: 2, whiteSpace: 'nowrap' }}>
                       {card.desc.split('、')[0]}
                     </div>
                   </div>
@@ -130,7 +158,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
         {/* ═══ 步骤2：选择执行者（选择任务类型后显示） ═══ */}
         {selectedType && selectedCard && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+            <div style={{ fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
               ② 选择执行者
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -145,7 +173,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
                     : '2px solid #F0ECF9',
                   background: selectedAgent === 'auto' ? '#7c5cfc15' : '#FAFAFF',
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-sm)',
                   fontWeight: selectedAgent === 'auto' ? 600 : 400,
                   color: selectedAgent === 'auto' ? 'var(--accent, #7c5cfc)' : 'var(--text-primary)',
                   display: 'flex',
@@ -172,7 +200,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
                       ? `linear-gradient(135deg, ${member.color}08 0%, ${member.color}15 100%)`
                       : '#FAFAFF',
                     cursor: 'pointer',
-                    fontSize: 12,
+                    fontSize: 'var(--font-size-sm)',
                     fontWeight: selectedAgent === member.id ? 600 : 400,
                     color: selectedAgent === member.id ? member.color : 'var(--text-primary)',
                     display: 'flex',
@@ -189,7 +217,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
             {/* 推荐说明 */}
             {selectedAgent === 'auto' && recommendedAgent && (
               <div style={{
-                fontSize: 11, color: 'var(--text-secondary)', marginTop: 8,
+                fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginTop: 8,
                 padding: '7px 12px',
                 background: '#FAFAFF',
                 borderRadius: 8,
@@ -207,8 +235,8 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
         {/* ═══ 步骤3：自定义任务描述（可选） ═══ */}
         {selectedType && selectedCard && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-              ③ 任务描述 <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>（可选）</span>
+            <div style={{ fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+              ③ 任务描述 <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', fontWeight: 400 }}>（可选）</span>
             </div>
             <textarea
               value={customPrompt}
@@ -222,7 +250,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
                 border: '1.5px solid #F0ECF9',
                 background: '#FAFAFF',
                 resize: 'none',
-                fontSize: 13,
+                fontSize: 'var(--font-size-base)',
                 fontFamily: 'inherit',
                 boxSizing: 'border-box',
                 outline: 'none',
@@ -241,7 +269,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
                     borderRadius: 14,
                     background: customPrompt === prompt ? `${selectedCard.color}15` : '#F0ECF9',
                     border: customPrompt === prompt ? `1.5px solid ${selectedCard.color}40` : '1.5px solid transparent',
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     cursor: 'pointer',
                     color: customPrompt === prompt ? selectedCard.color : 'var(--text-secondary)',
                     transition: 'all 0.15s',
@@ -267,7 +295,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
               ? 'linear-gradient(135deg, #7c5cfc 0%, #a78bfa 100%)'
               : 'var(--border-light)',
             color: selectedType ? 'white' : 'var(--text-secondary)',
-            fontSize: 15,
+            fontSize: 'var(--font-size-lg)',
             fontWeight: 600,
             cursor: selectedType ? 'pointer' : 'not-allowed',
             transition: 'all 0.2s',

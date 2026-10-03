@@ -325,11 +325,21 @@ export function cleanTtsText(text: string): string {
   return cleaned
 }
 
-export function formatTime(ts: number): string {
-  const d = new Date(ts); const M = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0'); const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
-  return `${M}-${day} ${h}:${m}`
+/** 会话/消息时间戳 —— 只显示日期，不显示时分。
+ *  今天 → 「今天」；昨天 → 「昨天」；本年 → 「MM-DD」；跨年 → 「YYYY-MM-DD」。
+ *  仅用于展示；排序请直接用 createdAt / timestamp 原始值，不要依赖格式化文本。 */
+export function formatDateLabel(ts: number): string {
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) {return ''}
+  const now = new Date()
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86400000)
+  if (dayDiff === 0) {return '今天'}
+  if (dayDiff === 1) {return '昨天'}
+  const M = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  if (d.getFullYear() === now.getFullYear()) {return `${M}-${day}`}
+  return `${d.getFullYear()}-${M}-${day}`
 }
 
 export function getConvPreview(messages: Array<{ role: string; content: string }>): string {

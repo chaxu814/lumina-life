@@ -1,0 +1,28 @@
+{
+  "memories": [
+    {
+      "id": "mem_1790964382014_jj2q40c",
+      "content": "adjustable",
+      "type": "fact",
+      "scores": {
+        "confidence": 0.7,
+        "recency": 1,
+        "frequency": 0.1,
+        "corroboration": 0,
+        "importance": 0.3
+      },
+      "compositeScore": 0.46499999999999997,
+      "createdAt": 1790964382014,
+      "updatedAt": 1790964382014,
+      "mentionCount": 1,
+      "sourceCount": 1,
+      "status": "pending"
+    }
+  ],
+  "config": {
+    "decayHalfLife": 7,
+    "highConfidenceThreshold": 0.6,
+    "lowConfidenceThreshold": 0.3,
+    "maxMemories": 500
+  }
+}

@@ -7,10 +7,19 @@
 // 必须在最顶部加载环境变量，否则 process.env 不生效
 import 'dotenv/config'
 
+// 🛡️ 全局异常兜底 —— 必须在任何异步任务启动之前安装。
+// 项目里有 338 处 `try { void asyncFn() } catch {}` 这类写法，
+// 它们的 try/catch 抓不到 Promise reject；而 Electron 主进程
+// 遇到 unhandledRejection 的默认行为是**直接终止进程**。
+// 这里装上兜底后，单个 reject 只会记日志而不会让应用消失。
+installCrashGuard()
+
 import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification, dialog } from 'electron'
+import { installCrashGuard } from './crashGuard'
 import { join } from 'path'
 import { getAppIconPath, getTrayIcon } from './appIcon'
 import { createTrayMenu, showTrayMenu, refreshTrayMenuState } from './tray/trayMenu'
+import { applyTrayIconConventions, applyMacDock, resolveDockMode } from './tray/macDock'
 import { applyGameEnabledOverride, persistGameEnabled, getGameEnabled } from './tray/trayPrefs'
 import {
   showBrowserWindow, closeBrowser, isBrowserOpen, registerBrowserIpc,
@@ -239,6 +248,12 @@ function createWindow(): BrowserWindow {
 // ==================??
 function createTray(): void {
   const trayIcon = getTrayIcon()
+  // macOS：菜单栏图标需为 template image（随深/浅色菜单栏自动反色），
+  // 否则深色模式下图标几乎不可见。非 darwin 平台原样返回，行为不变。
+  applyTrayIconConventions(trayIcon, process.platform)
+  // macOS Dock：默认保留 Dock 图标（保留 Cmd+Q 等常规交互），
+  // 仅在 LUMINA_MAC_HIDE_DOCK=1 时隐藏为纯菜单栏应用。
+  applyMacDock(app, trayIcon, resolveDockMode(process.env.LUMINA_MAC_HIDE_DOCK), process.platform)
   tray = new Tray(trayIcon.isEmpty() ? nativeImage.createEmpty() : trayIcon)
 
   tray.setToolTip('Lumina Life 1.0')

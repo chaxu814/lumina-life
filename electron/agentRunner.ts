@@ -16,9 +16,12 @@ import {
   getToolsetTools, toOpenAIFunctions, resolveToolset, getToolDef,
   executeTool, executeToolWithRetry, executeToolsParallel,
   groupParallelBatches,
+  getToolNames,
 } from './tools/registry'
 import { registerAllTools } from './tools/index'
 import { isToolAllowedForRole } from './rolePolicy'
+import { parseXmlToolCalls as parseXmlToolCallsShared } from './llm/xmlToolCall'
+import { applyEmotionGate, renderGateNotice } from './orchestration/emotionGating'
 import { enterAgentContext } from './tools/agentRunContext'
 import { getMemoryStore } from './memory/memoryStore'
 import { getAgentChatsManager } from './agentChatsManager'
@@ -35,6 +38,20 @@ import { ApprovalDecision } from './approvalTypes'
 import { getSessionManager } from './sessionManager'
 import { TokenEstimator } from './tokenEstimator'
 import { needsCompaction, compactMessages } from './agentCompactor'
+
+/**
+ * 🧭 路由仲裁系统提示（只给「歧义任务」用）
+ *
+ * 纯正则路由对无代码关键词的请求必然失手（「这玩意跑起来就崩，帮我看看」），
+ * 这种时候才花一次 token 让模型判一下该不该派活。输出必须极短（16 token 上限），
+ * 答不出就静默退回纯规则，绝不阻塞首字响应。
+ */
+const ROUTE_ARBITER_SYSTEM = `你是任务路由器。只回答一个词，不要解释。
+规则：
+- lumina：闲聊、情感、查资料、写邮件、做计划、整理笔记、翻译、查天气 —— Lumina 自己能高质量答完
+- yak：需要真正动手写/改代码、调试、重构、跑命令、装环境 —— 派给代码工程师
+- recha：需要自我否定、挑逻辑漏洞、风险评估、方案对比 —— 派给审查员
+用户请求：`
 // Hook 系统
 import { getHookManager } from './hooks/hookManager'
 import type { HookContext, BeforeReasoningInput } from './hooks/types'
@@ -232,102 +249,17 @@ export function describeRunFailure(raw?: string): string {
 
 // ═══════════════════════════════════════════════════════════
 // XML 格式 Tool Call 解析器
-// 某些 LLM 提供商返回 <tool_call> XML 而非标准 OpenAI function calling
-// 例如: <tool_call><function=browser><parameter=action>snapshot</parameter></function></tool_call>
-// 新增 <tool_name> + <tool_args> JSON 格式支持
-//   例如: <tool_call><tool_name>web_search</tool_name><tool_args>{"query":"..."}</tool_args></tool_call>
-// ═══════════════════════════════════════════════════════════
-
-export function parseXmlToolCalls(text: string): LLMToolCall[] | null {
-  if (!text) {return null}
-
-  const calls: LLMToolCall[] = []
-
-  // ── 格式 A: <tool_call><function=name>...</function></tool_call> ──
-  const toolCallRegex = /<tool_call>\s*<function=(\w+)>(.*?)<\/function>\s*<\/tool_call>/gs
-
-  let match: RegExpExecArray | null
-  while ((match = toolCallRegex.exec(text)) !== null) {
-    const fnName = match[1]
-    const paramsStr = match[2]
-
-    // 解析 <parameter=key>value</parameter>
-    const args: Record<string, any> = {}
-    const paramRegex = /<parameter=(\w+)>(.*?)<\/parameter>/gs
-    let pm: RegExpExecArray | null
-    while ((pm = paramRegex.exec(paramsStr)) !== null) {
-      args[pm[1]] = pm[2].trim()
-    }
-
-    calls.push({
-      id: `call_xml_${Date.now()}_${calls.length}`,
-      type: 'function',
-      function: {
-        name: fnName,
-        arguments: JSON.stringify(args),
-      },
-    })
-  }
-
-  // ── 格式 B: <tool_call><tool_name>name</tool_name><tool_args>JSON</tool_args></tool_call> ──
-  // 支持 LLM 输出 JSON 格式参数（如 date_range: "last_week"）
-  const jsonArgsRegex = /<tool_call>\s*<tool_name>(\w+)<\/tool_name>\s*<tool_args>(.*?)<\/tool_args>\s*<\/tool_call>/gs
-  while ((match = jsonArgsRegex.exec(text)) !== null) {
-    const fnName = match[1]
-    const rawArgs = match[2].trim()
-    let args: Record<string, any> = {}
-    try {
-      args = JSON.parse(rawArgs)
-    } catch {
-      // JSON 解析失败 → 尝试 key="value" 格式兜底
-      const fallbackRegex = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g
-      let fm: RegExpExecArray | null
-      while ((fm = fallbackRegex.exec(rawArgs)) !== null) {
-        args[fm[1]] = fm[2] ?? fm[3] ?? fm[4] ?? ''
-      }
-    }
-    if (Object.keys(args).length > 0) {
-      calls.push({
-        id: `call_json_${Date.now()}_${calls.length}`,
-        type: 'function',
-        function: {
-          name: fnName,
-          arguments: JSON.stringify(args),
-        },
-      })
-    }
-  }
-
-  // 额外支持括号参数风格 <web_search(query="xxx", engine="yyy")>
-  //   某些 LLM 输出这种格式（没有 <tool_call> 外层包裹）
-  //   正则: <(\w+)\(([^)]*)\)>  匹配 <web_search(query="...", engine="...")>
-  const bracketRegex = /<(\w+)\s*\(([^)]*)\)\s*>/gi
-  while ((match = bracketRegex.exec(text)) !== null) {
-    const fnName = match[1]
-    const paramsBlock = match[2]
-
-    // 解析 key="value" 或 key=value 格式的参数
-    const args: Record<string, any> = {}
-    const paramRegex = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g
-    let pm: RegExpExecArray | null
-    while ((pm = paramRegex.exec(paramsBlock)) !== null) {
-      args[pm[1]] = pm[2] ?? pm[3] ?? pm[4] ?? ''
-    }
-    delete args.search_depth
-
-    if (Object.keys(args).length > 0) {
-      calls.push({
-        id: `call_bracket_${Date.now()}_${calls.length}`,
-        type: 'function',
-        function: {
-          name: fnName,
-          arguments: JSON.stringify(args),
-        },
-      })
-    }
-  }
-
-  return calls.length > 0 ? calls : null
+//
+// ⚠️ 本函数已委托给 llm/xmlToolCall.ts（唯一事实源）。
+// 历史上本文件有一份独立实现，只认 3 种格式，而 reactEngine 那份认 7 种。
+// 两边不一致的直接后果：模型输出了本文件认不出的格式 → 解析返回 null
+//   → XML 被删干净 → 回复凭空变空 → 用户看到「暂时无法生成有效回复」。
+// 现在统一到一处，agentRunner 与 reactEngine 认得一样多。
+//
+// 保留本函数名是为了不破坏既有调用点与测试。
+export function parseXmlToolCalls(text: string, knownTools?: Set<string>): LLMToolCall[] | null {
+  const r = parseXmlToolCallsShared(text, knownTools)
+  return r.calls.length > 0 ? r.calls : null
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1377,6 +1309,43 @@ private summarizer: ConversationSummarizer | null = null
       }
     } catch { /* ignore */ }
 
+    // 🧭 路由预热（fire-and-forget，**不阻塞**）
+    //   真实委派由 LLM 自主决定，但模型有时会忘记委派、自己硬揽本该 Yak 干的活。
+    //   纯正则路由对「这玩意跑起来就崩，帮我看看」这类无代码关键词的歧义请求必然失手，
+    //   所以这里对**歧义任务**提前起一次后台仲裁（1.2s 硬超时），结果写进缓存，
+    //   随后的 initSystemPrompt() 同步读取。规则能直接定的不调 LLM，零成本。
+    //   仲裁失败/超时一律静默退回纯规则，绝不影响首字响应。
+    if (this.config.personaId === 'lumina' && text && text.trim()) {
+      try {
+        const { warmRouteHint } = require('./orchestration/routingDecider')
+        const arbiter = async (q: string): Promise<string | null> => {
+          // 独立 provider 实例：绝不复用 this._llmProvider（它会改写 this.messages）
+          try {
+            const { LLMProvider } = require('./core/llmProvider')
+            const p = new LLMProvider({
+              baseUrl: this.config.baseUrl || '',
+              apiKey: this.config.apiKey || '',
+              model: this.config.model || '',
+              maxContextTokens: 4_096,
+              personaId: this.config.personaId,
+            })
+            const r: any = await p.call({
+              messages: [
+                { role: 'system', content: ROUTE_ARBITER_SYSTEM },
+                { role: 'user', content: q },
+              ],
+              maxTokens: 16,
+              temperature: 0,
+            })
+            const raw = String(r?.text || r?.content || '').trim()
+            const m = /lumina|yak|recha/i.exec(raw)
+            return m ? m[0].toLowerCase() : null
+          } catch { return null }
+        }
+        warmRouteHint(text, undefined, { llmClassify: arbiter })
+      } catch { /* 路由预热失败绝不影响主流程 */ }
+    }
+
     // 🔧 FIX-1: 确保 system prompt（人格+指令+工具说明）始终在消息最开头
     //   必须在 PreSearch 之前执行，否则 PreSearch 插入的 system 消息会
     //   让后续的 initSystemPrompt() 条件判断跳过执行
@@ -1707,6 +1676,22 @@ private summarizer: ConversationSummarizer | null = null
     //   统一后：只走 agentRunner.runReActLoop()，所有修复逻辑集中维护
     {
       const { tools, toolsetName } = this.getToolsForMode()
+
+      // 🆕 情绪门控说明注入（创新功能 1）
+      //   时序很关键：getToolsForMode() 刚跑完，_emotionGateNotice 才有值；
+      //   紧接着 initSystemPrompt() 会被 runReActLoop 内部再调一次，
+      //   那里也会带上最新一轮的 notice。
+      if (this._emotionGateNotice) {
+        this.initSystemPrompt()
+        const sysIdx = this.messages.findIndex(m => m.role === 'system')
+        if (sysIdx >= 0) {
+          this.messages[sysIdx] = {
+            ...this.messages[sysIdx],
+            content: (this.messages[sysIdx].content || '') + '\n\n' + this._emotionGateNotice,
+          }
+        }
+      }
+
       const openaiTools = tools
         .map(t => toOpenAIFunctions([getToolDef(t)!]))
         .flat()
@@ -1787,8 +1772,26 @@ private summarizer: ConversationSummarizer | null = null
         console.warn('[AgentRunner] 全路径恢复失败:', err)
       }
       // 最终兜底：可操作提示
+      //
+      // 🔧 文案重写（真实故障反馈）
+      //   旧文案：「请试试说"继续"让我重新尝试，或检查 LLM 服务是否正常运行。」
+      //   问题：它把用户引向错误的方向——「检查 LLM 服务」暗示 API 挂了，
+      //   用户会去折腾 baseUrl / API Key / 网络，而实际根因往往是
+      //   模型这轮输出没被正确解析（见 llm/xmlToolCall.ts）。
+      //   误导性报错比没有报错更糟糕。
+      //
+      //   新文案原则：
+      //   ① 说清楚是「我这边没能生成」而不是「你的服务坏了」
+      //   ② 给一个真正有用的下一步（重说一次 / 换个说法 / 换模型）
+      //   ③ 带一句可排查的线索，��便用户反馈时能提供
       if (!result || result.trim().length === 0) {
-        result = '抱歉，我暂时无法生成有效回复。请试试说"继续"让我重新尝试，或检查 LLM 服务是否正常运行。'
+        result = '这轮我没能给出有效回复（模型返回了无法识别的内容，不一定是你的问题）。\n' +
+          '可以试试：① 让我再说一次；② 换个说法或补充点上下文；③ 如果反复出现，换一个模型试试。'
+        console.error(
+          '[AgentRunner] ❌ 全部恢复路径失败。诊断信息：' +
+          `mode=${this.config.mode} model=${this.config.model || 'n/a'} ` +
+          `messages=${this.messages.length} roundLimit=${this.config.maxToolCalls ?? 30}`,
+        )
       }
     }
 
@@ -3148,16 +3151,45 @@ private summarizer: ConversationSummarizer | null = null
       if (streamText) {this.messages.push({ role: 'assistant', content: streamText })}
       return { toolCalls: streamToolCalls, text: streamText || undefined, usage: streamUsage, earlyResults: earlyResultsObj }
     }
-    const parsedXml = parseXmlToolCalls(streamText)
-    if (parsedXml?.length) {
+    // ══════════════════════════════════════════════════════
+    // XML 工具调用（统一走 llm/xmlToolCall 单一事实源）
+    // ══════════════════════════════════════════════════════
+    // 白名单用已注册的完整工具名：防止 <b>、<br> 这类 HTML 标签被误当成工具。
+    const xmlResult = parseXmlToolCallsShared(streamText, getToolNames())
+
+    if (xmlResult.calls.length > 0) {
       if (tools.length === 0) {
-        const cleanText = streamText
-          .replace(/<tool_call>[\s\S]*?<\/tool_call>/gs, '')
-          .replace(/<\w+\s*\([^)]*\)\s*>/gi, '')
-          .trim()
-        return { text: cleanText || streamText, usage: streamUsage, earlyResults: earlyResultsObj }
+        // 🔧 P0 修复（真实故障）
+        //   旧实现：剥掉 XML → cleanText 为空 → `cleanText || streamText`
+        //   仍然把整段 XML 当成回复返回 → 上游 cleanToolNoiseText 再删一遍
+        //   → finalText 变空串 → 连续空回复 → 用户看到「暂时无法生成有效回复」。
+        //
+        //   触发条件：chat 纯对话模式，或情绪门控把工具收紧到 0。
+        //   模型此时仍然输出了工具调用，是合理的（它不知道没工具可用）。
+        //
+        //   现在：保留正文 + 追加一句诚实的说明，让用户知道发生了什么。
+        //   **绝不能返回空串** —— 内容凭空消失是最糟的失败方式。
+        const leftover = xmlResult.text.trim()
+        const hint = leftover
+          ? `${leftover}\n\n（本轮没有可用的工具，所以这个操作暂时没法执行。你可以换个说法，或到设置里检查工具是否被关闭了。）`
+          : '（我本来想调用一个工具，但这轮没有可用的工具，所以没能执行。你可以换个说法，或到设置里检查工具是否被关闭了。）'
+        console.warn(
+          `[AgentRunner] ⚠️ 模型输出了 XML 工具调用，但本轮可用工具数为 0（已保留内容不丢弃）。` +
+          `parsed=${xmlResult.calls.length} diag=${xmlResult.diagnostic || 'n/a'}`,
+        )
+        return { text: hint, usage: streamUsage, earlyResults: earlyResultsObj }
       }
-      return { toolCalls: parsedXml, usage: streamUsage, earlyResults: earlyResultsObj }
+      return { toolCalls: xmlResult.calls, text: xmlResult.text || undefined, usage: streamUsage, earlyResults: earlyResultsObj }
+    }
+
+    // 🔧 P0 修复：解析不出工具调用时，**原文一字不改**地返回。
+    //   只有在模型确实表达了调用意图时才记一条警告——
+    //   普通的 Markdown / HTML 回答不应该被误判为「解析失败」。
+    if (xmlResult.hadToolCallIntent) {
+      console.warn(
+        `[AgentRunner] ⚠️ 检测到工具调用意图但未能解析（保留原文，不丢弃内容）。` +
+        `diag=${xmlResult.diagnostic}`,
+      )
     }
     return { text: streamText, usage: streamUsage, earlyResults: earlyResultsObj }
 
@@ -3256,14 +3288,42 @@ private summarizer: ConversationSummarizer | null = null
       tools = tools.filter(t => !disabledSet.has(t))
     }
 
+    // 每轮重置：上一轮的收紧说明不能泄漏到下一轮
+    this._emotionGateNotice = ''
+
     // 角色硬闸门（广告层）：在 disabledTools 之上，再按 rolePolicy 过滤一遍，
     // 确保向 LLM 广告的工具都在当前角色白名单内。
     // personaId 缺省按 lumina（全放行）处理，不影响 Lumina 主聊天。
     const personaId = this.config.personaId
     tools = tools.filter(t => isToolAllowedForRole(personaId, t).allowed)
 
+    // 🆕 情绪驱动的工具收紧（创新功能 1）
+    //   放在最后：只有前面所有硬性过滤都放行的工具，才有资格被情绪收紧。
+    //   顺序很重要——情绪**永远不能**放宽 rolePolicy 的角色边界。
+    //   读 features.emotionGating 开关：用户可关（键缺失 = 默认开）。
+    let emotionGatingOn = true
+    try {
+      const { getConfig } = require('./agentConfig')
+      emotionGatingOn = (getConfig() as any)?.features?.emotionGating !== false
+    } catch { /* 读不到就用默认 */ }
+
+    const gate = emotionGatingOn
+      ? applyEmotionGate(tools, this._currentEmotion)
+      : { tools, suppressed: [], reasons: [], gated: false, notice: '' }
+    if (gate.gated) {
+      tools = gate.tools
+      toolsetName += '+情绪收紧'
+      this._emotionGateNotice = renderGateNotice(gate)
+      console.log(
+        `[getToolsForMode] 😶 情绪收紧：暂缓 ${gate.suppressed.length} 个工具（${gate.reasons.join('；')}）`,
+      )
+    }
+
     return { tools, toolsetName }
   }
+
+  /** 🆕 情绪门控产生的说明（供注入 prompt）；无收紧时为空串 */
+  private _emotionGateNotice = ''
 
   private initSystemPrompt(): void {
     // 群聊场景已由前端（getAgentSystemPromptLite）提供精准 prompt，

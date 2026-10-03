@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react'
 import { useStore } from '../stores/appStore'
+import { persistLLMConfig } from '../services/llmPersist'
 
 type StepId = 'welcome' | 'llm' | 'personality' | 'done'
 
@@ -178,7 +179,22 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
   const useFound = async (f: any) => {
     const r = await window.luminaAPI?.providerApplyLocal?.({ id: f.id, baseUrl: f.baseUrl, model: f.recommendedModel })
     if (r?.success) {
-      setLLMConfig({ provider: r.id === 'ollama' ? 'ollama' : 'lmstudio', baseUrl: r.baseUrl || '', model: r.model || '', apiKey: 'local' })
+      // 🔧 修复（新手最关键的路径）：原先只 setLLMConfig（纯内存）就 onNext()，
+      // 新用户第一次配置「看起来成功」但**重启即丢**，
+      // 之后会表现为「配置不生效 / 老是有个固定的东西」。
+      // 这里必须落盘，才能真正写进 lumina-providers.json。
+      const pid = r.id === 'ollama' ? 'ollama' : 'lmstudio'
+      setLLMConfig({ provider: pid, baseUrl: r.baseUrl || '', model: r.model || '', apiKey: 'local' })
+      const saved = await persistLLMConfig(pid, {
+        baseUrl: r.baseUrl || '',
+        model: r.model || '',
+        apiKey: 'local',
+      })
+      if (!saved.ok) {
+        // 落盘失败必须拦下来告知，否则用户会带着「假成功」走完引导
+        setDetectMsg('⚠️ 接入成功但保存失败：' + saved.error + '（重启后会失效）')
+        return
+      }
       onNext()
     } else { setDetectMsg('接入失败：' + (r?.error || '未知错误')) }
   }

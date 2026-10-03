@@ -32,8 +32,16 @@ export const localStorageBackend: LoopPersistenceBackend = {
   async save(tasks) {
     try {
       localStorage.setItem(LOOP_STORAGE_KEY, JSON.stringify(tasks))
-    } catch {
-      /* 容量超限等 — 静默 */
+    } catch (e) {
+      // 🔧 原为静默 catch（注释也承认「静默」）。
+      // 容量超限时用户的 Loop 任务**全部丢失**且毫无察觉——
+      // 表现为「我建的循环任务怎么都没了」，且无法排查。
+      // 现在至少留下 error 级线索（诊断面板可见）。
+      console.error(
+        '[loopPersist] ⚠️ Loop 任务保存失败（localStorage 容量超限？），' +
+        '本次变更已丢失。共 ' + (Array.isArray(tasks) ? tasks.length : 0) + ' 条任务未能保存。',
+        e,
+      )
     }
   },
 }

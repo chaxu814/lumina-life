@@ -1,0 +1,28 @@
+{
+  "memories": [
+    {
+      "id": "mem_1791013644419_ardx06f",
+      "content": "喜欢热茶",
+      "type": "preference",
+      "scores": {
+        "confidence": 0.7,
+        "recency": 1,
+        "frequency": 0.1,
+        "corroboration": 0,
+        "importance": 0.7
+      },
+      "compositeScore": 0.585,
+      "createdAt": 1791013644419,
+      "updatedAt": 1791013644419,
+      "mentionCount": 1,
+      "sourceCount": 1,
+      "status": "pending"
+    }
+  ],
+  "config": {
+    "decayHalfLife": 7,
+    "highConfidenceThreshold": 0.6,
+    "lowConfidenceThreshold": 0.3,
+    "maxMemories": 500
+  }
+}

@@ -86,6 +86,11 @@ export const BROWSER_PROCS = [
   'chrome', 'msedge', 'firefox', 'brave', 'opera', 'opera_gx', 'vivaldi', 'arc',
   '360se', '360chrome', 'qqbrowser', 'sogouexplorer', 'maxthon', 'iexplore',
   'msedgewebview2', 'thorium', 'centbrowser', 'starbyte', 'flock',
+  // ── macOS（System Events 报的进程名，无 .app 后缀）──
+  'safari', 'google chrome', 'chromium', 'firefox', 'microsoft edge',
+  'brave browser', 'opera', 'vivaldi', 'arc', 'safari technology preview',
+  // Electron 系（含自家 Lumina）
+  'electron',
 ]
 
 export const TERMINAL_PROCS = [
@@ -93,6 +98,8 @@ export const TERMINAL_PROCS = [
   'git-bash', 'bash', 'sh', 'zsh', 'wsl', 'wslhost', 'alacritty',
   'wezterm', 'wezterm-gui', 'hyper', 'tabby', 'putty', 'mobaxterm',
   'powershell_ise', 'cmder', 'tilix', 'kitty',
+  // ── macOS 终端 ──
+  'terminal', 'iterm', 'iterm2', 'warp', 'alacritty',
 ]
 
 export const IDE_PROCS = [
@@ -101,6 +108,9 @@ export const IDE_PROCS = [
   'rubymine', 'datagrip', 'phpstorm', 'fleet', 'sublime_text',
   'notepad++', 'devenv', 'atom', 'zed', 'eclipse', 'netbeans',
   'code-insiders', 'androidstudio', 'unity', 'unrealeditor',
+  // ── macOS IDE ──
+  'xcode', 'android studio', 'intellij idea', 'visual studio code',
+  'sublime text', 'nova', 'pycharm ce',
 ]
 
 /**
@@ -114,6 +124,11 @@ export const DEFAULT_SYSTEM_KEY_BLOCKLIST = [
   'win_m', 'win_i', 'win_u', 'win_pause', 'win_shift_s',
   'ctrl_shift_esc', 'ctrl_alt_del', 'alt_tab', 'alt_shift_tab',
   'alt_f4', 'ctrl_esc', 'sleep', 'power', 'lock',
+  // ── macOS 等价越权键（Command 对应 Windows 的 Win）──
+  // Command+Space  Spotlight/输入源切换、Command+Tab 应用切换、
+  // Command+Q 强杀前台 App、Command+Option+Esc 强制退出、Command+L 锁屏
+  'cmd_space', 'cmd_tab', 'cmd_shift_tab', 'cmd_q', 'cmd_l',
+  'ctrl_cmd_q', 'ctrl_alt_cmd', 'cmd_h', 'cmd_m',
 ]
 
 /** 终端/IDE 分区下仍然允许的「只读导航键」 */
@@ -180,12 +195,14 @@ export const LEVEL_RANK: Record<CuLevel, number> = {
   full: 3,
 }
 
-/** 进程名归一化：去路径、去 .exe、转小写 */
+/** 进程名归一化：去路径、去 .exe、转小写；macOS 额外去 .app 后缀 */
 export function normalizeProc(name?: string | null): string {
   if (!name) {return ''}
   let s = String(name).trim().toLowerCase()
   s = s.split(/[\\/]/).pop() || s
   if (s.endsWith('.exe')) {s = s.slice(0, -4)}
+  // macOS：进程名可能带 .app（System Events / 活动监视器两种都给法）
+  if (s.endsWith('.app')) {s = s.slice(0, -4)}
   return s
 }
 
@@ -346,6 +363,12 @@ export function defaultPolicy(): CuPolicy {
       '写字板': 'full',
       winword: 'full',
       excel: 'full',
+      // macOS 日常文本/办公应用：完整控制
+      textedit: 'full',
+      pages: 'full',
+      'microsoft word': 'full',
+      'microsoft excel': 'full',
+      notes: 'full',
       // Lumina 自己：完整控制
       lumina: 'full',
     },
@@ -466,10 +489,60 @@ function psScriptPath(): string {
 }
 
 /**
+ * macOS：经 AppleScript System Events 取前台 App 名与窗口标题。
+ * 与 Windows 版同形（proc|title），使 decideCuGate 的分区/授权逻辑零改动复用。
+ *
+ * 缓存策略与 Windows 一致（400ms），避免连续动作反复起进程。
+ * 缓存变量（_fgCache / FG_CACHE_MS）在上方 FgCache 处已声明，此处直接复用。
+ */
+
+/** 从 execFile 结果里取前台信息；统一在这里做归一化与缓存 */
+function absorbForeground(stdout: string): { proc: string; title: string } {
+  const line = String(stdout || '').trim().split(/\r?\n/).pop() || ''
+  const idx = line.indexOf('|')
+  const proc = normalizeProc(idx >= 0 ? line.slice(0, idx) : line)
+  const title = idx >= 0 ? line.slice(idx + 1) : ''
+  _fgCache = { at: Date.now(), proc, title }
+  return { proc, title }
+}
+
+/**
  * 探测前台应用。返回 {proc, title}；探测不到返回 null（调用方 fail-open）。
- * 结果缓存 400ms，避免连续动作时反复起 PowerShell。
+ * 结果缓存 400ms，避免连续动作时反复起 PowerShell / osascript。
  */
 export function getForegroundApp(): Promise<{ proc: string; title: string } | null> {
+  // macOS：System Events 同样需要辅助功能权限；未授权时 resolve(null) 由上层 fail-open
+  if (process.platform === 'darwin') {
+    const now = Date.now()
+    if (_fgCache && now - _fgCache.at < FG_CACHE_MS) {
+      return Promise.resolve({ proc: _fgCache.proc, title: _fgCache.title })
+    }
+    return new Promise((resolve) => {
+      try {
+        execFile('osascript', [
+          '-e', 'tell application "System Events" to set fw to first application process whose frontmost is true',
+          '-e', 'tell application "System Events" to return (name of fw) & "|" & (name of window 1 of fw)',
+        ], { timeout: 2500, maxBuffer: 64 * 1024 }, (err, stdout) => {
+          if (err) {
+            console.warn('[cuPermissions] macOS 前台探测失败（放行）:', err.message)
+            resolve(null)
+            return
+          }
+          const out = String(stdout || '').trim()
+          if (!out || out.startsWith('execution error') || out.startsWith('ERR:')) {
+            console.warn('[cuPermissions] macOS 前台探测返回异常（放行）:', out.slice(0, 120))
+            resolve(null)
+            return
+          }
+          resolve(absorbForeground(out))
+        })
+      } catch (e) {
+        console.warn('[cuPermissions] macOS 前台探测异常（放行）:', (e as Error)?.message)
+        resolve(null)
+      }
+    })
+  }
+
   if (process.platform !== 'win32') {
     return Promise.resolve(null)
   }
@@ -489,12 +562,7 @@ export function getForegroundApp(): Promise<{ proc: string; title: string } | nu
             resolve(null)
             return
           }
-          const line = String(stdout).trim().split(/\r?\n/).pop() || ''
-          const idx = line.indexOf('|')
-          const proc = normalizeProc(idx >= 0 ? line.slice(0, idx) : line)
-          const title = idx >= 0 ? line.slice(idx + 1) : ''
-          _fgCache = { at: Date.now(), proc, title }
-          resolve({ proc, title })
+          resolve(absorbForeground(String(stdout)))
         },
       )
     } catch (e) {

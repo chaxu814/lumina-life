@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../stores/appStore'
+import { switchAndPersist } from '../services/llmPersist'
 
 // 快速切换用的供应商列表
 const QUICK_PROVIDERS = [
@@ -166,9 +167,9 @@ export default function ModelSelector() {
                     {models.map(m => (
                       <div key={m.id} onClick={() => {
                         const store = useStore.getState()
-                        switchLLMProvider(p.nameCn || p.label, p.url, m.id)
-                        store.setLLMConfig({ model: m.id })
-                        if (p.id === 'opencode-zen') {store.setLLMConfig({ apiKey: 'public' })}
+              // 🔧 修复：原先只改内存不落盘 → 重启后复原，用户感知「切换不生效」
+              void switchAndPersist(store, p.id || p.nameCn || p.label, p.url, m.id,
+                p.id === 'opencode-zen' ? { apiKey: 'public' } : undefined)
                         setShowProviderMenu(false)
                         setExpandedProvider(null)
                       }}
@@ -233,8 +234,8 @@ export default function ModelSelector() {
                           const actualUrl = (p.id === 'custom' ? store.llmConfig.baseUrl : p.url)
                           const syncedUrl = (p.id === 'lmstudio' && store.llmConfig.baseUrl?.includes(':1234'))
                             ? store.llmConfig.baseUrl : actualUrl
-                          switchLLMProvider(p.nameCn || p.label, syncedUrl, m.id)
-                          store.setLLMConfig({ model: m.id })
+          // 🔧 修复：同上，必须落盘
+          void switchAndPersist(store, p.id || p.nameCn || p.label, syncedUrl || '', m.id)
                           setShowProviderMenu(false)
                           setExpandedProvider(null)
                         }}

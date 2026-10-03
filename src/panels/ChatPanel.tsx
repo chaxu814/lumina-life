@@ -49,6 +49,11 @@ import {
   detectMentionInReply,
 } from '../services/conversationDynamics'
 import LuckyModeSelector from '../components/LuckyModeSelector'
+import TaskDispatcher from '../components/TaskDispatcher'
+import DecisionCard, { type DecisionRequest } from '../components/DecisionCard'
+import SubagentCards from '../components/SubagentCards'
+import TheaterMount from '../components/TheaterMount'
+import { TASK_TYPE_CARDS, TEAM_MEMBERS, type TaskType } from '../data/agentRoles'
 import ContextUsageIndicator from '../components/ContextUsageIndicator'
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
@@ -61,19 +66,26 @@ import {
   loadLLMData, saveLLMData, loadAgentVoices, saveAgentVoices,
   setLLMRefreshFn, _llmState, _llmNotify, _startAutonomyTimer, _stopAutonomyTimer, _startAutonomyWithRemaining, _autonomyTimer,
   useLLMPanels,
-  cleanTtsText, formatTime, getConvPreview, insertAtCursor, getAgentSystemPrompt,
+  cleanTtsText, formatDateLabel, getConvPreview, insertAtCursor, getAgentSystemPrompt,
 } from '../chat/chatShared'
 
 /**
  * 新 assistant 回复落地后调用：仅当 browser.autoOpenLinks 开关开启、
  * 且回复里确有 http/https 链接时，才自动在内置浏览器打开「主要 URL」。
- * 开关默认关 → shouldAutoOpen 直接返回 null，绝不弹窗。
  * 每次回复现读配置，开关改动即时生效，无需额外监听。全程静默失败，不打扰用户。
+ *
+ * 【判据：!== false，而不是 === true】
+ * 该开关的产品默认是「开」（见 CONFIG_DEFAULTS.browser.autoOpenLinks）。
+ * 旧用户配置文件里可能根本没有这个键，此时 `=== true` 会读到 undefined，
+ * 表现为「设置面板显示已开启，但回复里从不自动打开」——
+ * 幽灵状态是最难排查的一类 bug。
+ * `!== false` 的语义是：键缺失 → 走默认（开）；只有用户显式关过才是关。
+ * 必须与 BrowserLinksPanel / memoryIpc 的 CONFIG_DEFAULTS 保持同一套判据。
  */
 async function maybeAutoOpenBrowserOnReply(text: string): Promise<void> {
   try {
     const cfg = await window.luminaAPI.getConfig()
-    const enabled = cfg?.browser?.autoOpenLinks === true
+    const enabled = cfg?.browser?.autoOpenLinks !== false
     const target = shouldAutoOpen(text, enabled)
     if (target) void window.luminaAPI.openBrowser(target)
   } catch { /* 静默失败 */ }
@@ -194,6 +206,51 @@ export default function ChatPanel() {
 
   // ═══ v2.14: 消息内联按钮 ═══
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
+
+  // 📋 任务派发中心（Lumina Agent 同步入口）
+  const [showTaskDispatcher, setShowTaskDispatcher] = useState(false)
+
+  // 🧭 决策卡片：agent 调 ask_decision 工具时主进程推过来，用户选完回传
+  const [pendingDecisions, setPendingDecisions] = useState<DecisionRequest[]>([])
+
+  // 挂载时补拉一次：避免「卡片已发出但窗口刚重建」时丢卡片；
+  // 同时注册监听接住后续新决策
+  useEffect(() => {
+    const api: any = (window as any).lumina || (window as any).api
+    if (!api?.onDecisionRequested) return
+
+    let alive = true
+    api.decisionPending?.()
+      .then((r: any) => { if (alive && r?.ok && Array.isArray(r.pending)) setPendingDecisions(r.pending) })
+      .catch(() => { /* 拉不到就算了，不影响新决策 */ })
+
+    const offReq = api.onDecisionRequested((req: DecisionRequest) => {
+      setPendingDecisions(prev => prev.some(d => d.id === req.id) ? prev : [...prev, req])
+    })
+    const offRes = api.onDecisionResolved?.((ev: any) => {
+      if (!ev?.id) return
+      setPendingDecisions(prev => prev.filter(d => d.id !== ev.id))
+    })
+
+    return () => {
+      alive = false
+      offReq?.()
+      offRes?.()
+    }
+  }, [])
+
+  // 提交后立刻从本地移除，不必等主进程回推（否则会有“已提交但卡片还在”的闪烁）
+  const handleDecisionSubmit = useCallback((id: string, selectedIds: string[], customText?: string) => {
+    setPendingDecisions(prev => prev.filter(d => d.id !== id))
+    const api: any = (window as any).lumina || (window as any).api
+    api?.decisionAnswer?.(id, selectedIds, customText).catch(() => { /* 失败主进程会超时兜底 */ })
+  }, [])
+
+  const handleDecisionCancel = useCallback((id: string) => {
+    setPendingDecisions(prev => prev.filter(d => d.id !== id))
+    const api: any = (window as any).lumina || (window as any).api
+    api?.decisionCancel?.(id).catch(() => { /* 同上 */ })
+  }, [])
 
   // 副人格冲突弹幕
   const [personalityConflict, setPersonalityConflict] = useState<any>(null)
@@ -1000,6 +1057,22 @@ export default function ChatPanel() {
   handleSendRef.current = handleSendWithText
 
   const handleSend = () => handleSendWithText(input)
+
+  /** 📋 任务派发：在 Lumina Agent 里把任务路由给指定执行者
+   * （群聊视图由 GroupChatView 自己处理路由，这里单人视图直接走当前对话） */
+  const handleTaskDispatch = useCallback(async (taskType: TaskType, agentId: string, prompt: string) => {
+    const card = TASK_TYPE_CARDS.find(c => c.id === taskType)
+    const agent = TEAM_MEMBERS.find(m => m.id === agentId)
+    if (!card) {return}
+
+    const task = prompt || card.desc
+    const assignee = agent ? `${agent.icon} ${agent.name}` : getAgentRole(selectedRole).name
+    const text = agent
+      ? `📋 任务派发：${card.icon} ${card.name}\n\n📌 任务：${task}\n🎯 执行者：${assignee}\n\n📨 请${agent!.name}开始处理此任务。`
+      : `📋 任务派发：${card.icon} ${card.name}\n\n📌 任务：${task}\n\n📨 请开始处理此任务。`
+
+    await handleSendWithText(text)
+  }, [handleSendWithText, selectedRole])
   const handleAbort = () => {
     abortRef.current = true
     window.luminaAPI.agentAbort()
@@ -1239,7 +1312,7 @@ export default function ChatPanel() {
                             fontSize: 10, color: 'var(--text-secondary)', marginTop: 2,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>
-                            {formatTime(conv.createdAt)} · {conv.messages.length} 条消息
+                            {formatDateLabel(conv.createdAt)} · {conv.messages.length} 条消息
                           </div>
                         </div>
                         {!isEditing && (
@@ -1885,7 +1958,7 @@ export default function ChatPanel() {
                     </button>
                   </>)}
                   <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 4 }}>
-                    {formatTime(msg.timestamp)}
+                    {formatDateLabel(msg.timestamp)}
                   </span>
                 </div>
               </div>
@@ -2529,6 +2602,39 @@ export default function ChatPanel() {
             <div style={{ flex: 1, minWidth: 8 }} />
           </div>
 
+          {/* ── 📋 任务派发中心入口（工具条下方，与群聊一致） ── */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontFamily: 'var(--font-sans)',
+          }}>
+            <button
+              onClick={() => setShowTaskDispatcher(true)}
+              title="任务派发中心"
+              style={{
+                padding: '4px 10px', borderRadius: 6,
+                border: '1.5px solid var(--border-light)',
+                background: 'var(--surface-50)',
+                cursor: 'pointer', fontSize: 12, display: 'flex',
+                alignItems: 'center', gap: 3, fontFamily: 'inherit',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-100)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--surface-50)' }}
+            >
+              📋 任务派发中心
+            </button>
+            <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+              选择任务类型 → 选择执行者 → 一键派发
+            </span>
+          </div>
+
+          {/* 子智能体（实习生）进度卡片：入口条正下方，与群聊视图一致 */}
+          <SubagentCards sessionId={activeConversationId} />
+
+          {/* 🎭 创新功能 2：团队可见性剧场（开关在「更多设置 → 任务剧场」）
+              关闭时 TheaterMount 直接返回 null，不订阅也不占位 */}
+          <TheaterMount />
+
           {/* 🍀 v1.0: Lucky 模式设置弹窗 */}
           {luckyMode.showSettings && (
             <LuckyModeSettings
@@ -2552,6 +2658,25 @@ export default function ChatPanel() {
         </div>
 
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} } @keyframes sendSpin { to { transform: rotate(360deg); } }`}</style>
+
+        {/* 📋 任务派发中心弹窗 */}
+        {showTaskDispatcher && (
+          <TaskDispatcher
+            onDispatch={handleTaskDispatch}
+            onClose={() => setShowTaskDispatcher(false)}
+          />
+        )}
+
+        {/* 🧭 决策卡片（agent 主动问「走哪条路」时出现）
+            与审批弹窗分开：审批不答就拦下操作，决策不答按推荐项继续。 */}
+        {pendingDecisions.map((d) => (
+          <DecisionCard
+            key={d.id}
+            request={d}
+            onSubmit={handleDecisionSubmit}
+            onCancel={handleDecisionCancel}
+          />
+        ))}
 
         {/* v2.14: 删除确认 */}
         {deletingTarget && (

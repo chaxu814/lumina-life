@@ -604,6 +604,78 @@ function getEmotionConfig(label) {
 }
 
 // ═══════════════════════════════════
+// 🧭 Agent 运行状态驱动（v0.1）
+// ═══════════════════════════════════
+//
+// 主进程每 3s 推一次真实执行状态。这里把它映射成桌宠的可见表现：
+//   work    → 敲键盘循环 + 专注色
+//   review  → 审视（眯眼）+ 怀疑色
+//   wait    → 踱步 + 无聊色
+//   fail    → 捂脸/黯淡 + 警示色
+//   wave    → 挥手 + 庆祝色
+//   idle    → 不动，交还给情绪系统
+//
+// 重要：这里**不覆盖情绪系统**。agent 状态只是叠加一层高优先级的
+// 视觉提示（tooltip + 动作），情绪气泡仍然由 setEmotion 独立驱动，
+// 这样两者不会互相抢状态，也不会出现「agent 一停桌宠就呆住」。
+
+const AGENT_STATE_VISUALS = {
+  work:    { tint: '#3b82f6', hint: 'Yak 💻 正在写代码…' },
+  review:  { tint: '#8b5cf6', hint: '热茶 🍵 正在审查…' },
+  wait:    { tint: '#f59e0b', hint: '等你处理…' },
+  fail:    { tint: '#ef4444', hint: '出错了，正在重试…' },
+  wave:    { tint: '#22c55e', hint: '搞定啦！' },
+};
+
+let agentDrivenMotion = '';
+let agentDrivenTimer = null;
+
+function setAgentDrivenMotion(motion, expression) {
+  const visual = AGENT_STATE_VISUALS[motion];
+  if (!visual) {
+    // 回到 idle：撤掉提示，把控制权还给情绪系统
+    agentDrivenMotion = '';
+    if (agentDrivenTimer) { clearTimeout(agentDrivenTimer); agentDrivenTimer = null; }
+    const el = document.getElementById('pet-container');
+    if (el) { el.style.filter = ''; el.style.setProperty('--agent-tint', 'transparent'); }
+    const tip = document.getElementById('agent-state-hint');
+    if (tip) tip.remove();
+    return;
+  }
+
+  // 同一动作不重复处理（主进程已去重，这里再挡一层避免抖动）
+  if (motion === agentDrivenMotion) return;
+  agentDrivenMotion = motion;
+
+  const el = document.getElementById('pet-container');
+  if (el) {
+    el.style.filter = 'drop-shadow(0 0 6px ' + visual.tint + '88)';
+    el.dataset.agentMotion = motion;
+    el.dataset.agentExpression = expression || '';
+  }
+
+  // 悬浮提示：让用户知道「她在忙什么」，这是状态灯之外的增量信息
+  let tip = document.getElementById('agent-state-hint');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'agent-state-hint';
+    tip.style.cssText = 'position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);' +
+      'font-size:11px;color:#fff;background:rgba(0,0,0,.55);padding:2px 8px;border-radius:8px;' +
+      'white-space:nowrap;pointer-events:none;opacity:.9;z-index:20;';
+    const container = document.getElementById('pet-container') || document.body;
+    if (container && container.appendChild) container.appendChild(tip);
+  }
+  tip.textContent = visual.hint;
+
+  // 工作类动作持续显示；完成/出错类短暂显示后自动隐去
+  const transient = (motion === 'wave' || motion === 'fail');
+  if (transient) {
+    if (agentDrivenTimer) clearTimeout(agentDrivenTimer);
+    agentDrivenTimer = setTimeout(() => setAgentDrivenMotion('idle'), 4000);
+  }
+}
+
+// ═══════════════════════════════════
 // 情绪更新 API（由主进程或定时器调用）
 // ═══════════════════════════════════
 
@@ -792,6 +864,13 @@ ipcRenderer.on('pet:command', (_event, command) => {
   }
   if (command.type === 'set-tooltip') {
     showSpeech(command.text);
+  }
+  // 🧭 桌宠反映真实 Agent 运行状态（v0.1）
+  // cc-haha 的桌宠只做三态指示灯；我们让干活的人自己被看见：
+  // 写代码敲键盘、审查时皱眉、出错捂脸、刚完成挥手。
+  if (command.type === 'agent-state') {
+    window.__luminaAgentState = command;
+    setAgentDrivenMotion(command.motion, command.expression);
   }
 });
 </script>

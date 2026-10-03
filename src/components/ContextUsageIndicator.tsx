@@ -59,7 +59,7 @@ const ContextUsageIndicator: React.FC = () => {
         padding: '3px 10px',
         borderRadius: '20px',
         fontSize: '11px',
-        fontFamily: "'SF Mono', 'Cascadia Code', 'Consolas', monospace",
+        fontFamily: 'inherit',
         color: colors.text,
         background: colors.bg,
         cursor: 'default',

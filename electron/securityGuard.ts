@@ -446,8 +446,44 @@ export class SecurityGuard {
     try {
       args = JSON.parse(toolCall.function.arguments)
     } catch {
-      // 无法解析的参数，直接放行（后续 LLM 会处理）
-      return { allowed: true, severity: GuardSeverity.SAFE, findings: [], requiresApproval: false, summary: '参数解析失败，放行' }
+      // 🔧 P0 修复（fail-open → fail-closed）
+      //
+      // 旧实现：参数解析失败就 allowed:true 放行，理由是「后续 LLM 会处理」。
+      // 这个理由站不住：**LLM 恰恰是最不该被信任来处理非法输入的一方**，
+      // 而安全审查恰恰是**唯一**不该失效的环节。
+      //
+      // 为什么这条路径值得关注：
+      //   攻击者可以把恶意 payload 藏在**非法 JSON** 里，例如：
+      //     {"cmd":"rm -rf /",     ← 截断的坏 JSON
+      //   JSON.parse 直接失败 → 规则检查全部跳过 → 放行。
+      //   也就是说「让检查失败」反而成了绕过检查的手段——典型 fail-open。
+      //
+      // 实际风险边界（避免过度声称）：
+      //   执行层 tools/registry.ts 对解析失败是 args = {},
+      //   所以坏 JSON 里的命令**不会**真的被执行。
+      //   但仍有两个真问题：
+      //     ① 工具会带着**空参数**执行，可能产生意外副作用
+      //     ② 安全审查静默失效，用户和开发者都无从察觉
+      //
+      // 修法：fail-closed —— 参数无法解析就是「无法审查」，
+      // 无法审查时必须停下来让用户决定，而不是默认放行。
+      return {
+        allowed: false,
+        severity: GuardSeverity.HIGH,
+        findings: [{
+          id: 'GUARD-BADJSON-001',
+          ruleId: 'GUARD-BADJSON',
+          category: ThreatCategory.COMMAND_INJECTION,
+          severity: GuardSeverity.HIGH,
+          title: '工具参数不是合法 JSON',
+          description: `${toolName} 的参数无法解析为 JSON，安全审查无法进行。`
+            + '这可能是模型输出异常，也可能是构造的绕过尝试。已拒绝执行。',
+          toolName,
+          remediation: '请让模型重新生成合法 JSON 参数；确认无误后可再次执行。',
+        }],
+        requiresApproval: true,
+        summary: `${toolName} 的参数不是合法 JSON，无法完成安全审查，已拦截`,
+      }
     }
 
     const findings: GuardFinding[] = []

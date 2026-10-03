@@ -79,6 +79,9 @@ export interface SubagentItem {
   error?: string
   /** 子智能体展示名（eg. 实习生小陈） */
   internName?: string
+  /** 🆕 归属会话 ID；缺失表示尚未被任何会话派活。
+   *  前端据此过滤，避免切会话时把别的会话的实习生卡片也显示出来。 */
+  sessionId?: string
 }
 
 /** 🆕 v03: 面板主视图：对话摘要（默认）/ 详情（旧时间线·工具·产物） */

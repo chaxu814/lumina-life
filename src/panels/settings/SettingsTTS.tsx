@@ -256,7 +256,8 @@ export default function SettingsTTS() {
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               IndexTTS-2.5 是本地 GPU 语音克隆模型，需要 Python 3.10-3.11 + NVIDIA GPU（约 6GB 显存）。<br/>
               启动服务：运行 <code style={{ background: 'rgba(139,92,246,0.1)', padding: '1px 4px', borderRadius: 3 }}>python\start_indextts.bat</code><br/>
-              模型目录默认 <code style={{ background: 'rgba(139,92,246,0.1)', padding: '1px 4px', borderRadius: 3 }}>K:\IndexTTS-2.5</code>
+              模型目录：启动时用 <code style={{ background: 'rgba(139,92,246,0.1)', padding: '1px 4px', borderRadius: 3 }}>--model-dir &lt;路径&gt;</code> 指定，
+              或设环境变量 <code style={{ background: 'rgba(139,92,246,0.1)', padding: '1px 4px', borderRadius: 3 }}>LUMINA_INDEXTTS_DIR</code>（无默认值，需自行指定）
             </div>
           </div>
 

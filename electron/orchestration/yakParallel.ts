@@ -224,6 +224,11 @@ export class YakParallel {
     return this.splitter
   }
 
+  /** 实习生池引用（供编排层在并行批次结束后统一收尾） */
+  getPool(): InternPool {
+    return this.pool
+  }
+
   /**
    * 招实习生并配好
    * @param count 要招的人数

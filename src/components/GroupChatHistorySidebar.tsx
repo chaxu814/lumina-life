@@ -4,7 +4,7 @@
 // ============================================================
 
 import React, { useState, useEffect } from 'react'
-import { GCSession, loadGCSessions, saveGCSessions, newGCSessionId } from '../chat/chatShared'
+import { GCSession, loadGCSessions, saveGCSessions, newGCSessionId, formatDateLabel } from '../chat/chatShared'
 
 export default function GroupChatHistorySidebar() {
   const [sessions, setSessions] = useState<GCSession[]>(() => {
@@ -98,17 +98,13 @@ export default function GroupChatHistorySidebar() {
     persistSessions(updated)
   }
 
-  // Format time like ChatPanel: "MM-DD HH:mm"
+  // Format time like ChatPanel: 只显示日期（今天 / 昨天 / MM-DD / YYYY-MM-DD），不显示时分
   const formatSessionTime = (dateStr: string): string => {
     // dateStr is like "2026/8/9" — try to parse and format
     try {
       const d = new Date(dateStr)
       if (isNaN(d.getTime())) {return dateStr}
-      const mm = String(d.getMonth() + 1).padStart(2, '0')
-      const dd = String(d.getDate()).padStart(2, '0')
-      const hh = String(d.getHours()).padStart(2, '0')
-      const mi = String(d.getMinutes()).padStart(2, '0')
-      return `${mm}-${dd} ${hh}:${mi}`
+      return formatDateLabel(d.getTime())
     } catch {
       return dateStr
     }

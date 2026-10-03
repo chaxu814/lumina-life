@@ -86,8 +86,25 @@ export class AgentChatsManager {
       const raw = fs.readFileSync(chatsPath, 'utf-8')
       return JSON.parse(raw) as ChatsStore
     } catch (e) {
-      console.warn(`[AgentChats] 加载 ${agentId} chats.json 失败:`, e)
-      return this._createEmptyStore(agentId)
+      // 🔧 P0 修复（静默丢对话历史）
+      // 旧实现：解析失败 → 返回空 store。
+      // 而 addMessage 会把这个空 store 缓存下来，下次写入就把
+      // **整个 Agent 的完整对话历史**覆盖成 1 条，且原文件不可恢复。
+      // 用户丢的是他最不能丢的东西：聊天记录。
+      //
+      // 现在：先把损坏原文备份到 .corrupted 文件，再抛错。
+      // 抛错后调用方不会写入，原文件保持原样，用户还能手动抢救。
+      const backup = chatsPath + '.corrupted'
+      try {
+        if (!fs.existsSync(backup)) {fs.copyFileSync(chatsPath, backup)}
+        console.error(
+          `[AgentChats] ${agentId} 的 chats.json 已损坏，原文已备份到 ${backup}。` +
+          '为避免覆盖历史数据，本次不写入。'
+        )
+      } catch { /* 备份失败也要继续抛错，绝不能退回「当空」 */ }
+      throw new Error(
+        `AgentChats: ${agentId} 的对话记录已损坏（原文备份于 ${backup}），已中止写入以免覆盖历史`
+      )
     }
   }
 
@@ -100,6 +117,25 @@ export class AgentChatsManager {
       fs.mkdirSync(dir, { recursive: true })
     }
     
+    // 🔧 写入前先滚动备份一份（只保留最近 3 份）。
+    // 即使是正常路径下的意外覆盖（如 bug 导致写入了残缺数据），
+    // 用户也有机会从备份里捞回历史。
+    if (fs.existsSync(chatsPath)) {
+      try {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const bak = `${chatsPath}.bak.${stamp}`
+        fs.copyFileSync(chatsPath, bak)
+        // 只保留最近 3 份，避免目录无限膨胀
+        try {
+          const baks = fs.readdirSync(path.dirname(chatsPath))
+            .filter(f => f.startsWith(path.basename(chatsPath) + '.bak.'))
+            .sort()
+          for (const old of baks.slice(0, Math.max(0, baks.length - 3))) {
+            try {fs.unlinkSync(path.join(path.dirname(chatsPath), old))} catch { /* ignore */ }
+          }
+        } catch { /* 清理失败不影响写入 */ }
+      } catch { /* 备份失败不阻塞保存 */ }
+    }
     fs.writeFileSync(chatsPath, JSON.stringify(store, null, 2), 'utf-8')
     this._stores.set(agentId, store)
   }

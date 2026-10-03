@@ -19,12 +19,25 @@ export interface AdapterEnv {
   grimAvailable?: boolean
   /** 注入 cliclick 是否可用（仅 macOS 用，便于单测） */
   cliclickAvailable?: boolean
+  /**
+   * 注入 macOS 显示器信息（point/DIP，与 electron.screen.getAllDisplays() 同构）。
+   * 缺省由 MacAdapter 自行从 electron.screen 读取；单测用它验证坐标换算。
+   */
+  displays?: import('./macCoordinate').DisplayInfo[]
+  /** 锁定 macOS 缩放比（1 = 非 Retina；缺省由截图像素尺寸实测反推） */
+  forceScale?: number
 }
 
 /** 按平台构造适配器（纯函数，可单测，不触碰全局单例） */
 export function createAdapter(platform: string, env: AdapterEnv = {}): PlatformAdapter {
   if (platform === 'win32') {return new WindowsAdapter()}
-  if (platform === 'darwin') {return new MacAdapter({ cliclickAvailable: env.cliclickAvailable })}
+  if (platform === 'darwin') {
+    return new MacAdapter({
+      cliclickAvailable: env.cliclickAvailable,
+      displays: env.displays,
+      forceScale: env.forceScale,
+    })
+  }
   if (platform === 'linux') {
     const opts: LinuxAdapterOptions = {
       sessionType: env.sessionType,

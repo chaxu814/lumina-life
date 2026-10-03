@@ -570,10 +570,50 @@ export const useStore = create<AppStore>()(
           const { activeProviderId, configs } = result
           if (!configs || Object.keys(configs).length === 0) {return}
 
+          // 🩹 启动自愈：providers.json 与 agent-llm-configs.json 漂移时对齐
+          //
+          // 背景：历史上「一键检测本地模型」只改内存不落盘，
+          // 导致两个配置源各说各话：
+          //   · lumina-providers.json  → 设置面板显示它
+          //   · agent-llm-configs.json → Agent 实际调用它
+          // 用户看到「每次启动都固定显示第一次那个模型」，
+          // 而实际跑的根本是另一个。
+          //
+          // 判定：以 **agent-llm-configs.json 为准**——它才是真正发请求用的那份。
+          // 让 UI 显示的和实际跑的一致，比让 UI 显示它自己那份更重要。
+          // 仅在确实漂移时才修正，避免每次启动都写盘。
+          let activeId = activeProviderId
+          try {
+            const agentRes = await win.luminaAPI.agentLlmGetAllConfigs?.()
+            const agentLumina = agentRes?.configs?.lumina
+            const curActive = activeProviderId ? (configs as any)[activeProviderId] : null
+            if (agentLumina?.endpoint && agentLumina?.model && curActive) {
+              const drifted = curActive.baseUrl !== agentLumina.endpoint
+                || curActive.model !== agentLumina.model
+              if (drifted) {
+                const pid = agentLumina.provider || activeProviderId
+                await win.luminaAPI.providerSaveConfig?.(pid, {
+                  baseUrl: agentLumina.endpoint,
+                  apiKey: agentLumina.apiKey || '',
+                  model: agentLumina.model,
+                  enabled: true,
+                  maxContextTokens: agentLumina.maxContextTokens || 256000,
+                })
+                activeId = pid
+                const healed = await win.luminaAPI.providerGetAll?.()
+                if (healed?.configs) {Object.assign(configs, healed.configs)}
+                console.warn(
+                  `[appStore] 🩥 配置漂移已自愈：providers(${curActive.model}@${curActive.baseUrl})`
+                  + ` → agents(${agentLumina.model}@${agentLumina.endpoint})`,
+                )
+              }
+            }
+          } catch { /* 自愈失败不阻塞启动：用 providers.json 原值即可 */ }
+
           // 更新 providerConfigs
           const newProviderConfigs: Record<string, LLMConfig> = {}
           for (const [id, cfg] of Object.entries(configs) as any) {
-            if (cfg.enabled || id === activeProviderId) {
+            if (cfg.enabled || id === activeId) {
               // maxTokens 是用户的"最大输出"偏好（后端不存）：激活供应商继承当前值，其余沿用各自上次值，避免每次同步被打回 8192
               const inheritedMaxTokens = (id === activeProviderId ? get().llmConfig.maxTokens : get().providerConfigs[id]?.maxTokens) || 8192
               newProviderConfigs[id] = {
@@ -591,16 +631,16 @@ export const useStore = create<AppStore>()(
           set({ providerConfigs: newProviderConfigs })
 
           // 如果有激活的供应商，切换到它
-          if (activeProviderId && newProviderConfigs[activeProviderId]) {
+          if (activeId && newProviderConfigs[activeId]) {
             set({
-              llmConfig: newProviderConfigs[activeProviderId],
+              llmConfig: newProviderConfigs[activeId],
               // ?? 立刻标记为在线（已保存=之前是好的），TopBar 见 llmChecked=true 将跳过自检
               llmOnline: true,
               llmChecked: true,
             })
             // ?? 后台验证真实连通性，失败则切回离线
             try {
-              const testResult = await win.luminaAPI.providerTestConnection?.(activeProviderId)
+              const testResult = await win.luminaAPI.providerTestConnection?.(activeId)
               if (!testResult?.success) {
                 set({ llmOnline: false })
               }
@@ -744,7 +784,7 @@ export const useStore = create<AppStore>()(
       agentMode: 'agent',
       setAgentMode: (agentMode) => set({ agentMode }),
       toolTraces: [],
-      addToolTrace: (t) => set((s) => ({ toolTraces: [...s.toolTraces, t] })),
+      addToolTrace: (t) => set((s) => ({ toolTraces: [...s.toolTraces, t].slice(-300) })),
       updateToolTrace: (name, status, result) => set((s) => ({
         toolTraces: s.toolTraces.map((t) =>
           t.name === name && t.status === 'running' ? { ...t, status, result } : t
@@ -967,6 +1007,13 @@ export const useStore = create<AppStore>()(
         theme: state.theme,        // 🆕 v1.1: 持久化主题偏好
         gamification: state.gamification, // 🆕 v3.0: 持久化游戏化状态
         a11y: state.a11y,          // ♿ 无障碍偏好（PTT 快捷键/高对比/字号）
+        // 🔧 修复：以下两项此前漏在白名单外，导致重启后归零。
+        //   · auditLogs —— SecurityPanel 展示「N 条记录」，用户查安全事件时
+        //     明明有面板有数据，重启后却是「暂无审计记录」，最伤信任。
+        //   · toolTraces —— 工具执行轨迹，供「工具执行流」回看。
+        //   两者都有 slice(0, 200/300) 的容量上限，不会让 localStorage 无限膨胀。
+        auditLogs: state.auditLogs,
+        toolTraces: state.toolTraces,
       }),
     }
   )

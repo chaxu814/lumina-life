@@ -114,7 +114,18 @@ function cleanXmlToolCalls(text: string): string {
     .replace(/<tool_name>[\s\S]*?<\/tool_name>\s*/gi, '')   // 🔧 v13.5: 移除 <tool_name> 块
     .replace(/<tool_args>[\s\S]*?<\/tool_args>\s*/gi, '')   // 🔧 v13.5: 移除 <tool_args> 块
     .trim()
-  // [fix] 不再回退为原文：避免把工具标记泄漏给用户（纯工具调用清理后即为空串）
+
+  // 🔧 P0 修复（真实故障）
+  //   旧实现：「不再回退为原文」→ 整段是纯工具标记时直接返回空串。
+  //   调用方 tryExecuteXmlToolCall 成功后拿到的 replyText 为空，
+  //   接着走「空回复」分支 → 连续空回复 → 用户看到「暂时无法生成有效回复」。
+  //   典型触发：模型想调工具但该轮没有可用工具（chat 模式 / 情绪门控收紧到 0）。
+  //
+  //   现在：整段被删光时返回一句诚实说明。
+  //   既不吐 XML 噪音，也不让内容凭空消失——内容消失是最难排查的失败。
+  if (!cleaned && text.trim()) {
+    return '（我这轮只输出了工具调用标记，没能给出实际内容。你可以让我再说一次。）'
+  }
   return cleaned
 }
 

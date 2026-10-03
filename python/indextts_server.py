@@ -255,14 +255,22 @@ async def main():
     global model_dir
 
     parser = argparse.ArgumentParser(description="Lumina × IndexTTS-2.5 HTTP Server")
-    parser.add_argument("--model-dir", type=str, default=r"K:\IndexTTS-2.5",
-                        help="IndexTTS-2.5 模型权重目录")
+    # 模型目录默认值：优先读环境变量 LUMINA_INDEXTTS_DIR；
+    # 都没配时留空，由首次请求时告知用户如何配置，而不是指向某个开发者本机路径。
+    # 旧默认值是 r"K:\IndexTTS-2.5"，那是作者本机路径，对任何其他用户都无效，
+    # 且会让 TTS 在开箱状态下直接报「目录不存在」。
+    parser.add_argument("--model-dir", type=str,
+                        default=os.environ.get("LUMINA_INDEXTTS_DIR", ""),
+                        help="IndexTTS-2.5 模型权重目录（或设环境变量 LUMINA_INDEXTTS_DIR）")
     parser.add_argument("--port", type=int, default=18927, help="HTTP 端口")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="监听地址")
     parser.add_argument("--preload", action="store_true", help="启动时立即加载模型（默认首次请求时加载）")
     args = parser.parse_args()
 
-    model_dir = os.path.abspath(args.model_dir)
+    model_dir = os.path.abspath(args.model_dir) if args.model_dir else ""
+    if not model_dir:
+        print("[indextts] 未配置模型目录。启动时请传 --model-dir <路径>，"
+              "或设置环境变量 LUMINA_INDEXTTS_DIR=/你的/IndexTTS-2.5")
 
     log("🚀 Lumina × IndexTTS-2.5 TTS 服务")
     log(f"    模型目录: {model_dir}")

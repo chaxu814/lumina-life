@@ -1887,13 +1887,13 @@ function AccessControlSettings() {
                 <div style={labelStyle}>允许读取路径（逗号分隔, * 为全部）</div>
                 <input type="text" value={editForm?.allowedReadPaths?.join(', ') || ''}
                   onChange={e => setEditForm({ ...editForm, allowedReadPaths: toArray(e.target.value) })}
-                  style={inputStyle} placeholder="K:\Projects, D:\Data" />
+                  style={inputStyle} placeholder="如 C:\Projects, C:\Data" />
               </div>
               <div>
                 <div style={labelStyle}>允许写入路径（逗号分隔, 空=禁止写）</div>
                 <input type="text" value={editForm?.allowedWritePaths?.join(', ') || ''}
                   onChange={e => setEditForm({ ...editForm, allowedWritePaths: toArray(e.target.value) })}
-                  style={inputStyle} placeholder="K:\Lumina 2\LuminaLife2.0" />
+                  style={inputStyle} placeholder="如 C:\Projects\MyApp" />
               </div>
               <div>
                 <div style={labelStyle}>允许危险工具（逗号分隔, * 为全部）</div>

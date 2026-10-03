@@ -30,7 +30,29 @@ interface NewsDigest {
   pushedToMail?: number
 }
 
-export type PushTimeSlot = 8 | 12 | 18 | 22
+/** v2.0：间隔模式下整点可任意，不再是 4 个字面量 */
+export type PushTimeSlot = number
+
+/** v2.0：系统弹窗配置 */
+interface SystemNotifyConfig {
+  enabled: boolean
+  minPriority: 'normal' | 'high'
+  scoreThreshold: number
+  majorCategories: string[]
+  majorHotScore: number
+  categoryCooldownMs: number
+  windowMs: number
+  maxPerWindow: number
+}
+
+/** v2.0：agent 整理配置 */
+interface AgentOrganizeConfig {
+  enabled: boolean
+  agentId: 'lumina' | 'yak' | 'recha'
+  maxItems: number
+  timeoutMs: number
+  maxRetries: number
+}
 
 interface NewsSourceMeta {
   id: string
@@ -43,6 +65,16 @@ interface NewsSourceMeta {
 interface NewsDigestConfig {
   enabled: boolean
   enabledSlots: PushTimeSlot[]
+  /** v2.0：'interval' 每 N 小时 / 'slots' 手挑整点 */
+  scheduleMode: 'interval' | 'slots'
+  /** v2.0：间隔小时数（1-24） */
+  intervalHours: number
+  /** v2.0：间隔模式起始整点 */
+  intervalAnchorHour: number
+  /** v2.0：静默时段（null = 不静默） */
+  intervalQuietHours: { start: number; end: number } | null
+  /** v2.0：同一时段冷却小时数 */
+  cooldownHours: number
   interests: string
   sources: Record<string, boolean>
   customRssSources?: string[]
@@ -53,6 +85,10 @@ interface NewsDigestConfig {
   bilingual?: boolean
   /** 分类配额（v2.0「雷达」升级） */
   categoryQuota?: Record<string, number>
+  /** v2.0：系统弹窗 */
+  systemNotify?: SystemNotifyConfig
+  /** v2.0：agent 整理 */
+  agentOrganize?: AgentOrganizeConfig
   lastPushedAt: Record<number, number>
 }
 
@@ -79,8 +115,30 @@ const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   general:  { bg: 'bg-surface-100',text: 'text-text-secondary', dot: 'bg-text-tertiary' },
 }
 
-const SLOT_LABEL: Record<PushTimeSlot, string> = {
+/** UI 侧默认值，仅用于「未加载到配置」时保持控件可用（主进程才是权威） */
+const DEFAULT_SYSTEM_NOTIFY: SystemNotifyConfig = {
+  enabled: true, minPriority: 'high', scoreThreshold: 85,
+  majorCategories: ['finance', 'trending'], majorHotScore: 90,
+  categoryCooldownMs: 30 * 60_000, windowMs: 60 * 60_000, maxPerWindow: 3,
+}
+
+const DEFAULT_AGENT_ORGANIZE: AgentOrganizeConfig = {
+  enabled: false, agentId: 'recha', maxItems: 12, timeoutMs: 120_000, maxRetries: 0,
+}
+
+/** v1.0 的四个固定时段（旧配置与旧数据仍可能出现） */
+const LEGACY_SLOTS: PushTimeSlot[] = [8, 12, 18, 22]
+
+const SLOT_LABEL: Record<number, string> = {
   8: '☀️ 早间 (8:00)', 12: '🌤️ 午间 (12:00)', 18: '🌆 傍晚 (18:00)', 22: '🌙 晚间 (22:00)',
+}
+
+/** 依据间隔 + 起点推导实际会推送的整点（与主进程 scheduleSlots.ts 保持一致） */function previewIntervalSlots(intervalHours: number, anchorHour: number): number[] {
+  const step = Math.max(1, Math.min(24, Math.trunc(intervalHours) || 3))
+  const anchor = ((Math.trunc(anchorHour) || 0) % 24 + 24) % 24
+  const set = new Set<number>()
+  for (let h = 0; h < 24; h += step) set.add((anchor + h) % 24)
+  return [...set].sort((a, b) => a - b)
 }
 
 // ── 组件 ──
@@ -130,6 +188,30 @@ export default function NewsPanel() {
   const [config, setConfig] = useState<NewsDigestConfig | null>(null)
   const [availableSources, setAvailableSources] = useState<NewsSourceMeta[]>([])
   const [configSaved, setConfigSaved] = useState(false)
+
+  // 🔔 v2.0: 系统通知权限（granted / denied / default）
+  const [notifyPermission, setNotifyPermission] = useState<string>('default')
+  const [notifyPermBusy, setNotifyPermBusy] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(window.luminaAPI as any).newsDigestNotifyPermission?.()
+      ?.then((r: any) => { if (!cancelled && r?.ok) setNotifyPermission(r.permission) })
+      .catch(() => { /* 拿不到就保持 default，不影响其他功能 */ })
+    return () => { cancelled = true }
+  }, [])
+
+  const handleRequestNotifyPermission = useCallback(async () => {
+    setNotifyPermBusy(true)
+    try {
+      const r = await (window.luminaAPI as any).newsDigestRequestNotifyPermission?.()
+      if (r?.ok) setNotifyPermission(r.permission)
+    } catch {
+      // 申请失败不弹错误：通知本就是可选增强
+    } finally {
+      setNotifyPermBusy(false)
+    }
+  }, [])
 
   // ── 加载配置 ──
   useEffect(() => {
@@ -497,28 +579,154 @@ export default function NewsPanel() {
           <div className="text-2xs text-text-tertiary mt-1">关闭的新闻源将不会被采集和推送</div>
         </div>
 
-        {/* 推送时段 */}
+        {/* 🕐 v2.0 推送频率：间隔模式 / 手挑整点 */}
         <div className="mb-3">
-          <div className="text-xs font-semibold text-text-primary mb-1.5">🕐 推送时间</div>
-          <div className="flex flex-wrap gap-2">
-            {([8, 12, 18, 22] as PushTimeSlot[]).map(slot => (
-              <label key={slot} className={clsx(
+          <div className="text-xs font-semibold text-text-primary mb-1.5">🕐 推送频率</div>
+
+          <div className="flex gap-2 mb-2">
+            {([['interval', '⏱ 固定间隔'], ['slots', '🕘 手挑整点']] as const).map(([mode, label]) => (
+              <label key={mode} className={clsx(
                 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-2xs cursor-pointer transition-all',
-                config.enabledSlots.includes(slot)
+                (config.scheduleMode ?? 'interval') === mode
                   ? 'bg-accent-50 border-accent-200 text-accent-600'
                   : 'bg-surface-1 border-light text-text-secondary',
               )}>
-                <input type="checkbox" className="sr-only" checked={config.enabledSlots.includes(slot)}
-                  onChange={e => {
-                    const newSlots = e.target.checked
-                      ? [...config.enabledSlots, slot]
-                      : config.enabledSlots.filter(s => s !== slot)
-                    setConfig({ ...config, enabledSlots: newSlots })
-                  }} />
-                <span>{SLOT_LABEL[slot]}</span>
+                <input type="radio" className="sr-only" name="news-schedule-mode"
+                  checked={(config.scheduleMode ?? 'interval') === mode}
+                  onChange={() => setConfig({ ...config, scheduleMode: mode })} />
+                <span>{label}</span>
               </label>
             ))}
           </div>
+
+          {(config.scheduleMode ?? 'interval') === 'interval' ? (
+            <>
+              <div className="flex gap-6 mb-1.5">
+                <div>
+                  <label className="text-2xs text-text-secondary block mb-0.5">每隔（小时）</label>
+                  <input type="number" min={1} max={24} value={config.intervalHours ?? 3}
+                    onChange={e => setConfig({ ...config, intervalHours: Math.max(1, Math.min(24, +e.target.value || 3)) })}
+                    className="w-18 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary text-center" />
+                </div>
+                <div>
+                  <label className="text-2xs text-text-secondary block mb-0.5">从几点开始</label>
+                  <input type="number" min={0} max={23} value={config.intervalAnchorHour ?? 0}
+                    onChange={e => setConfig({ ...config, intervalAnchorHour: Math.max(0, Math.min(23, +e.target.value || 0)) })}
+                    className="w-18 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary text-center" />
+                </div>
+                <div>
+                  <label className="text-2xs text-text-secondary block mb-0.5">同段冷却（小时）</label>
+                  <input type="number" min={0} max={24} value={config.cooldownHours ?? 23}
+                    onChange={e => setConfig({ ...config, cooldownHours: Math.max(0, Math.min(24, +e.target.value || 0)) })}
+                    className="w-18 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary text-center" />
+                </div>
+              </div>
+              <div className="text-2xs text-text-tertiary">
+                实际推送：{previewIntervalSlots(config.intervalHours ?? 3, config.intervalAnchorHour ?? 0).map(s => `${s}:00`).join('、')}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {LEGACY_SLOTS.map(slot => (
+                <label key={slot} className={clsx(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-2xs cursor-pointer transition-all',
+                  config.enabledSlots.includes(slot)
+                    ? 'bg-accent-50 border-accent-200 text-accent-600'
+                    : 'bg-surface-1 border-light text-text-secondary',
+                )}>
+                  <input type="checkbox" className="sr-only" checked={config.enabledSlots.includes(slot)}
+                    onChange={e => {
+                      const newSlots = e.target.checked
+                        ? [...config.enabledSlots, slot]
+                        : config.enabledSlots.filter(s => s !== slot)
+                      setConfig({ ...config, enabledSlots: newSlots })
+                    }} />
+                  <span>{SLOT_LABEL[slot]}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 🔔 v2.0 系统弹窗通知（分级） */}
+        <div className="mb-3 p-2.5 rounded-lg border border-light bg-surface-1">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-xs font-semibold text-text-primary">🔔 系统弹窗通知</div>
+            <Switch checked={config.systemNotify?.enabled ?? true}
+              onChange={v => setConfig({ ...config, systemNotify: { ...(config.systemNotify ?? DEFAULT_SYSTEM_NOTIFY), enabled: v } })} />
+          </div>
+          <div className="text-2xs text-text-tertiary mb-2">
+            只有<strong>高优先级</strong>新闻（评分 ≥ {(config.systemNotify?.scoreThreshold ?? 85)}、命中你的订阅话题、或重大财经/热搜类）才弹系统通知；
+            普通新闻仍只走桌宠气泡 + 侧边栏。
+          </div>
+
+          <div className="flex gap-6 mb-2">
+            <div>
+              <label className="text-2xs text-text-secondary block mb-0.5">高优先级评分线</label>
+              <input type="number" min={0} max={100} value={config.systemNotify?.scoreThreshold ?? 85}
+                onChange={e => setConfig({ ...config, systemNotify: { ...(config.systemNotify ?? DEFAULT_SYSTEM_NOTIFY), scoreThreshold: Math.max(0, Math.min(100, +e.target.value || 0)) } })}
+                className="w-18 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary text-center" />
+              <input type="range" min={0} max={100} value={config.systemNotify?.scoreThreshold ?? 85}
+                onChange={e => setConfig({ ...config, systemNotify: { ...(config.systemNotify ?? DEFAULT_SYSTEM_NOTIFY), scoreThreshold: +e.target.value } })}
+                className="w-28" />
+            </div>
+            <div>
+              <label className="text-2xs text-text-secondary block mb-0.5">1 小时内最多弹</label>
+              <input type="number" min={1} max={20} value={config.systemNotify?.maxPerWindow ?? 3}
+                onChange={e => setConfig({ ...config, systemNotify: { ...(config.systemNotify ?? DEFAULT_SYSTEM_NOTIFY), maxPerWindow: Math.max(1, +e.target.value || 1) } })}
+                className="w-18 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary text-center" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className={clsx('text-2xs px-1.5 py-0.5 rounded',
+              notifyPermission === 'granted' ? 'bg-green-100 text-green-600'
+                : notifyPermission === 'denied' ? 'bg-red-100 text-red-600'
+                : 'bg-yellow-100 text-yellow-600')}>
+              通知权限：{notifyPermission === 'granted' ? '已授权' : notifyPermission === 'denied' ? '已被系统拒绝' : '未授权'}
+            </span>
+            {notifyPermission !== 'granted' && (
+              <Button size="sm" onClick={handleRequestNotifyPermission} disabled={notifyPermBusy}>
+                {notifyPermBusy ? '申请中…' : '申请通知权限'}
+              </Button>
+            )}
+          </div>
+          {notifyPermission !== 'granted' && (
+            <div className="text-2xs text-text-tertiary mt-1">未授权时会静默降级（仅气泡+侧边栏），不会报错。</div>
+          )}
+        </div>
+
+        {/* 🤖 v2.0 团队 agent 整理 */}
+        <div className="mb-3 p-2.5 rounded-lg border border-light bg-surface-1">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-xs font-semibold text-text-primary">🤖 Agent 智能整理</div>
+            <Switch checked={config.agentOrganize?.enabled ?? false}
+              onChange={v => setConfig({ ...config, agentOrganize: { ...(config.agentOrganize ?? DEFAULT_AGENT_ORGANIZE), enabled: v } })} />
+          </div>
+          <div className="text-2xs text-text-tertiary mb-2">
+            由团队 agent 归类打标签、生成 2-3 句中文摘要观点、剔除重复与低价值条目。
+            <strong>默认关闭</strong>：每次整理都会消耗 LLM 调用额度。
+          </div>
+          {(config.agentOrganize?.enabled ?? false) && (
+            <div className="flex gap-6">
+              <div>
+                <label className="text-2xs text-text-secondary block mb-0.5">整理成员</label>
+                <select value={config.agentOrganize?.agentId ?? 'recha'}
+                  onChange={e => setConfig({ ...config, agentOrganize: { ...(config.agentOrganize ?? DEFAULT_AGENT_ORGANIZE), agentId: e.target.value as any } })}
+                  className="w-24 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary">
+                  <option value="recha">热茶（筛选）</option>
+                  <option value="lumina">Lumina</option>
+                  <option value="yak">阿yak</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-2xs text-text-secondary block mb-0.5">每次最多整理</label>
+                <input type="number" min={1} max={50} value={config.agentOrganize?.maxItems ?? 12}
+                  onChange={e => setConfig({ ...config, agentOrganize: { ...(config.agentOrganize ?? DEFAULT_AGENT_ORGANIZE), maxItems: Math.max(1, Math.min(50, +e.target.value || 1)) } })}
+                  className="w-18 px-2 py-1 rounded-md text-xs border border-light bg-surface-0 text-text-primary text-center" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 兴趣标签 */}
@@ -595,11 +803,15 @@ export default function NewsPanel() {
         {Object.keys(config.lastPushedAt).length > 0 && (
           <div className="text-2xs text-text-tertiary mt-2">
             上次推送：
-            {([8, 12, 18, 22] as PushTimeSlot[]).filter(s => config.lastPushedAt[s]).map(s => (
-              <span key={s} className="mr-2">
-                {SLOT_LABEL[s]} 于 {new Date(config.lastPushedAt[s]).toLocaleString('zh-CN')}
-              </span>
-            ))}
+            {Object.keys(config.lastPushedAt)
+              .map(Number)
+              .filter(s => config.lastPushedAt[s])
+              .sort((a, b) => b - a)
+              .map(s => (
+                <span key={s} className="mr-2">
+                  {SLOT_LABEL[s] ?? `${String(s).padStart(2, '0')}:00`} 于 {new Date(config.lastPushedAt[s]).toLocaleString('zh-CN')}
+                </span>
+              ))}
           </div>
         )}
       </>)}
@@ -663,7 +875,11 @@ export default function NewsPanel() {
             <span>{digest.date}</span>
             {config && (
               <span className="text-2xs">
-                · 推送 {config.enabled ? '🟢' : '🔴'} {config.enabled ? `${config.enabledSlots.length}时段` : '关闭'}
+                · 推送 {config.enabled ? '🟢' : '🔴'} {config.enabled
+                  ? (config.scheduleMode === 'slots'
+                      ? `${config.enabledSlots.length}时段`
+                      : `每${config.intervalHours ?? 3}小时`)
+                  : '关闭'}
               </span>
             )}
           </div>

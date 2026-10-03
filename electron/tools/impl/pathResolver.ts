@@ -126,16 +126,22 @@ export async function tryResolvePath(rawPath: string): Promise<[string, boolean]
       appRoot = electron.app?.getAppPath() || ''
     } catch {}
 
-    // 已知的项目根目录（Lumina 的可能安装位置）
+    // 已知的项目根目录（按可靠性从高到低）
+    //
+    // 【为什么不再硬编码本机盘符】
+    // 旧列表里写着 'J:\\LuminaLife2.0'（作者当时机器的安装位置）。
+    // 对任何其他用户来说这个路径不存在，属于开发环境的残留，
+    // 公开仓库里会被审稿人直接当成“个人项目遗留”看待。
+    // 现在只保留三类：进程工作目录（开发态）、Electron 应用路径（打包后）、
+    // 以及 LUMINA_PROJECT_ROOT 环境变量（需要指向别处时显式指定）。
+    // homeDir 及其下的 LuminaLife2.0 是通用的合理猜测（很多人确实装在用户目录下），保留。
     const knownRoots: string[] = [
       cwd,
       appRoot,
+      process.env.LUMINA_PROJECT_ROOT || '',
       homeDir,
       path.join(homeDir, 'LuminaLife2.0'),
       path.join(homeDir, 'Desktop', 'LuminaLife2.0'),
-      process.env.LUMINA_PROJECT_ROOT || '',
-      'J:\\LuminaLife2.0',                          // 当前安装位置
-      'J:/LuminaLife2.0',
     ].filter(Boolean)
 
     // 去重

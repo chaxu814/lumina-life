@@ -1,9 +1,18 @@
 // ============================================================
 // panels/settings/BrowserLinksPanel.tsx — 内置浏览器与回复链接联动设置
 //
-// 单开关：browser.autoOpenLinks（默认关）。
+// 单开关：browser.autoOpenLinks（默认开）。
 // 开启后，Lumina 新回复里若含 http/https 链接，自动在内置浏览器打开「主要 URL」。
-// 默认关闭，避免每条带链接的回复都弹窗打扰；回复里的链接本身始终可点。
+//
+// 【为什么默认开】
+// 产品决策：用户希望这个联动默认生效。
+// 主进程的 config:get 会用 CONFIG_DEFAULTS 补全缺失键，
+// 所以新用户和「从未手动改过」的老用户都读得到 true；
+// 而显式关过的用户仍是 false —— 显式设置永远优先于默认值。
+//
+// 这里的读取用 `!== false` 而不是 `=== true`，是为了和主进程保持同一套语义：
+// 键缺失(undefined/null) = 走默认 = 开；只有显式 false 才算关。
+// 若两边判据不一致，就会出现「开关显示开着但实际不工作」的幽灵状态。
 // ============================================================
 import React, { useEffect, useState } from 'react'
 
@@ -14,14 +23,16 @@ const card: React.CSSProperties = {
 }
 
 export default function BrowserLinksPanel() {
-  const [enabled, setEnabled] = useState(false)
+  const [enabled, setEnabled] = useState(true)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     let alive = true
     window.luminaAPI.getConfig().then((cfg: any) => {
       if (!alive) return
-      setEnabled(cfg?.browser?.autoOpenLinks === true)
+      // 键缺失 = 默认开；只有显式 false 才是关。
+      // config:get 已用 CONFIG_DEFAULTS 补全，这里的 !== false 是双保险。
+      setEnabled(cfg?.browser?.autoOpenLinks !== false)
       setLoaded(true)
     }).catch(() => setLoaded(true))
     return () => { alive = false }
@@ -55,8 +66,8 @@ export default function BrowserLinksPanel() {
             lineHeight: 1.6, maxWidth: 520,
           }}>
             开启后，Lumina 的新回复里若包含网址，会自动在内置浏览器打开第一条链接。
-            <b>默认关闭</b>，避免每条带链接的回复都弹出窗口打扰你；
-            回复里的链接本身始终可以点击打开。
+            <b>默认开启</b>；回复里的链接本身始终可以点击打开。
+            如果你不喜欢自动弹窗，可以随时在这里关掉。
           </div>
         </div>
         <Switch checked={enabled} disabled={!loaded} onChange={toggle} />

@@ -362,6 +362,43 @@ const api = {
     return () => { ipcRenderer.removeListener('subtask:event', handler) }
   },
 
+  // 🎭 创新功能 2：团队可见性剧场
+  //   onTheaterBeat  = 单幕增量（用于实时滚动动画）
+  //   onTheaterState = 整场状态（用于折叠态概览）
+  //   两者都返回取消订阅函数，与上面的 onSubtaskEvent 保持同一套写法。
+  onTheaterBeat: (callback: (beat: any) => void) => {
+    const handler = (_event: any, beat: any) => callback(beat)
+    ipcRenderer.on('theater:beat', handler)
+    return () => { ipcRenderer.removeListener('theater:beat', handler) }
+  },
+
+  onTheaterState: (callback: (state: any) => void) => {
+    const handler = (_event: any, state: any) => callback(state)
+    ipcRenderer.on('theater:state', handler)
+    return () => { ipcRenderer.removeListener('theater:state', handler) }
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // 🆕 v1.0 决策征询（ask_decision）—— agent 主动问用户「走哪条路」
+  //   与审批流（approval）是两回事：审批不答就拦下，决策不答走默认。
+  // ══════════════════════════════════════════════════════════
+  onDecisionRequested: (callback: (req: any) => void) => {
+    const handler = (_e: any, req: any) => callback(req)
+    ipcRenderer.on('decision:requested', handler)
+    return () => { ipcRenderer.removeListener('decision:requested', handler) }
+  },
+  onDecisionResolved: (callback: (ev: any) => void) => {
+    const handler = (_e: any, ev: any) => callback(ev)
+    ipcRenderer.on('decision:resolved', handler)
+    return () => { ipcRenderer.removeListener('decision:resolved', handler) }
+  },
+  decisionAnswer: (id: string, selectedIds: string[], customText?: string, cancelled?: boolean) =>
+    ipcRenderer.invoke('decision:answer', { id, selectedIds, customText, cancelled }),
+  decisionCancel: (id: string) => ipcRenderer.invoke('decision:cancel', id),
+  decisionCancelAll: () => ipcRenderer.invoke('decision:cancel-all'),
+  decisionPending: () => ipcRenderer.invoke('decision:pending'),
+  decisionConfig: (patch?: any) => ipcRenderer.invoke('decision:config', patch),
+
   // ─── Skill 安装 API ───────────────────────────────────
   skillInstall: (zipPath: string) =>
     ipcRenderer.invoke('skill:install', zipPath) as Promise<{ success: boolean; skillId?: string; error?: string }>,
@@ -1127,6 +1164,10 @@ const api = {
   newsDigestUpdateConfig: (config: any) => ipcRenderer.invoke('news-digest:update-config', config) as Promise<{ ok: boolean; error?: string }>,
   newsDigestTrigger: (slot?: number) => ipcRenderer.invoke('news-digest:trigger', slot) as Promise<{ ok: boolean; error?: string }>,
   newsDigestResetCooldown: () => ipcRenderer.invoke('news-digest:reset-cooldown') as Promise<{ ok: boolean }>,
+
+  // v2.0: 系统弹窗通知权限
+  newsDigestNotifyPermission: () => ipcRenderer.invoke('news-digest:notify-permission') as Promise<{ ok: boolean; permission: string; error?: string }>,
+  newsDigestRequestNotifyPermission: () => ipcRenderer.invoke('news-digest:notify-request-permission') as Promise<{ ok: boolean; permission: string; error?: string }>,
 
   // 新闻源信息（供前端展示可用新闻源列表）
   newsSourcesGetAvailable: () => ipcRenderer.invoke('news-sources:get-available') as Promise<any[]>,

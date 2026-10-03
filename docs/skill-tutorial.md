@@ -204,7 +204,7 @@ registerTool(helloWorldDef, helloWorld)
 ### 5.5 验证
 
 ```powershell
-cd "K:\2\Lumina AI"
+cd "<项目目录>"
 npx tsc --noEmit   # 确认没有类型错误
 npm run dev        # 启动后对 Agent 说 "用 hello_world 问候一下小明"
 ```
@@ -322,7 +322,7 @@ const {
 
 ```powershell
 # 1. 类型检查（改完必跑）
-cd "K:\2\Lumina AI"
+cd "<项目目录>"
 npx tsc --noEmit
 
 # 2. 启动开发版

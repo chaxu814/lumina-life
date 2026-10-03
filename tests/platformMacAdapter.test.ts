@@ -28,6 +28,9 @@ vi.mock('fs', async (importOriginal) => {
 })
 
 import { MacAdapter, buildMacKeyScript } from '../electron/core/platform/MacAdapter'
+import {
+  getCapabilityStatus, resetCapabilityStatuses,
+} from '../electron/core/platform/platformStatus'
 
 /** 构造一个含合法 IHDR 的 PNG 头（宽 1920 高 1080），供 screenshot 读取宽高 */
 function makePngBuf(w = 1920, h = 1080): Buffer {
@@ -50,15 +53,16 @@ beforeEach(() => {
 
 // ── 能力与授权提示 ────────────────────────────────────────
 describe('MacAdapter capabilities', () => {
-  it('鼠标/键盘/截屏/窗口可用，UIA 关闭', () => {
+  it('鼠标/键盘/截屏/窗口/已装应用可用，AX 元素树已实现', () => {
     const c = clic.capabilities
     expect(c.platform).toBe('darwin')
     expect(c.mouse).toBe(true)
     expect(c.keyboard).toBe(true)
     expect(c.screenshot).toBe(true)
     expect(c.windowInfo).toBe(true)
-    expect(c.uia).toBe(false)
-    expect(c.installedApps).toBe(false)
+    // v0.1：macOS 用 AX（Accessibility）补上 Windows UIA 的等价能力
+    expect(c.uia).toBe(true)
+    expect(c.installedApps).toBe(true)
   })
 
   it('notes 含辅助功能 + 屏幕录制授权指引', () => {
@@ -223,9 +227,22 @@ describe('MacAdapter 截屏与应用', () => {
     expect(unlinkSyncMock).toHaveBeenCalled()
   })
 
-  it('屏幕录制被拒时抛权限引导', async () => {
+  it('屏幕录制被拒时抛权限引导（并含 macOS 13+ 正式权限名）', async () => {
     execCmdMock.mockResolvedValue('ERR:tccERR 123|')
-    await expect(clic.screenshot()).rejects.toThrow(/屏幕录制/)
+    await expect(clic.screenshot()).rejects.toThrow(/屏幕与系统音频录制|Screen Recording/)
+  })
+
+  it('屏幕录制被拒时登记结构化 needs_permission 状态', async () => {
+    resetCapabilityStatuses()
+    execCmdMock.mockResolvedValue('ERR:tccERR 123|')
+    await expect(clic.screenshot()).rejects.toThrow()
+    const s = getCapabilityStatus('screenshot')
+    expect(s.state).toBe('needs_permission')
+    if (s.state === 'needs_permission') {
+      expect(s.permission).toBe('screen_recording')
+      expect(s.settingsPath).toMatch(/屏幕与系统音频录制|屏幕录制/)
+    }
+    resetCapabilityStatuses()
   })
 
   it('getActiveWindow 用两段 osascript 取前台进程名/标题', async () => {
@@ -236,6 +253,12 @@ describe('MacAdapter 截屏与应用', () => {
     expect(args.length).toBeGreaterThanOrEqual(3)
     expect(w?.processName).toBe('Finder')
     expect(w?.title).toBe('Untitled')
+  })
+
+  it('getActiveWindow 解析 position/size 里的 point 坐标', async () => {
+    execCmdMock.mockResolvedValue('Safari|Example|100, 200|800, 600')
+    const w = await clic.getActiveWindow()
+    expect(w?.bounds).toEqual({ x: 100, y: 200, w: 800, h: 600 })
   })
 
   it('openApp 用 open -a', async () => {
@@ -250,7 +273,11 @@ describe('MacAdapter 截屏与应用', () => {
     expect(apps.map(a => a.name)).toEqual(['Safari', 'Mail'])
   })
 
-  it('getUiaTree 优雅降级为空数组', async () => {
-    await expect(clic.getUiaTree()).resolves.toEqual([])
+  it('getUiaTree 走 AX 扫描（不再是无条件空数组）', async () => {
+    execCmdMock.mockResolvedValue('')
+    await clic.getUiaTree()
+    const [cmd, args] = execCmdMock.mock.calls[0]
+    expect(cmd).toBe('osascript')
+    expect(args[1]).toContain('System Events')
   })
 })

@@ -164,3 +164,32 @@ export function blendCore(a: CoreEmotion, b: CoreEmotion, t: number): CoreEmotio
   }
   return out
 }
+
+/**
+ * 从「效价 × 唤醒度」推导焦虑强度。
+ *
+ * 【为什么不能直接用 core.anxiety】
+ * 团队五维里的 anxiety 是一个独立维度，数值由 socialEngine 自己演化；
+ * 而前端三维（mood/energy）里**根本没有焦虑**，只有效价和唤醒度。
+ * 两者不是同一个量：把前端三维直接当成五维用，
+ * 就会出现「剧场说焦虑 / 门控说不焦虑」这种自相矛盾。
+ * 所以需要一条明确的换算公式。
+ *
+ * 【公式：anxiety = -valence × arousal】
+ * 焦虑 = **负效价**与**高唤醒**的组合，而不是任意一个：
+ *   · 低效价 + 高唤醒 → 焦躁（心里烦、坐不住、静不下来）= 焦虑 ✅
+ *   · 低效价 + 低唤醒 → 失落（低落、疲惫、提不起劲）    = 不是焦虑 ✗
+ *
+ * 早先写成 `(-valence + arousal) / 2` 时，第二种情况被误判成焦虑——
+ * 用户的测试直接抓到了这一点：mood=-0.7 / energy=0.3 是「难过」，
+ * 不是「焦虑」。两种情绪在陪伴产品里的处理完全不同：
+ * 难过该被安慰，焦虑才该被放慢节奏。
+ *
+ * 两个模块（情绪门控、剧场）共用本函数，
+ * 从结构上杜绝「同一情绪在两处被判成不同结论」。
+ */
+export function anxietyFrom(valence: number, arousal: number): number {
+  const v = Math.max(-1, Math.min(1, valence))
+  const a = clamp(arousal)
+  return clamp(-v * a)
+}

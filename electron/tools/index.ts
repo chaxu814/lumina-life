@@ -114,6 +114,9 @@ import { hearingDefs } from './impl/hearingTools'
 import { proactiveDefs } from './impl/proactiveTools'
 // 🆕 Daily Paper 工具
 import { dailyPaperDef, dailyPaperHandler } from './impl/dailyPaper'
+
+// 🆕 v1.0 决策征询：结构化选项 + 用户自由输入
+import { askDecisionDef, askDecisionTool } from './impl/askDecision'
 // 🆕 Computer Use (v2.5, v3.30 + UIA 元素树)
 import {
   desktopSeeDef, desktopSee,
@@ -317,6 +320,11 @@ export function registerAllTools(): void {
 
   // 🆕 Daily Paper (1 工具)
   registerTool(dailyPaperDef, dailyPaperHandler)
+
+  // 🆕 v1.0 决策征询（1 工具）— agent 主动问用户「走哪条路」
+  //   与 approval（问「我可以做 X 吗」）职责不同，不可合并：
+  //   审批不答就拦下，决策不答就按推荐项继续。
+  registerTool(askDecisionDef, askDecisionTool)
 
   // 🆕 Computer Use (v2.5) — 屏幕理解 + 自动操作
   registerTool(desktopSeeDef, desktopSee)

@@ -10,6 +10,10 @@ import { join } from 'path'
 import fs from 'fs'
 import { app } from 'electron'
 import { replaceAllCronEntries } from '../tools/impl/cron'
+import {
+  onDecisionEvent, submitDecisionAnswer, cancelDecision,
+  cancelAllDecisions, getPendingDecisions, getDecisionConfig, setDecisionConfig,
+} from '../decisionService'
 
 // 持久化路径
 const configPath = join(app.getPath('userData'), 'lumina-config.json')
@@ -198,8 +202,24 @@ function clearCrashFlag(): void {
 // ── 配置读写 ──────────────────────────────────────────
 
 function loadConfig(): Record<string, any> {
-  try { if (fs.existsSync(configPath)) {return JSON.parse(fs.readFileSync(configPath, 'utf-8'))} } catch {}
-  return {}
+  if (!fs.existsSync(configPath)) {return {} }   // 首次启动：空配置是正常的
+  const raw = fs.readFileSync(configPath, 'utf-8')
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    // 🔧 配置损坏时**抛出**而非静默返回 {}
+    //
+    // 原因：调用方拿到 {} 后会往里塞一项再写回，
+    // 于是一份损坏的文件被「修复」成了「只剩那一项」——
+    // 用户的其他配置（主题、功能开关、角色配置）全部消失，
+    // 而且没有任何提示。整份配置被静默清空比报错糟糕得多。
+    //
+    // 抛出后由调用方的 try/catch 兜住：文件保持原样，
+    // 用户至少还能手动抢救，也让开发者看得到日志。
+    const err = new Error(`配置文件已损坏，已拒绝写入以免覆盖：${configPath} — ${(e as Error)?.message}`);
+    console.error('[Config] 配置文件解析失败：', (e as Error)?.message)
+    throw err
+  }
 }
 
 function saveConfig(config: Record<string, any>): void {
@@ -741,10 +761,18 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
       )
 
       // 持久化到 lumina-config.json
-      const config = loadConfig()
-      config.agentLlmConfigs = config.agentLlmConfigs || {}
-      config.agentLlmConfigs[params.agentId] = persona.llmConfig
-      saveConfig(config)
+      // 🔧 try/catch：loadConfig 在配置损坏时会抛错（防止把损坏文件
+      // 「修复」成只剩这一项，导致用户其他配置被清空）。
+      // 这里接住它，明确告知失败，文件保持原样。
+      try {
+        const config = loadConfig()
+        config.agentLlmConfigs = config.agentLlmConfigs || {}
+        config.agentLlmConfigs[params.agentId] = persona.llmConfig
+        saveConfig(config)
+      } catch (e: any) {
+        console.error('[AgentLLM] 持久化失败：', e?.message)
+        return { ok: false, error: e?.message || '配置文件损坏，未保存（已保留原文件）' }
+      }
 
       // v5.0: 通知 AgentPool 热更新该 agent 的 LLM（如果池已初始化）
       try {
@@ -1624,6 +1652,7 @@ ipcMain.handle('news:fetch-quotes', async () => {
 
 // ── 📡 v4.0: 新闻推送配置 IPC ─────────────────────────────
 import { getNewsDigestScheduler } from '../newsDigestScheduler'
+import { getSystemNotifier } from '../proactive/systemNotifier'
 
 ipcMain.handle('news-digest:get-config', async () => {
   const s = getNewsDigestScheduler()
@@ -1656,6 +1685,30 @@ ipcMain.handle('news-digest:reset-cooldown', async () => {
   const s = getNewsDigestScheduler()
   s.resetCooldown()
   return { ok: true }
+})
+
+// ── v2.0: 系统弹窗（通知权限） ────────────────────────────
+// 权限查询：UI 用它显示「已授权 / 未授权 / 已被系统拒绝」
+ipcMain.handle('news-digest:notify-permission', async () => {
+  try {
+    const notifier = getSystemNotifier()
+    return { ok: true, permission: notifier.getPermissionStatus() }
+  } catch (err: any) {
+    console.error('[news-digest:notify-permission] 失败:', err.message)
+    return { ok: false, permission: 'default', error: err.message }
+  }
+})
+
+// 申请权限：必须由用户点击触发（自动申请在部分平台会被系统忽略）
+ipcMain.handle('news-digest:notify-request-permission', async () => {
+  try {
+    const notifier = getSystemNotifier()
+    const permission = await notifier.requestPermission()
+    return { ok: true, permission }
+  } catch (err: any) {
+    console.error('[news-digest:notify-request-permission] 失败:', err.message)
+    return { ok: false, permission: 'default', error: err.message }
+  }
 })
 
 // 可用新闻源信息（给前端配置面板展示）
@@ -1708,3 +1761,64 @@ ipcMain.handle('news-mcp:publish-site', async (_e, source: string, date?: string
     return await publishToGitHubPages(source, date)
   } catch (err: any) { return { ok: false, error: err.message } }
 })
+
+// ═══════════════════════════════════════════════════════════
+// 🆕 v1.0 决策征询 IPC（ask_decision 的主进程侧接线）
+//
+// 职责很薄：把 decisionService 的事件转给渲染进程，再把 UI 的回答收回去。
+// 所有业务逻辑（超时/校验/默认）都在 decisionService 里，这里不做重复判断。
+//
+// ⚠️ 依赖必须用**静态 import**，不能写成模块顶层的 require()：
+//    electron-vite 打包时会把 systemIpc 拆进 out/main/chunks/*.js，
+//    运行时 require('../decisionService') 会相对 chunk 目录解析成
+//    out/main/decisionService（不存在）→ 启动即崩 "Cannot find module"。
+//    本文件里其它 require('../xxx') 之所以没事，是因为它们都在**函数体内**（延后执行），
+//    被 Vite 静态处理掉了；而顶层 IIFE 里的 require 不会被转换。
+// ═══════════════════════════════════════════════════════════
+;(function registerDecisionIpc() {
+  // 用 getAllWindows()[0] 而非捕获的 mainWindow 引用：窗口重建后旧引用会失效，
+  // 而这个 IIFE 是模块级的，拿不到 registerSystemIpc 的 mainWindow 参数。
+  // 每次发事件时现取当前窗口，比缓存引用更安全。
+  const currentWindow = () => {
+    try { return BrowserWindow.getAllWindows()[0] } catch { return undefined }
+  }
+
+  onDecisionEvent((ev: any) => {
+    const win = currentWindow()
+    if (!win) return // 窗口关了，决策会自己走超时兜底
+    try {
+      if (ev.type === 'requested') win.webContents.send('decision:requested', ev.request)
+      else if (ev.type === 'resolved') win.webContents.send('decision:resolved', ev)
+    } catch { /* 窗口在发送瞬间被销毁 */ }
+  })
+
+  ipcMain.handle('decision:answer', async (_e, p: { id: string; selectedIds: string[]; customText?: string; cancelled?: boolean }) => {
+    try {
+      const r = submitDecisionAnswer({
+        id: p.id,
+        selectedIds: Array.isArray(p.selectedIds) ? p.selectedIds : [],
+        customText: p.customText,
+        cancelled: p.cancelled,
+      })
+      return { ok: r.ok, error: r.error }
+    } catch (err: any) { return { ok: false, error: err.message } }
+  })
+
+  ipcMain.handle('decision:cancel', async (_e, id: string) => {
+    try { return { ok: cancelDecision(String(id || '')) } } catch { return { ok: false } }
+  })
+
+  ipcMain.handle('decision:cancel-all', async () => {
+    try { return { ok: true, count: cancelAllDecisions() } } catch { return { ok: false, count: 0 } }
+  })
+
+  ipcMain.handle('decision:pending', async () => {
+    try { return { ok: true, pending: getPendingDecisions() } } catch { return { ok: false, pending: [] } }
+  })
+
+  ipcMain.handle('decision:config', async (_e, patch?: any) => {
+    try {
+      return { ok: true, config: patch ? setDecisionConfig(patch) : getDecisionConfig() }
+    } catch (err: any) { return { ok: false, error: err.message } }
+  })
+})()

@@ -29,7 +29,7 @@ export interface ParallelSubtask {
 /** 注入依赖（生产用 internPool + DelegationManager；测试用 mock） */
 export interface SubagentRunDeps {
   hire: () => Intern | null
-  assign: (internId: string, task: string) => boolean
+  assign: (internId: string, task: string, sessionId?: string) => boolean
   complete: (internId: string, result: string) => void
   fail: (internId: string, error: string) => void
   fire: (internId: string) => boolean
@@ -58,6 +58,8 @@ export async function executeParallelSubagents(
   subtasks: ParallelSubtask[],
   context: string | undefined,
   deps: SubagentRunDeps,
+  /** 归属会话；透传给 internPool.assign，最终带到前端卡片，用于按会话过滤 */
+  sessionId?: string,
 ): Promise<{ ok: boolean; content: string; outcomes: SubagentOutcome[]; hiredCount: number }> {
   const hired: string[] = []
 
@@ -70,7 +72,7 @@ export async function executeParallelSubagents(
     hired.push(intern.id)
 
     // 2. 派活
-    deps.assign(intern.id, st.description)
+    deps.assign(intern.id, st.description, sessionId)
 
     // 3. 执行
     try {
@@ -197,7 +199,7 @@ export async function runSubagents(args: Record<string, any>): Promise<ToolResul
 
   const deps: SubagentRunDeps = {
     hire: () => pool.hire(),
-    assign: (id, task) => pool.assign(id, task),
+    assign: (id, task, sessionId) => pool.assign(id, task, undefined, sessionId),
     complete: (id, result) => pool.complete(id, result),
     fail: (id, err) => pool.fail(id, err),
     fire: (id) => pool.fire(id),
@@ -207,7 +209,7 @@ export async function runSubagents(args: Record<string, any>): Promise<ToolResul
   }
 
   try {
-    const result = await executeParallelSubagents(owner, subtasks, args.context, deps)
+    const result = await executeParallelSubagents(owner, subtasks, args.context, deps, args.__sessionId)
     return { callId, ok: result.ok, content: result.content, error: result.ok ? undefined : result.content }
   } catch (err: any) {
     return { callId, ok: false, content: '', error: `并行子任务异常: ${err?.message || String(err)}` }

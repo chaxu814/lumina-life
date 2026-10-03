@@ -272,8 +272,19 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
     vectorStore.addEntry(`[人格] 特质: ${structured.persona.traits.join('、')}`, { type: 'persona' })
   }
 
-  // 执行语义搜索
-  const results = await vectorStore.search(query, topK, 0.05)
+  // 🆕 执行混合检索：BM25 词法 + 余弦语义 → RRF 融合
+  //   之前这里只跑 vectorStore.search()（纯 TF-IDF 余弦），关键词精确命中和
+  //   语义相近只能二选一。现在默认走双路融合；任何一层失败都会自动回退，
+  //   最差退回原来的纯语义 + 关键词回退链，行为不会比旧版差。
+  let results: Awaited<ReturnType<typeof vectorStore.search>> = []
+  let usedHybrid = true
+  try {
+    results = await vectorStore.searchHybrid(query, topK, { minCosine: 0.05 })
+  } catch (err) {
+    usedHybrid = false
+    console.warn('[memorySearch] 混合检索失败，回退纯语义检索:', err)
+    results = await vectorStore.search(query, topK, 0.05)
+  }
 
   if (results.length === 0) {
     // 回退到关键词搜索
@@ -292,9 +303,11 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
     `${i + 1}. [相似度 ${(r.score * 100).toFixed(0)}%] ${r.entry.text.slice(0, 200)}`
   )
 
+  const modeLabel = usedHybrid ? '混合检索(BM25+余弦·RRF融合)' : '语义检索'
+
   return {
     callId: '',
     ok: true,
-    content: `🔍 语义搜索 "${query}" (${results.length} 条):\n${lines.join('\n')}`,
+    content: `🔍 ${modeLabel} "${query}" (${results.length} 条):\n${lines.join('\n')}`,
   }
 }

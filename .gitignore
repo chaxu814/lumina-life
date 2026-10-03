@@ -197,3 +197,6 @@ docs/.vitepress/cache/
 
 # 运行时状态
 .lumina-recovery.json
+
+# 发布卫生：评测过程的调试截图不进仓库（约 2.2MB）
+docs/gaming-autoplay-evidence/

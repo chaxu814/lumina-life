@@ -91,7 +91,7 @@
 ### 5.1 纯 Node 自测量（任何机器，无需 GUI）
 
 ```powershell
-cd "K:\2\Lumina AI"
+cd "<项目目录>"
 node scripts\benchmark\benchmark.js --scenario idle --samples 5
 # 查看输出的 benchmark-results.json
 ```

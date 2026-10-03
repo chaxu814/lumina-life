@@ -95,41 +95,51 @@ describe('pushState', () => {
 // ── pushDecider ──
 
 describe('pushDecider', () => {
+
+  // 🛡️ 固定基准时刻：解除本块对「测试运行时刻」的依赖
+  //
+  // 原先这些用例用 BASE_MS 表示「此刻」，于是结果随钟点变化：
+  // 白天跑 → 走到「每日上限 / 冷却期 / 活跃判断」分支 → 通过；
+  // 凌晨跑（落在默认静默时段内）→ 先被静默时段拦下，
+  // reason 变成「静默时段」→ 断言失败。
+  // 表现是「有时过有时不过」，与产品代码无关。
+  const BASE = (() => { const d = new Date(); d.setHours(14, 0, 0, 0); return d })()
+  const BASE_MS = BASE.getTime()
   const settings = { ...DEFAULT_PUSH_SETTINGS, quietHoursStart: '02:00', quietHoursEnd: '06:00' }
 
   it('总开关关闭时不推送', () => {
     const s = makeState()
-    const r = decidePush(s, { ...settings, enabled: false })
+    const r = decidePush(s, { ...settings, enabled: false }, BASE_MS)
     expect(r.should_speak).toBe(false)
     expect(r.reason).toContain('开关')
   })
 
   it('静默时段不推送', () => {
-    const s = makeState({ lastActiveAt: Date.now() - 60 * 60 * 1000 })
+    const s = makeState({ lastActiveAt: BASE_MS - 60 * 60 * 1000 })
     const night = new Date()
     night.setHours(3, 0, 0, 0)
-    const r = decidePush(s, settings, night.getTime())
+    const r = decidePush(s, settings, night.getTime(), BASE_MS)
     expect(r.should_speak).toBe(false)
     expect(r.reason).toContain('静默')
   })
 
   it('每日达上限不推送', () => {
-    const s = makeState({ todayPushCount: 5, lastActiveAt: Date.now() - 60 * 60 * 1000 })
-    const r = decidePush(s, { ...settings, maxPerDay: 5 })
+    const s = makeState({ todayPushCount: 5, lastActiveAt: BASE_MS - 60 * 60 * 1000 })
+    const r = decidePush(s, { ...settings, maxPerDay: 5 }, BASE_MS)
     expect(r.should_speak).toBe(false)
     expect(r.reason).toContain('上限')
   })
 
   it('冷却期不推送', () => {
-    const s = makeState({ lastPushAt: Date.now() - 10 * 60 * 1000, lastActiveAt: Date.now() - 60 * 60 * 1000 })
-    const r = decidePush(s, { ...settings, cooldownMinutes: 30 })
+    const s = makeState({ lastPushAt: BASE_MS - 10 * 60 * 1000, lastActiveAt: BASE_MS - 60 * 60 * 1000 })
+    const r = decidePush(s, { ...settings, cooldownMinutes: 30 }, BASE_MS)
     expect(r.should_speak).toBe(false)
     expect(r.reason).toContain('冷却')
   })
 
   it('用户刚活跃（5分钟内）不推送', () => {
-    const s = makeState({ lastActiveAt: Date.now() - 2 * 60 * 1000 })
-    const r = decidePush(s, settings)
+    const s = makeState({ lastActiveAt: BASE_MS - 2 * 60 * 1000 })
+    const r = decidePush(s, settings, BASE_MS)
     expect(r.should_speak).toBe(false)
     expect(r.reason).toContain('活跃')
   })
@@ -143,7 +153,7 @@ describe('pushDecider', () => {
       lastActiveAt: t - 30 * 60 * 1000,
       updatedAt: t - 60 * 1000,
     })
-    const r = decidePush(s, settings, t)
+    const r = decidePush(s, settings, t, BASE_MS)
     expect(r.should_speak).toBe(true)
     expect(r.speech.length).toBeGreaterThan(0)
     expect(['low', 'medium', 'high']).toContain(r.intensity)
@@ -152,9 +162,9 @@ describe('pushDecider', () => {
   it('低欲望值时不推送（亲密度低+疲劳+精力差）', () => {
     const s = makeState({
       intimacy: 0.1, luminaEnergy: 0.1, fatigue: 0.9,
-      lastActiveAt: Date.now() - 30 * 60 * 1000,
+      lastActiveAt: BASE_MS - 30 * 60 * 1000,
     })
-    const r = decidePush(s, settings)
+    const r = decidePush(s, settings, BASE_MS)
     expect(r.should_speak).toBe(false)
     expect(r.reason).toContain('欲望值')
   })
@@ -167,10 +177,10 @@ describe('pushDecider', () => {
       lastActiveAt: t - 30 * 60 * 1000,
       updatedAt: t - 60 * 1000,
     })
-    const r1 = decidePush(base, settings, t)
+    const r1 = decidePush(base, settings, t, BASE_MS)
     // 加未响应计数
     const ignored = { ...base, consecutiveIgnored: 3 }
-    const r2 = decidePush(ignored, settings, t)
+    const r2 = decidePush(ignored, settings, t, BASE_MS)
     // 至少有一个状态变化（阈值提高后可能从推送变不推送，或强度降低）
     expect(r1.reason).not.toBe(r2.reason)
   })
@@ -183,7 +193,7 @@ describe('pushDecider', () => {
       lastActiveAt: t - 30 * 60 * 1000,
       updatedAt: t - 60 * 1000,
     })
-    const r = decidePush(s, { ...settings, allowedTypes: ['care'] }, t)
+    const r = decidePush(s, { ...settings, allowedTypes: ['care'] }, t, BASE_MS)
     expect(r.should_speak).toBe(true)
     expect(r.type).toBe('care')
   })

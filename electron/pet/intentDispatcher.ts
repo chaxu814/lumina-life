@@ -71,6 +71,65 @@ export function flushPetLifeState(): void {
 }
 
 let lifeStateTimer: ReturnType<typeof setInterval> | null = null
+let agentStateTimer: ReturnType<typeof setInterval> | null = null
+
+/**
+ * 🧭 把桌宠绑定到真实 Agent 运行状态（v0.1）
+ *
+ * 这是我们越过 cc-haha 天花板的那条线：它的桌宠只是任务三态指示灯，
+ * 作者明写「不能替你批准权限」。我们让**干活的人自己被看见** ——
+ * Yak 在写代码时敲键盘、热茶在审查时皱眉、验证失败时捂脸。
+ *
+ * 设计约束（重要）：
+ * - 零 LLM 调用：这是状态机映射，不是推理。不花 token、不加延迟。
+ * - 有防抖：状态至少停留 1.2s 才切动作，避免高频 tick 把动画抖成抽搐。
+ * - 空闲不接管：没人干活时交还给情绪系统，否则桌宠会显得呆板。
+ * - 可关闭：设置项 `pet.agentStateDriven` 关掉即完全退回原行为。
+ */
+function startAgentStateBridge(): void {
+  if (agentStateTimer != null) return
+  try {
+    // 关闭开关时完全不启动，连轮询开销都没有
+    if (process.env.LUMINA_PET_AGENT_STATE === '0') return
+
+    const { deriveAgentState, shouldDrivePetFromAgent, agentStateToMotion, agentStateToExpression } =
+      require('./agentStateBridge')
+
+    let lastMotion = ''
+    agentStateTimer = setInterval(() => {
+      try {
+        const snap = deriveAgentState()
+        if (!shouldDrivePetFromAgent(snap)) {
+          lastMotion = ''
+          return
+        }
+        const motion = agentStateToMotion(snap.state)
+        if (motion === lastMotion) return
+        lastMotion = motion
+
+        // 复用现有命令通道（pet:command），不新增 IPC
+        try {
+          sendPetCommand({
+            type: 'agent-state',
+            state: snap.state,
+            motion,
+            expression: agentStateToExpression(snap.state),
+            actor: snap.actor,
+            taskTitle: snap.taskTitle,
+            detail: snap.detail,
+          })
+        } catch { /* 窗口可能已关闭 */ }
+        console.log(`[agentStateBridge] 🎭 ${motion} (${snap.actor ?? '-'}) ${snap.taskTitle ?? ''}`)
+      } catch { /* 单次失败不影响下一拍 */ }
+    }, 3000)
+    if (typeof (agentStateTimer as any)?.unref === 'function') { (agentStateTimer as any).unref() }
+  } catch { /* 桥接失败时桌宠照常按情绪运行 */ }
+}
+
+export function stopAgentStateBridge(): void {
+  if (agentStateTimer) { clearInterval(agentStateTimer); agentStateTimer = null }
+}
+
 /**
  * 应用启动时调用：立即从磁盘恢复内驱力/情绪（含离线冷落推进），
  * 并开启独立于渲染进程的周期落盘（防止 pet 渲染页没跑 autonomy tick 时
@@ -89,6 +148,8 @@ export function initPetLifeState(): void {
       }, 60000)
       if (typeof (lifeStateTimer as any)?.unref === 'function') {(lifeStateTimer as any).unref()}
     }
+    // 🧭 桌宠绑定真实 Agent 运行状态（零 LLM 开销，失败自动退回情绪驱动）
+    startAgentStateBridge()
   } catch { /* 不影响主链路 */ }
 }
 

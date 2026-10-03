@@ -68,6 +68,42 @@ jobs:
             *.xml
           retention-days: 7
 
+  native-abi:
+    # 原生模块 ABI 门禁 —— 2026-10-03 发布审计的真实事故。
+    # better-sqlite3 的预编译包是为 Node 20 (ABI 143) 打的，而 Electron 40 需要 ABI 148。
+    # 后果：vitest 全绿（测试跑在 Node 下），但**打包后启动时** SQLite 初始化失败，
+    #       记忆系统的 ReMe/Scroll 分支静默降级 —— 属于「测试骗过了我们」的那类 bug。
+    # 这个 job 在真实 Electron ABI 下加载原生模块，确保发布产物不会带病。
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild:electron
+
+      - name: Verify native module loads under Electron ABI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # 用 Electron 的 Node 模式实际 require 一次，验证 ABI 一致
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          & .\node_modules\electron\dist\electron.exe -e "const D=require('better-sqlite3'); const d=new D(':memory:'); d.exec('create table t(x)'); d.prepare('insert into t values (?)').run(42); if(d.prepare('select x from t').get().x!==42) throw new Error('bad'); console.log('ELECTRON_ABI_OK'); d.close();"
+          if ($LASTEXITCODE -ne 0) { throw '原生模块在 Electron ABI 下加载失败 —— 记忆系统会在真机静默降级' }
+          if (-not $?) { throw '原生模块探测失败' }
+
+      - name: Native ABI unit test
+        run: npx vitest run tests/nativeAbi.test.ts --reporter=verbose
+
   coverage:
     # 覆盖率门禁：只在 Linux + Node 22 跑一次，命中 vitest.config.ts 中的 thresholds。
     # 低于阈值（核心模块 70% 行/函数、55% 分支）即失败。

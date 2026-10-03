@@ -129,6 +129,15 @@ const RULES: SandboxRule[] = [
     description: '递归强制删除根/家目录', remediation: '硬拦截：会清空用户数据，禁止执行',
   },
   {
+    // v0.1 macOS 变体：macOS 的 home 是 /Users/<name>，BLOCK-002 的 `~` 形式不覆盖绝对路径写法。
+    // `rm -rf /Users/alice` 与 `rm -rf ~/` 意图完全相同，必须同级硬拦。
+    id: 'BLOCK-002P', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
+    pattern: /\brm\s+-[rRfF]{2,}\s+(?:\/Users\/[A-Za-z0-9._-]+|\$HOME|\/home\/[A-Za-z0-9._-]+)\s*(?:$|[\s;|&])/i,
+    description: '递归强制删除用户主目录（/Users/xxx、$HOME、/home/xxx）',
+    remediation: '硬拦截：会清空用户数据，禁止执行',
+    platform: 'posix',
+  },
+  {
     id: 'BLOCK-003', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bmkfs(?:\.\w+)?\b/i,
     description: '格式化文件系统', remediation: '硬拦截：不可逆文件系统格式化',
@@ -148,6 +157,16 @@ const RULES: SandboxRule[] = [
     pattern: /\b(del|erase|rmdir|rd|Remove-Item|Remove-ItemProperty)\b[\s\S]{0,120}([\\/](Windows|System32|SysWOW64|Program Files(?:\s\(x86\))?)[\\/]?)/i,
     description: '删除系统目录（Windows/System32）', remediation: '硬拦截：删除系统关键目录会导致系统损坏',
     platform: 'win32',
+  },
+  {
+    // v0.1 macOS 对应物：BLOCK-006 的 POSIX 形态。
+    // 没有这条，macOS 上 `rm -rf /System/Library/...` / `rm -rf /Applications/X.app`
+    // 在规则库里**一条都命中不了**——沙箱会直接退化为无保护。
+    id: 'BLOCK-006P', severity: Severity.BLOCK, category: ThreatCategory.PRIVILEGE_ESCALATION,
+    pattern: /\b(rm|rmdir|unlink)\b[\s\S]{0,80}(-[\w-]+\s+)*\/?(System\/Library|System\/Applications|Library\/Keychains|usr\/(?:bin|lib|local)|Applications\/[^/\s]+\.app)/i,
+    description: '删除/清空 macOS 系统目录或应用包（/System、/Library、.app）',
+    remediation: '硬拦截：删除系统关键目录会导致系统损坏或应用无法运行',
+    platform: 'posix',
   },
   {
     id: 'BLOCK-007', severity: Severity.BLOCK, category: ThreatCategory.CODE_EXECUTION,
@@ -195,6 +214,16 @@ const RULES: SandboxRule[] = [
     platform: 'win32',
   },
   {
+    // v0.1 macOS 对应物：CRIT-005 的 POSIX 形态。
+    // 缺这条时 `rm -rf ~/Documents` 在 macOS 上严重度为 SAFE（完全放行），
+    // 而等价 Windows 命令是 CRITICAL——同一意图在两平台防护等级相差 5 级。
+    id: 'CRIT-005P', severity: Severity.CRITICAL, category: ThreatCategory.PRIVILEGE_ESCALATION,
+    pattern: /\brm\b[\s\S]{0,60}-[rRfF]{2,}|\brm\b[\s\S]{0,40}-[rR]\b[\s\S]{0,20}-[fF]\b|\bfind\b[\s\S]{0,60}-delete\b|\btrash\b[\s\S]{0,40}-\w+\s+\//i,
+    description: '递归强制删除目录（POSIX rm -rf / find -delete）',
+    remediation: '强审批：递归强删不可逆，需确认目标路径',
+    platform: 'posix',
+  },
+  {
     id: 'CRIT-006', severity: Severity.CRITICAL, category: ThreatCategory.DATA_EXFIL,
     pattern: /\b(scp|rsync|sftp|ftp)\b[\s\S]{0,120}(${SENSITIVE_PATHS}|id_rsa)/i,
     description: '把凭证/密钥文件外传到远端', remediation: '强审批：疑似 SSH 私钥/凭证外传，禁止静默执行',
@@ -221,6 +250,29 @@ const RULES: SandboxRule[] = [
     id: 'HIGH-004', severity: Severity.HIGH, category: ThreatCategory.PRIVILEGE_ESCALATION,
     pattern: /\bchmod\s+[0-7]*777\b|\bchown\s+-?R?\b[\s\S]{0,30}(root|Administrators)/i,
     description: '权限过度放开 / 改属主为管理员', remediation: '降级 Low IL：777 或 root/Administrators 属主过宽',
+    platform: 'posix',
+  },
+  {
+    // v0.1 macOS 对应物：HIGH-001（Windows `del /f` 静默强删）的 POSIX 形态。
+    id: 'HIGH-001P', severity: Severity.HIGH, category: ThreatCategory.PRIVILEGE_ESCALATION,
+    pattern: /\brm\b[\s\S]{0,40}-[a-zA-Z]*f[a-zA-Z]*\b/i,
+    description: '强制删除不提示（POSIX rm -f）', remediation: '降级 Low IL 并审批：静默删除不可恢复',
+    platform: 'posix',
+  },
+  {
+    // v0.1 macOS 提权/系统破坏补充：diskutil / SIP / Gatekeeper / 系统偏好改写。
+    // Windows 侧有 diskpart / net user / reg delete 的对位，macOS 原本完全没有。
+    id: 'HIGH-006', severity: Severity.HIGH, category: ThreatCategory.PRIVILEGE_ESCALATION,
+    pattern: /\bdiskutil\b[\s\S]{0,40}(erase|reformat|apfs delete)|\bcsrutil\s+disable|\bspctl\s+--master-disable|\bdefaults\s+write\b[\s\S]{0,60}\b(com\.apple|global)\b/i,
+    description: '破坏系统安全或磁盘（diskutil 擦盘、关闭 SIP/Gatekeeper、改系统偏好）',
+    remediation: '降级 Low IL 并审批：会削弱系统安全边界或损坏磁盘',
+    platform: 'posix',
+  },
+  {
+    // macOS 特有凭据入口：Keychain 导出。Windows 侧有 reg/DPAPI 对位，macOS 无。
+    id: 'HIGH-007', severity: Severity.HIGH, category: ThreatCategory.CREDIT_LEAK,
+    pattern: /\bsecurity\s+(?:find-generic-password|find-internet-password|dump-keychain|unlock-keychain)\b/i,
+    description: '读取/导出 macOS 钥匙串凭据', remediation: '降级 Low IL 并审批：钥匙串含全机密码，禁止静默导出',
     platform: 'posix',
   },
 

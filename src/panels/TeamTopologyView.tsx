@@ -542,7 +542,7 @@ export default function TeamTopologyView({ board, workers, counts, onAction, his
               style={{ width: 120, margin: '0 4px' }}
               title="回放时间轴 · 点击跳转"
             />
-            <span style={{ fontSize: 10, color: '#6b7280', minWidth: 56, fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 10, color: '#6b7280', minWidth: 56 }}>
               {snaps.length ? HHMMSS((replay || snaps[snaps.length - 1]).ts) : '--:--:--'}
             </span>
             {replay && (

@@ -43,7 +43,7 @@ features:
 ## 项目结构
 
 ```
-K:\LuminaLife2.0
+<项目目录>
 ├── electron/           # Electron 主进程
 │   ├── main.ts         # 入口（BrowserWindow、IPC、tray）
 │   ├── tools/          # 工具注册与实现
