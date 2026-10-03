@@ -125,7 +125,7 @@ describe('低置信度标注', () => {
 
     const out = await memoryGet({ section: 'facts' })
     expect(out.ok).toBe(true)
-    for (const l of out.content.split('\n')) lines.push(l)
+    for (const l of out.content.split('\n')) {lines.push(l)}
 
     const inferred = lines.find(l => l.includes('模型推断：用户住在杭州'))!
     const stated = lines.find(l => l.includes('用户亲口说住在杭州'))!

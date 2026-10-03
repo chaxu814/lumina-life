@@ -28,7 +28,7 @@ const read = (p: string) => readFileSync(join(root, p), 'utf-8')
  */
 function stripComments(src: string): string {
   return src
-    .replace(/^﻿/, '')
+    .replace(/^\uFEFF/, '')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n')
     .map(line => (/^\s*\/\//.test(line) ? '' : line))

@@ -84,7 +84,7 @@ export class PetChatOrchestrator {
    */
   handlePetMessage(text: string): void {
     const t = (text || '').trim()
-    if (!t) return
+    if (!t) {return}
     this.deps.addMessage('user', t)
     this.queue.push(t)
     void this.pump()
@@ -92,7 +92,7 @@ export class PetChatOrchestrator {
 
   /** 串行泵：同一时刻只跑一条；当前条结束后自动处理下一条排队消息 */
   private async pump(): Promise<void> {
-    if (this.running) return
+    if (this.running) {return}
     this.running = true
     try {
       while (this.queue.length > 0) {
@@ -135,7 +135,7 @@ export class PetChatOrchestrator {
 
       // 失败：记录原因，退避后重试
       lastReason = (res && (res.error || res.content)) || '空回复'
-      if (attempt >= PET_RETRY_MAX) break
+      if (attempt >= PET_RETRY_MAX) {break}
       const wait = PET_RETRY_BACKOFF_MS[attempt] ?? 1500
       this.sleepCalls.push(wait)
       await (this.deps.sleep ?? defaultSleep)(wait)
@@ -160,7 +160,7 @@ export class PetChatOrchestrator {
  * 才需要推给桌宠。system 消息一律跳过。
  */
 export function messagesToForward(newMsgs: StoreMessage[], injectedByUs: boolean): StoreMessage[] {
-  if (injectedByUs) return []
+  if (injectedByUs) {return []}
   return (newMsgs || []).filter((m) => m && m.role !== 'system')
 }
 

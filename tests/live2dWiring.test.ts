@@ -30,7 +30,7 @@ function execIntentCases(): Set<string> {
   const end = html.indexOf('startAutonomyLoop', start)
   const body = html.slice(start, end)
   const set = new Set<string>()
-  for (const m of body.matchAll(/case\s+'([a-z-]+)'\s*:/g)) set.add(m[1])
+  for (const m of body.matchAll(/case\s+'([a-z-]+)'\s*:/g)) {set.add(m[1])}
   return set
 }
 
@@ -52,7 +52,7 @@ function moodExpressionKeys(): Set<string> {
   const end = html.indexOf('naturalMicroExpression', start)
   const body = html.slice(start, end)
   const set = new Set<string>()
-  for (const m of body.matchAll(/'([^']+)\s*[^']*'\s*:\s*'[a-z]+'/g)) set.add(m[1].trim())
+  for (const m of body.matchAll(/'([^']+)\s*[^']*'\s*:\s*'[a-z]+'/g)) {set.add(m[1].trim())}
   return set
 }
 
@@ -139,7 +139,7 @@ describe('Live2D AI 驱动身体 · 端到端接线契约', () => {
       const fn = b.match(/(do[A-Z][A-Za-z]*)\s*\(/)
       if (fn) {
         const fnBody = html.match(new RegExp(`function ${fn[1]}\\s*\\([\\s\\S]*?\\n}`))
-        if (fnBody) b += '\n' + fnBody[0]
+        if (fnBody) {b += '\n' + fnBody[0]}
       }
       return b
     }

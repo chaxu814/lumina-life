@@ -220,7 +220,6 @@ export default function TeamTopologyView({ board, workers, counts, onAction, his
       }, 800)
       return trimmed
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveSig])
 
   // ── 回放状态 ──

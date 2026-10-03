@@ -17,6 +17,7 @@ import { describeScreenViaVlm } from './vision/screenVision'
 import * as path from 'path'
 import * as fs from 'fs'
 import { getAgentConfig } from '../agentConfig'
+import { getAppIconPath } from '../appIcon'
 import { LLMProvider } from '../core/llmProvider'
 import { detectScene } from '../sceneDetector'
 import { getProviderManager } from '../core/providerManager'
@@ -270,7 +271,7 @@ let lastInteractionTime = Date.now()
 // 主进程每 100ms 读一次全局鼠标（screen.getCursorScreenPoint），换算成相对桌宠窗口的
 // CSS 像素坐标推给渲染层 driveGaze，让她在 compact 小窗口里也能"一直看着"鼠标。
 let cursorFollowTimer: ReturnType<typeof setInterval> | null = null
-let lastCursor = { x: 0, y: 0, sent: false }
+const lastCursor = { x: 0, y: 0, sent: false }
 
 /** 启动全局鼠标注视推送（幂等；窗口关闭时由 closed 清理） */
 function startCursorFollow(): void {
@@ -1173,8 +1174,8 @@ export const PET_WINDOW_H = 720
 
 export function compactPetWindowEnabled(): boolean {
   const mode = (process.env.LUMINA_PET_WINDOW || '').toLowerCase()
-  if (mode === 'fullscreen' || mode === 'legacy' || mode === '0') return false
-  if (mode === 'compact' || mode === '1') return true
+  if (mode === 'fullscreen' || mode === 'legacy' || mode === '0') {return false}
+  if (mode === 'compact' || mode === '1') {return true}
   return process.platform === 'win32'
 }
 
@@ -1192,14 +1193,14 @@ function clampWindowPos(x: number, y: number, w: number, h: number): { x: number
 /** 透明窗在高频移动后可能停止呈现：用 1px 的 setBounds 轻推 DComp 重新合成（30ms 后归位，肉眼几乎无感） */
 function nudgeRepaint(win: BrowserWindow): void {
   try {
-    if (!win || win.isDestroyed()) return
+    if (!win || win.isDestroyed()) {return}
     // 1) 渲染层重建 WebGL 绘图缓冲，强制 DWM 重新挂接 DirectComposition 呈现面（移动后空白的根因修复）
     try { win.webContents.send('pet:force-repaint') } catch { /* noop */ }
     // 2) 1px 轻推再归位（双保险，触发 DComp 重新合成）
     const b = win.getBounds()
     win.setBounds({ x: b.x, y: b.y + 1, width: b.width, height: b.height })
     setTimeout(() => {
-      if (win.isDestroyed()) return
+      if (win.isDestroyed()) {return}
       win.setBounds(b)
       try { win.webContents.send('pet:force-repaint') } catch { /* noop */ }
     }, 60)
@@ -1370,6 +1371,8 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
     resizable: false,
     hasShadow: false,
     focusable: true,
+    // 任务栏/Alt-Tab 里不要出现 Electron 原子图标
+    icon: getAppIconPath(256),
     backgroundColor: petCaps.backgroundColor,
     webPreferences: {
       preload: resolvePreloadPath(),
@@ -1406,7 +1409,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
     setWindowClickThrough(config.clickThrough)
     startCursorFollow() // 👀 v6.2 全屏注视推送
     // 首次加载完成后强制重绘一次（部分机器首帧 DComp 呈现面未挂接 → 开局即空白）
-    setTimeout(() => { if (petWindow && !petWindow.isDestroyed()) nudgeRepaint(petWindow) }, 500)
+    setTimeout(() => { if (petWindow && !petWindow.isDestroyed()) {nudgeRepaint(petWindow)} }, 500)
   }).catch(err => {
     console.error('[PetWindow] loadFile failed:', err)
   })
@@ -1586,12 +1589,12 @@ export function registerPetIpc(): void {
   }
   ipcMain.on('pet:window-move', (e, payload: { screenX?: number; screenY?: number; grabX?: number; grabY?: number }) => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) {return}
     // 拖拽一开始就解除旧吸附，edge-watch 绝不能与用户拖拽打架
     disarmEdgeSnap()
     const sx = Number(payload?.screenX), sy = Number(payload?.screenY)
     const gx = Number(payload?.grabX) || 0, gy = Number(payload?.grabY) || 0
-    if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) {return}
     const [w, h] = win.getSize()
     const c = clampWindowPos(Math.round(sx - gx), Math.round(sy - gy), w, h)
     dragPending = c
@@ -1616,7 +1619,7 @@ export function registerPetIpc(): void {
   // compact 拖拽结束：落最终位置 + 持久化 + 边缘吸附 + 强制重绘
   ipcMain.on('pet:window-move-end', (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) {return}
     if (dragTrailing) { clearTimeout(dragTrailing); dragTrailing = null }
     if (dragPending) { applyDragBounds(win, dragPending.x, dragPending.y); dragPending = null }
     const [x, y] = win.getPosition()
@@ -1642,7 +1645,7 @@ export function registerPetIpc(): void {
   // compact 小窗口：定期把窗口位置写回配置（走路/边缘钳制等非拖拽场景也能记住位置）
   ipcMain.on('pet:window-sync-pos', (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) return
+    if (!win || win.isDestroyed() || !compactPetWindowEnabled()) {return}
     const [x, y] = win.getPosition()
     if (config.x !== x || config.y !== y) { config.x = x; config.y = y; persistPetConfig() }
   })
@@ -1817,6 +1820,7 @@ export function registerPetIpc(): void {
         width: 560,
         height: 780,
         title: 'Lumina 桌宠设置',
+        icon: getAppIconPath(256),
         alwaysOnTop: true,
         resizable: true,
         minimizable: false,
@@ -2389,6 +2393,8 @@ export function openPetChatWindow(): { ok: boolean; error?: string } {
       minHeight: 420,
       hasShadow: false,
       focusable: true,
+      // ⭐ 这个窗口会显示在任务栏 —— 不设 icon 就是 Electron 默认的原子图标
+      icon: getAppIconPath(256),
       backgroundColor: petCaps.backgroundColor,
       webPreferences: {
         preload: resolvePreloadPath(),
@@ -2460,6 +2466,7 @@ export function openOnboarding(): { ok: boolean } {
     width: 780,
     height: 640,
     title: 'Lumina Virtual Pet · 初始人格',
+    icon: getAppIconPath(256),
     alwaysOnTop: true,
     resizable: false,
     webPreferences: {

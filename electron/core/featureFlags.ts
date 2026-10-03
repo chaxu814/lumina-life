@@ -8,6 +8,7 @@
  * - 读取是同步的（启动时一次性加载），不要在热路径里反复 IO
  */
 import { app } from 'electron';
+import { stateFilePath } from './pathsFallback';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -66,14 +67,15 @@ const DEFAULTS: Record<FeatureKey, boolean> = {
   'mode.minimal': false,
 };
 
-let overrides: Partial<Record<FeatureKey, boolean>> = {};
+const overrides: Partial<Record<FeatureKey, boolean>> = {};
 let loaded = false;
 
 function userFlagsPath(): string {
   try {
     return path.join(app.getPath('userData'), 'feature-flags.json');
   } catch {
-    return path.join(process.cwd(), 'feature-flags.json');
+    // ⚠️ 不要退回 process.cwd()：开发态 cwd 就是项目根，会把状态写进 Git 工作区
+    return stateFilePath('feature-flags.json');
   }
 }
 
@@ -85,7 +87,7 @@ export function loadFeatureFlags(): void {
     if (fs.existsSync(p)) {
       const raw = JSON.parse(fs.readFileSync(p, 'utf-8'));
       for (const k of Object.keys(raw) as FeatureKey[]) {
-        if (k in DEFAULTS) overrides[k] = !!raw[k];
+        if (k in DEFAULTS) {overrides[k] = !!raw[k];}
       }
     }
   } catch {
@@ -95,14 +97,14 @@ export function loadFeatureFlags(): void {
   for (const k of Object.keys(DEFAULTS) as FeatureKey[]) {
     const envKey = 'LUMINA_FF_' + k.replace(/\./g, '_').toUpperCase();
     const v = process.env[envKey];
-    if (v === '1' || v === 'true') overrides[k] = true;
-    else if (v === '0' || v === 'false') overrides[k] = false;
+    if (v === '1' || v === 'true') {overrides[k] = true;}
+    else if (v === '0' || v === 'false') {overrides[k] = false;}
   }
 }
 
 export function isEnabled(key: FeatureKey): boolean {
-  if (!loaded) loadFeatureFlags();
-  if (key in overrides) return overrides[key]!;
+  if (!loaded) {loadFeatureFlags();}
+  if (key in overrides) {return overrides[key]!;}
   return DEFAULTS[key];
 }
 
@@ -119,8 +121,8 @@ export function setFlag(key: FeatureKey, value: boolean): void {
 }
 
 export function allFlags(): Record<FeatureKey, boolean> {
-  if (!loaded) loadFeatureFlags();
+  if (!loaded) {loadFeatureFlags();}
   const out = { ...DEFAULTS };
-  for (const k of Object.keys(overrides) as FeatureKey[]) out[k] = overrides[k]!;
+  for (const k of Object.keys(overrides) as FeatureKey[]) {out[k] = overrides[k]!;}
   return out;
 }

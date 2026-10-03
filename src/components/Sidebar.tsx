@@ -234,7 +234,7 @@ export default function Sidebar() {
       {sections.map((section) => (
         <div key={section.label} className="sidebar-section">
           {section.items.map((item) => {
-            if (minimal && item.id !== 'chat' && item.id !== 'settings') return null
+            if (minimal && item.id !== 'chat' && item.id !== 'settings') {return null}
             const isActive = activePanel === item.id
             return (
               <button key={item.id}

@@ -87,10 +87,10 @@ let agentStateTimer: ReturnType<typeof setInterval> | null = null
  * - 可关闭：设置项 `pet.agentStateDriven` 关掉即完全退回原行为。
  */
 function startAgentStateBridge(): void {
-  if (agentStateTimer != null) return
+  if (agentStateTimer != null) {return}
   try {
     // 关闭开关时完全不启动，连轮询开销都没有
-    if (process.env.LUMINA_PET_AGENT_STATE === '0') return
+    if (process.env.LUMINA_PET_AGENT_STATE === '0') {return}
 
     const { deriveAgentState, shouldDrivePetFromAgent, agentStateToMotion, agentStateToExpression } =
       require('./agentStateBridge')
@@ -104,7 +104,7 @@ function startAgentStateBridge(): void {
           return
         }
         const motion = agentStateToMotion(snap.state)
-        if (motion === lastMotion) return
+        if (motion === lastMotion) {return}
         lastMotion = motion
 
         // 复用现有命令通道（pet:command），不新增 IPC

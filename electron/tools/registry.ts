@@ -28,13 +28,43 @@ export interface ToolsetDef {
 
 export const TOOLSETS: Record<string, ToolsetDef> = {
   // ═══════════════════════════════════════════════════════════
+  // 【v3.34 修复】ToolDef.toolsets 曾经完全被忽略 —— 声明了 toolsets 的
+  // 工具实际永远进不了模型的 function list。实测：132 个已注册工具里有
+  // **47 个**不在任何静态 toolset 中（team_message / hire_worker /
+  // adversarial_review / desktop_act / creator_* / tavily_* / lsp_* …），
+  // 而 agentTeamPersonas.ts 又花了 20 行教模型去调其中 5 个。
+  //
+  // 【但不能无脑全并】实测 ToolDef.toolsets 里 'agent' 被宽泛标注了
+  // **121/132** 次 —— 邮件、创作者、浏览器、搜索全写着 'agent'。若直接
+  // 合并，agent 模式会从 34 涨到 121，三档按需加载的分层设计当场作废
+  // （每轮 function list 多塞 87 个 schema，纯烧 token 还会稀释选择）。
+  //
+  // 【采用的方案：模式层静态、能力层声明式】
+  //   · 模式层（chat / agent / developer）保持静态表独占 —— 它表达的是
+  //     「这一档给用户多少能力」的产品决策，不能被工具自己声明左右。
+  //   · 能力层（team / lsp / browser / computer_use / creator / …）改为
+  //     声明式自动解析：所有 ToolDef.toolsets 里写了该名字的工具自动并入。
+  //     这样新加工具只要写对 toolsets 就能被看见，不用记得改第二张表。
+  //   · 新增 full：全量注册工具，供「全部工具」模式 / 高级用户使用。
+  //
+  // 未被任何 toolset 覆盖的工具会在启动日志里告警（见 tools/index.ts），
+  // 防止再次静默沉底。详见 resolveToolset() 与 MODE_TOOLSETS。
+  // ═══════════════════════════════════════════════════════════
+
+  /** 全量工具集：所有已注册工具（运行时特殊处理，不受分档限制） */
+  full: {
+    description: '全量工具 — 不分档，供高级用户 / 调试用',
+    tools: [],
+  },
+
+  // ═══════════════════════════════════════════════════════════
   // 精简三层工具架构（方案B — 按模式分档加载）
   //   设计原则：
   //     - chat: 纯对话（0 工具，最安全）
   //     - agent: 日常使用（约 32 工具：文件+终端+搜索+记忆+任务+系统+团队）
-  //     - developer: agent + git（约 36 工具）
-  //   全量注册工具 100+（含 Computer Use/新闻/创作者/LSP/MCP/邮件等，按需启用），
-  //   启动日志会打印实际注册数 getToolNames().size。
+  //     - developer: agent + git + LSP/AST + 代码工具 + Computer Use + 浏览器
+  //   全量注册工具 132 个（含 Computer Use/新闻/创作者/LSP/MCP/邮件等，
+  //   按需启用），启动日志会打印实际注册数与各档可达数。
   //   旧有 TOOLSETS 保留在下方，保证 resolveToolset 向下兼容。
   // ═══════════════════════════════════════════════════════════
 
@@ -51,10 +81,13 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
     tools: [],
   },
 
-  /*** 🔵 L3 — 开发者模式：Agent + Git + 团队 */
+  /*** 🔵 L3 — 开发者模式：Agent + Git + 代码工具 + Computer Use + 浏览器 */
   developer: {
-    description: '开发者模式 — Agent + Git + Team',
-    includes: ['agent', 'git', 'team'],
+    description: '开发者模式 — Agent + Git + LSP/AST + 代码工具 + Computer Use + 浏览器',
+    // v3.34: 补上 lsp / code / computer_use / browser —— 修复前即使工具声明了
+    // 自己的 toolsets，开发者模式也拿不到 ast_search / lsp_* / desktop_act
+    // 这一整层「写代码真正要用的工具」。
+    includes: ['agent', 'git', 'team', 'lsp', 'code', 'computer_use', 'browser', 'desktop'],
     tools: [],
   },
 
@@ -232,6 +265,57 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
     description: '结构化记忆（旧，由 memory 替代）',
     tools: ['memory_save', 'memory_search', 'memory_get', 'memory_all', 'memory_summarize'],
   },
+
+  // ── v3.34 新增：能力层占位（tools 为空，由 ToolDef.toolsets 声明式填充）
+  //    修复前这些名字在静态表里根本不存在，导致 developer 的 includes 引用它们时
+  //    resolveToolset 静默返回 []，lsp_* / ast_search / browser_* 这一整层
+  //    「写代码真正要用的工具」即使声明了 toolsets 也拿不到。
+  // ────────────────────────────────────────────────────────────────
+
+  lsp: {
+    description: 'LSP / AST 代码导航',
+    tools: [],
+  },
+
+  code: {
+    description: '代码智能（开发伴手 / 每日代码报告等）',
+    tools: [],
+  },
+
+  browser: {
+    description: '浏览器自动化（Playwright / CDP）',
+    tools: [],
+  },
+
+  creator: {
+    description: '内容创作工作流（大纲/生成/润色/导出）',
+    tools: [],
+  },
+
+  research: {
+    description: '深度调研',
+    tools: [],
+  },
+
+  media: {
+    description: '多媒体生成',
+    tools: [],
+  },
+
+  social: {
+    description: '团队社交（群聊/朋友圈/社交引擎）',
+    tools: [],
+  },
+
+  voice: {
+    description: '语音输出 / 输入',
+    tools: [],
+  },
+
+  news: {
+    description: '新闻聚合与日报',
+    tools: [],
+  },
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -255,8 +339,29 @@ export function getToolNames(): Set<string> {
   return new Set(toolDefinitions.keys())
 }
 
+/** 按模式分档加载的「模式层」—— 静态表独占，不接受声明式合并
+ *
+ *  【为什么要单列】
+ *  ToolDef.toolsets 里 'agent' 被宽泛标注了 121/132 次（邮件/创作者/浏览器/
+ *  搜索全写着 agent）。若无差别合并，agent 模式会从 34 涨到 121，
+ *  三档按需加载的分层设计当场作废 —— 每轮 function list 多塞 87 个
+ *  schema，既烧 token 又稀释模型的选择。
+ *  模式层表达的是「这一档给用户多少能力」的产品决策，不能被工具自己声明左右。
+ */
+export const MODE_TOOLSETS = new Set(['chat', 'agent', 'developer'])
+
 /** 解析 toolset（支持嵌套 includes + v3.6: blockedInChild 过滤）
- *  🔧 P0-fix: 自动过滤未注册的工具名，避免下游崩溃 */
+ *
+ *  🔧 P0-fix: 自动过滤未注册的工具名，避免下游崩溃
+ *
+ *  🔧 v3.34-fix: 能力层 toolset 改为**声明式** —— 自动并入所有
+ *  `ToolDef.toolsets` 里写了本名字的工具。修复前 `ToolDef.toolsets`
+ *  字段完全无人读取，导致 132 个已注册工具中有 47 个对模型彻底不可达
+ *  （team_message / hire_worker / adversarial_review / desktop_act /
+ *   creator_* / lsp_* / tavily_* …），而 agentTeamPersonas.ts 还在
+ *   教模型去调其中 5 个。
+ *  模式层（chat/agent/developer）例外，见 MODE_TOOLSETS 注释。
+ */
 export function resolveToolset(
   name: string,
   visited = new Set<string>(),
@@ -266,17 +371,42 @@ export function resolveToolset(
   if (visited.has(name)) {return []}
   visited.add(name)
 
+  // full：全部已注册工具（除 blockedInChild）
+  if (name === 'full') {
+    const all = [...toolDefinitions.keys()]
+    return excludeChildBlocked ? all.filter(t => !toolDefinitions.get(t)?.blockedInChild) : all
+  }
+
   const ts = TOOLSETS[name]
-  if (!ts) {return []}
+  if (!ts) {
+    // 静默返回 [] 会让「includes 写错名字」这类错误完全隐形（v3.34 踩过：
+    // developer 的 includes 里写了 lsp/code/browser，但静态表里没有这三个名字，
+    // 于是 lsp_* / ast_search / browser_* 整层工具永远拿不到，没有任何报错）。
+    console.warn(
+      `[Registry] resolveToolset("${name}"): 未定义的 toolset（返回空集）。` +
+      `若它出现在某个 toolset 的 includes 里，该分支的能力将静默丢失。`,
+    )
+    return []
+  }
 
   const tools = new Set<string>()
-  
+
   // 只添加已注册的工具
   for (const t of ts.tools) {
     if (toolDefinitions.has(t)) {
       tools.add(t)
     } else {
       console.warn(`[Registry] resolveToolset("${name}"): 跳过未注册工具 "${t}"`)
+    }
+  }
+
+  // 🆕 v3.34: 能力层声明式合并 —— ToolDef.toolsets 声明了本名字的工具自动并入
+  //    模式层与 full 跳过：前者要保持分档，后者已经全量。
+  if (!MODE_TOOLSETS.has(name)) {
+    for (const [toolName, def] of toolDefinitions) {
+      if (def.toolsets?.includes(name)) {
+        tools.add(toolName)
+      }
     }
   }
 

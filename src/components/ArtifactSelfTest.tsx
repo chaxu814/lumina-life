@@ -45,7 +45,7 @@ const ArtifactSelfTest: React.FC = () => {
   const [busy, setBusy] = useState(false)
 
   // 非 dev 环境绝不渲染（生产构建此分支被静态替换为 false）
-  if (!import.meta.env.DEV) return null
+  if (!import.meta.env.DEV) {return null}
 
   /** 加载全部 8 种示例产物（全部动态 import，生产不打包） */
   const loadSamples = async () => {
@@ -85,7 +85,7 @@ const ArtifactSelfTest: React.FC = () => {
           mtime: now,
         }),
       ]
-      for (const it of items) addArtifact(it)
+      for (const it of items) {addArtifact(it)}
     } finally {
       setBusy(false)
     }
@@ -114,9 +114,9 @@ const ArtifactSelfTest: React.FC = () => {
   const clearSamples = () => {
     const state = useTaskWorkspace.getState()
     const selftestIds = state.artifacts.filter((a) => a.id.startsWith(SELFTEST_PREFIX)).map((a) => a.id)
-    for (const id of selftestIds) state.closeArtifact(id)
+    for (const id of selftestIds) {state.closeArtifact(id)}
     // 把激活产物切回 null，避免预览区残留
-    if (selftestIds.includes(state.activeArtifactId || '')) state.setActiveArtifact(null)
+    if (selftestIds.includes(state.activeArtifactId || '')) {state.setActiveArtifact(null)}
   }
 
   return (

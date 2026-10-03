@@ -9,6 +9,7 @@ import { globalEventBus, BusEvents } from '../eventBus'
 import { xpManager, XP_RULES } from './levels'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as os from 'os'
 import { app } from 'electron'
 
 // ═══════════════════════════════════════════════════════════
@@ -236,10 +237,14 @@ class QuestManager {
 
   private _getStatePath(): string {
     try {
-      return path.join(app.getPath('userData'), 'lumina-quests.json')
-    } catch {
-      return path.join(process.cwd(), 'lumina-quests.json')
-    }
+      if (app && typeof app.getPath === 'function') {
+        return path.join(app.getPath('userData'), 'lumina-quests.json')
+      }
+    } catch { /* app 未就绪 */ }
+    // ⚠️ 原来这里退回 process.cwd()，也就是**项目根目录** ——
+    // 于是开发模式下 `lumina-quests.json` 会落进仓库里（发布后污染 Git 工作区）。
+    // 退回系统临时目录：宁可状态不持久，也不能把文件写进用户的代码仓库。
+    return path.join(os.tmpdir(), 'lumina-quests.json')
   }
 
   private _createEmptyState(): DailyQuestState {

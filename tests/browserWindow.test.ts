@@ -52,7 +52,12 @@ describe('内置浏览器：窗口与 webview 的角色分工', () => {
     // did-attach-webview → guest.on('will-navigate') → isAllowedUrl
     expect(winSrc).toContain("'did-attach-webview'")
     expect(winSrc).toMatch(/guest\.on\('will-navigate'/)
-    expect(winSrc).toMatch(/if \(!isAllowedUrl\(url\)\) ev\.preventDefault\(\)/)
+    // 【v3.34 括号容错】原断言是 /if \(!isAllowedUrl\(url\)\) ev\.preventDefault\(\)/。
+  // eslint 的 curly 规则（--fix）会把单行 if 补成 if (...) { ev.preventDefault() }，
+  // 断言随之失配。读源码文本的断言对格式化工具天然脆弱，这里压掉空白、
+  // 允许可选花括号，让 lint 修复不会再连带打红。
+  const flatWin = winSrc.replace(/\s+/g, ' ')
+  expect(flatWin).toMatch(/if \(!isAllowedUrl\(url\)\) \{? ?ev\.preventDefault\(\)/)
 
     // target=_blank 一律在当前窗口打开，不弹一堆窗
     expect(winSrc).toContain('guest.setWindowOpenHandler')
@@ -106,7 +111,7 @@ describe('内置浏览器：标题栏不再无限拼接', () => {
 
   it('同一标题重复套用不会累积后缀（幂等）', () => {
     let t = 'example.com'
-    for (let i = 0; i < 6; i++) t = applyTitle(t)
+    for (let i = 0; i < 6; i++) {t = applyTitle(t)}
     expect(t).toBe('example.com — Lumina 浏览器')
     expect(t.match(/Lumina 浏览器/g)).toHaveLength(1)
   })

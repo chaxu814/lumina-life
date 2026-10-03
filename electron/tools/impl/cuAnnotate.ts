@@ -11,6 +11,7 @@
 // ============================================================
 
 import { BrowserWindow } from 'electron'
+import { getAppIconPath } from '../../appIcon'
 import { pngDimensions, gridDims, type GridInfo, type NormRect } from './cuGeometry'
 
 export interface AnnotatedImage {
@@ -76,6 +77,7 @@ async function annotator(): Promise<BrowserWindow | null> {
         show: false,
         width: 256,
         height: 256,
+        icon: getAppIconPath(256),
         webPreferences: { /* 默认即可：data URL 内联脚本无需 node */ },
       })
       await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(PAGE))

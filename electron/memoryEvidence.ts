@@ -20,6 +20,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import { stateFilePath } from './core/pathsFallback'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -82,7 +83,8 @@ export class MemoryEvidenceEngine {
       maxMemories: 500,
       ...config,
     }
-    this.storagePath = path.join(process.cwd(), 'memory-evidence.json')
+    // ⚠️ 不要退回 process.cwd()：开发态 cwd 就是项目根，会把状态写进 Git 工作区
+    this.storagePath = stateFilePath('memory-evidence.json')
     this.load()
   }
 
@@ -194,6 +196,26 @@ export class MemoryEvidenceEngine {
   /** 获取待确认记忆 */
   getPendingMemories(): ScoredMemory[] {
     return this.memories.filter(m => m.status === 'pending')
+  }
+
+  /** 🆕 v3.34: 按内容查找已有记忆（公开包装）
+   *
+   *  【为什么需要】记忆保存链路在写入时经常已经知道 content（例如用户纠正了
+   *  一条旧记忆），需要在保存**之前**拿到对应的证据条目来判断该把它标成
+   *  confirmed 还是 contradicted。findSimilar 本身是 private。
+   *
+   *  这里不放开原方法的可见性，而是加一个显式的公开入口 —— 让「什么时候
+   *  可以按内容反查」这件事是显式选择，而不是不小心依赖了内部实现。
+   */
+  findByContent(content: string): ScoredMemory | undefined {
+    return this.findSimilar(String(content || '').trim())
+  }
+
+  /** 🆕 v3.34: 按内容反查并标为已证伪，返回命中的 id（未命中返回 null） */
+  contradictByContent(content: string): string | null {
+    const hit = this.findByContent(content)
+    if (!hit) {return null}
+    return this.markContradicted(hit.id) ? hit.id : null
   }
 
   /** 获取过时/矛盾记忆 (建议清理) */

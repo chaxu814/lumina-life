@@ -38,7 +38,7 @@ export default function AppearancePanel() {
   const apply = async (name: string) => {
     const res = await api.themeApply(name)
     if (res?.ok) { setCurrent(name); setMsg(`已切换到「${name}」`) }
-    else setMsg('切换失败：' + (res?.error || ''))
+    else {setMsg('切换失败：' + (res?.error || ''))}
   }
 
   const importTheme = async () => {
@@ -51,7 +51,7 @@ export default function AppearancePanel() {
     if (!confirm(`确定删除主题「${name}」？`)) { return }
     const res = await api.themeDelete(name)
     if (res?.ok) { setMsg(`已删除「${name}」`); load() }
-    else setMsg('删除失败：' + (res?.error || ''))
+    else {setMsg('删除失败：' + (res?.error || ''))}
   }
 
   if (editing) {

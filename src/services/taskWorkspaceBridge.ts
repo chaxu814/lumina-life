@@ -17,7 +17,7 @@ const _unsubs: Array<() => void> = []
 
 /** 后台 runner 事件的工具调用也进「工具执行」列表 */
 function recordRunnerToolEvent(ev: any, agentId: string): void {
-  if (!ev || !ev.tool) return
+  if (!ev || !ev.tool) {return}
   const store = useTaskWorkspace.getState()
   if (ev.type === 'tool_start') {
     store.recordToolStart(ev.tool, agentId, null, ev.args)
@@ -29,7 +29,7 @@ function recordRunnerToolEvent(ev: any, agentId: string): void {
 }
 
 export function initTaskWorkspaceBridge(): void {
-  if (_initialized) return
+  if (_initialized) {return}
   const api = (window as any).luminaAPI
   if (!api) { return }
   _initialized = true
@@ -79,7 +79,7 @@ export function initTaskWorkspaceBridge(): void {
   // 任意 owner（Lumina/Yak/热茶）派生的并行子智能体：hire/assign/done/error/fire。
   if (api.onSubtaskEvent) {
     _unsubs.push(api.onSubtaskEvent((ev: any) => {
-      if (!ev || !ev.id) return
+      if (!ev || !ev.id) {return}
       const store = ws()
       switch (ev.type) {
         case 'assigned':
@@ -133,7 +133,7 @@ export function initTaskWorkspaceBridge(): void {
   // ── 进度看板（图1）：主进程 / CLI 推来的任务板直接进工作区 ──
   if (api.onTaskBoard) {
     _unsubs.push(api.onTaskBoard((board: any) => {
-      if (!board) return
+      if (!board) {return}
       ws().setBoard({ title: board.title, items: board.items || [] })
       ws().setPanelOpen(true)
     }))
@@ -157,7 +157,7 @@ export function initTaskWorkspaceBridge(): void {
   // resetAgentRuntime() 清空它，工作区会跟着一起清空成"暂无工具调用"。
   if (api.onAgentEvent) {
     _unsubs.push(api.onAgentEvent((ev: any) => {
-      if (!ev || !ev.tool) return
+      if (!ev || !ev.tool) {return}
       const store = ws()
       const convId = store.activeConversationId
       if (ev.type === 'tool_start') {

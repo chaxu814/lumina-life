@@ -9,6 +9,8 @@ import {
   markUnverifiedFact,
   normalizeFactSource,
 } from '../../memory/memoryStore'
+// v3.34: 接上五维证据链（此前 memoryEvidence.ts 是 16KB 死代码）
+import { recordEvidence, contradictEvidence, rankByEvidence } from '../../memory/evidenceBridge'
 
 // ── 记忆保存 ────────────────────────────────────────────
 
@@ -56,20 +58,28 @@ export async function memorySave(args: Record<string, any>): Promise<ToolResult>
         ? `\n   ♻️ 已纠正旧记忆 id=${res.demoted.join(',')}（降权并标注为已取代，不会再压过这条）`
         : ''
       const missingNote = res.ok ? '' : `\n   ⚠️ ${res.reason}`
+      // v3.34: 纠正 = 旧内容被证伪。同步把证据链里对应旧条目标为 contradicted，
+      // 否则召回排序仍会把一条已被用户否认的记忆排在前面。
+      const contradicted = res.ok ? contradictEvidence(content) : false
+      const evNote = contradicted ? `\n   🚫 证据链已把被取代的旧条目标为 contradicted（不再优先召回）` : ''
       return {
         callId: '',
         ok: true,
-        content: `✅ 事实已记录: ${content.slice(0, 100)}\n   来源: ${source} / 置信度: ${pct}%${demotedNote}${missingNote}`
+        content: `✅ 事实已记录: ${content.slice(0, 100)}\n   来源: ${source} / 置信度: ${pct}%${demotedNote}${missingNote}${evNote}`
           + (pct < 80 ? '\n   ⚠️ 该条为未验证记忆，不得当作权威事实对外陈述。' : ''),
       }
     }
     const id = store.addFact({ category: 'user', content, source, confidence: args.confidence })
     const saved = store.getFacts('user', 100).find(f => f.id === id)
     const pct = Math.round((saved?.confidence ?? 0) * 100)
+    // v3.34: 同时登记到证据链。写入期的权威性硬约束仍只由 source 决定，
+    // 证据链只负责后续排序与生命周期（不引入第二个“谁说了算”）。
+    const ev = recordEvidence(content, 'fact', source)
+    const evNote = ev ? `\n   📊 证据分 ${Math.round(ev.score * 100)}%（${ev.status}）` : ''
     return {
       callId: '',
       ok: true,
-      content: `✅ 事实已记录: ${content.slice(0, 100)}\n   来源: ${source} / 置信度: ${pct}%`
+      content: `✅ 事实已记录: ${content.slice(0, 100)}\n   来源: ${source} / 置信度: ${pct}%${evNote}`
         + (pct < 80 ? '\n   ⚠️ 该条为未验证记忆，不得当作权威事实对外陈述。' : ''),
     }
   }
@@ -299,15 +309,24 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
     }
   }
 
+  // v3.34: 证据链重排 —— 被用户证伪（contradicted）/ 已过期（outdated）的条目沉底，
+  // 已确认（confirmed）的提到前面。这是「证据链」对用户可感知的直接作用：
+  // 记错的事不会再被当成事实优先讲出来。
+  const { ranked, demoted } = rankByEvidence(results, r => r.entry?.text ?? '')
+  results = ranked as typeof results
+
   const lines = results.map((r, i) =>
     `${i + 1}. [相似度 ${(r.score * 100).toFixed(0)}%] ${r.entry.text.slice(0, 200)}`
   )
+  const demoteNote = demoted > 0
+    ? `\n⚠️ 其中 ${demoted} 条被证据链标为已证伪/已过期，已沉底排序`
+    : ''
 
   const modeLabel = usedHybrid ? '混合检索(BM25+余弦·RRF融合)' : '语义检索'
 
   return {
     callId: '',
     ok: true,
-    content: `🔍 ${modeLabel} "${query}" (${results.length} 条):\n${lines.join('\n')}`,
+    content: `🔍 ${modeLabel} "${query}" (${results.length} 条):\n${lines.join('\n')}${demoteNote}`,
   }
 }

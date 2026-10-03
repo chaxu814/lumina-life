@@ -31,7 +31,7 @@ const ROOT = path.resolve(__dirname, '..')
 function electronVersion(): string | null {
   try {
     const pkgPath = path.join(ROOT, 'node_modules', 'electron', 'package.json')
-    if (!fs.existsSync(pkgPath)) return null
+    if (!fs.existsSync(pkgPath)) {return null}
     return JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version
   } catch {
     return null
@@ -58,7 +58,7 @@ function probeUnderElectron(): { ok: boolean; output: string } {
     ? electronBin
     : path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron')
 
-  if (!fs.existsSync(bin)) return { ok: false, output: `electron binary not found: ${bin}` }
+  if (!fs.existsSync(bin)) {return { ok: false, output: `electron binary not found: ${bin}` }}
 
   // 在 Electron 的 Node 模式下执行一段脚本，真实加载原生模块并跑一条 SQL
   const script = [
@@ -96,7 +96,7 @@ describe('原生模块 ABI 一致性', () => {
     }
 
     const { ok, output } = probeUnderElectron()
-    if (ok) return
+    if (ok) {return}
 
     throw new Error(
       `\n原生模块在 Electron ${ver} 下加载失败 —— 打包后记忆系统（SQLite）会静默降级。\n` +

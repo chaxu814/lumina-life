@@ -27,7 +27,7 @@ export class PushScheduler {
   }
 
   start(): void {
-    if (this.timer) return
+    if (this.timer) {return}
     this.running = true
     this.timer = setInterval(() => this.tick(), CHECK_INTERVAL_MS)
   }
@@ -75,7 +75,7 @@ export class PushScheduler {
   }
 
   private tick(): void {
-    if (!this.running) return
+    if (!this.running) {return}
     this.state = tickState(this.state)
     const decision = decidePush(this.state, this.settings)
     if (decision.should_speak) {
@@ -89,6 +89,6 @@ export class PushScheduler {
 /** 单例（主进程用） */
 let _scheduler: PushScheduler | null = null
 export function getPushScheduler(deps?: PushExecutorDeps): PushScheduler {
-  if (!_scheduler) _scheduler = new PushScheduler(deps)
+  if (!_scheduler) {_scheduler = new PushScheduler(deps)}
   return _scheduler
 }

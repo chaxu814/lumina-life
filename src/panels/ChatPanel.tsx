@@ -87,7 +87,7 @@ async function maybeAutoOpenBrowserOnReply(text: string): Promise<void> {
     const cfg = await window.luminaAPI.getConfig()
     const enabled = cfg?.browser?.autoOpenLinks !== false
     const target = shouldAutoOpen(text, enabled)
-    if (target) void window.luminaAPI.openBrowser(target)
+    if (target) {void window.luminaAPI.openBrowser(target)}
   } catch { /* 静默失败 */ }
 }
 
@@ -217,18 +217,18 @@ export default function ChatPanel() {
   // 同时注册监听接住后续新决策
   useEffect(() => {
     const api: any = (window as any).lumina || (window as any).api
-    if (!api?.onDecisionRequested) return
+    if (!api?.onDecisionRequested) {return}
 
     let alive = true
     api.decisionPending?.()
-      .then((r: any) => { if (alive && r?.ok && Array.isArray(r.pending)) setPendingDecisions(r.pending) })
+      .then((r: any) => { if (alive && r?.ok && Array.isArray(r.pending)) {setPendingDecisions(r.pending)} })
       .catch(() => { /* 拉不到就算了，不影响新决策 */ })
 
     const offReq = api.onDecisionRequested((req: DecisionRequest) => {
       setPendingDecisions(prev => prev.some(d => d.id === req.id) ? prev : [...prev, req])
     })
     const offRes = api.onDecisionResolved?.((ev: any) => {
-      if (!ev?.id) return
+      if (!ev?.id) {return}
       setPendingDecisions(prev => prev.filter(d => d.id !== ev.id))
     })
 
@@ -810,7 +810,7 @@ export default function ChatPanel() {
       flushThinking()
     }
     const scheduleThinking = () => {
-      if (thinkingRaf) return
+      if (thinkingRaf) {return}
       thinkingRaf = window.requestAnimationFrame(flushThinking)
     }
     // 暴露给 handleAbort，让"中断"也能拿到最后一帧的思考步骤

@@ -98,7 +98,7 @@ const TaskWorkspacePanel: React.FC = () => {
   // ── 底部追加任务输入：发送到当前对话 ──
   const handleSend = () => {
     const text = inputText.trim()
-    if (!text) return
+    if (!text) {return}
     const convId = useStore.getState().activeConversationId
     useStore.getState().addMessage(convId, 'user', text)
     // 同时在时间线记一条 system 事件

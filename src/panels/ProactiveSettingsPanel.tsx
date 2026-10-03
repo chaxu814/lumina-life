@@ -45,7 +45,7 @@ export default function ProactiveSettingsPanel() {
   }
 
   async function save(patch: Partial<PushSettings>) {
-    if (!settings) return
+    if (!settings) {return}
     const next = { ...settings, ...patch }
     setSettings(next)
     try {
@@ -71,7 +71,7 @@ export default function ProactiveSettingsPanel() {
   }
 
   function toggleType(type: string) {
-    if (!settings) return
+    if (!settings) {return}
     const has = settings.allowedTypes.includes(type)
     const next = has
       ? settings.allowedTypes.filter(t => t !== type)

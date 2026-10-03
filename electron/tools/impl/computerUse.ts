@@ -233,7 +233,7 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
 
   const maxSteps = Math.min(Math.max(1, (args.max_steps as number) || 8), 16)
   const steps: string[] = []
-  let view: View = { kind: 'full' }
+  const view: View = { kind: 'full' }
   resetCuAbort()
 
   // v3.20: 会话锁——同一时刻只允许一个操控者驱动键鼠（对标 cc-haha ForegroundLease）

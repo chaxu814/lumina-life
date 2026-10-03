@@ -80,7 +80,7 @@ function createElectronRuntime(): NotifierRuntime {
     getNotificationCtor() {
       // require 而非 import：单测（node 环境）下不触发 electron 加载
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         return require('electron').Notification as NotificationCtor
       } catch {
         return null
@@ -104,7 +104,7 @@ function createElectronRuntime(): NotifierRuntime {
     isAppFocused() {
       try {
         const { BrowserWindow } = require('electron')
-        if (!BrowserWindow?.getAllWindows) return false
+        if (!BrowserWindow?.getAllWindows) {return false}
         return BrowserWindow.getAllWindows().some((w: any) => {
           try { return !w.isDestroyed() && w.isFocused() } catch { return false }
         })
@@ -191,11 +191,11 @@ export class SystemNotifier {
       const ctor = this.safeGetCtor() as
         | (NotificationCtor & { permission?: string; requestPermission?: (cb: (p: string) => void) => Promise<string> | void })
         | null
-      if (!ctor) return 'unsupported'
+      if (!ctor) {return 'unsupported'}
 
       const current = ctor.permission || 'default'
-      if (current === 'granted' || current === 'denied') return current
-      if (typeof ctor.requestPermission !== 'function') return current
+      if (current === 'granted' || current === 'denied') {return current}
+      if (typeof ctor.requestPermission !== 'function') {return current}
 
       const result = await Promise.race<string>([
         Promise.resolve(
@@ -285,7 +285,7 @@ export class SystemNotifier {
 let instance: SystemNotifier | null = null
 
 export function getSystemNotifier(): SystemNotifier {
-  if (!instance) instance = new SystemNotifier()
+  if (!instance) {instance = new SystemNotifier()}
   return instance
 }
 

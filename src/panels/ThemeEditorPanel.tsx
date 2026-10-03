@@ -88,7 +88,7 @@ export default function ThemeEditorPanel() {
       isDark, vars,
     })
     if (res?.ok) { setMsg(`已保存「${name}」`); setThemeName(name); setBuiltIn(false) }
-    else setMsg('保存失败：' + (res?.error || ''))
+    else {setMsg('保存失败：' + (res?.error || ''))}
   }
 
   const handleOverwrite = async () => {
@@ -98,19 +98,19 @@ export default function ThemeEditorPanel() {
       isDark, vars,
     })
     if (res?.ok) { setMsg(`已覆盖「${themeName}」`) }
-    else setMsg('覆盖失败：' + (res?.error || ''))
+    else {setMsg('覆盖失败：' + (res?.error || ''))}
   }
 
   const handleExport = async () => {
     const res = await api.themeExport(themeName)
-    if (res?.ok) setMsg('已导出主题文件')
-    else if (!res?.canceled) setMsg('导出失败：' + (res?.error || ''))
+    if (res?.ok) {setMsg('已导出主题文件')}
+    else if (!res?.canceled) {setMsg('导出失败：' + (res?.error || ''))}
   }
 
   const colorRows = useMemo(() => {
     const rows: Array<{ group: string; key: string; value: string }> = []
     for (const g of GROUPS) {
-      for (const k of g.vars) rows.push({ group: g.label, key: k, value: vars[k] || '' })
+      for (const k of g.vars) {rows.push({ group: g.label, key: k, value: vars[k] || '' })}
     }
     return rows
   }, [vars])

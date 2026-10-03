@@ -86,7 +86,7 @@ export default function DecisionCard({ request, onSubmit, onCancel, compact }: P
     }
     tick()
     timerRef.current = setInterval(tick, 1000)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    return () => { if (timerRef.current) {clearInterval(timerRef.current)} }
   }, [request.id, request.timeoutMs, request.createdAt])
 
   const toggle = useCallback((id: string) => {
@@ -102,7 +102,7 @@ export default function DecisionCard({ request, onSubmit, onCancel, compact }: P
   const canSubmit = selected.length > 0 || customText.trim().length > 0
 
   const handleSubmit = useCallback(() => {
-    if (!canSubmit) return
+    if (!canSubmit) {return}
     onSubmit(request.id, selected, customText.trim() || undefined)
   }, [canSubmit, onSubmit, request.id, selected, customText])
 
@@ -154,7 +154,7 @@ export default function DecisionCard({ request, onSubmit, onCancel, compact }: P
           onClick={() => setCollapsed(c => !c)}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter') setCollapsed(c => !c) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') {setCollapsed(c => !c)} }}
         >
           <span className={`decision-card-context-text${collapsed ? ' is-collapsed' : ''}`}>
             {request.context}

@@ -45,7 +45,7 @@ function makeFakeDb() {
         return {
           run: (meta: string, id: number) => {
             const r = rows.find(x => x.id === id)
-            if (r) r.metadata = meta
+            if (r) {r.metadata = meta}
             return { changes: r ? 1 : 0 }
           },
         }
@@ -216,7 +216,7 @@ describe('affinityDecay · 存储层', () => {
   })
 
   it('limit 生效', () => {
-    for (let i = 0; i < 10; i++) db.__add({ content: `f${i}`, confidence: 0.9 - i * 0.01 })
+    for (let i = 0; i < 10; i++) {db.__add({ content: `f${i}`, confidence: 0.9 - i * 0.01 })}
     expect(store.rankFacts({ limit: 3, now })).toHaveLength(3)
   })
 

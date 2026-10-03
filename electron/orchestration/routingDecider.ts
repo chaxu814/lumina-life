@@ -63,9 +63,9 @@ const ROUTE_HINT_MAX = 50
 /** 读取已缓存的路由提示（供同步的 buildSystemPrompt 调用） */
 export function peekRouteHint(userText: string): string {
   const key = (userText || '').trim().slice(0, 200)
-  if (!key) return ''
+  if (!key) {return ''}
   const hit = _routeHintCache.get(key)
-  if (!hit) return ''
+  if (!hit) {return ''}
   if (Date.now() - hit.at > ROUTE_HINT_TTL) {
     _routeHintCache.delete(key)
     return ''
@@ -83,7 +83,7 @@ function setRouteHint(userText: string, hint: string): void {
   // 简单的容量控制：超出就清最早的（Map 保持插入序）
   if (_routeHintCache.size >= ROUTE_HINT_MAX) {
     const oldest = _routeHintCache.keys().next().value
-    if (oldest) _routeHintCache.delete(oldest)
+    if (oldest) {_routeHintCache.delete(oldest)}
   }
   _routeHintCache.set(key, { hint, at: Date.now() })
 }
@@ -112,7 +112,7 @@ export function warmRouteHint(
   timeoutMs = 1_200,
 ): void {
   const text = (userText || '').trim()
-  if (!text) return
+  if (!text) {return}
 
   // 纯规则已经能定的，直接写缓存，不做 LLM 调用
   try {
@@ -128,7 +128,7 @@ export function warmRouteHint(
     }
   } catch { /* 规则出错就继续走仲裁 */ }
 
-  if (!deps.llmClassify) return
+  if (!deps.llmClassify) {return}
 
   // 歧义 → 仲裁一次（带硬超时，失败不阻塞）
   void (async () => {
@@ -233,7 +233,7 @@ function matchAll(text: string, rules: Array<{ re: RegExp; tag: string }>): stri
   const out: string[] = []
   for (const r of rules) {
     // 用 match 而非 test，避开 lastIndex 粘连
-    if (text.match(r.re)) out.push(r.tag)
+    if (text.match(r.re)) {out.push(r.tag)}
   }
   return out
 }
@@ -349,11 +349,11 @@ const VALID_TARGETS: RouteTarget[] = ['lumina', 'yak', 'recha']
 
 /** 从 LLM 自由文本里抽出一个合法 target，抽不出返回 null */
 export function parseArbiterAnswer(raw: string): RouteTarget | null {
-  if (!raw) return null
+  if (!raw) {return null}
   const s = raw.toLowerCase().trim()
   // 优先匹配完整词，避免 recha 里的 'a' 之类误命中
   for (const t of ['recha', 'yak', 'lumina']) {
-    if (new RegExp(`\\b${t}\\b`).test(s)) return t as RouteTarget
+    if (new RegExp(`\\b${t}\\b`).test(s)) {return t as RouteTarget}
   }
   return null
 }

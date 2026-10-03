@@ -78,7 +78,7 @@ export function normalizeThinkingStep(
 }
 
 function summarizeShort(args: unknown, max = 120): string | undefined {
-  if (args == null) return undefined
+  if (args == null) {return undefined}
   let s: string
   try { s = typeof args === 'string' ? args : JSON.stringify(args) } catch { s = String(args) }
   s = s.replace(/\s+/g, ' ').trim()

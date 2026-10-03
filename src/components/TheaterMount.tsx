@@ -27,13 +27,13 @@ export default function TheaterMount() {
   useEffect(() => {
     let alive = true
     window.luminaAPI.getConfig()
-      .then((cfg: any) => { if (alive) setEnabled(cfg?.features?.theater !== false) })
+      .then((cfg: any) => { if (alive) {setEnabled(cfg?.features?.theater !== false)} })
       .catch(() => { /* 读不到就默认开着 */ })
     return () => { alive = false }
   }, [])
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) {return}
     const api: any = window.luminaAPI
     // 防御：不同构建下 preload 暴露的通道名可能带前缀
     const onBeat = (b: TheaterBeat) => setLastBeat(b)
@@ -51,6 +51,6 @@ export default function TheaterMount() {
     setLastBeat(null)
   }, [])
 
-  if (!enabled) return null
+  if (!enabled) {return null}
   return <TheaterFeed play={play} lastBeat={lastBeat} onClose={close} />
 }

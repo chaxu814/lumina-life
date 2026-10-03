@@ -150,12 +150,17 @@ jobs:
 
       - name: TypeScript type check (strict)
         run: npx tsc --noEmit --strict
-        continue-on-error: true
+        # v3.34: 移除 continue-on-error。
+        # 之前这里是 `continue-on-error: true`，等于 README 里「tsc --strict 零
+        # 错误」这句宣传在 CI 里根本没被执行 —— 任何人都能提交一堆 strict 报错
+        # 而不被拦下。对一个准备开源、且 agentRunner.ts 已有 3196 行的项目，
+        # 这个门禁形同虚设。外部 PR 若真的卡在 strict，门禁失败信息本身就是引导。
 
       - name: ESLint check (flat config)
-        run: npx eslint .
-        # ESLint v9 flat config（eslint.config.js）；历史问题已降级 warn 渐进收敛，
-        # 会真出 bug 的规则（prefer-const/no-var）保持 error，故 lint 应稳定 exit 0。
+        run: npx eslint . --max-warnings 0
+        # v3.34: 加 --max-warnings 0，让 warning 也不能通过。
+        # eslint.config.js 里的规则已按「会真出 bug 的保持 error、其余降 warn」
+        # 重新分层；配合本门禁，防止规则随时间重新腐化成没人看的摆设。
 
   build:
     strategy:

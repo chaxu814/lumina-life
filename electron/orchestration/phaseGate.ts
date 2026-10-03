@@ -444,7 +444,7 @@ ${options.task}
           result: r.content,
           error: r.success ? undefined : (r.error || '执行失败'),
         })
-        if (r.success) artifacts.push(r.subTaskId)
+        if (r.success) {artifacts.push(r.subTaskId)}
       }
       engine.getPool().dismissAll()
     } else {

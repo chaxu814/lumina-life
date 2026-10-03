@@ -19,6 +19,7 @@ import { BrowserWindow } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
 import { app } from 'electron'
+import { stateFilePath } from './core/pathsFallback'
 import { getUsageStats } from './usageStats'       // 📊 v3.0: 使用数据统计
 // 🆕 Lucky 模式场景感知
 import { getSceneAwareAdjustment, getConfig as getLuckyConfig, setConfig as setLuckyConfig } from './luckyModeIntegration'
@@ -146,7 +147,8 @@ class ModeManager {
     try {
       return path.join(app.getPath('userData'), 'mode-config.json')
     } catch {
-      return path.join(process.cwd(), 'mode-config.json')
+      // ⚠️ 不要退回 process.cwd()：开发态 cwd 就是项目根，会把状态写进 Git 工作区
+    return stateFilePath('mode-config.json')
     }
   }
 

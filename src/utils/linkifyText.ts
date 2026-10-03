@@ -28,7 +28,7 @@ const TRAILING_PUNCT = new Set([
 
 function countChar(s: string, ch: string): number {
   let n = 0
-  for (let i = 0; i < s.length; i++) if (s[i] === ch) n++
+  for (let i = 0; i < s.length; i++) {if (s[i] === ch) {n++}}
   return n
 }
 
@@ -55,8 +55,8 @@ function cleanUrl(raw: string): string {
 
 /** 规范化成 href：www. 补 https://；只保留 http/https。非法 scheme 返回 ''。 */
 function toHref(cleaned: string): string {
-  if (/^https?:\/\//i.test(cleaned)) return cleaned
-  if (/^www\./i.test(cleaned)) return 'https://' + cleaned
+  if (/^https?:\/\//i.test(cleaned)) {return cleaned}
+  if (/^www\./i.test(cleaned)) {return 'https://' + cleaned}
   return ''
 }
 
@@ -73,20 +73,20 @@ export function linkify(input: string): LinkToken[] {
     const href = cleaned ? toHref(cleaned) : ''
     // 只放行 http/https；javascript:/data: 等根本不会被上面的正则命中，这里再兜一层
     if (/^https?:\/\//i.test(href)) {
-      if (m.index > lastIndex) tokens.push({ type: 'text', text: text.slice(lastIndex, m.index) })
+      if (m.index > lastIndex) {tokens.push({ type: 'text', text: text.slice(lastIndex, m.index) })}
       tokens.push({ type: 'link', text: cleaned, href })
       // 用 cleaned 长度推进游标：被剥掉的尾随标点（。,.; 等）回流为后续文本，不丢失
       lastIndex = m.index + cleaned.length
     }
   }
-  if (lastIndex < text.length) tokens.push({ type: 'text', text: text.slice(lastIndex) })
+  if (lastIndex < text.length) {tokens.push({ type: 'text', text: text.slice(lastIndex) })}
   return tokens
 }
 
 /** 回复里「主要」的 URL：第一个 http/https 链接；没有则返回 null。 */
 export function pickPrimaryUrl(text: string): string | null {
   for (const t of linkify(String(text ?? ''))) {
-    if (t.type === 'link' && t.href) return t.href
+    if (t.type === 'link' && t.href) {return t.href}
   }
   return null
 }
@@ -97,6 +97,6 @@ export function pickPrimaryUrl(text: string): string | null {
  * 返回值就是要打开的地址。纯函数，便于单测。
  */
 export function shouldAutoOpen(text: string, enabled: boolean): string | null {
-  if (!enabled) return null
+  if (!enabled) {return null}
   return pickPrimaryUrl(text)
 }

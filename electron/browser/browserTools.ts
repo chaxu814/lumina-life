@@ -38,10 +38,10 @@ export const browserOpenDef: ToolDef = {
 
 export async function browserOpen(args: Record<string, any>): Promise<ToolResult> {
   const url = String(args?.url ?? '').trim()
-  if (!url) return fail('请提供要打开的网址')
+  if (!url) {return fail('请提供要打开的网址')}
   showBrowserWindow()
   const r = await navigate(url)
-  if (!r.ok) return fail(`打开失败：${r.error || url}`)
+  if (!r.ok) {return fail(`打开失败：${r.error || url}`)}
   const finalUrl = r.url || normalizeUrl(url)
   const head = `🌐 已打开：${r.title || finalUrl}\n🔗 ${finalUrl}\n\n`
   return ok(head + '可以用 browser_read 读页面、browser_list 找可点元素。')
@@ -56,7 +56,7 @@ export const browserReadDef: ToolDef = {
 
 export async function browserRead(args: Record<string, any>): Promise<ToolResult> {
   const r = await readPage(Number(args?.limit) || 6000)
-  if (!r.ok) return fail(`读取失败：${r.error}`)
+  if (!r.ok) {return fail(`读取失败：${r.error}`)}
   const head = `📄 ${r.title || '页面'}\n🔗 ${r.url}\n\n`
   return ok(head + (r.text || '(页面无可读文本)'))
 }
@@ -72,8 +72,8 @@ export const browserListDef: ToolDef = {
 
 export async function browserList(args: Record<string, any>): Promise<ToolResult> {
   const r = await readInteractive(Number(args?.limit) || 200)
-  if (!r.ok) return fail(`列举失败：${r.error}`)
-  if (r.items.length === 0) return ok('当前页面没有可交互元素')
+  if (!r.ok) {return fail(`列举失败：${r.error}`)}
+  if (r.items.length === 0) {return ok('当前页面没有可交互元素')}
   const lines = r.items.map((it: any) =>
     `[${it.i}] <${it.tag}> "${it.text}"${it.href ? ` → ${it.href}` : ''} @(${it.x},${it.y})`)
   return ok(`共 ${r.items.length} 个可交互元素：\n` + lines.join('\n'))
@@ -88,7 +88,7 @@ export const browserClickDef: ToolDef = {
 
 export async function browserClick(args: Record<string, any>): Promise<ToolResult> {
   const r = await clickInteractive(Number(args?.index) || 0)
-  if (!r.ok) return fail(`点击失败：${r.error}`)
+  if (!r.ok) {return fail(`点击失败：${r.error}`)}
   return ok(`👆 已点击 <${r.clicked?.tag}> "${r.clicked?.text ?? ''}"`)
 }
 
@@ -104,7 +104,7 @@ export const browserTypeDef: ToolDef = {
 
 export async function browserType(args: Record<string, any>): Promise<ToolResult> {
   const r = await typeInto(Number(args?.index) || 0, String(args?.text ?? ''))
-  if (!r.ok) return fail(`输入失败：${r.error}`)
+  if (!r.ok) {return fail(`输入失败：${r.error}`)}
   return ok(`⌨️ 已填入第 ${args?.index} 个输入框`)
 }
 
@@ -117,7 +117,7 @@ export const browserShotDef: ToolDef = {
 
 export async function browserShot(): Promise<ToolResult> {
   const r = await screenshot()
-  if (!r.ok) return fail(`截图失败：${r.error}`)
+  if (!r.ok) {return fail(`截图失败：${r.error}`)}
   return ok(`📸 已截图（${Math.round((r.dataUrl?.length || 0) / 1024)} KB data URL）`, {
     dataUrl: r.dataUrl,
   } as any)

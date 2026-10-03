@@ -118,7 +118,7 @@ action 必须是以下之一：${Object.keys(profile.actionMap).join('、')}
   try {
     const raw = await callVisionModel(prompt, `第 ${round} 轮决策`, '', true)
     // 提取 JSON
-    let s = (raw || '').trim().replace(/```json\s*/gi, '').replace(/```/g, '').trim()
+    const s = (raw || '').trim().replace(/```json\s*/gi, '').replace(/```/g, '').trim()
     const start = s.indexOf('{')
     const end = s.lastIndexOf('}')
     if (start < 0 || end <= start) {return null}

@@ -14,9 +14,21 @@ import {
   onDecisionEvent, submitDecisionAnswer, cancelDecision,
   cancelAllDecisions, getPendingDecisions, getDecisionConfig, setDecisionConfig,
 } from '../decisionService'
+import { stateFilePath } from '../core/pathsFallback'
+import { collectAll } from '../tools/impl/newsCollector'
+import { filterWithLLM } from '../tools/impl/newsFilter'
+import { deduplicate, assembleDigestBody } from '../tools/impl/newsDigest'
+import { enrichItemsBackground } from '../tools/impl/newsEnricher'
+import { type NewsItem } from '../tools/impl/newsCollector'
+import { sendMail } from '../mailStore'
+import { getProviderManager, ProviderManager } from '../core/providerManager'
+import { LLMProvider } from '../core/llmProvider'
+import { getNewsDigestScheduler } from '../newsDigestScheduler'
+import { getSystemNotifier } from '../proactive/systemNotifier'
 
 // 持久化路径
-const configPath = join(app.getPath('userData'), 'lumina-config.json')
+// ⚠️ 同 loopIpc/memoryIpc：模块顶层不能直接调 app.getPath()，app 尚未就绪会抛错。
+const configPath = stateFilePath('lumina-config.json')
 
 // ── 外部进程 ──────────────────────────────────────────
 
@@ -1015,6 +1027,18 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     mainWindow?.focus()
     return { ok: true }
   })
+
+  // 注册孤儿 handler（cron / news / news-digest / news-mcp 共 20+ 通道）。
+  // 以前它们写在模块顶层，会在 app 初始化前就执行而崩溃；
+  // 顺带修好一个隐性 bug —— 这些通道此前从未真正注册，
+  // preload.ts 里的 invoke 会一直 noSuchHandler 失败。
+  try {
+    registerOrphanIpcHandlers()
+    registerDecisionIpc()
+  } catch (err: any) {
+    // 单个通道注册失败（如同名重复注册）不应拖垮整个应用
+    console.warn('[SystemIpc] 部分 IPC 通道注册失败:', err?.message || err)
+  }
 }
 
 export function cleanupSystemProcesses(): void {
@@ -1383,7 +1407,24 @@ async function handleEmptyLocalModels(params: { baseUrl: string; apiKey: string 
 }
 
 // ─── 🆕 v1.1: Cron 任务同步 ─────────────────────────
-ipcMain.handle('cron:sync-all', async (_event, entries: Array<{
+//
+// 🔧 启动崩溃修复（2026-10-03）
+//
+// 【原 bug】L1386 往后有 20+ 个 `ipcMain.handle(...)` 写在**模块顶层**。
+//   `registerSystemIpc()` 在 L1020 就已经闭合，这些 handler 属于孤儿：
+//   它们在主进程加载时立即执行，而那一刻 Electron 的 ipcMain 尚未初始化，
+//   于是 `npm run dev` 崩在：
+//     TypeError: Cannot read properties of undefined (reading 'handle')
+//       at ipcMain.handle("cron:sync-all", …)
+//   —— 报错指向 cron，但根因是**整段孤儿代码**，不只是那一个 handler。
+//
+// 【修法】把整段包进 registerOrphanIpcHandlers()，由 registerSystemIpc() 调用。
+//   这样注册时机与其它 handler 一致（在 app ready 之后），全部 20+ 个
+//   cron / news / news-digest / news-mcp 通道才会真正生效。
+//   顺带修好一个隐性 bug：这些通道此前**注册了但没人调用**，
+//   preload.ts 里的 invoke 会一直 noSuchHandler 失败。
+function registerOrphanIpcHandlers(): void {
+  ipcMain.handle('cron:sync-all', async (_event, entries: Array<{
   name: string; schedule: string; action: string; enabled: boolean
 }>) => {
   try {
@@ -1396,14 +1437,8 @@ ipcMain.handle('cron:sync-all', async (_event, entries: Array<{
 })
 
 // ─── 🆕 v1.1: 新闻采集与推送 ────────────────────────
-import { collectAll } from '../tools/impl/newsCollector'
-import { filterWithLLM } from '../tools/impl/newsFilter'
-import { deduplicate, assembleDigestBody } from '../tools/impl/newsDigest'
-import { enrichItemsBackground } from '../tools/impl/newsEnricher'
-import { type NewsItem } from '../tools/impl/newsCollector'
-import { sendMail } from '../mailStore'
-import { getProviderManager, ProviderManager } from '../core/providerManager'
-import { LLMProvider } from '../core/llmProvider'
+// （原先这里的 7 个 import 写在文件中部；包成函数后 import 不能再出现在
+//   函数体内，故已上移到文件顶部。行为不变，只是位置合法了。）
 
 // 新闻采集并筛选（UI 展示：不使用指纹去重，保留全部新闻供展示）
 ipcMain.handle('news:collect', async () => {
@@ -1651,8 +1686,7 @@ ipcMain.handle('news:fetch-quotes', async () => {
 })
 
 // ── 📡 v4.0: 新闻推送配置 IPC ─────────────────────────────
-import { getNewsDigestScheduler } from '../newsDigestScheduler'
-import { getSystemNotifier } from '../proactive/systemNotifier'
+// （同样从文件中部上移到顶部，理由见上方 news:collect 处注释）
 
 ipcMain.handle('news-digest:get-config', async () => {
   const s = getNewsDigestScheduler()
@@ -1762,6 +1796,8 @@ ipcMain.handle('news-mcp:publish-site', async (_e, source: string, date?: string
   } catch (err: any) { return { ok: false, error: err.message } }
 })
 
+} // ← registerOrphanIpcHandlers() 结束
+
 // ═══════════════════════════════════════════════════════════
 // 🆕 v1.0 决策征询 IPC（ask_decision 的主进程侧接线）
 //
@@ -1774,10 +1810,16 @@ ipcMain.handle('news-mcp:publish-site', async (_e, source: string, date?: string
 //    out/main/decisionService（不存在）→ 启动即崩 "Cannot find module"。
 //    本文件里其它 require('../xxx') 之所以没事，是因为它们都在**函数体内**（延后执行），
 //    被 Vite 静态处理掉了；而顶层 IIFE 里的 require 不会被转换。
+//
+// 🔧 2026-10-03：这段**原来是顶层 IIFE**（`;(function(){…})()`），会在模块加载时
+//    立即执行 → ipcMain 尚未就绪 → 又一次
+//    “Cannot read properties of undefined (reading 'handle')”。
+//    改为普通函数，由 registerSystemIpc() 调用。
+//    静态 import 保持在文件顶部（已上移），因此仍满足上面的 chunk 解析要求。
 // ═══════════════════════════════════════════════════════════
-;(function registerDecisionIpc() {
+function registerDecisionIpc(): void {
   // 用 getAllWindows()[0] 而非捕获的 mainWindow 引用：窗口重建后旧引用会失效，
-  // 而这个 IIFE 是模块级的，拿不到 registerSystemIpc 的 mainWindow 参数。
+  // 而这个函数是模块级的，拿不到 registerSystemIpc 的 mainWindow 参数。
   // 每次发事件时现取当前窗口，比缓存引用更安全。
   const currentWindow = () => {
     try { return BrowserWindow.getAllWindows()[0] } catch { return undefined }
@@ -1785,10 +1827,10 @@ ipcMain.handle('news-mcp:publish-site', async (_e, source: string, date?: string
 
   onDecisionEvent((ev: any) => {
     const win = currentWindow()
-    if (!win) return // 窗口关了，决策会自己走超时兜底
+    if (!win) {return} // 窗口关了，决策会自己走超时兜底
     try {
-      if (ev.type === 'requested') win.webContents.send('decision:requested', ev.request)
-      else if (ev.type === 'resolved') win.webContents.send('decision:resolved', ev)
+      if (ev.type === 'requested') {win.webContents.send('decision:requested', ev.request)}
+      else if (ev.type === 'resolved') {win.webContents.send('decision:resolved', ev)}
     } catch { /* 窗口在发送瞬间被销毁 */ }
   })
 
@@ -1821,4 +1863,4 @@ ipcMain.handle('news-mcp:publish-site', async (_e, source: string, date?: string
       return { ok: true, config: patch ? setDecisionConfig(patch) : getDecisionConfig() }
     } catch (err: any) { return { ok: false, error: err.message } }
   })
-})()
+}

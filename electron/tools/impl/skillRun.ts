@@ -9,25 +9,67 @@
 
 import type { ToolDef, ToolResult } from '../types'
 import { runSkillTool, listSkillTools, listInstalledSkills } from '../../skillInstaller'
+import { app } from 'electron'
+
+/**
+ * 🔧 启动崩溃修复（2026-10-03）
+ *
+ * 【原 bug】`createSkillRunDef()` 在**构造 ToolDef 时**就调用 `listInstalledSkills()`，
+ * 它内部走 `app.getPath('userData')`。而 `registerAllTools()` 是在主进程模块顶层
+ * （`electron/tools/index.ts` 末尾）被调用的 —— 那时 Electron 的 `app` 还没初始化，
+ * 于是 `npm run dev` 直接崩：
+ *
+ *   TypeError: Cannot read properties of undefined (reading 'getPath')
+ *     at getSkillsDir (out/main/index.js:246695)
+ *     at listInstalledSkills$1
+ *     at createSkillRunDef
+ *     at registerAllTools
+ *
+ * 【为什么症状是「图标不对」而不是「启动失败」】
+ * 窗口根本没创建出来，任务栏上剩的是上一次残留或 Electron 默认壳，
+ * 看起来就像图标问题。**这才是当时误判的方向。**
+ *
+ * 【修法】ToolDef 的 description 改成惰性求值：
+ * 构造期只放函数指针，真正生成 schema 时才读磁盘。
+ * 这样工具注册不再依赖 Electron 运行时状态，`app` 未就绪也安全。
+ */
+
+/** 安全读取已安装技能：任何异常都退回空列表，绝不让工具注册崩掉 */
+function safeListInstalled(): ReturnType<typeof listInstalledSkills> {
+  try {
+    // app 未就绪时 getPath 会抛，这里提前挡住
+    if (!app || typeof app.getPath !== 'function') {return []}
+    return listInstalledSkills()
+  } catch {
+    return []
+  }
+}
+
+/** 生成已安装技能的可读清单（失败时给出说明而不是空白） */
+function buildSkillInfo(): string {
+  const installed = safeListInstalled()
+  if (installed.length === 0) {return '  (暂无已安装的 Skill，或技能目录尚未就绪)'}
+  return installed.map(s => {
+    const tools = listSkillTools(s.id)
+    return `  - ${s.id}: ${s.name} — ${s.description.slice(0, 60)}${tools.length ? ` (可用工具: ${tools.join(', ')})` : ''}`
+  }).join('\n')
+}
+
+/** 惰性生成 skill_run 的描述（供工具注册与 schema 刷新时调用） */
+export function resolveSkillRunDescription(): string {
+  return `执行已安装 Skill 中的工具脚本。支持 Python/Node/Shell/PowerShell 脚本。
+
+【已安装的 Skill】
+${buildSkillInfo()}
+
+用法: skill_run(skill_id, tool_name, args?) → 返回脚本执行输出`
+}
 
 /** 动态生成 tool def（包含已安装 skill 列表） */
 export function createSkillRunDef(): ToolDef {
-  const installed = listInstalledSkills()
-  const skillInfo = installed.length > 0
-    ? installed.map(s => {
-        const tools = listSkillTools(s.id)
-        return `  - ${s.id}: ${s.name} — ${s.description.slice(0, 60)}${tools.length ? ` (可用工具: ${tools.join(', ')})` : ''}`
-      }).join('\n')
-    : '  (暂无已安装的 Skill)'
-
   return {
     name: 'skill_run',
-    description: `执行已安装 Skill 中的工具脚本。支持 Python/Node/Shell/PowerShell 脚本。
-
-【已安装的 Skill】
-${skillInfo}
-
-用法: skill_run(skill_id, tool_name, args?) → 返回脚本执行输出`,
+    description: resolveSkillRunDescription(),
     params: {
       skill_id: { type: 'string', description: 'Skill ID (从上面列表中选择)', required: true },
       tool_name: { type: 'string', description: '工具名称 (不含扩展名，如 "search" 对应 tools/search.py)', required: true },
@@ -173,7 +215,7 @@ export async function useSkillHandler(args: Record<string, any>): Promise<ToolRe
       callId: '',
       ok: false,
       content: '',
-      error: `找不到 Skill "${skillId}"。请确认 skill_id 是否正确。可用: ${listInstalledSkills().map(s => s.id).join(', ') || '(无已安装技能)'}`,
+      error: `找不到 Skill "${skillId}"。请确认 skill_id 是否正确。可用: ${safeListInstalled().map(s => s.id).join(', ') || '(无已安装技能)'}`,
       durationMs: Date.now() - start,
     }
 

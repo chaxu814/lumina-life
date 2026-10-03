@@ -173,7 +173,7 @@ function stripNs(xml: string): string {
 function parseResponseBlock(block: string, baseUrl: string): WebDavEntry | null {
   const hrefMatch = block.match(/<href>([\s\S]*?)<\/href>/i)
   if (!hrefMatch) {return null}
-  let href = decodeURIComponent(hrefMatch[1].trim())
+  const href = decodeURIComponent(hrefMatch[1].trim())
 
   // 判定 collection
   const isCollection = /<collection\s*\/?>/i.test(block)

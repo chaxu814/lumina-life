@@ -20,6 +20,8 @@
     "pack:all": "electron-vite build && electron-builder --win --x64 --mac --x64 --arm64 --linux --x64",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:ratchet": "node scripts/lint-ratchet.cjs",
+    "lint:ratchet:update": "node scripts/lint-ratchet.cjs --update",
     "typecheck": "tsc --noEmit --strict",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

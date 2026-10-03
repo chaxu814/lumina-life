@@ -80,12 +80,54 @@ export class AsyncTaskManager extends EventEmitter {
   private idCounter = 0
   private persistTimer?: NodeJS.Timeout
   private _persistPath: string
+  /** Electron app 就绪前先不落盘，等 ready 后再补路径并加载 */
+  private _appReady = false
 
   constructor(persistPath?: string) {
     super()
-    this._persistPath = persistPath || path.join(app.getPath('userData'), 'async-tasks.json')
-    this._load()
-    this._startPersistTimer()
+    this._persistPath = this._resolvePersistPath(persistPath)
+    if (this._appReady) {
+      this._load()
+      this._startPersistTimer()
+    } else {
+      // 模块顶层 new 时 app 还没就绪（getPath 会抛）。
+      // 这里的思路与 quests / subscriptionManager 一致：延后到 app ready，
+      // 而不是直接崩掉 —— 那个崩溃曾让 `npm run dev` 完全起不来。
+      this._deferUntilAppReady()
+    }
+  }
+
+  /**
+   * 解析落盘路径。app 不可用时退回 cwd（仅在 app 永远不就绪的极端情况下发生）。
+   */
+  private _resolvePersistPath(explicit?: string): string {
+    if (explicit) {return explicit}
+    try {
+      if (app && typeof app.getPath === 'function') {
+        return path.join(app.getPath('userData'), 'async-tasks.json')
+      }
+    } catch { /* app 未就绪 */ }
+    return path.join(process.cwd(), 'async-tasks.json')
+  }
+
+  /** 等 app ready 后补上真实路径、加载存量任务并开始定时落盘 */
+  private _deferUntilAppReady(): void {
+    const run = () => {
+      try {
+        this._persistPath = this._resolvePersistPath()
+        this._load()
+        this._startPersistTimer()
+        console.log('[AsyncTaskManager] app ready，已启用任务持久化')
+      } catch (err: any) {
+        console.warn('[AsyncTaskManager] 延迟初始化失败（不影响任务功能）:', err?.message || err)
+      }
+    }
+    try {
+      if (app && typeof app.whenReady === 'function') {
+        app.whenReady().then(run).catch(() => undefined)
+        return
+      }
+    } catch { /* 极端环境：放弃持久化但不影响使用 */ }
   }
 
   // ── 提交 ────────────────────────────────────────────────

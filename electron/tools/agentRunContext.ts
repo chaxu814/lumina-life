@@ -33,12 +33,12 @@ export function getCurrentPersona(): string {
 
 /** 从任意 persona（含 intern_<owner>_<name>）解析出派生 owner 角色 */
 export function ownerOfPersona(personaId: string | undefined | null): RoleId {
-  if (!personaId) return 'lumina'
+  if (!personaId) {return 'lumina'}
   // 子智能体：intern_<owner>_<name> → owner
   if (personaId.startsWith('intern_')) {
     const parts = personaId.split('_')
     const owner = parts[1]
-    if (owner === 'lumina' || owner === 'yak' || owner === 'recha') return owner
+    if (owner === 'lumina' || owner === 'yak' || owner === 'recha') {return owner}
   }
   return normalizeRole(personaId)
 }

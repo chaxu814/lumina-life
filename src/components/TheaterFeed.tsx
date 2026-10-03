@@ -51,9 +51,9 @@ const ROLE_COLOR: Record<TheaterRole, string> = {
 }
 
 function fmtElapsed(ms: number): string {
-  if (ms < 1000) return `${Math.max(0, Math.round(ms))}ms`
+  if (ms < 1000) {return `${Math.max(0, Math.round(ms))}ms`}
   const s = ms / 1000
-  if (s < 60) return `${s.toFixed(1)}s`
+  if (s < 60) {return `${s.toFixed(1)}s`}
   const m = Math.floor(s / 60)
   return `${m}分${Math.round(s % 60)}秒`
 }
@@ -74,27 +74,27 @@ export default function TheaterFeed({ play, lastBeat, onClose }: Props) {
 
   // 实时跟随：只在用户没手动上滑时滚到底
   useEffect(() => {
-    if (!follow || !expanded) return
+    if (!follow || !expanded) {return}
     const el = listRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el) {el.scrollTop = el.scrollHeight}
   }, [beatCount, follow, expanded])
 
   const onScroll = useCallback(() => {
     const el = listRef.current
-    if (!el) return
+    if (!el) {return}
     // 距底部 < 24px 才算「在底部」，否则取消跟随
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
     setFollow(atBottom)
   }, [])
 
   const stats = useMemo(() => {
-    if (!play) return null
+    if (!play) {return null}
     const last = play.beats[play.beats.length - 1]
     const startedAt = play.openedAt
     return { elapsed: (last?.at ?? Date.now()) - startedAt, actors: new Set(play.beats.map(b => b.role)).size }
   }, [play])
 
-  if (!play || play.beats.length === 0) return null
+  if (!play || play.beats.length === 0) {return null}
 
   // ── 折叠态：一条状态条 ──────────────────────────────
   if (!expanded) {
@@ -130,7 +130,7 @@ export default function TheaterFeed({ play, lastBeat, onClose }: Props) {
           {play.closed ? ' · 已收场' : ' · 进行中'}
         </span>
         <div className="theater-actions">
-          <button className="theater-btn" onClick={() => { setFollow(f => !f); if (!follow) { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight } }}>
+          <button className="theater-btn" onClick={() => { setFollow(f => !f); if (!follow) { const el = listRef.current; if (el) {el.scrollTop = el.scrollHeight} } }}>
             {follow ? '跟随中' : '已暂停跟随'}
           </button>
           <button className="theater-btn" onClick={() => setExpanded(false)}>收起</button>

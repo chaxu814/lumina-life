@@ -344,7 +344,7 @@ export async function autoFixLoop(
     } catch (err: any) {
       const msg = err?.message || String(err)
       attempts.push({ round, errorLog: verifyResult.errors.join('\n').slice(0, 2000), output: '', delegateSuccess: false, note: `修复委托异常: ${msg}` })
-      if (!hooks.onDelegateFailure?.(round, msg)) break
+      if (!hooks.onDelegateFailure?.(round, msg)) {break}
       continue
     }
 
@@ -363,7 +363,7 @@ export async function autoFixLoop(
     if (verifyResult.passed) {
       console.log(`[VerifyLoop] ✅ 第 ${round} 轮修复后验证通过 (${verifyResult.elapsedMs}ms)`)
       const last = attempts[attempts.length - 1]
-      if (last) last.note = `✅ 第 ${round} 轮修复后通过`
+      if (last) {last.note = `✅ 第 ${round} 轮修复后通过`}
       return {
         success: true,
         content: `✅ 第 ${round} 轮修复后验证通过`,
@@ -377,7 +377,7 @@ export async function autoFixLoop(
     if (hooks.isConverged?.(history, round)) {
       console.log(`[VerifyLoop] ⏹ 错误模式无变化，提前终止修复循环`)
       const last = attempts[attempts.length - 1]
-      if (last) last.note = '提前终止: 错误模式无变化'
+      if (last) {last.note = '提前终止: 错误模式无变化'}
       break
     }
 
@@ -387,7 +387,7 @@ export async function autoFixLoop(
   // 超过最大轮次
   console.log(`[VerifyLoop] ❌ 修复失败，已达最大轮次 ${maxRounds}`)
   const last = attempts[attempts.length - 1]
-  if (last && !last.note) last.note = `第 ${maxRounds} 轮后仍失败`
+  if (last && !last.note) {last.note = `第 ${maxRounds} 轮后仍失败`}
   return {
     success: false,
     content: `❌ 自动修复失败，经过 ${maxRounds} 轮修复后验证仍未通过`,
@@ -402,10 +402,10 @@ export async function autoFixLoop(
  * 且发生在第 3 轮及以后 → 判定为无进展。
  */
 export function defaultConvergenceCheck(history: VerifyResult[], round: number): boolean {
-  if (round < 3 || history.length < 2) return false
+  if (round < 3 || history.length < 2) {return false}
   const prev = history[history.length - 2].errors
   const cur = history[history.length - 1].errors
-  if (!prev.length || !cur.length) return false
+  if (!prev.length || !cur.length) {return false}
   return cur.every((e, i) => !!prev[i] && e.includes(prev[i].slice(0, 100)))
 }
 

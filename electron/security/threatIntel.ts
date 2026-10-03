@@ -42,7 +42,7 @@ export interface ThreatIntelData {
   updatedAt: number
 }
 
-let current: ThreatIntelData = {
+const current: ThreatIntelData = {
   maliciousPackages: new Set(MALICIOUS_PACKAGES),
   maliciousDomains: new Set(MALICIOUS_DOMAINS),
   c2Fragments: new Set(C2_DOMAIN_FRAGMENTS),

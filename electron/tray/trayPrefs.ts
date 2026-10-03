@@ -25,7 +25,7 @@ function prefsPath(): string {
 
 function readPrefs(): TrayPrefs {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     const raw = fs.readFileSync(prefsPath(), 'utf-8')
     const parsed = JSON.parse(raw)
@@ -37,7 +37,7 @@ function readPrefs(): TrayPrefs {
 
 function writePrefs(prefs: TrayPrefs): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     fs.mkdirSync(appDataDir(), { recursive: true })
     fs.writeFileSync(prefsPath(), JSON.stringify(prefs, null, 2), 'utf-8')
@@ -78,7 +78,7 @@ export function getGameEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 /** 仅用于测试：清空持久化记录。 */
 export function __resetTrayPrefsForTest(): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     fs.unlinkSync(prefsPath())
   } catch { /* 本来就没有 */ }

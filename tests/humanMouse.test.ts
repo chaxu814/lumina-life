@@ -84,8 +84,8 @@ describe('buildHumanPath (纯函数)', () => {
 describe('isInstantMouse', () => {
   const original = process.env.LUMINA_CU_INSTANT_MOUSE
   afterEach(() => {
-    if (original === undefined) delete process.env.LUMINA_CU_INSTANT_MOUSE
-    else process.env.LUMINA_CU_INSTANT_MOUSE = original
+    if (original === undefined) {delete process.env.LUMINA_CU_INSTANT_MOUSE}
+    else {process.env.LUMINA_CU_INSTANT_MOUSE = original}
   })
 
   it('默认 false', () => {

@@ -79,7 +79,7 @@ function renderMarkdown(md: string): string {
         !(idx === 0 && arr[0] === '') && !(idx === arr.length - 1 && arr[arr.length - 1] === ''),
       )
       if (!inTable) { out.push('<table class="tw-md-table">'); inTable = true; tableHeader = true }
-      if (isSep) continue
+      if (isSep) {continue}
       const tag = tableHeader ? 'th' : 'td'
       out.push('<tr>' + cells.map((c) => `<${tag}>${inlineMd(c)}</${tag}>`).join('') + '</tr>')
       tableHeader = false
@@ -118,7 +118,7 @@ function renderMarkdown(md: string): string {
     if (trimmed === '') { out.push('<div style="height:6px"></div>'); continue }
     out.push(`<div>${inlineMd(trimmed)}</div>`)
   }
-  if (inTable) out.push('</table>')
+  if (inTable) {out.push('</table>')}
 
   let html = out.join('\n')
   // 还原代码块
@@ -142,9 +142,9 @@ function escapeHtml(s: string): string {
 
 /** 格式化文件大小 */
 function formatSize(bytes?: number): string {
-  if (bytes == null) return '未知'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes == null) {return '未知'}
+  if (bytes < 1024) {return `${bytes} B`}
+  if (bytes < 1024 * 1024) {return `${(bytes / 1024).toFixed(1)} KB`}
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
@@ -160,7 +160,7 @@ function parseCsv(content: string, delimiter?: string): string[][] {
     if (inQuotes) {
       if (ch === '"') {
         if (content[i + 1] === '"') { field += '"'; i++ }
-        else inQuotes = false
+        else {inQuotes = false}
       } else {
         field += ch
       }
@@ -169,9 +169,9 @@ function parseCsv(content: string, delimiter?: string): string[][] {
     } else if (ch === delim) {
       row.push(field); field = ''
     } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && content[i + 1] === '\n') i++
+      if (ch === '\r' && content[i + 1] === '\n') {i++}
       row.push(field); field = ''
-      if (row.length > 1 || row[0] !== '') rows.push(row)
+      if (row.length > 1 || row[0] !== '') {rows.push(row)}
       row = []
     } else {
       field += ch
@@ -207,7 +207,7 @@ const ArtifactViewer: React.FC = () => {
 
   // 仅显示当前任务的产物；无 activeTaskId 时显示全部
   const scopedArtifacts = useMemo(() => {
-    if (!activeTaskId || activeTaskId === '__runtime__') return artifacts
+    if (!activeTaskId || activeTaskId === '__runtime__') {return artifacts}
     return artifacts.filter((a) => a.taskId === activeTaskId)
   }, [artifacts, activeTaskId])
 
@@ -222,7 +222,7 @@ const ArtifactViewer: React.FC = () => {
   const blobUrlRef = useRef<string | null>(null)
 
   const kind: ArtifactKind = useMemo(() => {
-    if (active?.kind) return active.kind
+    if (active?.kind) {return active.kind}
     return detectArtifactKind(active?.filename || '', active?.content)
   }, [active])
 
@@ -234,12 +234,12 @@ const ArtifactViewer: React.FC = () => {
     !remoteDataUrl
 
   useEffect(() => {
-    if (!needsRemote || !active?.filePath) return
+    if (!needsRemote || !active?.filePath) {return}
     let cancelled = false
     setLoadState('loading')
     window.luminaAPI?.artifactReadFile(active.filePath)
       .then((res) => {
-        if (cancelled) return
+        if (cancelled) {return}
         if (res?.ok && res.dataUrl) {
           setRemoteDataUrl(res.dataUrl)
           setLoadState('done')
@@ -247,7 +247,7 @@ const ArtifactViewer: React.FC = () => {
           setLoadState('error')
         }
       })
-      .catch(() => { if (!cancelled) setLoadState('error') })
+      .catch(() => { if (!cancelled) {setLoadState('error')} })
     return () => { cancelled = true }
   }, [needsRemote, active?.filePath])
 
@@ -297,7 +297,7 @@ const ArtifactViewer: React.FC = () => {
   }
 
   const handleOpenExternal = async () => {
-    if (!active.filePath) return
+    if (!active.filePath) {return}
     try {
       await window.luminaAPI?.artifactOpenExternal(active.filePath)
     } catch { /* 忽略 */ }
@@ -311,10 +311,10 @@ const ArtifactViewer: React.FC = () => {
   const renderBody = () => {
     switch (kind) {
       case 'image': {
-        if (loadState === 'loading') return <div className="tw-artifact-placeholder">加载图片中…</div>
-        if (loadState === 'error') return <div className="tw-artifact-error">图片读取失败 <button className="tw-artifact-btn" onClick={() => setLoadState('idle')}>重试</button></div>
-        if (!effectiveDataUrl) return <div className="tw-artifact-placeholder">无图片数据</div>
-        if (tooLarge) return <div className="tw-artifact-note">图片过大（{formatSize(effectiveSize)}），请下载到本地查看</div>
+        if (loadState === 'loading') {return <div className="tw-artifact-placeholder">加载图片中…</div>}
+        if (loadState === 'error') {return <div className="tw-artifact-error">图片读取失败 <button className="tw-artifact-btn" onClick={() => setLoadState('idle')}>重试</button></div>}
+        if (!effectiveDataUrl) {return <div className="tw-artifact-placeholder">无图片数据</div>}
+        if (tooLarge) {return <div className="tw-artifact-note">图片过大（{formatSize(effectiveSize)}），请下载到本地查看</div>}
         return (
           <div className="tw-image-view">
             <img
@@ -327,10 +327,10 @@ const ArtifactViewer: React.FC = () => {
         )
       }
       case 'pdf': {
-        if (loadState === 'loading') return <div className="tw-artifact-placeholder">加载 PDF 中…</div>
-        if (loadState === 'error') return <div className="tw-artifact-error">PDF 读取失败 <button className="tw-artifact-btn" onClick={() => setLoadState('idle')}>重试</button></div>
-        if (!effectiveDataUrl) return <div className="tw-artifact-placeholder">无 PDF 数据</div>
-        if (tooLarge) return <div className="tw-artifact-note">PDF 过大（{formatSize(effectiveSize)}），请在系统中打开查看</div>
+        if (loadState === 'loading') {return <div className="tw-artifact-placeholder">加载 PDF 中…</div>}
+        if (loadState === 'error') {return <div className="tw-artifact-error">PDF 读取失败 <button className="tw-artifact-btn" onClick={() => setLoadState('idle')}>重试</button></div>}
+        if (!effectiveDataUrl) {return <div className="tw-artifact-placeholder">无 PDF 数据</div>}
+        if (tooLarge) {return <div className="tw-artifact-note">PDF 过大（{formatSize(effectiveSize)}），请在系统中打开查看</div>}
         return (
           <div className="tw-pdf-view">
             <iframe src={effectiveDataUrl} style={{ width: '100%', height: '100%', border: 'none' }} title={active.filename} />

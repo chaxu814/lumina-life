@@ -66,7 +66,7 @@ const HEARTBEAT_MS = 45 * 1000
  */
 function resolveDefaultMaxConcurrent(): number {
   const raw = process.env.LUMINA_MAX_CONCURRENT
-  if (!raw) return 2
+  if (!raw) {return 2}
   const n = parseInt(raw, 10)
   if (!Number.isFinite(n)) {
     console.warn(`[teamAutonomy] ⚠️ LUMINA_MAX_CONCURRENT="${raw}" 不是数字，回退默认 2`)

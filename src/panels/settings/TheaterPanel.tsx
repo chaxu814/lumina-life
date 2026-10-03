@@ -53,7 +53,7 @@ export default function TheaterPanel({ initialEnabled = true }: Props) {
   useEffect(() => {
     let alive = true
     window.luminaAPI.getConfig().then((cfg: any) => {
-      if (!alive) return
+      if (!alive) {return}
       const f = cfg?.features || {}
       // 键缺失 = 默认开，与主进程 CONFIG_DEFAULTS 同一语义
       setTheaterOn(f.theater !== false)

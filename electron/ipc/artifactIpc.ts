@@ -38,9 +38,9 @@ function getWhitelistDirs(): string[] {
 
 /** 校验路径是否在白名单目录内且无穿越，返回安全绝对路径或 null */
 function resolveSafePath(filePath: string): string | null {
-  if (!filePath || typeof filePath !== 'string') return null
+  if (!filePath || typeof filePath !== 'string') {return null}
   // 拒绝空路径与显式 .. 片段
-  if (filePath.includes('\0')) return null
+  if (filePath.includes('\0')) {return null}
   const resolved = path.resolve(filePath)
   const whitelist = getWhitelistDirs()
   for (const dir of whitelist) {

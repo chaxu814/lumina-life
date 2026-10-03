@@ -36,9 +36,9 @@ function ownerMeta(owner: string) {
 }
 
 function fmtDuration(ms: number): string {
-  if (ms < 1000) return '<1 秒'
+  if (ms < 1000) {return '<1 秒'}
   const s = Math.round(ms / 1000)
-  if (s < 60) return `${s} 秒`
+  if (s < 60) {return `${s} 秒`}
   const m = Math.floor(s / 60)
   const rest = s % 60
   return rest ? `${m} 分 ${rest} 秒` : `${m} 分`
@@ -126,12 +126,12 @@ export default function SubagentCards({ sessionId }: { sessionId?: string } = {}
   //     （它们刚 hire 出来还没 assign，此刻就是为本会话准备的）
   //   · 没传 sessionId → 不过滤，退回旧的「显示全部」行为
   const subagents = useMemo(() => {
-    if (!sessionId) return allSubagents
+    if (!sessionId) {return allSubagents}
     return allSubagents.filter((s) => !s.sessionId || s.sessionId === sessionId)
   }, [allSubagents, sessionId])
 
   // 空状态：不渲染任何东西，避免在输入区上方留一块死空间
-  if (subagents.length === 0) return null
+  if (subagents.length === 0) {return null}
 
   const active = subagents.filter((s) => s.status === 'running').length
   const finished = subagents.filter((s) => TERMINAL.includes(s.status)).length

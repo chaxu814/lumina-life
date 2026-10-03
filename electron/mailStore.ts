@@ -6,6 +6,7 @@
 // ============================================================
 
 import { app, Notification } from 'electron'
+import { stateFilePath } from './core/pathsFallback'
 import fs from 'fs'
 import path from 'path'
 import { join } from 'path'
@@ -87,7 +88,8 @@ function getStorePath(): string {
     const userData = app.getPath('userData')
     storePath = path.join(userData, 'lumina-mailbox.json')
   } catch {
-    storePath = path.join(process.cwd(), 'lumina-mailbox.json')
+    // ⚠️ 不要退回 process.cwd()：开发态 cwd 就是项目根，会把状态写进 Git 工作区
+    storePath = stateFilePath('lumina-mailbox.json')
   }
   return storePath
 }

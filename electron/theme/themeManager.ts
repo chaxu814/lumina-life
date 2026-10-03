@@ -33,32 +33,32 @@ export interface ThemeFs {
 /** node:fs 适配器 */
 const nodeFs: ThemeFs = {
   readFile: (p) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     return fs.readFileSync(p, 'utf-8')
   },
   writeFile: (p, data) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     fs.writeFileSync(p, data, 'utf-8')
   },
   exists: (p) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     return fs.existsSync(p)
   },
   readdir: (p) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     return fs.readdirSync(p)
   },
   unlink: (p) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     fs.unlinkSync(p)
   },
   mkdir: (p) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const fs = require('fs') as typeof import('fs')
     fs.mkdirSync(p, { recursive: true })
   },

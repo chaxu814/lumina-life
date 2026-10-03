@@ -57,7 +57,7 @@ export interface MacAdapterOptions {
 /** 运行时读取 electron.screen 的显示器信息（非 Electron 环境返回空数组） */
 function readDisplays(): DisplayInfo[] {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const { screen } = require('electron')
     if (!screen || typeof screen.getAllDisplays !== 'function') {return []}
     return (screen.getAllDisplays() as any[]).map(d => ({

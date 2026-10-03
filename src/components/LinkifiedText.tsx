@@ -26,7 +26,7 @@ export default function LinkifiedText({ text }: LinkifiedTextProps) {
               onClick={(e) => {
                 e.preventDefault()
                 // 防御：只放行 http/https，javascript:/data: 等一律不点
-                if (!/^https?:\/\//i.test(href)) return
+                if (!/^https?:\/\//i.test(href)) {return}
                 try {
                   void window.luminaAPI?.openBrowser?.(href)
                 } catch { /* 忽略 */ }

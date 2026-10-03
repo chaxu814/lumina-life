@@ -8,8 +8,13 @@
 import { ipcMain, app } from 'electron'
 import fs from 'fs'
 import { join } from 'path'
+import { stateFilePath } from '../core/pathsFallback'
 
-const DATA_FILE = join(app.getPath('userData'), 'lumina-loop-data.json')
+// ⚠️ 不能写成 `join(app.getPath('userData'), …)`：本模块在主进程模块顶层被加载，
+//    那时 Electron app 还没初始化，getPath 会抛
+//    “Cannot read properties of undefined”，直接让 npm run dev 起不来。
+//    stateFilePath() 内部处理了这个时序问题。
+const DATA_FILE = stateFilePath('lumina-loop-data.json')
 
 function readData(): Record<string, any> {
   try {

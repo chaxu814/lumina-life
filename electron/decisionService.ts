@@ -166,7 +166,7 @@ export function setDecisionConfig(patch: Partial<DecisionConfig>): DecisionConfi
 
 function sanitizeTimeout(v: unknown, fallback: number): number {
   const n = typeof v === 'number' ? v : NaN
-  if (!Number.isFinite(n) || n <= 0) return fallback
+  if (!Number.isFinite(n) || n <= 0) {return fallback}
   return Math.floor(n)
 }
 
@@ -193,8 +193,8 @@ export function validateDecisionInput(raw: {
   const errors: string[] = []
 
   const question = typeof raw.question === 'string' ? raw.question.trim() : ''
-  if (!question) errors.push('question 不能为空')
-  if (question.length > 500) errors.push('question 超过 500 字上限')
+  if (!question) {errors.push('question 不能为空')}
+  if (question.length > 500) {errors.push('question 超过 500 字上限')}
 
   // ── 选项规整 ──
   const out: DecisionOption[] = []
@@ -206,21 +206,21 @@ export function validateDecisionInput(raw: {
   } else if (!Array.isArray(raw.options)) {
     errors.push('options 必须是数组')
   } else {
-    if (raw.options.length === 0) errors.push('options 不能为空数组')
-    if (raw.options.length > 8) errors.push('options 最多 8 项（超过会让卡片过长，反而没人选）')
+    if (raw.options.length === 0) {errors.push('options 不能为空数组')}
+    if (raw.options.length > 8) {errors.push('options 最多 8 项（超过会让卡片过长，反而没人选）')}
 
     for (const o of raw.options as any[]) {
       if (!o || typeof o !== 'object') { errors.push('options 中存在非对象项'); continue }
       const label = typeof o.label === 'string' ? o.label.trim() : ''
       if (!label) { errors.push('options 中存在缺少 label 的项'); continue }
-      if (label.length > 60) errors.push(`选项 label 过长: ${label.slice(0, 20)}…`)
+      if (label.length > 60) {errors.push(`选项 label 过长: ${label.slice(0, 20)}…`)}
 
       // id 缺省时用 label 派生（保证 UI 与 agent 侧引用稳定）
       const id = typeof o.id === 'string' && o.id.trim() ? o.id.trim() : `opt_${label}`
       if (seenIds.has(id)) { errors.push(`选项 id 重复: ${id}`); continue }
       seenIds.add(id)
 
-      if (o.recommended) recommendedCount++
+      if (o.recommended) {recommendedCount++}
       out.push({
         id,
         label,
@@ -328,8 +328,8 @@ export function askDecision(params: AskDecisionParams): Promise<AskDecisionResul
 
     entry.resolve = (answer) => {
       const e = pending.get(request.id)
-      if (!e) return // 已被超时/取消解决过，忽略迟到的回答
-      if (e.timer) clearTimeout(e.timer)
+      if (!e) {return} // 已被超时/取消解决过，忽略迟到的回答
+      if (e.timer) {clearTimeout(e.timer)}
       pending.delete(request.id)
       request.status = answer.cancelled ? 'cancelled' : 'answered'
       request.answer = answer
@@ -341,8 +341,8 @@ export function askDecision(params: AskDecisionParams): Promise<AskDecisionResul
     // ⑤ 超时兜底 —— agent 不会永远等下去
     entry.timer = setTimeout(() => {
       const e = pending.get(request.id)
-      if (!e) return
-      if (e.timer) clearTimeout(e.timer)
+      if (!e) {return}
+      if (e.timer) {clearTimeout(e.timer)}
       pending.delete(request.id)
       request.status = 'timeout'
       request.resolvedAt = Date.now()
@@ -354,7 +354,7 @@ export function askDecision(params: AskDecisionParams): Promise<AskDecisionResul
       resolve({ status: 'timeout', answer: fallback, summary: d.summary })
     }, timeoutMs)
     // Node 端不要因为一个挂起的决策而阻止进程退出
-    if (typeof entry.timer.unref === 'function') entry.timer.unref()
+    if (typeof entry.timer.unref === 'function') {entry.timer.unref()}
 
     pending.set(request.id, entry)
     emit({ type: 'requested', request })
@@ -387,7 +387,7 @@ function pickDefault(
 
 /** 把回答压成一句话，agent 直接读这个就能继续干 */
 function buildSummary(request: DecisionRequest, answer: DecisionAnswer): string {
-  if (answer.cancelled) return '用户取消了这次决策，请不要继续原方案，或改问其他方案。'
+  if (answer.cancelled) {return '用户取消了这次决策，请不要继续原方案，或改问其他方案。'}
 
   const labels = answer.selectedLabels.join('、')
   const custom = answer.customText?.trim()
@@ -395,8 +395,8 @@ function buildSummary(request: DecisionRequest, answer: DecisionAnswer): string 
   if (custom && answer.selectedIds.length > 0) {
     return `用户选择了：${labels}；并补充要求：${custom}`
   }
-  if (custom) return `用户没有选择预设选项，直接回答：${custom}`
-  if (request.multiSelect) return `用户选择了：${labels}`
+  if (custom) {return `用户没有选择预设选项，直接回答：${custom}`}
+  if (request.multiSelect) {return `用户选择了：${labels}`}
   return `用户选择了：${labels}`
 }
 
@@ -414,7 +414,7 @@ export interface SubmitAnswerParams {
 /** UI 提交回答。无效的 id 或选项会被拒绝，不会污染 pending 表。 */
 export function submitDecisionAnswer(params: SubmitAnswerParams): { ok: boolean; error?: string } {
   const entry = pending.get(params.id)
-  if (!entry) return { ok: false, error: '决策已超时或不存在' }
+  if (!entry) {return { ok: false, error: '决策已超时或不存在' }}
 
   if (params.cancelled) {
     entry.resolve({ selectedIds: [], selectedLabels: [], cancelled: true })
@@ -443,7 +443,7 @@ export function submitDecisionAnswer(params: SubmitAnswerParams): { ok: boolean;
 /** 主动取消（用户点了 ×） */
 export function cancelDecision(id: string): boolean {
   const entry = pending.get(id)
-  if (!entry) return false
+  if (!entry) {return false}
   entry.resolve({ selectedIds: [], selectedLabels: [], cancelled: true })
   return true
 }

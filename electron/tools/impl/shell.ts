@@ -69,7 +69,20 @@ import { spawn, exec } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
 import type { ToolDef, ToolResult } from '../types'
+import { shell as electronShell } from 'electron'
 import { getProcessManager, killProcessTree } from '../../processSandbox'
+
+// v3.34: 改用静态 import 而非 `require('electron')`
+//
+// 为什么要改：原来两处 `` 是**运行时
+// CJS require**，vitest 的 vi.mock 只拦 ESM import，不拦它。于是
+// electron/__tests__/shell.test.ts 里的 explorer / start 重定向用例
+// 永远拿不到 mock，抛出 “Cannot read properties of undefined (reading
+// 'openPath')” —— 这两个用例因为目录不在 vitest include 里，已经挂了
+// 半年没人发现。
+//
+// 改成静态 import 后：真实 Electron 主进程里行为完全不变（shell 本来就在
+// 主进程），但测试可以正确 mock，也更符合 Electron 官方写法。
 import { getShellMonitor } from './shellMonitor'
 import { getNetCage } from './shellNetCage'
 import { ensureFileWallSandbox, wrapLowIntegrity, stripExitMarker, markRunasUnavailable, probeRunasAvailability, decideLowIL } from './shellFileWall'
@@ -479,12 +492,12 @@ export async function shellExec(args: Record<string, any>): Promise<ToolResult> 
     const parsed = parseExplorerCommand(command)
     if (parsed.action === 'redirect' && parsed.target) {
       try {
-        const { shell } = require('electron')
+        
         if (/^https?:\/\//i.test(parsed.target)) {
-          await shell.openExternal(parsed.target)
+          await electronShell.openExternal(parsed.target)
         } else {
           const absPath = path.resolve(cwd, parsed.target)
-          await shell.openPath(absPath)
+          await electronShell.openPath(absPath)
         }
         return { callId: '', ok: true, content: `✅ 已打开: ${parsed.target}\n💡 下次直接用 open_file 工具` }
       } catch (e: any) {
@@ -505,12 +518,12 @@ export async function shellExec(args: Record<string, any>): Promise<ToolResult> 
     const target = parseStartCommand(command)
     if (target) {
       try {
-        const { shell } = require('electron')
+        
         if (/^https?:\/\//i.test(target)) {
-          await shell.openExternal(target)
+          await electronShell.openExternal(target)
           return { callId: '', ok: true, content: `✅ 已打开: ${target}\n💡 下次用 open_file 工具` }
         }
-        const errorMsg = await shell.openPath(target)
+        const errorMsg = await electronShell.openPath(target)
         if (errorMsg) {return { callId: '', ok: false, content: '', error: `打开失败: ${errorMsg}` }}
         return { callId: '', ok: true, content: `✅ 已打开: ${target}\n💡 下次用 open_file 工具` }
       } catch (e: any) {

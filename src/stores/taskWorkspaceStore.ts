@@ -196,7 +196,7 @@ export function detectLanguage(filename: string): string {
 
 /** 把任意参数对象序列化为可展示的短摘要，超长截断 */
 export function summarizeArgs(args: unknown, max = 60): string {
-  if (args == null) return ''
+  if (args == null) {return ''}
   let str: string
   try {
     str = typeof args === 'string' ? args : JSON.stringify(args)
@@ -204,7 +204,7 @@ export function summarizeArgs(args: unknown, max = 60): string {
     str = String(args)
   }
   str = str.replace(/\s+/g, ' ').trim()
-  if (str.length <= max) return str
+  if (str.length <= max) {return str}
   return str.slice(0, max) + '…'
 }
 
@@ -302,9 +302,9 @@ export function mapLoopTaskToWorkspace(loop: LoopTaskShape): TaskWorkspaceTask {
 
 /** 🆕 v02: 后台 AsyncTask 状态 → 工作区 TaskStatus */
 export function mapAsyncStatus(s: string): TaskStatus {
-  if (s === 'running') return 'running'
-  if (s === 'done') return 'done'
-  if (s === 'error') return 'error'
+  if (s === 'running') {return 'running'}
+  if (s === 'done') {return 'done'}
+  if (s === 'error') {return 'error'}
   return 'idle' // queued / cancelled / paused
 }
 
@@ -336,11 +336,11 @@ const DISMISS_KEY = 'lumina_tw_dismissed_loops'
 /** 从 localStorage 读取已隐藏的 Loop ID 列表；不可用时降级为空数组 */
 function loadDismissedLoops(): string[] {
   try {
-    if (typeof localStorage === 'undefined') return []
+    if (typeof localStorage === 'undefined') {return []}
     const raw = localStorage.getItem(DISMISS_KEY)
-    if (!raw) return []
+    if (!raw) {return []}
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {return []}
     return parsed.filter((x): x is string => typeof x === 'string')
   } catch {
     return []
@@ -350,7 +350,7 @@ function loadDismissedLoops(): string[] {
 /** 把已隐藏的 Loop ID 列表写回 localStorage；不可用时静默忽略 */
 function saveDismissedLoops(ids: string[]): void {
   try {
-    if (typeof localStorage === 'undefined') return
+    if (typeof localStorage === 'undefined') {return}
     localStorage.setItem(DISMISS_KEY, JSON.stringify(ids))
   } catch {
     /* localStorage 不可用（隐私模式/Node 测试环境）时降级为内存态 */
@@ -369,7 +369,7 @@ export function groupTimelineByParent(
   const groups: Record<string, TimelineEvent[]> = {}
   for (const ev of events) {
     const key = ev.parentId || UNGROUPED_GROUP
-    if (!groups[key]) groups[key] = []
+    if (!groups[key]) {groups[key] = []}
     groups[key].push(ev)
   }
   return groups
@@ -381,10 +381,10 @@ export function aggregateSubtaskProgress(
 ): { total: number; done: number; running: number; error: number; idle: number; percent: number } {
   let done = 0, running = 0, error = 0, idle = 0
   for (const s of subtasks) {
-    if (s.status === 'done') done++
-    else if (s.status === 'running') running++
-    else if (s.status === 'error') error++
-    else idle++
+    if (s.status === 'done') {done++}
+    else if (s.status === 'running') {running++}
+    else if (s.status === 'error') {error++}
+    else {idle++}
   }
   const total = subtasks.length
   const percent = total > 0 ? Math.round(((done + error) / total) * 100) : 0
@@ -393,11 +393,11 @@ export function aggregateSubtaskProgress(
 
 /** 从子任务状态推导父任务整体状态：有error→error，有running→running，全done→done，否则idle */
 export function deriveGroupStatus(subtasks: SubtaskItem[]): TaskStatus {
-  if (subtasks.length === 0) return 'idle'
+  if (subtasks.length === 0) {return 'idle'}
   const { done, running, error } = aggregateSubtaskProgress(subtasks)
-  if (error > 0) return 'error'
-  if (running > 0) return 'running'
-  if (done === subtasks.length) return 'done'
+  if (error > 0) {return 'error'}
+  if (running > 0) {return 'running'}
+  if (done === subtasks.length) {return 'done'}
   return 'idle'
 }
 
@@ -414,18 +414,18 @@ export function shouldAutoExpand(
   collapsedGroupIds: string[],
   hasActiveExpanded: boolean,
 ): boolean {
-  if (task.status !== 'running') return false
-  if (collapsedGroupIds.includes(task.id)) return false
-  if (hasActiveExpanded) return false
+  if (task.status !== 'running') {return false}
+  if (collapsedGroupIds.includes(task.id)) {return false}
+  if (hasActiveExpanded) {return false}
   return true
 }
 
 /** 格式化耗时：ms → "12.3s" / "2m 5s" / "1h 2m" */
 export function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return '0s'
-  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (!Number.isFinite(ms) || ms < 0) {return '0s'}
+  if (ms < 1000) {return `${Math.round(ms)}ms`}
   const totalSec = ms / 1000
-  if (totalSec < 60) return `${Math.round(totalSec * 10) / 10}s`
+  if (totalSec < 60) {return `${Math.round(totalSec * 10) / 10}s`}
   const totalMin = totalSec / 60
   if (totalMin < 60) {
     const m = Math.floor(totalMin)
@@ -466,20 +466,20 @@ const TEXT_EXTS = new Set(['txt', 'log', 'md', 'markdown'])
 /** 根据文件名+内容前几个字节判定产物类型 */
 export function detectArtifactKind(filename: string, content?: string): ArtifactKind {
   const ext = (filename.split('.').pop() || '').toLowerCase()
-  if (ext === 'pdf') return 'pdf'
-  if (IMAGE_EXTS.has(ext)) return 'image'
-  if (ext === 'json') return 'json'
-  if (ext === 'csv' || ext === 'tsv') return 'csv'
-  if (ext === 'md' || ext === 'markdown') return 'markdown'
-  if (CODE_EXTS.has(ext)) return 'code'
-  if (TEXT_EXTS.has(ext)) return 'text'
+  if (ext === 'pdf') {return 'pdf'}
+  if (IMAGE_EXTS.has(ext)) {return 'image'}
+  if (ext === 'json') {return 'json'}
+  if (ext === 'csv' || ext === 'tsv') {return 'csv'}
+  if (ext === 'md' || ext === 'markdown') {return 'markdown'}
+  if (CODE_EXTS.has(ext)) {return 'code'}
+  if (TEXT_EXTS.has(ext)) {return 'text'}
   // 无扩展名或未知：用内容嗅探
   const head = (content || '').slice(0, 256).trim()
   if (head.startsWith('{') || head.startsWith('[')) {
     try { JSON.parse(head); return 'json' } catch { /* 非合法 JSON，回退 text */ }
   }
-  if (head.includes(',') && head.includes('\n')) return 'csv'
-  if (head.length > 0) return 'text'
+  if (head.includes(',') && head.includes('\n')) {return 'csv'}
+  if (head.length > 0) {return 'text'}
   return 'binary'
 }
 
@@ -496,13 +496,13 @@ export function isTextArtifact(kind: ArtifactKind): boolean {
 /** 产物 → 侧边栏图标 key（md / html / code / image / pdf / json / file） */
 export function artifactIconKey(kind: ArtifactKind, filename: string): string {
   const ext = (filename.split('.').pop() || '').toLowerCase()
-  if (ext === 'md' || ext === 'markdown') return 'md'
-  if (ext === 'html' || ext === 'htm') return 'html'
-  if (ext === 'json') return 'json'
-  if (ext === 'csv' || ext === 'tsv') return 'csv'
-  if (kind === 'image') return 'image'
-  if (kind === 'pdf') return 'pdf'
-  if (kind === 'code') return 'code'
+  if (ext === 'md' || ext === 'markdown') {return 'md'}
+  if (ext === 'html' || ext === 'htm') {return 'html'}
+  if (ext === 'json') {return 'json'}
+  if (ext === 'csv' || ext === 'tsv') {return 'csv'}
+  if (kind === 'image') {return 'image'}
+  if (kind === 'pdf') {return 'pdf'}
+  if (kind === 'code') {return 'code'}
   return 'file'
 }
 
@@ -551,7 +551,7 @@ export function deriveUsedSkills(calls: ToolCallRecord[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const c of calls) {
-    if (!c.name || seen.has(c.name)) continue
+    if (!c.name || seen.has(c.name)) {continue}
     seen.add(c.name)
     out.push(c.name)
   }
@@ -573,7 +573,7 @@ export function deriveSubagentList(
   // 兼容旧数据模型：父任务卡片里的 subtasks 也进「子智能体」层
   for (const t of tasks) {
     for (const sub of t.subtasks ?? []) {
-      if (map.has(sub.id)) continue
+      if (map.has(sub.id)) {continue}
       map.set(sub.id, {
         id: sub.id,
         title: sub.title,
@@ -602,9 +602,9 @@ const BOARD_KEY = 'lumina_tw_board'
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
-    if (typeof localStorage === 'undefined') return fallback
+    if (typeof localStorage === 'undefined') {return fallback}
     const raw = localStorage.getItem(key)
-    if (!raw) return fallback
+    if (!raw) {return fallback}
     return JSON.parse(raw) as T
   } catch {
     return fallback
@@ -614,11 +614,11 @@ function loadJson<T>(key: string, fallback: T): T {
 /** 读取字符串数组型持久化，非数组或元素非字符串时回退默认值 */
 function loadStringArray(key: string, fallback: string[] = []): string[] {
   try {
-    if (typeof localStorage === 'undefined') return fallback
+    if (typeof localStorage === 'undefined') {return fallback}
     const raw = localStorage.getItem(key)
-    if (!raw) return fallback
+    if (!raw) {return fallback}
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return fallback
+    if (!Array.isArray(parsed)) {return fallback}
     return parsed.filter((x): x is string => typeof x === 'string')
   } catch {
     return fallback
@@ -639,7 +639,7 @@ function loadPanelView(): PanelView {
 
 function saveJson(key: string, value: unknown): void {
   try {
-    if (typeof localStorage === 'undefined') return
+    if (typeof localStorage === 'undefined') {return}
     localStorage.setItem(key, JSON.stringify(value))
   } catch { /* 隐私模式/Node 测试环境降级 */ }
 }
@@ -757,7 +757,7 @@ export function findRunningToolCall(
 
 /** 会话内已结束的调用是否需要丢弃（会话容量保护，避免无限增长） */
 export function pruneToolCalls(calls: ToolCallRecord[], keep = 300): ToolCallRecord[] {
-  if (calls.length <= keep) return calls
+  if (calls.length <= keep) {return calls}
   // 优先丢弃最旧的已结束记录，运行中的永远保留
   const running = calls.filter((c) => c.status === 'running')
   const finished = calls.filter((c) => c.status !== 'running')
@@ -1027,12 +1027,12 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
     set({ board })
   },
   updateBoardItem: (id, patch) => set((s) => {
-    if (!s.board) return s
+    if (!s.board) {return s}
     const items = s.board.items.map((i) => {
-      if (i.id !== id) return i
+      if (i.id !== id) {return i}
       const next = { ...i, ...patch }
-      if (patch.status === 'done' && !next.completedAt) next.completedAt = Date.now()
-      if (patch.status && patch.status !== 'done') next.completedAt = undefined
+      if (patch.status === 'done' && !next.completedAt) {next.completedAt = Date.now()}
+      if (patch.status && patch.status !== 'done') {next.completedAt = undefined}
       return next
     })
     const board = { ...s.board, items, updatedAt: Date.now() }
@@ -1073,7 +1073,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
   // 初始化时从 localStorage 读取已隐藏的 Loop ID（Node 测试环境自动降级为空）
   dismissedLoopIds: loadDismissedLoops(),
   dismissLoopTask: (loopId) => set((s) => {
-    if (s.dismissedLoopIds.includes(loopId)) return s
+    if (s.dismissedLoopIds.includes(loopId)) {return s}
     const next = [...s.dismissedLoopIds, loopId]
     saveDismissedLoops(next)
     // 同时从工作区 tasks 里移除对应卡片
@@ -1081,7 +1081,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
     return { dismissedLoopIds: next, tasks }
   }),
   restoreLoopTask: (loopId) => set((s) => {
-    if (!s.dismissedLoopIds.includes(loopId)) return s
+    if (!s.dismissedLoopIds.includes(loopId)) {return s}
     const next = s.dismissedLoopIds.filter((id) => id !== loopId)
     saveDismissedLoops(next)
     return { dismissedLoopIds: next }
@@ -1093,7 +1093,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
       .filter((l) => l.status !== 'running')
       .map((l) => l.id)
       .filter((id) => !s.dismissedLoopIds.includes(id))
-    if (toDismiss.length === 0) return 0
+    if (toDismiss.length === 0) {return 0}
     const next = [...s.dismissedLoopIds, ...toDismiss]
     saveDismissedLoops(next)
     // 从工作区 tasks 移除对应 Loop 卡片
@@ -1126,7 +1126,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
 
   upsertRemoteTask: (remote) => {
     const mapped = mapAsyncTaskToWorkspace(remote)
-    let assignedId = mapped.id
+    const assignedId = mapped.id
     set((s) => {
       const idx = s.tasks.findIndex((t) => t.id === mapped.id)
       if (idx >= 0) {
@@ -1162,7 +1162,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
 
   addSubtask: (parentId, subtask) => set((s) => ({
     tasks: s.tasks.map((t) => {
-      if (t.id !== parentId) return t
+      if (t.id !== parentId) {return t}
       const subtasks = t.subtasks ? [...t.subtasks, subtask] : [subtask]
       // 父任务状态随子任务聚合
       return { ...t, subtasks, status: deriveGroupStatus(subtasks) }
@@ -1170,7 +1170,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
   })),
   updateSubtaskStatus: (parentId, subtaskId, status) => set((s) => ({
     tasks: s.tasks.map((t) => {
-      if (t.id !== parentId || !t.subtasks) return t
+      if (t.id !== parentId || !t.subtasks) {return t}
       const subtasks = t.subtasks.map((sub) =>
         sub.id === subtaskId
           ? { ...sub, status, completedAt: status === 'done' || status === 'error' ? Date.now() : sub.completedAt }
@@ -1181,7 +1181,7 @@ export const useTaskWorkspace = create<TaskWorkspaceState>()((set, get) => {
   })),
   removeSubtask: (parentId, subtaskId) => set((s) => ({
     tasks: s.tasks.map((t) => {
-      if (t.id !== parentId || !t.subtasks) return t
+      if (t.id !== parentId || !t.subtasks) {return t}
       const subtasks = t.subtasks.filter((sub) => sub.id !== subtaskId)
       return { ...t, subtasks, status: deriveGroupStatus(subtasks) }
     }),

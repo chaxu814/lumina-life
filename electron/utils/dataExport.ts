@@ -76,22 +76,22 @@ function humanReadableMemory(): string {
   try {
     const store = getMemoryStore()
     const mem: any = (store as any).getStructuredMemory ? store.getStructuredMemory() : null
-    if (!mem) return '# Lumina Memory\n(结构化记忆不可用，详见 data/*.json)\n'
+    if (!mem) {return '# Lumina Memory\n(结构化记忆不可用，详见 data/*.json)\n'}
     const lines: string[] = ['# Lumina 记忆导出', '', `导出时间: ${new Date().toISOString()}`, '']
     const u = mem.user || {}
     lines.push('## 用户画像')
     lines.push(`- 称呼: ${u.name || '（未设置）'}`)
-    if (Array.isArray(u.preferences) && u.preferences.length) lines.push(`- 偏好: ${u.preferences.join('、')}`)
-    if (Array.isArray(u.habits) && u.habits.length) lines.push(`- 习惯: ${u.habits.join('、')}`)
+    if (Array.isArray(u.preferences) && u.preferences.length) {lines.push(`- 偏好: ${u.preferences.join('、')}`)}
+    if (Array.isArray(u.habits) && u.habits.length) {lines.push(`- 习惯: ${u.habits.join('、')}`)}
     lines.push('')
     if (Array.isArray(mem.facts) && mem.facts.length) {
       lines.push('## 事实记忆')
-      for (const f of mem.facts) lines.push(`- [${f.category}] ${f.content}`)
+      for (const f of mem.facts) {lines.push(`- [${f.category}] ${f.content}`)}
       lines.push('')
     }
     if (Array.isArray(mem.reflections) && mem.reflections.length) {
       lines.push('## 反思记忆')
-      for (const r of mem.reflections) lines.push(`- ${r.topic}: ${r.insight}`)
+      for (const r of mem.reflections) {lines.push(`- ${r.topic}: ${r.insight}`)}
       lines.push('')
     }
     return lines.join('\n')
@@ -149,7 +149,7 @@ export function defaultExportFileName(): string {
  */
 export function importDataFromZip(zipPath: string): DataImportResult {
   try {
-    if (!fs.existsSync(zipPath)) return { ok: false, error: '文件不存在' }
+    if (!fs.existsSync(zipPath)) {return { ok: false, error: '文件不存在' }}
     const zip = new AdmZip(zipPath)
     const entries = zip.getEntries()
     const dataEntries = entries.filter(e => e.entryName.startsWith('data/') && e.entryName.endsWith('.json'))
@@ -182,8 +182,8 @@ export function importDataFromZip(zipPath: string): DataImportResult {
         for (const row of rows) {
           try {
             const res = insert.run(...useCols.map(c => row[c] === undefined ? null : row[c]))
-            if (res.changes > 0) ins++
-            else skip++
+            if (res.changes > 0) {ins++}
+            else {skip++}
           } catch { skip++ }
         }
       })

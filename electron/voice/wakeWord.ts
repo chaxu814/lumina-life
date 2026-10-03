@@ -57,7 +57,7 @@ export class PorcupineWakeWordProvider implements WakeWordProvider {
     // 真接入点：动态 import @picovoice/porcupine-node（可选依赖，未装时给出清晰提示）
     try {
       const Porcupine = (await import('@picovoice/porcupine-node' as any)).default
-      // eslint-disable-next-line no-new
+       
       new Porcupine(this.cfg.accessKey, {
         customWritePath: this.cfg.modelPath,
         sensitivities: [this.cfg.sensitivity ?? 0.5],

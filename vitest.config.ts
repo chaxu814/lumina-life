@@ -6,11 +6,20 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
-    // agentRunner 依赖链重（工具/Skill/记忆系统注册），冷加载 5~8s；
-    // 统一放宽测试/钩子超时，避免动态 import 它的用例偶发超时与连锁误报。
-    testTimeout: 20000,
-    hookTimeout: 20000,
+    // ⚠️ v3.34 修复：此前 include 只写 'tests/**'，导致 electron/__tests__/ 下的
+    // 7 个测试文件**永远不会被 npm test 执行**（186 个 test 文件只跑 179 个）。
+    // 其中 electron/__tests__/memoryStore.test.ts 是本项目唯一一份真正的
+    // MemoryStore 集成测试 —— 也就是 63KB 的核心记忆存储模块一直是裸奔的。
+    // 现在把两个目录都纳入。
+    include: [
+      'tests/**/*.test.ts',
+      'electron/**/__tests__/**/*.test.ts',
+    ],
+    // 断环后 agentRunner 的冷加载已回到预算内（实测全量套件 14s）。
+    // 阈值仍留出余量：agentRunner 依赖工具/Skill/记忆三套注册，冷加载在
+    // 慢机器或覆盖率插桩下仍会明显变慢。
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       provider: 'v8',
       // 只把「已建立实测的核心模块」纳入门禁，作为防回归门；

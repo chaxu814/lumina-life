@@ -10,9 +10,11 @@ import { getMemoryStore, MemoryVectorStore, normalizeFactSource } from '../memor
 import { getSessionManager, type SessionData } from '../sessionManager'
 import { MessageHistory, isMultimodalMessage, extractMultimodalText, type MultimodalContentItem } from '../msgHistory'
 import { ScrollContext } from '../memory/scrollContext'
+import { stateFilePath } from '../core/pathsFallback'
 
-const configPath = join(app.getPath('userData'), 'lumina-config.json')
-const memoryPath = join(app.getPath('userData'), 'lumina-memory.db')
+// ⚠️ 同 loopIpc：模块顶层不能直接调 app.getPath()，app 尚未就绪会抛错。
+const configPath = stateFilePath('lumina-config.json')
+const memoryPath = stateFilePath('lumina-memory.db')
 
 // 全局向量存储实例
 const vectorStore = new MemoryVectorStore()

@@ -29,7 +29,7 @@ export default function BrowserLinksPanel() {
   useEffect(() => {
     let alive = true
     window.luminaAPI.getConfig().then((cfg: any) => {
-      if (!alive) return
+      if (!alive) {return}
       // 键缺失 = 默认开；只有显式 false 才是关。
       // config:get 已用 CONFIG_DEFAULTS 补全，这里的 !== false 是双保险。
       setEnabled(cfg?.browser?.autoOpenLinks !== false)

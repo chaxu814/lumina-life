@@ -61,7 +61,11 @@ describe('featureFlags · 三处判据一致（防止幽灵状态）', () => {
 
   it('聊天区挂载：关闭时 TheaterMount 返回 null（零开销而非隐藏）', () => {
     const src = readSrc('src/components/TheaterMount.tsx')
-    expect(src).toMatch(/if\s*\(!enabled\)\s*return null/)
+    // 【v3.34 括号容错】原断言是 /if\s*\(!enabled\)\s*return null/，
+    // 但 eslint 的 curly 规则（--fix）会把单行 if 补成 if (...) { return null }，
+    // 于是断言失配。这类「读源码文本」的断言天然脆 —— 格式化工具一改就红。
+    // 这里改成对花括号/换行不敏感，避免每次 lint 修复都要回来改测试。
+    expect(src.replace(/\s+/g, ' ')).toMatch(/if\s*\(\s*!enabled\s*\)\s*\{?\s*return null/)
   })
 })
 

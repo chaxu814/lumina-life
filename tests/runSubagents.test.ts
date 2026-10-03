@@ -37,7 +37,7 @@ function makeDeps(opts: {
 
   const deps: SubagentRunDeps = {
     hire: () => {
-      if (opts.poolEmpty) return null
+      if (opts.poolEmpty) {return null}
       counter++
       return makeIntern(`intern_yak_小${counter}`)
     },
@@ -46,8 +46,8 @@ function makeDeps(opts: {
     fail: (id) => failed.push(id),
     fire: (id) => { fired.push(id); return true },
     delegate: async (_owner, internId, _task) => {
-      if (opts.delegateThrows) throw new Error('boom')
-      if (opts.delegateFail) return { success: false, error: '模拟失败' }
+      if (opts.delegateThrows) {throw new Error('boom')}
+      if (opts.delegateFail) {return { success: false, error: '模拟失败' }}
       return { success: true, content: `${internId} 干完了` }
     },
   }

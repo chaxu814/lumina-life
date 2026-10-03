@@ -55,8 +55,8 @@ function isInQuietHours(settings: PushSettings, now = new Date()): boolean {
   const cur = now.getHours() * 60 + now.getMinutes()
   const start = parseTime(settings.quietHoursStart)
   const end = parseTime(settings.quietHoursEnd)
-  if (start === end) return false
-  if (start < end) return cur >= start && cur < end
+  if (start === end) {return false}
+  if (start < end) {return cur >= start && cur < end}
   return cur >= start || cur < end // 跨午夜
 }
 
@@ -107,10 +107,10 @@ export function decidePush(
   // 6. 计算欲望值
   const hour = nowDate.getHours()
   let timeWeight = 0.5
-  if (hour >= 9 && hour <= 11) timeWeight = 0.8 // 上午
-  else if (hour >= 14 && hour <= 17) timeWeight = 0.7 // 下午
-  else if (hour >= 19 && hour <= 22) timeWeight = 0.9 // 晚上黄金时段
-  else if (hour >= 0 && hour < 6) timeWeight = 0.2 // 深夜
+  if (hour >= 9 && hour <= 11) {timeWeight = 0.8} // 上午
+  else if (hour >= 14 && hour <= 17) {timeWeight = 0.7} // 下午
+  else if (hour >= 19 && hour <= 22) {timeWeight = 0.9} // 晚上黄金时段
+  else if (hour >= 0 && hour < 6) {timeWeight = 0.2} // 深夜
 
   const desire =
     s.intimacy * 0.35 +
@@ -137,11 +137,11 @@ export function decidePush(
   // 8. 选择推送类型
   const availableTypes = settings.allowedTypes
   let type: PushType = 'chat'
-  if (s.fatigue > 0.6 && availableTypes.includes('care')) type = 'care'
-  else if (hour >= 11 && hour <= 13 && availableTypes.includes('reminder')) type = 'reminder'
-  else if (s.intimacy > 0.7 && availableTypes.includes('share')) type = 'share'
-  else if (availableTypes.includes('greeting')) type = 'greeting'
-  else type = pickRandom(availableTypes.length > 0 ? availableTypes : ['chat'])
+  if (s.fatigue > 0.6 && availableTypes.includes('care')) {type = 'care'}
+  else if (hour >= 11 && hour <= 13 && availableTypes.includes('reminder')) {type = 'reminder'}
+  else if (s.intimacy > 0.7 && availableTypes.includes('share')) {type = 'share'}
+  else if (availableTypes.includes('greeting')) {type = 'greeting'}
+  else {type = pickRandom(availableTypes.length > 0 ? availableTypes : ['chat'])}
 
   // 9. 强度
   const intensity: PushIntensity = desire > 0.8 ? 'high' : desire > 0.65 ? 'medium' : 'low'

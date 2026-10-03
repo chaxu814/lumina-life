@@ -38,6 +38,7 @@ const SESSION_PARTITION = 'persist:lumina-browser'
 export { DEVICE_PRESETS, isAllowedUrl, normalizeUrl } from './browserUrl'
 export type { DevicePreset } from './browserUrl'
 import { isAllowedUrl, normalizeUrl } from './browserUrl'
+import { getAppIconPath } from '../appIcon'
 
 export interface BrowserState {
   url: string
@@ -70,7 +71,7 @@ function resolveHtml(): string {
     join(__dirname, '..', '..', 'electron', 'browser', 'browser.html'), // dev
     join(process.cwd(), 'electron', 'browser', 'browser.html'),
   ]
-  for (const c of candidates) if (existsSync(c)) return c
+  for (const c of candidates) {if (existsSync(c)) {return c}}
   return candidates[0]
 }
 
@@ -80,7 +81,7 @@ function resolvePreload(): string {
     join(__dirname, '..', '..', 'out', 'preload', 'browser.js'),
     join(process.cwd(), 'out', 'preload', 'browser.js'),
   ]
-  for (const c of candidates) if (existsSync(c)) return c
+  for (const c of candidates) {if (existsSync(c)) {return c}}
   return candidates[0]
 }
 
@@ -92,10 +93,10 @@ function getSession(): Session {
 /** 单例窗口：已开就复用并聚焦 */
 export function showBrowserWindow(initialUrl?: string): BrowserWindow {
   if (win && !win.isDestroyed()) {
-    if (win.isMinimized()) win.restore()
+    if (win.isMinimized()) {win.restore()}
     win.show()
     win.focus()
-    if (initialUrl) void navigate(initialUrl)
+    if (initialUrl) {void navigate(initialUrl)}
     return win
   }
 
@@ -110,6 +111,7 @@ export function showBrowserWindow(initialUrl?: string): BrowserWindow {
     minWidth: 560,
     minHeight: 420,
     title: 'Lumina 浏览器',
+    icon: getAppIconPath(256),
     backgroundColor: '#12141a',
     show: false,
     autoHideMenuBar: true,
@@ -138,7 +140,7 @@ export function showBrowserWindow(initialUrl?: string): BrowserWindow {
       finish()
     })
   })
-  hostReady.then(() => { if (initialUrl) void navigate(initialUrl) })
+  hostReady.then(() => { if (initialUrl) {void navigate(initialUrl)} })
 
   // 宿主页绝不能被导航走：一旦离开 browser.html，工具栏就没了。
   // 注意 will-navigate 只对"页面/用户发起的导航"触发，loadFile 不受影响。
@@ -148,11 +150,11 @@ export function showBrowserWindow(initialUrl?: string): BrowserWindow {
   // 网页本体的白名单挂在 webview 上，规则只在 browserUrl.ts 里存在一份
   w.webContents.on('did-attach-webview', (_e, guest) => {
     guest.on('will-navigate', (ev, url) => {
-      if (!isAllowedUrl(url)) ev.preventDefault()
+      if (!isAllowedUrl(url)) {ev.preventDefault()}
     })
     guest.setWindowOpenHandler(({ url }) => {
       // target=_blank 一律在当前窗口里打开，不弹新窗
-      if (isAllowedUrl(url)) void navigate(url)
+      if (isAllowedUrl(url)) {void navigate(url)}
       return { action: 'deny' }
     })
   })
@@ -181,10 +183,10 @@ export function isBrowserOpen(): boolean {
  * executeJavaScript 会自动 await 返回的 Promise，所以可以直接拿异步结果。
  */
 async function callHost<T>(method: string, args: unknown[] = []): Promise<T> {
-  if (!getBrowserWindow()) throw new Error('浏览器未打开')
+  if (!getBrowserWindow()) {throw new Error('浏览器未打开')}
   await hostReady
   const w = getBrowserWindow()
-  if (!w) throw new Error('浏览器未打开')
+  if (!w) {throw new Error('浏览器未打开')}
   const literal = args.map((a) => JSON.stringify(a === undefined ? null : a)).join(',')
   const code =
     `(function(){` +
@@ -217,7 +219,7 @@ export async function navigate(
 ): Promise<{ ok: boolean; url?: string; title?: string; error?: string }> {
   const input = String(raw || '').trim()
   const target = normalizeUrl(input)
-  if (!isAllowedUrl(target)) return { ok: false, error: `不支持的地址：${raw}` }
+  if (!isAllowedUrl(target)) {return { ok: false, error: `不支持的地址：${raw}` }}
 
   if (!getBrowserWindow()) {
     showBrowserWindow(input)
@@ -245,7 +247,7 @@ async function execInPage(src: string): Promise<any> {
 export async function readPage(
   limit = 6000,
 ): Promise<{ ok: boolean; url?: string; title?: string; text?: string; error?: string }> {
-  if (!getBrowserWindow()) return { ok: false, error: '浏览器未打开' }
+  if (!getBrowserWindow()) {return { ok: false, error: '浏览器未打开' }}
   const n = Math.max(200, Math.min(20000, limit))
   try {
     // 用 String.fromCharCode(10) 代替 \n，避免多层转义把源码里的换行写坏
@@ -268,7 +270,7 @@ export async function readPage(
 export async function readInteractive(
   limit = 200,
 ): Promise<{ ok: boolean; items: any[]; error?: string }> {
-  if (!getBrowserWindow()) return { ok: false, items: [], error: '浏览器未打开' }
+  if (!getBrowserWindow()) {return { ok: false, items: [], error: '浏览器未打开' }}
   const n = Math.max(10, Math.min(1000, limit))
   try {
     const items = await execInPage(
@@ -304,7 +306,7 @@ export async function readInteractive(
 export async function clickInteractive(
   index: number,
 ): Promise<{ ok: boolean; error?: string; clicked?: any }> {
-  if (!getBrowserWindow()) return { ok: false, error: '浏览器未打开' }
+  if (!getBrowserWindow()) {return { ok: false, error: '浏览器未打开' }}
   try {
     const clicked = await execInPage(
       `(function(){
@@ -316,7 +318,7 @@ export async function clickInteractive(
          return { tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || '').trim().slice(0, 80) };
        })()`,
     )
-    if (!clicked) return { ok: false, error: `没有索引为 ${index} 的可点击元素` }
+    if (!clicked) {return { ok: false, error: `没有索引为 ${index} 的可点击元素` }}
     return { ok: true, clicked }
   } catch (e: any) {
     return { ok: false, error: String(e?.message || e) }
@@ -328,7 +330,7 @@ export async function typeInto(
   index: number,
   text: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!getBrowserWindow()) return { ok: false, error: '浏览器未打开' }
+  if (!getBrowserWindow()) {return { ok: false, error: '浏览器未打开' }}
   const value = JSON.stringify(String(text ?? ''))
   try {
     const okd = await execInPage(
@@ -353,7 +355,7 @@ export async function typeInto(
 
 /** 截图当前网页本体（不是工具栏） */
 export async function screenshot(): Promise<{ ok: boolean; dataUrl?: string; error?: string }> {
-  if (!getBrowserWindow()) return { ok: false, error: '浏览器未打开' }
+  if (!getBrowserWindow()) {return { ok: false, error: '浏览器未打开' }}
   try {
     const dataUrl = await callHost<string>('shot')
     if (!dataUrl || !String(dataUrl).startsWith('data:image')) {
@@ -369,18 +371,18 @@ export function closeBrowser(): void {
   const w = win
   win = null
   lastState = { ...EMPTY_STATE }
-  if (w && !w.isDestroyed()) w.close()
+  if (w && !w.isDestroyed()) {w.close()}
 }
 
 // ─── IPC（供浏览器窗口自身的工具栏 / 渲染进程调用） ─────────────────────
 
 export function registerBrowserIpc(): void {
-  if (ipcRegistered) return
+  if (ipcRegistered) {return}
   ipcRegistered = true
 
   // 宿主页在 webview 事件后回报状态，这里缓存并广播给工具栏
   ipcMain.on('browser:state-changed', (_e, s: any) => {
-    if (!s || typeof s.url !== 'string') return
+    if (!s || typeof s.url !== 'string') {return}
     sendState({ ...EMPTY_STATE, ...s })
   })
 
@@ -411,7 +413,7 @@ export function registerBrowserIpc(): void {
   ipcMain.handle('browser:open-external', async (_e, url: string) => {
     try {
       const target = normalizeUrl(String(url || ''))
-      if (!isAllowedUrl(target)) return { ok: false }
+      if (!isAllowedUrl(target)) {return { ok: false }}
       const { shell } = require('electron')
       await shell.openExternal(target)
       return { ok: true }

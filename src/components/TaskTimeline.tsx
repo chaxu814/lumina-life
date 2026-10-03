@@ -34,10 +34,10 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
 ]
 
 function matchFilter(ev: TimelineEvent, filter: Filter): boolean {
-  if (filter === 'all') return true
-  if (filter === 'tool') return ev.type === 'tool_start' || ev.type === 'tool_end' || ev.type === 'tool_error'
-  if (filter === 'thinking') return ev.type === 'thinking'
-  if (filter === 'message') return ev.type === 'text' || ev.type === 'system'
+  if (filter === 'all') {return true}
+  if (filter === 'tool') {return ev.type === 'tool_start' || ev.type === 'tool_end' || ev.type === 'tool_error'}
+  if (filter === 'thinking') {return ev.type === 'thinking'}
+  if (filter === 'message') {return ev.type === 'text' || ev.type === 'system'}
   return true
 }
 
@@ -109,7 +109,7 @@ const TaskTimeline: React.FC<{ taskId: string | null }> = ({ taskId }) => {
 
   const onScroll = () => {
     const el = scrollRef.current
-    if (!el) return
+    if (!el) {return}
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
     stickToBottom.current = atBottom
   }
@@ -122,8 +122,8 @@ const TaskTimeline: React.FC<{ taskId: string | null }> = ({ taskId }) => {
   const toggleGroup = (key: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(key)) {next.delete(key)}
+      else {next.add(key)}
       return next
     })
   }

@@ -358,16 +358,16 @@ export class NewsDigestScheduler {
    * 纯判定，便于单测（通过参数注入时间）。
    */
   isDueAt(date: Date, lastPushMinute: number): { due: boolean; slot?: number; reason: string } {
-    if (!this.config.enabled) return { due: false, reason: '总开关关闭' }
+    if (!this.config.enabled) {return { due: false, reason: '总开关关闭' }}
 
     const hour = date.getHours()
     const minute = date.getMinutes()
 
     // 只在整点后 5 分钟内触发（8:00-8:05、12:00-12:05 等）
-    if (minute > 5) return { due: false, reason: '不在整点窗口' }
+    if (minute > 5) {return { due: false, reason: '不在整点窗口' }}
 
     const slots = this.getActiveSlots()
-    if (!slots.includes(hour)) return { due: false, reason: `${hour}:00 不在启用时段` }
+    if (!slots.includes(hour)) {return { due: false, reason: `${hour}:00 不在启用时段` }}
 
     // 静默时段
     if (isHourInQuietRange(hour, this.config.intervalQuietHours)) {
@@ -376,7 +376,7 @@ export class NewsDigestScheduler {
 
     // 同一分钟不重复推
     const currentMinute = hour * 100 + minute
-    if (currentMinute === lastPushMinute) return { due: false, reason: '本分钟已检查过' }
+    if (currentMinute === lastPushMinute) {return { due: false, reason: '本分钟已检查过' }}
 
     // 冷却：同一时段 cooldownHours 内不重复
     const lastPushed = this.config.lastPushedAt[hour] || 0
@@ -388,10 +388,10 @@ export class NewsDigestScheduler {
   }
 
   private checkAndPush(): void {
-    if (this.inFlight) return
+    if (this.inFlight) {return}
     const now = new Date()
     const check = this.isDueAt(now, this.lastPushMinute)
-    if (!check.due || check.slot === undefined) return
+    if (!check.due || check.slot === undefined) {return}
 
     // 标记本分钟（无论后续成败，避免 60s 轮询在同分钟内重复进入）
     this.lastPushMinute = now.getHours() * 100 + now.getMinutes()
@@ -408,7 +408,7 @@ export class NewsDigestScheduler {
    */
   private notifyHighPriority(filtered: FilteredItem[], slotName: string): void {
     const sn = this.config.systemNotify
-    if (!sn.enabled) return
+    if (!sn.enabled) {return}
 
     try {
       const { high } = classifyBatch(filtered, this.config.interests, {
@@ -462,7 +462,7 @@ export class NewsDigestScheduler {
    */
   private async organizeWithAgent(filtered: FilteredItem[]): Promise<FilteredItem[]> {
     const ao = this.config.agentOrganize
-    if (!ao.enabled) return filtered
+    if (!ao.enabled) {return filtered}
 
     try {
       const result = await organizeNewsWithAgent(filtered, {

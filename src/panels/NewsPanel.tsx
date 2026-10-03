@@ -137,7 +137,7 @@ const SLOT_LABEL: Record<number, string> = {
   const step = Math.max(1, Math.min(24, Math.trunc(intervalHours) || 3))
   const anchor = ((Math.trunc(anchorHour) || 0) % 24 + 24) % 24
   const set = new Set<number>()
-  for (let h = 0; h < 24; h += step) set.add((anchor + h) % 24)
+  for (let h = 0; h < 24; h += step) {set.add((anchor + h) % 24)}
   return [...set].sort((a, b) => a - b)
 }
 
@@ -196,7 +196,7 @@ export default function NewsPanel() {
   useEffect(() => {
     let cancelled = false
     ;(window.luminaAPI as any).newsDigestNotifyPermission?.()
-      ?.then((r: any) => { if (!cancelled && r?.ok) setNotifyPermission(r.permission) })
+      ?.then((r: any) => { if (!cancelled && r?.ok) {setNotifyPermission(r.permission)} })
       .catch(() => { /* 拿不到就保持 default，不影响其他功能 */ })
     return () => { cancelled = true }
   }, [])
@@ -205,7 +205,7 @@ export default function NewsPanel() {
     setNotifyPermBusy(true)
     try {
       const r = await (window.luminaAPI as any).newsDigestRequestNotifyPermission?.()
-      if (r?.ok) setNotifyPermission(r.permission)
+      if (r?.ok) {setNotifyPermission(r.permission)}
     } catch {
       // 申请失败不弹错误：通知本就是可选增强
     } finally {

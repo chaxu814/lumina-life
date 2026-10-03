@@ -25,7 +25,7 @@ import * as path from 'path'
 function buildClient() {
   const cfg = getSyncConfig()
   // 延迟读密码（测试时 safeStorage 退化为 base64）
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   const { getSecrets } = require('../sync/syncConfig') as typeof import('../sync/syncConfig')
   const secrets = getSecrets()
   return new WebDavClient({
@@ -37,7 +37,7 @@ function buildClient() {
 
 function buildEngine() {
   const cfg = getSyncConfig()
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   const { getSecrets } = require('../sync/syncConfig') as typeof import('../sync/syncConfig')
   const secrets = getSecrets()
   const client = new WebDavClient({

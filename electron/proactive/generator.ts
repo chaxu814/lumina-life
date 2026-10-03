@@ -53,14 +53,14 @@ export const VISIBLE_ACTIONS = new Set([
 function enrichAction(rawAction: string | undefined | null, mood: string, hour: number): string {
   const a = (rawAction || '').toLowerCase().trim()
   // LLM 明确给了有效大动作 → 尊重它
-  if (VISIBLE_ACTIONS.has(a)) return a
+  if (VISIBLE_ACTIONS.has(a)) {return a}
   // 深夜只做睡/醒
-  if (hour >= 23 || hour < 6) return 'sleep'
+  if (hour >= 23 || hour < 6) {return 'sleep'}
   // 按情绪补动作
-  if (/超开心|兴奋|幸福|开心/.test(mood)) return Math.random() < 0.5 ? 'happy' : 'wave'
-  if (/难过|低落/.test(mood)) return 'sad'
-  if (/闷闷不乐/.test(mood)) return 'think'
-  if (/疲惫/.test(mood)) return 'sleep'
+  if (/超开心|兴奋|幸福|开心/.test(mood)) {return Math.random() < 0.5 ? 'happy' : 'wave'}
+  if (/难过|低落/.test(mood)) {return 'sad'}
+  if (/闷闷不乐/.test(mood)) {return 'think'}
+  if (/疲惫/.test(mood)) {return 'sleep'}
   // 平静：小幅点头/歪头，避免每次都手舞足蹈
   return Math.random() < 0.55 ? 'nod' : 'think'
 }

@@ -153,7 +153,13 @@ export async function botAct(req: GameActionRequest, config: GameConfig): Promis
       bot.setControlState('sneak', false)
       return { ok: true, content: `🤖 bot 潜行 ${dur}ms`, route }
     case 'select_slot': {
-      const slot = Math.floor(Number(req.slot) ?? 0)
+      // v3.34 修真 bug：原来是 `Number(req.slot) ?? 0`。
+      // Number() 失败时返回的是 NaN，**不是** null/undefined，所以 `?? 0`
+      // 这条回退分支永远不会触发 —— req.slot 传 "abc" 时 Math.floor(NaN) = NaN，
+      // 一个 NaN 槽位号被一路传进 bot 的 select_slot，看起来像"没反应"。
+      // 这里显式做 NaN 校验，别让 `??` 给人"已经兜底了"的错觉。
+      const slotRaw = Number(req.slot)
+      const slot = Number.isFinite(slotRaw) ? Math.floor(slotRaw) : 0
       try {
         await new Promise<void>((resolve, reject) => {
           try {

@@ -7,6 +7,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+import * as os from 'os'
 import { app } from 'electron'
 
 export interface SubscriptionState {
@@ -39,9 +40,15 @@ class SubscriptionManager {
 
   constructor() {
     try {
-      this.statePath = path.join(app.getPath('userData'), 'lumina-news-subscriptions.json')
+      if (app && typeof app.getPath === 'function') {
+        this.statePath = path.join(app.getPath('userData'), 'lumina-news-subscriptions.json')
+      } else {
+        throw new Error('app not ready')
+      }
     } catch {
-      this.statePath = path.join(process.cwd(), 'lumina-news-subscriptions.json')
+      // ⚠️ 原来退回 process.cwd()（项目根），会在开发模式下往仓库里写文件。
+      // 改退系统临时目录：状态不持久可以接受，污染代码仓库不能接受。
+      this.statePath = path.join(os.tmpdir(), 'lumina-news-subscriptions.json')
     }
     this._load()
   }

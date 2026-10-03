@@ -35,8 +35,8 @@ describe('generateIntervalSlots — 间隔模式时段生成', () => {
     // 7 小时：0,7,14,21 —— 20 之后是 27 → 回绕成 3，但 3 已在集合外
     const s7 = generateIntervalSlots(7, 0)
     expect(s7).toEqual([0, 7, 14, 21])
-    for (const h of s7) expect(h).toBeGreaterThanOrEqual(0)
-    for (const h of s7) expect(h).toBeLessThanOrEqual(23)
+    for (const h of s7) {expect(h).toBeGreaterThanOrEqual(0)}
+    for (const h of s7) {expect(h).toBeLessThanOrEqual(23)}
   })
 
   it('每 5 小时 → 0,5,10,15,20', () => {

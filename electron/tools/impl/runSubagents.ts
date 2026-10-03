@@ -100,8 +100,8 @@ export async function executeParallelSubagents(
     // 并行：子任务彼此独立，用 allSettled 互不影响
     const settled = await Promise.allSettled(subtasks.map(runOne))
     for (const s of settled) {
-      if (s.status === 'fulfilled') outcomes.push(s.value)
-      else outcomes.push({ title: '(未知)', internId: null, status: 'error', detail: String(s.reason) })
+      if (s.status === 'fulfilled') {outcomes.push(s.value)}
+      else {outcomes.push({ title: '(未知)', internId: null, status: 'error', detail: String(s.reason) })}
     }
   } finally {
     // 用完即走：无论成败，全部 fire，不残留跨任务上下文

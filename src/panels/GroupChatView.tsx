@@ -655,8 +655,8 @@ export default function GroupChatView() {
   const toggleThinking = useCallback((msgId: string, streaming: boolean) => {
     setThinkingCollapsed(prev => {
       const nowCollapsed = !(msgId in prev ? prev[msgId] : !streaming)
-      if (nowCollapsed) userExpandedRef.current.delete(msgId)
-      else userExpandedRef.current.add(msgId)
+      if (nowCollapsed) {userExpandedRef.current.delete(msgId)}
+      else {userExpandedRef.current.add(msgId)}
       return { ...prev, [msgId]: nowCollapsed }
     })
   }, [])
@@ -782,7 +782,7 @@ export default function GroupChatView() {
    *   2. 没记录过 → 正在输出（!_animDone）默认展开，输出完毕默认收起
    */
   const isThinkingCollapsed = (msgId: string, msg?: GCMsg): boolean => {
-    if (msgId in thinkingCollapsed) return thinkingCollapsed[msgId]
+    if (msgId in thinkingCollapsed) {return thinkingCollapsed[msgId]}
     return Boolean(msg && msg._animDone)
   }
   const fileInputRef = useRef<HTMLInputElement>(null)

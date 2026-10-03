@@ -4,7 +4,8 @@
 // v3.0 新增: 团队协作工具 + 结构化记忆
 // ============================================================
 
-import { registerTool, getToolNames, validateToolRegistry } from './registry'
+import { registerTool, getToolNames, validateToolRegistry, resolveToolset, TOOLSETS } from './registry'
+import { claimToolsRegistration } from './registrationFlag'
 import { skillToToolDef, executeSkill, BUILTIN_SKILLS, getSkill } from './skillSystem'
 // 语音工具 (Whisper + ONNX + TTS)
 import {
@@ -192,13 +193,12 @@ import {
   teamAutonomyDef, teamAutonomy as teamAutonomyHandler,
   teamLogDef, teamLog as teamLogHandler,
   teamCheckpointDef, teamCheckpoint as teamCheckpointHandler,
+  phaseGateDelegateDef, phaseGateDelegate as phaseGateDelegateHandler,
 } from './impl/teamCollab'
 
-let _registered = false
-
 export function registerAllTools(): void {
-  if (_registered) {return}
-  _registered = true
+  // 标志位放在零依赖的叶子模块里，避开 agentRunner 顶层调用造成的 TDZ（详见 registrationFlag.ts 注释）
+  if (!claimToolsRegistration()) {return}
 
   // ── 基础工具 ─────────────────────────────────────────
 
@@ -384,6 +384,11 @@ export function registerAllTools(): void {
   registerTool(teamLogDef, teamLogHandler)
   registerTool(teamCheckpointDef, teamCheckpointHandler)
 
+  // v3.34: 五阶段门控委托 —— phaseGatedDelegate() 在此之前 0 调用方，
+  // 导致 Research→Plan→Execute→Verify→Review 整条链路从未被真正执行过。
+  // 详见 impl/phaseGateDelegate.ts 顶部说明。
+  registerTool(phaseGateDelegateDef, phaseGateDelegateHandler)
+
   // ── v2.5 Skill 系统 ──────────────────────────────────
 
   // 将每个内置 Skill 注册为一个标准工具，LLM 可直接调用
@@ -453,7 +458,26 @@ export function registerAllTools(): void {
     )
   }
 
-  console.log(`[Tools] 已注册 ${getToolNames().size} 个工具 (v2.6: +邮件 3 工具)`)
+  const registeredNames = [...getToolNames()]
+  console.log(
+    `[Tools] 已注册 ${registeredNames.length} 个工具 | 模式分档: ` +
+    `chat=${resolveToolset('chat').length} ` +
+    `agent=${resolveToolset('agent').length} ` +
+    `developer=${resolveToolset('developer').length} ` +
+    `full=${registeredNames.length}`,
+  )
+  // 注册了但任何 toolset 都到不了的工具 —— 属于「写了但用户用不上」，需要人工确认
+  const reachable = new Set<string>()
+  for (const setName of Object.keys(TOOLSETS)) {
+    for (const t of resolveToolset(setName)) {reachable.add(t)}
+  }
+  const orphans = registeredNames.filter(n => !reachable.has(n))
+  if (orphans.length > 0) {
+    console.warn(
+      `[Tools] ⚠️ ${orphans.length} 个已注册工具不在任何 toolset 中（模型无法调用）: ` +
+      orphans.join(', '),
+    )
+  }
 
   // 🔧 P0-fix: 工具注册表校验
   try {

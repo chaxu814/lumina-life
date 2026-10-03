@@ -902,8 +902,8 @@ export interface SearchResult {
 function normalizeRrfScore(raw: number, k = 60, perRoute = 20): number {
   const min = 1 / (k + Math.max(1, perRoute))
   const max = 2 / (k + 1)
-  if (!Number.isFinite(raw)) return 0
-  if (max <= min) return 0
+  if (!Number.isFinite(raw)) {return 0}
+  if (max <= min) {return 0}
   const norm = (raw - min) / (max - min)
   return Math.max(0, Math.min(1, norm))
 }

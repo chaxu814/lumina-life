@@ -50,7 +50,7 @@ export interface MarkdownAgent {
 
 /** 解析 frontmatter（YAML 子集，纯函数可单测） */
 export function parseAgentMarkdown(raw: string, source = '<memory>'): MarkdownAgent | null {
-  const text = raw.replace(/^﻿/, '')
+  const text = raw.replace(/^\uFEFF/, '')
   const fmMatch = text.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/)
   if (!fmMatch) {return null}
   const fm = fmMatch[1]

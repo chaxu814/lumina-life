@@ -43,7 +43,7 @@ export const LEGACY_SLOTS = [8, 12, 18, 22] as const
 /** 把任意输入夹到合法小时（0-23）。非法值一律回落到 0。 */
 export function normalizeHour(hour: unknown): number {
   const n = Math.trunc(Number(hour))
-  if (!Number.isFinite(n)) return 0
+  if (!Number.isFinite(n)) {return 0}
   // 允许 24 作为 anchor 的等价写法（=次日 0 点）
   return ((n % 24) + 24) % 24
 }
@@ -51,9 +51,9 @@ export function normalizeHour(hour: unknown): number {
 /** 把间隔夹到 [1, 24]。0/负数/NaN → 默认值。 */
 export function normalizeIntervalHours(hours: unknown): number {
   const n = Math.trunc(Number(hours))
-  if (!Number.isFinite(n)) return DEFAULT_INTERVAL_HOURS
-  if (n < MIN_INTERVAL_HOURS) return MIN_INTERVAL_HOURS
-  if (n > MAX_INTERVAL_HOURS) return MAX_INTERVAL_HOURS
+  if (!Number.isFinite(n)) {return DEFAULT_INTERVAL_HOURS}
+  if (n < MIN_INTERVAL_HOURS) {return MIN_INTERVAL_HOURS}
+  if (n > MAX_INTERVAL_HOURS) {return MAX_INTERVAL_HOURS}
   return n
 }
 
@@ -83,12 +83,12 @@ export function generateIntervalSlots(
  * 支持跨午夜（如 23→7）。
  */
 export function isHourInQuietRange(hour: number, quiet: QuietHours | null | undefined): boolean {
-  if (!quiet) return false
+  if (!quiet) {return false}
   const start = normalizeHour(quiet.start)
   const end = normalizeHour(quiet.end)
-  if (start === end) return false
+  if (start === end) {return false}
   const cur = normalizeHour(hour)
-  if (start < end) return cur >= start && cur < end
+  if (start < end) {return cur >= start && cur < end}
   return cur >= start || cur < end // 跨午夜
 }
 
@@ -106,7 +106,7 @@ export function resolveActiveSlots(spec: ScheduleSpec): number[] {
   const cleaned = new Set<number>()
   for (const raw of spec.enabledSlots ?? []) {
     const n = Math.trunc(Number(raw))
-    if (!Number.isFinite(n) || n < 0 || n > 23) continue // 静默丢弃越界项
+    if (!Number.isFinite(n) || n < 0 || n > 23) {continue} // 静默丢弃越界项
     cleaned.add(n)
   }
   return [...cleaned].sort((a, b) => a - b)
@@ -121,7 +121,7 @@ export function sanitizeSlots(slots: unknown): number[] {
   const cleaned = new Set<number>()
   for (const raw of list) {
     const n = Math.trunc(Number(raw))
-    if (!Number.isFinite(n) || n < 0 || n > 23) continue
+    if (!Number.isFinite(n) || n < 0 || n > 23) {continue}
     cleaned.add(n)
   }
   return [...cleaned].sort((a, b) => a - b)
@@ -145,10 +145,10 @@ export function describeSlot(hour: number): string {
   const h = normalizeHour(hour)
   const time = `${String(h).padStart(2, '0')}:00`
   // 兼容旧版固定文案
-  if (h === 8) return '☀️ 早间'
-  if (h === 12) return '🌤️ 午间'
-  if (h === 18) return '🌆 傍晚'
-  if (h === 22) return '🌙 晚间'
+  if (h === 8) {return '☀️ 早间'}
+  if (h === 12) {return '🌤️ 午间'}
+  if (h === 18) {return '🌆 傍晚'}
+  if (h === 22) {return '🌙 晚间'}
   const meta = SLOT_META.find(m => h <= m.max) ?? SLOT_META[SLOT_META.length - 1]
   return `${meta.label} (${time})`
 }
@@ -162,6 +162,6 @@ export function describeSlot(hour: number): string {
  */
 export function normalizeCooldownHours(hours: unknown): number {
   const n = Number(hours)
-  if (!Number.isFinite(n) || n < 0) return 0
+  if (!Number.isFinite(n) || n < 0) {return 0}
   return Math.min(n, 24)
 }

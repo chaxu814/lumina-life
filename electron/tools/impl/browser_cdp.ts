@@ -10,6 +10,7 @@
 // ============================================================
 
 import { BrowserWindow, webContents } from 'electron'
+import { getAppIconPath } from '../../appIcon'
 import type { ToolDef, ToolResult } from '../types'
 
 // ============================================================
@@ -47,6 +48,7 @@ class CDPBrowserManager {
       const browserWindow = new BrowserWindow({
         width,
         height,
+        icon: getAppIconPath(256),
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
@@ -111,6 +113,7 @@ class CDPBrowserManager {
       // Create new window and connect to remote debug port
       const browserWindow = new BrowserWindow({
         show: false,
+        icon: getAppIconPath(256),
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,

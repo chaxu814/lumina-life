@@ -29,17 +29,17 @@ const CITY_COORDS: Record<string, { lat: number; lon: number; name: string }> = 
 
 /** WMO weather_code → 中文描述 */
 function weatherCodeToText(code: number): string {
-  if (code === 0) return '晴'
-  if (code === 1) return '大致晴'
-  if (code === 2) return '多云'
-  if (code === 3) return '阴'
-  if (code === 45 || code === 48) return '雾'
-  if (code >= 51 && code <= 57) return '毛毛雨'
-  if (code >= 61 && code <= 67) return '雨'
-  if (code >= 71 && code <= 77) return '雪'
-  if (code >= 80 && code <= 82) return '阵雨'
-  if (code >= 85 && code <= 86) return '阵雪'
-  if (code >= 95) return '雷雨'
+  if (code === 0) {return '晴'}
+  if (code === 1) {return '大致晴'}
+  if (code === 2) {return '多云'}
+  if (code === 3) {return '阴'}
+  if (code === 45 || code === 48) {return '雾'}
+  if (code >= 51 && code <= 57) {return '毛毛雨'}
+  if (code >= 61 && code <= 67) {return '雨'}
+  if (code >= 71 && code <= 77) {return '雪'}
+  if (code >= 80 && code <= 82) {return '阵雨'}
+  if (code >= 85 && code <= 86) {return '阵雪'}
+  if (code >= 95) {return '雷雨'}
   return `未知(${code})`
 }
 
@@ -47,16 +47,16 @@ function weatherCodeToText(code: number): string {
 function clothingAdvice(tempC: number, code: number, precipProb: number): string {
   const tips: string[] = []
 
-  if (tempC >= 30) tips.push('天气炎热，穿短袖/薄衫，注意防晒补水')
-  else if (tempC >= 22) tips.push('舒适宜人，短袖或薄长袖即可')
-  else if (tempC >= 15) tips.push('早晚偏凉，建议带件薄外套')
-  else if (tempC >= 5) tips.push('较冷，穿厚外套/风衣')
-  else if (tempC >= 0) tips.push('寒冷，注意保暖，穿羽绒服/厚棉衣')
-  else tips.push('严寒，全副武装防冻，注意防滑')
+  if (tempC >= 30) {tips.push('天气炎热，穿短袖/薄衫，注意防晒补水')}
+  else if (tempC >= 22) {tips.push('舒适宜人，短袖或薄长袖即可')}
+  else if (tempC >= 15) {tips.push('早晚偏凉，建议带件薄外套')}
+  else if (tempC >= 5) {tips.push('较冷，穿厚外套/风衣')}
+  else if (tempC >= 0) {tips.push('寒冷，注意保暖，穿羽绒服/厚棉衣')}
+  else {tips.push('严寒，全副武装防冻，注意防滑')}
 
-  if (precipProb >= 50) tips.push('降水概率高，记得带伞')
-  if (code >= 71 && code <= 86) tips.push('有雨雪，注意路滑')
-  if (code >= 95) tips.push('可能有雷雨，减少户外活动')
+  if (precipProb >= 50) {tips.push('降水概率高，记得带伞')}
+  if (code >= 71 && code <= 86) {tips.push('有雨雪，注意路滑')}
+  if (code >= 95) {tips.push('可能有雷雨，减少户外活动')}
 
   return tips.join('；')
 }

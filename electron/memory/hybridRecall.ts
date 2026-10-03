@@ -97,7 +97,7 @@ export function rrfFuse(rankings: number[][], k = 60): Map<number, number> {
   const fused = new Map<number, number>()
 
   for (const ranking of rankings) {
-    if (!Array.isArray(ranking) || ranking.length === 0) continue
+    if (!Array.isArray(ranking) || ranking.length === 0) {continue}
 
     const seenInRoute = new Set<number>()
     for (let i = 0; i < ranking.length; i++) {
@@ -106,8 +106,8 @@ export function rrfFuse(rankings: number[][], k = 60): Map<number, number> {
       // 注意：不能用 `docIdx < 0` 判负——NaN 的比较恒为 false，会被放行，
       // 而 `fused.set(NaN, ...)` 会造出一个键为字符串 "NaN" 的脏条目，
       // 下游拿它去 docs[idx] 取文档必然拿到 undefined。
-      if (typeof docIdx !== 'number' || !Number.isInteger(docIdx) || docIdx < 0) continue
-      if (seenInRoute.has(docIdx)) continue
+      if (typeof docIdx !== 'number' || !Number.isInteger(docIdx) || docIdx < 0) {continue}
+      if (seenInRoute.has(docIdx)) {continue}
       seenInRoute.add(docIdx)
 
       const rank = i + 1 // 1-based
@@ -126,7 +126,7 @@ export function rrfFuse(rankings: number[][], k = 60): Map<number, number> {
 /** 词频表 */
 function termFreq(tokens: string[]): Map<string, number> {
   const tf = new Map<string, number>()
-  for (const t of tokens) tf.set(t, (tf.get(t) || 0) + 1)
+  for (const t of tokens) {tf.set(t, (tf.get(t) || 0) + 1)}
   return tf
 }
 
@@ -138,7 +138,7 @@ function buildIdf(docTokensList: string[][]): Map<string, number> {
   const N = docTokensList.length || 1
   const df = new Map<string, number>()
   for (const toks of docTokensList) {
-    for (const t of new Set(toks)) df.set(t, (df.get(t) || 0) + 1)
+    for (const t of new Set(toks)) {df.set(t, (df.get(t) || 0) + 1)}
   }
   const idf = new Map<string, number>()
   for (const [term, n] of df) {
@@ -151,9 +151,9 @@ function buildIdf(docTokensList: string[][]): Map<string, number> {
 /** L2 归一化，零向量原样返回 */
 function l2Normalize(v: number[]): number[] {
   let norm = 0
-  for (const x of v) norm += x * x
+  for (const x of v) {norm += x * x}
   norm = Math.sqrt(norm)
-  if (norm === 0) return v
+  if (norm === 0) {return v}
   return v.map(x => x / norm)
 }
 
@@ -182,9 +182,9 @@ function tfidfVector(
 /** 余弦相似度（假定两侧已 L2 归一化，故退化为点积；仍做一次保护性裁剪） */
 export function cosineSimilarity(a: number[], b: number[]): number {
   const n = Math.min(a.length, b.length)
-  if (n === 0) return 0
+  if (n === 0) {return 0}
   let dot = 0
-  for (let i = 0; i < n; i++) dot += a[i] * b[i]
+  for (let i = 0; i < n; i++) {dot += a[i] * b[i]}
   return Math.max(-1, Math.min(1, dot))
 }
 
@@ -198,7 +198,7 @@ const BM25_B = 0.75
 
 function bm25Rankings(query: string, docs: string[], perRoute: number): number[] {
   const qTokens = Array.from(new Set(tokenize(query)))
-  if (qTokens.length === 0 || docs.length === 0) return []
+  if (qTokens.length === 0 || docs.length === 0) {return []}
 
   const docTokens = docs.map(d => tokenize(d))
   const docLens = docTokens.map(t => t.length)
@@ -207,7 +207,7 @@ function bm25Rankings(query: string, docs: string[], perRoute: number): number[]
 
   const df = new Map<string, number>()
   for (const toks of docTokens) {
-    for (const t of new Set(toks)) df.set(t, (df.get(t) || 0) + 1)
+    for (const t of new Set(toks)) {df.set(t, (df.get(t) || 0) + 1)}
   }
   const idf = (t: string): number => {
     const n = df.get(t) || 0
@@ -221,11 +221,11 @@ function bm25Rankings(query: string, docs: string[], perRoute: number): number[]
     let s = 0
     for (const qt of qTokens) {
       const f = tf.get(qt)
-      if (!f) continue
+      if (!f) {continue}
       s += idf(qt) * ((f * (BM25_K1 + 1)) / (f + BM25_K1 * lenNorm))
     }
     // 零分不进池：否则「所有文档都排一遍」会把纯噪声塞进融合
-    if (s > 0) scored.push({ idx: i, score: s })
+    if (s > 0) {scored.push({ idx: i, score: s })}
   }
 
   scored.sort((a, b) => b.score - a.score)
@@ -261,8 +261,8 @@ export function hybridRecall(
   const rrfK = options.rrfK ?? DEFAULTS.rrfK
   const minCosine = options.minCosine ?? DEFAULTS.minCosine
 
-  if (!query || !query.trim()) return []
-  if (!Array.isArray(docs) || docs.length === 0) return []
+  if (!query || !query.trim()) {return []}
+  if (!Array.isArray(docs) || docs.length === 0) {return []}
 
   const texts = docs.map(d => d.text || '')
 
@@ -276,7 +276,7 @@ export function hybridRecall(
 
   // ── RRF 融合 ──
   const fused = rrfFuse([bm25Route, cosineRoute], rrfK)
-  if (fused.size === 0) return []
+  if (fused.size === 0) {return []}
 
   const bm25RankMap = new Map<number, number>()
   bm25Route.forEach((docIdx, i) => bm25RankMap.set(docIdx, i + 1))
@@ -286,7 +286,7 @@ export function hybridRecall(
   const hits: HybridHit[] = []
   for (const [idx, score] of fused) {
     const doc = docs[idx]
-    if (!doc) continue
+    if (!doc) {continue}
     const bRank = bm25RankMap.get(idx) || 0
     const cRank = cosRankMap.get(idx) || 0
     hits.push({
@@ -302,10 +302,10 @@ export function hybridRecall(
 
   // 排序：融合分降序；同分时两路都命中的排前面（双路共识强于单路高分）
   hits.sort((a, b) => {
-    if (Math.abs(b.score - a.score) > 1e-12) return b.score - a.score
+    if (Math.abs(b.score - a.score) > 1e-12) {return b.score - a.score}
     const aBoth = a.bestRoute === 'both' ? 1 : 0
     const bBoth = b.bestRoute === 'both' ? 1 : 0
-    if (aBoth !== bBoth) return bBoth - aBoth
+    if (aBoth !== bBoth) {return bBoth - aBoth}
     return 0
   })
 
@@ -351,17 +351,17 @@ function buildCosineRoute(
       })
     }
 
-    if (!Array.isArray(queryVec) || queryVec.length === 0) return []
+    if (!Array.isArray(queryVec) || queryVec.length === 0) {return []}
 
     const scored: Array<{ idx: number; score: number }> = []
     for (let i = 0; i < docs.length; i++) {
-      let docVec = docs[i].vector
+      const docVec = docs[i].vector
       if (!Array.isArray(docVec) || docVec.length === 0 || docVec.length !== queryVec.length) {
         // 维度不匹配（混合了外部向量与本地向量）→ 本条只能靠 BM25，这里跳过
         continue
       }
       const score = cosineSimilarity(queryVec, docVec)
-      if (score >= minCosine) scored.push({ idx: i, score })
+      if (score >= minCosine) {scored.push({ idx: i, score })}
     }
 
     scored.sort((a, b) => b.score - a.score)
@@ -388,9 +388,9 @@ export interface HybridStats {
 export function explainRouting(hits: HybridHit[]): HybridStats {
   const stats: HybridStats = { total: hits.length, bothRoutes: 0, bm25Only: 0, cosineOnly: 0 }
   for (const h of hits) {
-    if (h.bestRoute === 'both') stats.bothRoutes++
-    else if (h.bestRoute === 'bm25') stats.bm25Only++
-    else stats.cosineOnly++
+    if (h.bestRoute === 'both') {stats.bothRoutes++}
+    else if (h.bestRoute === 'bm25') {stats.bm25Only++}
+    else {stats.cosineOnly++}
   }
   return stats
 }

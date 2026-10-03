@@ -65,13 +65,13 @@ const DEFAULT_STATE: PushState = {
 
 function stateFilePath(): string {
   const dir = path.join(app.getPath('userData'), 'proactive')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
   return path.join(dir, 'push-state.json')
 }
 
 function settingsFilePath(): string {
   const dir = path.join(app.getPath('userData'), 'proactive')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(dir)) {fs.mkdirSync(dir, { recursive: true })}
   return path.join(dir, 'push-settings.json')
 }
 
@@ -130,7 +130,7 @@ export function savePushSettings(settings: PushSettings): void {
  */
 export function tickState(state: PushState, now = Date.now()): PushState {
   const elapsedH = (now - state.updatedAt) / (1000 * 60 * 60)
-  if (elapsedH <= 0) return state
+  if (elapsedH <= 0) {return state}
 
   const idleMin = (now - state.lastActiveAt) / (1000 * 60)
 

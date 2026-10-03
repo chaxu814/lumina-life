@@ -44,6 +44,10 @@ import { getTaskTrace } from '../../team/llmTrace'
 import { getCheckpointStore, createCheckpoint, rollbackCheckpoint } from '../../team/teamCheckpoint'
 import { buildDigest, getDailyLog, dayRange } from '../../team/teamDailyLog'
 import { sendApprovalRequest, recordApprovalVerdict } from '../../team/teamPolicy'
+// v3.34: 五阶段门控委托（此前 phaseGatedDelegate() 0 调用方）
+// 实现见 ./phaseGateDelegate.ts，这里只做 re-export 保持 tools/index 的单一注册入口。
+export { phaseGateDelegateDef, phaseGateDelegate } from './phaseGateDelegate'
+import { phaseGateDelegateDef, phaseGateDelegate } from './phaseGateDelegate'
 
 const ok = (content: string): ToolResult => ({ callId: `collab-${Date.now()}`, ok: true, content })
 const fail = (error: string): ToolResult => ({ callId: `collab-${Date.now()}`, ok: false, content: '', error })

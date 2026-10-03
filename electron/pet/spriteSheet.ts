@@ -120,7 +120,7 @@ export function computeFrameRects(
   includeMirrored = true,
 ): SpriteFrameRect[] {
   const out: SpriteFrameRect[] = []
-  if (frameW <= 0 || frameH <= 0) return out
+  if (frameW <= 0 || frameH <= 0) {return out}
 
   for (const action of SPRITE_ACTIONS) {
     for (let i = 0; i < action.frames; i++) {
@@ -262,9 +262,9 @@ export interface SpriteManifest {
 export function parseSpriteManifest(raw: string): SpriteManifest | null {
   let data: unknown
   try { data = JSON.parse(raw) } catch { return null }
-  if (!data || typeof data !== 'object') return null
+  if (!data || typeof data !== 'object') {return null}
   const d = data as Record<string, unknown>
-  if (d.kind !== 'spritesheet') return null
+  if (d.kind !== 'spritesheet') {return null}
   const name = typeof d.name === 'string' && d.name.trim() ? d.name.trim() : 'custom-sprite'
   const frameW = typeof d.frameW === 'number' && d.frameW > 0 ? Math.floor(d.frameW) : SPRITE_DEFAULT_FRAME
   const frameH = typeof d.frameH === 'number' && d.frameH > 0 ? Math.floor(d.frameH) : SPRITE_DEFAULT_FRAME
@@ -343,9 +343,9 @@ export const SPRITE_MANIFEST_FILE = 'sprite.json'
 export function assertSafeImportFiles(relFiles: string[]): string[] {
   const bad: string[] = []
   for (const f of relFiles) {
-    if (!isSafeRelativePath(f)) bad.push(f)
+    if (!isSafeRelativePath(f)) {bad.push(f)}
     const lower = f.toLowerCase()
-    if (/\.(js|mjs|cjs|html?|bat|cmd|exe|dll|ps1|sh)$/.test(lower)) bad.push(f)
+    if (/\.(js|mjs|cjs|html?|bat|cmd|exe|dll|ps1|sh)$/.test(lower)) {bad.push(f)}
   }
   return bad
 }

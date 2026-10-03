@@ -31,8 +31,8 @@ const BUILTIN_AGENTS: AgentDef[] = [
 
 /** 根据 agentId 映射负责人 emoji：lumina→🐱 recha→🍵 yak→📊 loop:→🔁 */
 function agentEmoji(agentId?: string): string {
-  if (!agentId) return '🔁'
-  if (agentId.startsWith('loop:')) return '🔁'
+  if (!agentId) {return '🔁'}
+  if (agentId.startsWith('loop:')) {return '🔁'}
   const found = BUILTIN_AGENTS.find((a) => a.id === agentId)
   return found ? found.emoji : '🔁'
 }
@@ -137,9 +137,9 @@ const GroupTaskCard: React.FC<{
   // 跟随最新子任务变化滚动（仅展开态、面板可见时）
   const subtaskListRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (!showExpanded || !subtaskListRef.current) return
+    if (!showExpanded || !subtaskListRef.current) {return}
     const last = subtaskListRef.current.lastElementChild
-    if (last) (last as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    if (last) {(last as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
   }, [subtasks.length, showExpanded])
 
   const duration = task.createdAt
@@ -255,7 +255,7 @@ const AgentStatusCards: React.FC = () => {
   for (const t of groupedTasks) {
     const auto = shouldAutoExpand(t, collapsedGroupIds, seenActiveExpanded)
     groupFlags.set(t.id, auto)
-    if (auto) seenActiveExpanded = true
+    if (auto) {seenActiveExpanded = true}
   }
 
   // 仅当存在非 running 的 Loop 任务时才显示"清空已完成"按钮

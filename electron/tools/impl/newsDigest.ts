@@ -12,6 +12,7 @@ import type { FilteredItem } from './newsFilter'
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
+import { stateFilePath } from '../../core/pathsFallback'
 
 // ═══════════════════════════════════════════════════════════
 // 持久化指纹存储（防重复推送）
@@ -28,7 +29,8 @@ function getFingerprintPath(): string {
   try {
     return path.join(app.getPath('userData'), 'news-fingerprints.json')
   } catch {
-    return path.join(process.cwd(), 'news-fingerprints.json')
+    // ⚠️ 不要退回 process.cwd()：开发态 cwd 就是项目根，会把状态写进 Git 工作区
+    return stateFilePath('news-fingerprints.json')
   }
 }
 

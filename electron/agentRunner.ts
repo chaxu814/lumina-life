@@ -108,7 +108,22 @@ import {
 } from './core/agentUtils'
 import { cleanToolNoiseText } from './agent/toolNoise'
 
-registerAllTools()
+// ⚠️ 工具注册已从模块顶层移除（v3.34 断环修复）
+//
+// 旧代码在这里直接 `registerAllTools()`，但本文件的依赖链是环的：
+//     tools/index.ts ──import──> impl/* ──> asyncTaskManager.ts
+//                    ──import──> agentRunner.ts ──> registerAllTools()
+//                                              │
+//                     读 tools/index.ts 的模块级绑定 ──> 回到 TDZ
+// 只要 agentRunner 先于 tools/index 完成求值（任何从 agentRunner 入口
+// import 的测试、任何一次 import 顺序调整），就会抛
+//     ReferenceError: Cannot access '_registered' before initialization
+// 生产环境靠 main.ts 的 import 顺序侥幸没炸，属于「随时会被外部 PR 踩爆」
+// 的定时炸弹。详见 electron/tools/registrationFlag.ts 的完整说明。
+//
+// 现在改为：main.ts 显式调用 + AgentRunner 构造函数兜底 + cli/index.ts 兜底，
+// 三处都是幂等的（claimToolsRegistration 用 CAS 语义）。
+// 行为不变，但不再依赖 import 顺序。
 
 // ── 辅助函数 ──────────────────────────────────────────────
 
@@ -241,7 +256,7 @@ export function describeRunFailure(raw?: string): string {
     return '这次回答被中止了。'
   }
   for (const [kind, re, text] of FAILURE_PATTERNS) {
-    if (re.test(s)) return text
+    if (re.test(s)) {return text}
   }
   return '这次没能完成，是模型服务返回了一个无法识别的错误。换个说法或稍后重试通常能解决。'
 }
@@ -678,6 +693,10 @@ private summarizer: ConversationSummarizer | null = null
    * @param config - 运行配置（模式、模型、API 密钥等），`mode` 默认为 `'agent'`
    */
   constructor(config: AgentRunConfig, options?: { sessionId?: string }) {
+    // v3.34 断环修复：工具注册改为惰性兜底（main.ts / cli 也会显式调用，三处幂等）
+    // 在这里而不是模块顶层调用，是因为构造时依赖图已 100% 求值，不会再落进 TDZ。
+    registerAllTools()
+
     this.config = {
       temperature: 0.7,
       maxTokens: 8192,    // 输出 token 上限（非上下文窗口），8192 足够长回答+代码
@@ -3079,7 +3098,7 @@ private summarizer: ConversationSummarizer | null = null
         let malformedToolArgs = 0
         for (const [, tc] of toolCallAccum) {
           if (!tc.name) {continue}
-          let args = tc.args || '{}'
+          const args = tc.args || '{}'
           try {
             JSON.parse(args)
           } catch {

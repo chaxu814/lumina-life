@@ -120,7 +120,7 @@ export function buildOrganizerPrompt(
  * 全失败返回 null（调用方据此降级）。
  */
 export function extractJsonArray(raw: string): unknown[] | null {
-  if (!raw) return null
+  if (!raw) {return null}
   const text = raw.trim()
 
   // ① ```json ... ``` 围栏
@@ -135,20 +135,20 @@ export function extractJsonArray(raw: string): unknown[] | null {
       const slice = candidate.slice(start, end + 1)
       try {
         const parsed = JSON.parse(slice)
-        if (Array.isArray(parsed)) return parsed
+        if (Array.isArray(parsed)) {return parsed}
       } catch { /* 继续尝试下一个候选 */ }
       // 退化：数组尾部可能带尾随逗号
       try {
         const fixed = slice.replace(/,\s*([\]}])/g, '$1')
         const parsed = JSON.parse(fixed)
-        if (Array.isArray(parsed)) return parsed
+        if (Array.isArray(parsed)) {return parsed}
       } catch { /* 继续 */ }
     }
 
     // ③ 整段就是数组
     try {
       const parsed = JSON.parse(candidate)
-      if (Array.isArray(parsed)) return parsed
+      if (Array.isArray(parsed)) {return parsed}
     } catch { /* 继续 */ }
   }
   return null
@@ -156,10 +156,10 @@ export function extractJsonArray(raw: string): unknown[] | null {
 
 /** 校验并归一化单条 agent 输出 */
 function normalizeEntry(raw: unknown): OrganizerEntry | null {
-  if (!raw || typeof raw !== 'object') return null
+  if (!raw || typeof raw !== 'object') {return null}
   const o = raw as Record<string, unknown>
   const id = typeof o.id === 'string' ? o.id : typeof o.id === 'number' ? String(o.id) : ''
-  if (!id) return null
+  if (!id) {return null}
 
   const tags = Array.isArray(o.tags)
     ? o.tags.filter((t): t is string => typeof t === 'string').slice(0, 5)
@@ -194,15 +194,15 @@ export function applyOrganizerOutput(
   options: { applyDrops?: boolean } = {},
 ): { items: FilteredItem[]; keptCount: number; matched: number } | null {
   const parsed = extractJsonArray(rawOutput)
-  if (!parsed) return null
+  if (!parsed) {return null}
 
   const byId = new Map(items.map(it => [it.item.id, it]))
   const entries: OrganizerEntry[] = []
   for (const p of parsed) {
     const e = normalizeEntry(p)
-    if (e && byId.has(e.id)) entries.push(e)
+    if (e && byId.has(e.id)) {entries.push(e)}
   }
-  if (entries.length === 0) return null
+  if (entries.length === 0) {return null}
 
   const applyDrops = options.applyDrops ?? false
   const kept = entries.filter(e => e.keep)
@@ -226,14 +226,14 @@ export function applyOrganizerOutput(
   const droppedItems = dropped.map(e => ({ ...byId.get(e.id)!, reason: byId.get(e.id)!.reason }))
   if (applyDrops) {
     // 只在至少留下 1 条时才允许裁剪，避免 agent 误判导致空列表
-    if (result.length > 0) return { items: result, keptCount: result.length, matched: entries.length }
+    if (result.length > 0) {return { items: result, keptCount: result.length, matched: entries.length }}
   }
   result.push(...droppedItems)
 
   // agent 没提到的条目补回末尾（保证不丢新闻）
   const covered = new Set(entries.map(e => e.id))
   for (const it of items) {
-    if (!covered.has(it.item.id)) result.push(it)
+    if (!covered.has(it.item.id)) {result.push(it)}
   }
 
   return { items: result, keptCount: kept.length, matched: entries.length }
@@ -267,7 +267,7 @@ export async function organizeNewsWithAgent(
   })
 
   // 开关关闭 → 零调用、零成本
-  if (!enabled) return degrade('用户未开启 agent 整理（省电模式）')
+  if (!enabled) {return degrade('用户未开启 agent 整理（省电模式）')}
 
   if (!Array.isArray(items) || items.length === 0) {
     return degrade('无待整理内容')

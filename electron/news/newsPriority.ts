@@ -43,7 +43,7 @@ export interface PriorityVerdict {
  * 按中英文标点 + 空白切分，丢掉单字符噪声。
  */
 export function splitInterests(interests: string | undefined | null): string[] {
-  if (!interests) return []
+  if (!interests) {return []}
   return Array.from(
     new Set(
       interests
@@ -56,7 +56,7 @@ export function splitInterests(interests: string | undefined | null): string[] {
 
 /** 判断某段文本是否命中任一关键词（英文大小写不敏感） */
 export function matchesKeywords(text: string, keywords: string[]): string[] {
-  if (!text || keywords.length === 0) return []
+  if (!text || keywords.length === 0) {return []}
   const hay = text.toLowerCase()
   return keywords.filter(k => hay.includes(k.toLowerCase()))
 }
@@ -125,8 +125,8 @@ export function classifyBatch(
     const verdict = classifyNewsPriority(item, interests, options)
     verdicts.set(item.item.id, verdict)
     const entry = { item, reasons: verdict.reasons }
-    if (verdict.priority === 'high') high.push(entry)
-    else normal.push(entry)
+    if (verdict.priority === 'high') {high.push(entry)}
+    else {normal.push(entry)}
   }
 
   return { high, normal, verdicts }

@@ -120,10 +120,10 @@ const FORCE_COMPLEX_SIGNALS: TriggerEntry[] = [
 
 /** 命中的独立信号数 → 放大系数（覆盖 1.0 ~ 1.6） */
 function compoundingFactor(distinctSignals: number): number {
-  if (distinctSignals <= 1) return 1.0
-  if (distinctSignals === 2) return 1.15
-  if (distinctSignals === 3) return 1.35
-  if (distinctSignals === 4) return 1.5
+  if (distinctSignals <= 1) {return 1.0}
+  if (distinctSignals === 2) {return 1.15}
+  if (distinctSignals === 3) {return 1.35}
+  if (distinctSignals === 4) {return 1.5}
   return 1.6
 }
 

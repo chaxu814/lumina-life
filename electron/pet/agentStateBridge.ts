@@ -53,7 +53,7 @@ export interface AgentStateSnapshot {
 function stateForMember(task: TaskNode): AgentRunState {
   const assignee = (task.assignTo || '').toLowerCase()
   // 热茶是审查员（recha），她的动作是「看」不是「写」
-  if (assignee === 'recha' || assignee === '热茶') return 'reviewing'
+  if (assignee === 'recha' || assignee === '热茶') {return 'reviewing'}
   return 'working'
 }
 
@@ -71,7 +71,7 @@ let _lastSnapshotAt = 0
  * 再退到实习生池 —— 实习生池��是真实在跑的并行任务，数据可靠。
  */
 export function deriveAgentState(now = Date.now()): AgentStateSnapshot {
-  let running: TaskNode[] = []
+  const running: TaskNode[] = []
   let failed: TaskNode | null = null
   let blocked: TaskNode | null = null
 
@@ -80,9 +80,9 @@ export function deriveAgentState(now = Date.now()): AgentStateSnapshot {
     const board = getTaskBoard()
     for (const projectId of knownProjectIds()) {
       for (const t of board.getTasks(projectId)) {
-        if (t.status === 'running') running.push(t)
-        else if (t.status === 'failed' && !failed) failed = t
-        else if ((t.status === 'blocked' || t.status === 'pending') && !blocked) blocked = t
+        if (t.status === 'running') {running.push(t)}
+        else if (t.status === 'failed' && !failed) {failed = t}
+        else if ((t.status === 'blocked' || t.status === 'pending') && !blocked) {blocked = t}
       }
     }
   } catch { /* 看板不可用则只信实习生池 */ }
@@ -139,8 +139,8 @@ function knownProjectIds(): string[] {
   try {
     const board: any = getTaskBoard()
     const projects = board.projects
-    if (projects instanceof Map) return [...projects.keys()]
-    if (Array.isArray(projects)) return projects.map((p: any) => p.id).filter(Boolean)
+    if (projects instanceof Map) {return [...projects.keys()]}
+    if (Array.isArray(projects)) {return projects.map((p: any) => p.id).filter(Boolean)}
   } catch { /* 私有字段不可访问是预期内的 */ }
   return []
 }
@@ -206,9 +206,9 @@ export function shouldDrivePetFromAgent(
   now = Date.now(),
   enabled = true,
 ): boolean {
-  if (!enabled) return false
+  if (!enabled) {return false}
   // 空闲时不接管：空闲时让原有情绪系统自由表现，否则会显得呆板
-  if (snapshot.state === 'idle') return false
+  if (snapshot.state === 'idle') {return false}
   // 状态刚变还不足最小驻留时间：等一等
   return snapshot.sinceMs >= AGENT_STATE_MIN_DWELL_MS
 }

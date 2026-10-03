@@ -33,8 +33,8 @@ export function registerPushIpc(): void {
   ipcMain.handle('proactive:toggle', (_e, enabled: boolean) => {
     const scheduler = getPushScheduler()
     scheduler.updateSettings({ enabled })
-    if (enabled) scheduler.start()
-    else scheduler.stop()
+    if (enabled) {scheduler.start()}
+    else {scheduler.stop()}
     return { enabled }
   })
 

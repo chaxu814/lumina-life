@@ -190,6 +190,15 @@ docs/_ref/
 /*总览-*.md
 /draft_*/
 
+# ── 测试运行时产生的临时备份 ─────────────────────────────────
+# memoryEvidence 相关用例会往仓库根目录写
+# memory-evidence-test-<n>.json.bak.<ISO时间戳> —— 它们是测试 fixture 的
+# 自动备份，不含任何信息，却因为某次误提交进了版本库，把仓库根目录弄得很脏。
+# 现在取消跟踪 + 加入 ignore；磁盘上的旧文件可以随时手动删。
+/memory-evidence-test-*.json.bak.*
+*.json.bak.*
+/.cowork-temp/
+
 # ── VitePress build output (regenerated on deploy) ──
 docs/.vitepress/dist/
 docs/.vitepress/cache/

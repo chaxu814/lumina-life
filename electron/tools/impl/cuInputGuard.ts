@@ -189,7 +189,7 @@ Add-Type -TypeDefinition $src -ReferencedAssemblies System.Windows.Forms,System.
 let scriptsDir: string | null = null
 try {
   // 惰性引入，避免测试环境（无 Electron app）直接崩
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   const { app } = require('electron')
   scriptsDir = join(app.getPath('userData'), 'scripts')
 } catch { /* 非 Electron 环境 */ }

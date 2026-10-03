@@ -32,7 +32,7 @@ function functionBody(src: string, signature: string): string {
     if (src[i] === '{') { depth++; began = true }
     else if (src[i] === '}') {
       depth--
-      if (began && depth === 0) return src.slice(start, i + 1)
+      if (began && depth === 0) {return src.slice(start, i + 1)}
     }
   }
   return src.slice(start, start + 4000)
@@ -41,9 +41,13 @@ function functionBody(src: string, signature: string): string {
 describe('群聊：思考过程跟随输出状态', () => {
   it('显式记录优先；没记录过时按"是否还在输出"派生', () => {
     const fn = functionBody(gcSrc, 'const isThinkingCollapsed = (msgId: string')
-    expect(fn).toContain('if (msgId in thinkingCollapsed) return thinkingCollapsed[msgId]')
+    // 【v3.34 括号容错】原来是 toContain('if (...) return ...')，eslint 的
+    // curly 规则 --fix 会把单行 if 补成 if (...) { return ... }，断言就红了。
+    // 「读源码文本」的断言对格式化天然脆弱，这里统一压掉空白并允许可选花括号。
+    const flat = fn.replace(/\s+/g, ' ')
+    expect(flat).toMatch(/if \(msgId in thinkingCollapsed\) \{?\s*return thinkingCollapsed\[msgId\]/)
     // 还在输出（!_animDone）→ 返回 false = 展开；输出完毕 → true = 收起
-    expect(fn).toContain('return Boolean(msg && msg._animDone)')
+    expect(flat).toMatch(/return Boolean\(msg && msg\._animDone\)/)
   })
 
   it('不能再用写死的 ?? true / ?? false 兜底（那会忽略输出状态）', () => {

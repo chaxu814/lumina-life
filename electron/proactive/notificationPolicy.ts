@@ -90,11 +90,11 @@ export function evaluateNotification(input: NotificationPolicyInput): NotifyDeci
     recentTimestamps, now, categoryCooldownMs, windowMs, maxPerWindow,
   } = input
 
-  if (!enabled) return skip('skip_disabled')
-  if (!supported) return skip('skip_unsupported')
-  if (!appReady) return skip('skip_not_ready')
-  if (permission !== 'granted') return skip('skip_no_permission')
-  if (appFocused) return skip('skip_focused')
+  if (!enabled) {return skip('skip_disabled')}
+  if (!supported) {return skip('skip_unsupported')}
+  if (!appReady) {return skip('skip_not_ready')}
+  if (permission !== 'granted') {return skip('skip_no_permission')}
+  if (appFocused) {return skip('skip_focused')}
 
   // 分级：只有达到阈值的优先级才允许离开「克制模式」
   if (PRIORITY_RANK[priority] < PRIORITY_RANK[minPriority]) {

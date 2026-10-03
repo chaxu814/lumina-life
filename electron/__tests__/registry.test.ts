@@ -42,6 +42,13 @@ const mockSearchDef: ToolDef = {
   },
 }
 
+const mockExtraDef: ToolDef = {
+  name: 'mock_extra',
+  description: 'Mock 额外工具',
+  toolsets: ['ut_solo'],
+  params: {},
+}
+
 beforeEach(() => {
   // 清除内部状态 — 重新注册测试工具
   registerTool(mockToolDef, async (args) => ({
@@ -53,6 +60,10 @@ beforeEach(() => {
   registerTool(mockSearchDef, async (args) => ({
     callId: '', ok: true, content: `搜索: ${args.query}`,
   }))
+  // 清掉上一轮用例可能留下的 fixture toolset，避免用例间互相污染
+  for (const name of ['ut_parent', 'ut_child', 'ut_solo', 'ut_broken']) {
+    delete TOOLSETS[name]
+  }
 })
 
 // ═══════════════════════════════════════════════════════════
@@ -89,26 +100,65 @@ describe('工具注册与查询', () => {
 // 2. Toolset 组合
 // ═══════════════════════════════════════════════════════════
 
+// 【v3.34 修注】本文件此前**从未被执行过**（vitest.config.ts 的 include 只写
+// 'tests/**'，不含 electron/__tests__/），所以里面 3 个 toolset 断言一直挂着。
+// 挂掉的原因是它们假设 resolveToolset('agent'/'developer'/'web') 能在
+// “只注册了 3 个 mock 工具”的注册表里拿到东西 —— 而这三个名字都是
+// MODE_TOOLSETS（静态表专属，不接受声明式合并）。
+//
+// 现在改成自建 fixture：测试自己往 TOOLSETS 里塞一个带 includes 的
+// toolset，并注册与之配套的 mock 工具。这样它测的是 resolveToolset 本身的
+// 组合语义，而不是依赖生产工具集的注册时机。
+const FIXTURE_SETS = ['ut_parent', 'ut_child', 'ut_solo']
+const FIXTURE_TOOLS = ['mock_read', 'mock_write', 'mock_search', 'mock_extra']
+
 describe('Toolset 组合解析', () => {
   it('resolveToolset 通过 includes 组合子 toolset', () => {
-    // files toolset 包含 mock_read + mock_write（实际不含，但我们测试 resolve 逻辑）
-    const agentTools = resolveToolset('agent')
-    expect(agentTools.length).toBeGreaterThan(0)
+    TOOLSETS.ut_child = { description: '子集', tools: ['mock_read', 'mock_write'] }
+    TOOLSETS.ut_solo = { description: '另一子集', tools: ['mock_extra'] }
+    TOOLSETS.ut_parent = { description: '父集', includes: ['ut_child', 'ut_solo'], tools: [] }
+    registerTool(mockExtraDef, async () => ({ callId: '', ok: true, content: 'extra' }))
+
+    const result = resolveToolset('ut_parent')
+    expect(result).toContain('mock_read')
+    expect(result).toContain('mock_write')
+    expect(result).toContain('mock_extra')
   })
 
-  it('resolveToolset 排除被 includes 覆盖的 toolset', () => {
-    // 确保同一个 toolset 不会被重复遍历
-    const result = resolveToolset('developer')
-    expect(result.length).toBeGreaterThan(0)
-    // developer includes agent, agent includes files
-    expect(new Set(result).size).toBe(result.length) // 无重复
+  it('resolveToolset 排除被 includes 覆盖的 toolset（无重复）', () => {
+    TOOLSETS.ut_child = { description: '子集', tools: ['mock_read'] }
+    // 故意让 ut_solo 也包含 mock_read —— 菱形依赖时同一工具不能出现两次
+    TOOLSETS.ut_solo = { description: '重叠子集', tools: ['mock_read', 'mock_search'] }
+    TOOLSETS.ut_parent = { description: '父集', includes: ['ut_child', 'ut_solo'], tools: [] }
+
+    const result = resolveToolset('ut_parent')
+    expect(result.filter(t => t === 'mock_read')).toHaveLength(1)
+    expect(new Set(result).size).toBe(result.length)
   })
 
   it('resolveToolset 简单 toolset 直接返回 tools', () => {
-    // files toolset 只有 tools，没有 includes
-    const result = resolveToolset('web')
-    expect(result).toContain('browser')
-    expect(result).toContain('web_fetch')
+    TOOLSETS.ut_solo = { description: '扁平集', tools: ['mock_read', 'mock_write'] }
+    const result = resolveToolset('ut_solo')
+    expect(result).toEqual(expect.arrayContaining(['mock_read', 'mock_write']))
+  })
+
+  it('resolveToolset 能力层会并入 ToolDef.toolsets 声明的工具（v3.34）', () => {
+    // mock_extra 声明的是 toolsets: ['ut_solo']，而 ut_solo 的静态 tools 为空。
+    // 能力层（非 MODE_TOOLSETS）应自动把它并进来 —— 这正是 v3.34 修的行为：
+    // 之前 ToolDef.toolsets 完全没人读，声明了也永远进不了 function list。
+    TOOLSETS.ut_solo = { description: '空集，靠声明式填充', tools: [] }
+    expect(resolveToolset('ut_solo')).toContain('mock_extra')
+  })
+
+  it('resolveToolset 模式层不接受声明式合并（保住分档设计）', () => {
+    // 'agent' 是 MODE_TOOLSETS：它的能力边界是产品决策，不能被工具自己声明左右。
+    // mock_extra 声明了 toolsets:['ut_solo']，但绝不能因此出现在 agent 里。
+    expect(resolveToolset('agent')).not.toContain('mock_extra')
+  })
+
+  it('resolveToolset 对未定义 toolset 返回空并告警（不静默吞掉 includes 错误）', () => {
+    TOOLSETS.ut_broken = { description: '引用了不存在的集', includes: ['__does_not_exist__'], tools: [] }
+    expect(resolveToolset('ut_broken')).toEqual([])
   })
 })
 
@@ -138,10 +188,13 @@ describe('工具执行', () => {
     expect(result.content).toContain('/test')
   })
 
-  it('executeToolWithRetry 失败后重试', async () => {
-    // 验证重试机制：未知工具返回 ok:true + 引导信息（v2.7 改进为不抛错，避免 ReAct 重试风暴）
+  it('executeToolWithRetry 对未知工具显式失败并给出可读原因', async () => {
+    // 行为演进记录：v2.7 曾改成 ok:true + 引导文案，理由是避免 ReAct 重试风暴；
+    // 但那会让 LLM 把「换一个工具吧」当成真实执行结果。后来又改回显式失败
+    // （registry.ts executeToolWithRetry 的「工具不存在」分支）。
+    // 显式失败更符合本项目一贯穿的「失败必须诚实」原则，这里锁定当前行为。
     const result = await executeToolWithRetry('no_such_tool', {}, { maxRetries: 1, backoff: 'fixed', retryDelayMs: 10 })
-    expect(result.ok).toBe(true)
+    expect(result.ok).toBe(false)
     expect(result.content).toContain('不存在')
   })
 })

@@ -23,6 +23,7 @@ import {
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { pushThemeToWindow } from '../ipc/themeIpc'
+import { getAppIconPath } from '../appIcon'
 
 // ─── 类型 ─────────────────────────────────────────────────
 
@@ -217,6 +218,7 @@ function createWindow(): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
+    icon: getAppIconPath(256),
     maximizable: false,
     minimizable: false,
     fullscreenable: false,

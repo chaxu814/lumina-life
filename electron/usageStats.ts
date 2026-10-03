@@ -12,6 +12,7 @@
 // ============================================================
 
 import { app } from 'electron'
+import { stateFilePath } from './core/pathsFallback'
 import * as path from 'path'
 import * as fs from 'fs'
 import { ipcMain } from 'electron'
@@ -88,7 +89,8 @@ class UsageStats {
     try {
       return path.join(app.getPath('userData'), 'usage-stats.json')
     } catch {
-      return path.join(process.cwd(), 'usage-stats.json')
+      // ⚠️ 不要退回 process.cwd()：开发态 cwd 就是项目根，会把状态写进 Git 工作区
+    return stateFilePath('usage-stats.json')
     }
   }
 

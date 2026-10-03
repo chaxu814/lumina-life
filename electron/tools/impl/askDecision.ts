@@ -87,7 +87,7 @@ export async function askDecisionTool(args: Record<string, any>): Promise<ToolRe
   let askedBy: 'lumina' | 'yak' | 'recha' = 'lumina'
   try {
     const p = getCurrentPersona()
-    if (p === 'yak' || p === 'recha') askedBy = p
+    if (p === 'yak' || p === 'recha') {askedBy = p}
   } catch { /* ignore */ }
 
   let result

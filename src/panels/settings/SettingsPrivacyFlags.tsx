@@ -52,8 +52,8 @@ export default function SettingsPrivacyFlags() {
     try {
       if (!api?.dataExportZip) { setMsg({ ok: false, text: '导出接口尚未接线（集成方接入后可用）' }); return }
       const r = await api.dataExportZip()
-      if (r?.ok) setMsg({ ok: true, text: `已导出到：${r.zipPath}（约 ${((r.bytes || 0) / 1024).toFixed(0)} KB）` })
-      else setMsg({ ok: false, text: '导出失败：' + (r?.error || '未知') })
+      if (r?.ok) {setMsg({ ok: true, text: `已导出到：${r.zipPath}（约 ${((r.bytes || 0) / 1024).toFixed(0)} KB）` })}
+      else {setMsg({ ok: false, text: '导出失败：' + (r?.error || '未知') })}
     } catch (e: any) {
       setMsg({ ok: false, text: '导出失败：' + (e?.message || e) })
     } finally { setBusy('idle') }
@@ -68,7 +68,7 @@ export default function SettingsPrivacyFlags() {
       if (r?.ok) {
         const total = Object.values(r.imported || {}).reduce((a: number, b: any) => a + (b || 0), 0)
         setMsg({ ok: true, text: `导入完成：新增 ${total} 条记录（已存在的自动跳过，不覆盖）` })
-      } else setMsg({ ok: false, text: '导入失败：' + (r?.error || '未知') })
+      } else {setMsg({ ok: false, text: '导入失败：' + (r?.error || '未知') })}
     } catch (e: any) {
       setMsg({ ok: false, text: '导入失败：' + (e?.message || e) })
     } finally { setBusy('idle') }

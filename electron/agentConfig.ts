@@ -541,9 +541,9 @@ class AgentConfigManager {
    * 非 intern ID 返回 null。
    */
   private _internOwner(agentId: string): 'lumina' | 'yak' | 'recha' | null {
-    if (!agentId || !agentId.startsWith('intern_')) return null
+    if (!agentId || !agentId.startsWith('intern_')) {return null}
     const owner = agentId.split('_')[1]
-    if (owner === 'lumina' || owner === 'yak' || owner === 'recha') return owner
+    if (owner === 'lumina' || owner === 'yak' || owner === 'recha') {return owner}
     return null
   }
 

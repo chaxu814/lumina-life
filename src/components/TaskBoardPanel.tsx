@@ -18,7 +18,7 @@ const DeliverableChip: React.FC<{ item: BoardItem }> = ({ item }) => {
   const d = item.deliverable
   const setActiveArtifact = useTaskWorkspace((s) => s.setActiveArtifact)
 
-  if (!d) return null
+  if (!d) {return null}
 
   const onClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -54,7 +54,7 @@ const TaskBoardPanel: React.FC = () => {
   const updateBoardItem = useTaskWorkspace((s) => s.updateBoardItem)
   const clearBoard = useTaskWorkspace((s) => s.clearBoard)
 
-  if (!board) return null
+  if (!board) {return null}
 
   const collapsed = collapsedSections.board
   const { done, total, percent } = boardProgress(board)

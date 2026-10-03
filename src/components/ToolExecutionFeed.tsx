@@ -34,7 +34,7 @@ const ToolExecutionFeed: React.FC = () => {
 
   // 倒序（新的在上面），最新 5 条默认可见
   const items = useMemo<ToolCallRecord[]>(() => {
-    if (manuallyCleared) return []
+    if (manuallyCleared) {return []}
     return toolCalls
       .filter((c) => (c.conversationId ?? null) === (activeConvId ?? null))
       .slice()

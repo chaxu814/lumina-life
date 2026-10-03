@@ -165,8 +165,8 @@ describe('去重与条数上限', () => {
     const many = Array.from({ length: 40 }, (_, i) => `不要做第${i}件事`).join('。')
     const got = extractUserConstraints([many])
     const perCat = new Map<string, number>()
-    for (const c of got) perCat.set(c.category, (perCat.get(c.category) ?? 0) + 1)
-    for (const n of perCat.values()) expect(n).toBeLessThanOrEqual(CONSTRAINT_MAX_PER_CATEGORY)
+    for (const c of got) {perCat.set(c.category, (perCat.get(c.category) ?? 0) + 1)}
+    for (const n of perCat.values()) {expect(n).toBeLessThanOrEqual(CONSTRAINT_MAX_PER_CATEGORY)}
 
     // 总上限：五类各 8 条 = 40，大于 CONSTRAINT_MAX_TOTAL，所以总量应被截断
     const allCats = [
