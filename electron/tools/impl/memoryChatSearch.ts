@@ -40,7 +40,7 @@ export const memoryChatSearchDef: ToolDef = {
       required: false,
     },
   },
-  toolsets: ['agent'],
+  toolsets: ['agent', 'memory'],
 }
 
 export async function memoryChatSearch(args: Record<string, any>): Promise<ToolResult> {

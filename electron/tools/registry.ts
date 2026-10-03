@@ -87,7 +87,7 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
     // v3.34: 补上 lsp / code / computer_use / browser —— 修复前即使工具声明了
     // 自己的 toolsets，开发者模式也拿不到 ast_search / lsp_* / desktop_act
     // 这一整层「写代码真正要用的工具」。
-    includes: ['agent', 'git', 'team', 'lsp', 'code', 'computer_use', 'browser', 'desktop'],
+    includes: ['agent', 'git', 'team', 'lsp', 'code', 'computer_use', 'browser', 'desktop', 'dev_tools'],
     tools: [],
   },
 
@@ -105,6 +105,9 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   web_search: {
     description: '搜索 + 抓取 + 浏览器',
+    // v3.34: 搜索引擎后端（Tavily / SerpAPI / Bing）走能力层声明，
+    // 修复前它们声明的是模式层 'agent'，因而对模型彻底不可达。
+    includes: ['search_engines'],
     tools: ['web_search', 'web_fetch', 'browser'],
   },
 
@@ -314,6 +317,23 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   news: {
     description: '新闻聚合与日报',
+    tools: [],
+  },
+
+  // ── v3.34：为「8 个孤儿工具」新增的能力层 ────────────────────
+  // 真机跑打包版时，孤儿守卫（终于不再被 full 短路）报出 8 个不可达工具。
+  // 根因：它们的 ToolDef.toolsets 只写了 'agent' / 'developer' —— 而这两个是
+  // **模式层**（MODE_TOOLSETS），按设计由静态表独占，工具自己声明不进去。
+  //
+  // 修法不是把它们硬塞进模式层（那会破坏分档），而是补两个能力层，
+  // 让声明真的能生效。
+  dev_tools: {
+    description: '开发伴手工具（仅开发者模式）',
+    tools: [],
+  },
+
+  search_engines: {
+    description: '多搜索引擎后端（Tavily / SerpAPI / Bing）',
     tools: [],
   },
 }

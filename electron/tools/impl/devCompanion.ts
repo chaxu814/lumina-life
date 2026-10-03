@@ -162,7 +162,7 @@ export const devCompanionCheckDef: ToolDef = {
   params: {
     cwd: { type: 'string', description: '项目仓库路径', required: true },
   },
-  toolsets: ['developer', 'agent'],
+  toolsets: ['developer', 'agent', 'dev_tools'],
 }
 
 export async function devCompanionCheck(args: Record<string, any>): Promise<ToolResult> {

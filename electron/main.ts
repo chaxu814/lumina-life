@@ -17,6 +17,38 @@ installCrashGuard()
 import { app, BrowserWindow, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, Notification, dialog } from 'electron'
 import { installCrashGuard } from './crashGuard'
 import { join } from 'path'
+
+// ═════════════════════════════════════════════���═════════════
+// v3.34: 统一 userData 目录（必须在任何 app.getPath('userData') 之前）
+//
+// 【为什么要这段】
+// Electron 的 userData 目录名取自 app.getName()，而：
+//   · dev 模式（未打包）→ 返回 Electron 的默认值 "Electron"
+//                       → userData = %APPDATA%/Electron
+//   · 打包版          → 返回 package.json 的 productName "Lumina Life"
+//                       → userData = %APPDATA%/lumina-life
+//
+// 结果是**同一个设置在两个目录里各存一份**，且内容会漂移。实测本机就同时存在
+// 两套 lumina-providers.json / agent-llm-configs.json / agents/<id>/agent.json，
+// 而且它们互相不一致：yak 指向 192.168.1.13、recha 指向 192.168.1.4，
+// 两者都是失效 IP —— 「每 Agent 独立 LLM」这个卖点功能实际处于互相打架的状态。
+//
+// 用户侧的表现是：装好正式版后发现「设置全没了」「改了配置不生效」，
+// 而他根本不知道自己的数据在另一个目录里。
+//
+// setName 必须在最顶部执行 —— 一旦有模块先调了 getPath('userData')，
+// 目录就已经被定死了，之后再改名也来不及。
+app.setName('Lumina Life')
+
+// 旧目录数据并入：必须在任何模块读 userData 之前。
+// （dev 跑过 / 旧安装包的用户，数据留在 %APPDATA%/Electron 下）
+import { migrateLegacyUserData } from './userDataMigration'
+try {
+  migrateLegacyUserData(app.getPath('userData'))
+} catch (e: any) {
+  console.warn('[Migration] 跳过:', e?.message || e)
+}
+
 import { getAppIconPath, getTrayIcon } from './appIcon'
 import { createTrayMenu, showTrayMenu, refreshTrayMenuState } from './tray/trayMenu'
 import { applyTrayIconConventions, applyMacDock, resolveDockMode } from './tray/macDock'

@@ -442,7 +442,7 @@ export function registerAllTools(): void {
   ]
   for (const t of antiHallucinationTools) {
     registerTool(
-      { name: t.name, description: t.desc, params: { query: { type: 'string', description: '搜索关键词', required: true }, count: { type: 'number', description: '结果数量 (1-10)', required: false } }, toolsets: ['agent'] },
+      { name: t.name, description: t.desc, params: { query: { type: 'string', description: '搜索关键词', required: true }, count: { type: 'number', description: '结果数量 (1-10)', required: false } }, toolsets: ['search_engines'] },
       async (args: any) => {
         if (t.redirect && args.query) {
           // 实际执行搜索

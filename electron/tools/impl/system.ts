@@ -53,7 +53,7 @@ export const processListDef: ToolDef = {
     filter: { type: 'string', description: '按名称过滤 (可选)', required: false },
     count: { type: 'number', description: '显示数量，默认 15', required: false },
   },
-  toolsets: ['agent'],
+  toolsets: ['agent', 'system_core'],
 }
 
 export async function processList(args: Record<string, any>): Promise<ToolResult> {

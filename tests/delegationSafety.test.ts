@@ -19,6 +19,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { registerAllTools, getToolDef, resolveToolset, getToolNames } from '../electron/tools/index'
+import { TOOLSETS } from '../electron/tools/registry'
 
 /** 能派生新 agent 的工具 —— 递归只能从这里发生 */
 const SPAWNING_TOOLS = [
@@ -29,6 +30,8 @@ const SPAWNING_TOOLS = [
   'phase_gate_delegate',
   'workflow',
 ]
+
+const allToolsCount = () => getToolNames().size
 
 describe('① 工具层：派生类工具都标了 blockedInChild', () => {
   beforeAll(() => { registerAllTools() })
@@ -81,6 +84,36 @@ describe('② toolset 层：子 Agent 拿不到派生类工具', () => {
       if (!getToolDef(t)) { continue }   // 该工具不存在时跳过
       expect(childTools.has(t), `子 Agent 不该失去 ${t}`).toBe(true)
     }
+  })
+})
+
+describe('工具可达性（孤儿守卫）', () => {
+  it('没有已注册工具是任何能力档都够不到的孤儿', () => {
+    registerAllTools()
+    const all = [...getToolNames()]
+    // 判定可达时必须排除 full —— 它是全集，含它则 orphans 恒等于 []，
+    // 守卫就永远不可能响（v3.34 自造的假防护就是这么来的）。
+    const reachable = new Set<string>()
+    for (const name of Object.keys(TOOLSETS)) {
+      if (name === 'full') { continue }
+      for (const t of resolveToolset(name)) { reachable.add(t) }
+    }
+    const orphans = all.filter(n => !reachable.has(n))
+    expect(
+      orphans,
+      `这些工具已注册但模型永远看不到（toolsets 只写了模式层 agent/developer，\n` +
+      `而模式层是静态表独占）：\n  ${orphans.join('\n  ')}\n` +
+      `修法：把它们挂到对应的**能力层**子集（如 system_core / memory / dev_tools），\n` +
+      `而不是硬塞进模式层 —— 那会破坏分档。`,
+    ).toEqual([])
+  })
+
+  it('每层都有工具（防止某个 toolset 被改成空集而无人察觉）', () => {
+    registerAllTools()
+    expect(resolveToolset('team').length).toBeGreaterThan(10)
+    expect(resolveToolset('agent').length).toBeGreaterThan(40)
+    expect(resolveToolset('developer').length).toBeGreaterThan(50)
+    expect(resolveToolset('full').length).toBe(allToolsCount())
   })
 })
 

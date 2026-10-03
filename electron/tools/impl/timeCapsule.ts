@@ -71,7 +71,7 @@ export const timeCapsuleDef: ToolDef = {
       required: false,
     },
   },
-  toolsets: ['agent'],
+  toolsets: ['agent', 'tasks_core'],
 }
 
 export async function timeCapsule(args: Record<string, any>): Promise<ToolResult> {
