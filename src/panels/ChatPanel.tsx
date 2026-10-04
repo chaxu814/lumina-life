@@ -667,6 +667,17 @@ export default function ChatPanel() {
 
   const clearAttachments = () => setAttachments([])
 
+  // ── 🛟 无模型判定（与引导收尾同一套口径）──────────────
+  // 【为什么要在这里也判一遍，而不是复用 OnboardingWizard 的】
+  // 引导只在新用户首次运行时出现；老用户随时可能在设置里把模型清空。
+  // 判定逻辑必须独立存在，否则「清空模型 → 静默卡住」这条路就没堵上。
+  // 占位符（your-model-name / local-model）也算未配置 —— 填了它但没真配很常见。
+  // 注意 llmConfig 已在组件顶部取过，这里不重复取。
+  const hasUsableModel = (c: { model?: string }): boolean => {
+    if (!c?.model) {return false}
+    return !/your-model-name|placeholder|^local-model$/i.test(c.model)
+  }
+
   const handleSendWithText = useCallback(async (text: string) => {
     if (!text.trim() || isProcessing || !activeConversationId) {return}
 
@@ -757,6 +768,34 @@ export default function ChatPanel() {
           `我会帮你做这些事：\n${plan}\n\n` +
           `去「任务看板 → Loop → 确认启动」后即可开始运转。`)
       }
+    }
+
+    // ── 🛟 无模型预检：在发起 agent 运行**之前**拦住 ──────────
+    //
+    // 【为什么必须前置，而不是等运行失败再处理】
+    // 现状是：config 直接拿 llmConfig 拼出来，没模型也照发，
+    // 结果要么长时间「思考中…」然后静默失败，要么抛一条用户看不懂的原始错误。
+    // 主聊天路径此前**没有任何兜底**（只有 GroupChatView 有一句提示）。
+    //
+    // 而用户此时的心理是「我明明点了发送，怎么没反应」——
+    // 他不会想到是自己没配模型，于是反复重装、反复填 Key。
+    //
+    // 这里是「无模型降级模式」：不假装在工作，直接说清现状 + 一条能走通的路。
+    // 应用内自带对话模型权重 100MB+，做不到随包分发；
+    // 但**说清真相 + 给出可点击的下一步**是能做到的。
+    if (!hasUsableModel(llmConfig)) {
+      useStore.getState().addMessage(activeConversationId, 'system',
+        '🌙 还没有可用的模型，我没法思考。\n\n' +
+        '任选一种就能开始：\n' +
+        '· **免费在线** — 引导里选「OpenCode Zen」，无需 Key（推荐）\n' +
+        '· **云端 API** — 设置 → LLM 模型配置，填 baseUrl + Key\n' +
+        '· **本地模型** — 装 LM Studio 或 Ollama 后，在同一页点「检测本地模型」\n\n' +
+        '配好之后这句话就会得到回答。')
+      setInput('')
+      setIsProcessing(false)
+      setAgentEvents([])
+      useAgentRuntime.getState().setAgentEvents([])
+      return
     }
 
     const systemPrompt = persona ? getPersonaPrompt(persona) : undefined
