@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react'
 import { useStore } from '../stores/appStore'
+import type { LLMConfig } from '../stores/appStore'
 import { persistLLMConfig } from '../services/llmPersist'
 
 type StepId = 'welcome' | 'llm' | 'personality' | 'team' | 'done'
@@ -469,13 +470,51 @@ function TeamStep({ onNext }: { onNext: () => void }) {
   )
 }
 
-function DoneStep({ onFinish }: { onFinish: () => void }) {
+/** 判定当前是否真的有一个「能用的模型」 */
+function hasUsableModel(c: LLMConfig): boolean {
+  // 占位符不算 —— 它是 ships-with 里的模板值，填了它但没真配的情况很常见
+  if (!c?.model) {return false}
+  if (/your-model-name|placeholder|^local-model$/i.test(c.model)) {return false}
+  return true
+}
+
+function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => void }) {
+  const llmConfig = useStore((s) => s.llmConfig)
+  const ready = hasUsableModel(llmConfig)
+
+  // 【为什么要在这里拦住】
+  // 引导的最后一屏原本无条件显示「一切准备就绪」，但**它从不校验是否真有模型**。
+  // 于是一个没配 Key、也没装本地模型的用户可以走完全部 5 步，
+  // 看到 🎉 和「开始和 Lumina 聊天」，然后对着一个永远不会回话的应用。
+  //
+  // 这是最糟糕的一类 onboarding 失败：用户以为是自己配错了，
+  // 于是反复重装、反复配 Key，而真实原因（压根没模型）没人告诉他。
+  //
+  // 注意：这里**不阻断**，只说清真相并给一条回路 ——
+  // 硬拦住不让继续反而会让人以为软件坏了。
+  if (!ready) {
+    return (
+      <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+        <div style={{ fontSize: 48, marginBottom: 10 }}>🤔</div>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>还差一步：Lumina 需要一个模型才能思考</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 18 }}>
+          她还没有可以对话的大脑。<br />
+          随便挑一个就行 —— <b>免费在线</b>最快，<b>本地模型</b>不花钱也不外传。
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 20 }}>
+          <button onClick={onBack} className="onboarding-btn-secondary">← 回去选模型</button>
+          <button onClick={onFinish} className="onboarding-btn-primary">先跳过，稍后再说</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ textAlign: 'center', padding: '32px 16px' }}>
       <div style={{ fontSize: 72, marginBottom: 12, animation: 'pulse 2s ease-in-out infinite' }}>🎉</div>
       <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>一切准备就绪！</h2>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 24 }}>
-        Lumina 🐱 已经准备好为你工作，背后的团队也已就位。<br />
+        Lumina 🐱 已经准备好为你工作（{llmConfig.model}），背后的团队也已就位。<br />
         现在去跟她说第一句话吧！
       </p>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 20 }}>
@@ -575,7 +614,12 @@ export default function OnboardingWizard() {
           )}
           {current.id === 'personality' && <PersonalityStep onNext={goNext} />}
           {current.id === 'team' && <TeamStep onNext={goNext} />}
-          {current.id === 'done' && <DoneStep onFinish={handleFinish} />}
+          {current.id === 'done' && (
+            <DoneStep
+              onFinish={handleFinish}
+              onBack={() => setStepIndex(i => Math.max(0, i - 2))}
+            />
+          )}
         </div>
 
         {/* 底部页码 */}
