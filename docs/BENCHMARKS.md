@@ -281,7 +281,7 @@ Live2D/VRM 需要会 Blender、会绑 3D 模型。精灵表把门槛从「掌握
 | **形象渲染广度** | AIRI | 5 种后端 vs 我们的 Live2D/VRM/精灵表/MMD/猫咪（广度接近，但 VRM 情绪动作默认关）|
 | **应用内本地推理** | AIRI | WebGPU 真本地 vs 我们需外挂 LM Studio |
 | **多 Agent 可视化编排** | cc-haha / MiniMax Code | 依赖泳道画布、动态 Workflow、模型 trace |
-| **IM 渠道** | openclaw(27) / cc-haha(8) / MiniMax Code(4) | 我们 0（`electron/channels/` 已写但未接线）|
+| **IM 渠道** | ⚠️ **7 个适配器已接线**（Telegram/微信/QQ/钉钉/Slack/Discord/openclaw），但默认关闭、需自配凭据、未经端到端真机验证 | openclaw(27) / cc-haha(8) / MiniMax Code(4) |
 | **记忆模块工程深度** | N.E.K.O | 35+ 模块 vs 我们的 13 个 |
 | **i18n 完整度** | AIRI | 6 语言 + Crowdin vs 我们 zh/en |
 | **人格厚度** | N.E.K.O | `persona/` 8 模块做融合与自我修正 vs 我们每人 55~75 行身份文件 |

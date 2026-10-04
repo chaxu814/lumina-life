@@ -70,7 +70,7 @@ title: 架构概览
 | `electron/memory/` | 13 | — | 记忆存储与检索 |
 | `electron/orchestration/` | 11 | 3,731 | 编排（路由 / 阶段门控 / 复杂度 / 验证闭环）|
 | `electron/api/` | 11 | — | REST API 路由 |
-| `electron/channels/` | 11 | — | IM 渠道适配（**未接线**，见「已知缺口」）|
+| `electron/channels/` | 11 | — | IM 渠道适配（**已接线**，但需用户自配凭据，见「已知缺口」）|
 | `electron/stt-server` `whisper/` | 13 | — | 本地语音输入 |
 
 ---
@@ -256,7 +256,7 @@ nomic-embed-text 或外部 embedding 服务）为**可选且默认关闭**。
 |---|---:|---|
 | `agentRunner.ts` 单文件巨大 | 173 KB | 单文件承载 ReAct 主循环，对外部贡献者是劝退级别。已拆出 `agentRunner.constants.ts`，主文件仍需进一步拆分 |
 | 循环依赖已断一处 | — | v3.34 已把 `registerAllTools()` 从 `agentRunner` 模块顶层移入构造函数（`registrationFlag.ts` 承载标志位）。建议引入 `madge` / `dependency-cruiser` 做持续检测 |
-| `electron/channels/adapters/` 未接线 | 11 文件 | IM 渠道适配器已写但未接入主流程 |
+| `electron/channels/adapters/` 默认关闭、未经真机验证 | 11 文件 | **接线是存在的**（`main.ts` 用 `await import()` 动态装载桥接器，打包器会内联，7 个适配器都有真实实现）。真实缺口是：适配器仅在配置 `enabled: true` 时启动，用户必须自己配凭据；且未做过端到端真机验证。**2026-10-04 更正**：此前这里写的是「未接线」，是因为项目里有一批检查 grep 静态 import，而这里用的是动态 import —— 扫不到就误判成没接线了 |
 | `electron/mission/` 零引用 | 5 文件 / 767 行 | 完整无引用 |
 | `electron/mcp/mcpConfigLoader.ts` 未接线 | 4 KB | 声明式 MCP 配置未接入 |
 | `electron/persona/subPersona.ts` 无消费者 | 9 KB | feature flag `personality.subPersona` 开了也没人读 |
