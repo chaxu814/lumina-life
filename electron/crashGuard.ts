@@ -32,7 +32,7 @@
 // 绝不 `process.exit(0)`——那会让用户以为一切正常。
 // ============================================================
 
-import { app } from 'electron'
+import { app, type Event as ElectronEvent, type WebContents as ElectronWebContents, type RenderProcessGoneDetails as ElectronGoneDetails } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -129,16 +129,28 @@ export function installCrashGuard(): void {
   // 用户看到的是「应用崩了」，但磁盘上没有任何证据 —— 只能靠猜。
   // （%APPDATA%\lumina-life\.lumina-crashed 那个标记不是证据：
   //   它在每次启动时写、只有走完 before-quit 才删，所以「上次强杀/关窗口」也会留下。）
-  const recordRendererGone = (_e: unknown, wc: unknown, details: unknown) => {
-    const d = (details || {}) as { reason?: string; exitCode?: number }
+  // 签名按 Electron 官方类型写。注意两个事件参数不同：
+  //   render-process-gone(event, webContents, details) —— 有 webContents
+  //   child-process-gone(event, details)                —— 没有（子进程可能非渲染进程）
+  // 下面两处 console 是有意保留的：crashGuard 就是「最后一道诊断线」，
+  // 崩溃现场必须同时进 stdout 和 crash-reports/，否则用户报障时无从查起。
+  const recordGone = (_event: ElectronEvent, wc: ElectronWebContents, details: ElectronGoneDetails) => {
+    const d = details || ({} as ElectronGoneDetails)
     let url = 'unknown'
-    try { url = (wc as any)?.webContents?.getURL?.() || 'unknown' } catch { /* ignore */ }
+    try { url = wc?.getURL?.() || 'unknown' } catch { /* ignore */ }
     const message = `渲染进程退出: reason=${d.reason || 'unknown'} exitCode=${d.exitCode ?? 'n/a'} url=${url}`
+    // eslint-disable-next-line no-console
     console.error('[CrashGuard] 💥 ' + message)
     writeCrashRecord({ at: new Date().toISOString(), kind: 'render-process-gone', message, stack: '' })
   }
-  app.on('render-process-gone', recordRendererGone as any)
-  app.on('child-process-gone', recordRendererGone as any)
+  app.on('render-process-gone', recordGone)
+  app.on('child-process-gone', (_event, details) => {
+    const d = (details || {}) as { reason?: string; exitCode?: number; type?: string }
+    const message = `子进程退出: type=${d.type || 'unknown'} reason=${d.reason || 'unknown'} exitCode=${d.exitCode ?? 'n/a'}`
+    // eslint-disable-next-line no-console
+    console.error('[CrashGuard] 💥 ' + message)
+    writeCrashRecord({ at: new Date().toISOString(), kind: 'render-process-gone', message, stack: '' })
+  })
 
   console.log('[CrashGuard] ✅ 全局异常兜底已安装（不再因单个 Promise reject 而崩溃）')
 }
