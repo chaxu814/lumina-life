@@ -8,6 +8,7 @@ import { useStore } from '../stores/appStore'
 // 群聊成员显示开关（2026-10-04）：用户可在「团队管理」里关掉某个成员。
 // 默认全开时后台成员持续发言会让人眼花缭乱。
 import { isAgentVisible } from '../services/teamVisibility'
+import { isLocalInferenceRuntime } from '../services/isLocalEndpoint'
 import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
 // 📋 任务工作区的开合状态来自同一个 store，所以「任务派发中心」旁边
 import { IconPlus, IconSend } from '../components/Icons'
@@ -509,7 +510,11 @@ export default function GroupChatView() {
   //   · llmReady      —— 最终能不能真发请求。本地额外要求模型真的加载了；
   //                      探测未完成时（null）不阻塞，避免刚打开就闪一下「模拟模式」。
   const isCloudAPI = llmConfig.apiKey?.startsWith('sk-') || llmConfig.baseUrl?.includes('api.openai.com') || llmConfig.baseUrl?.includes('api.moonshot') || llmConfig.baseUrl?.includes('api.deepseek')
-  const isLocalLLM = llmConfig.baseUrl?.includes('localhost') || llmConfig.baseUrl?.includes('127.0.0.1') || llmConfig.baseUrl?.includes('ollama')
+  // 🔧 2026-10-04：原先只认 localhost / 127.0.0.1 / ollama，认不出局域网 IP。
+  // 用户把 LM Studio 跑在内网另一台机（http://192.168.1.2:1234/v1）时，
+  // 本地模型探测不跑、还会被误报成「云端 API」。
+  // 统一走 isLocalEndpoint —— 原来这个判定散在 6+ 处且写法各不相同。
+  const isLocalLLM = isLocalInferenceRuntime(llmConfig.baseUrl)
   const llmConfigured = !!(llmConfig.model && (llmConfig.apiKey || isLocalLLM))
 
   // ── 🔧 2026-10-04：提示框的两个真问题 ──

@@ -841,7 +841,19 @@ export function registerProviderIpc(): void {
   ipcMain.handle('provider:discover-local', async () => {
     try {
       const { discoverLocalProviders, FREE_SETUP_GUIDE } = await import('./localProviderDiscovery')
-      const found = await discoverLocalProviders()
+      // 🔧 2026-10-04：探测要带上当前供应商的 apiKey，并额外试一次当前配置的端点。
+      //   1) LM Studio 开启鉴权后 /v1/models 返回 401，不带 key 探测会把
+      //      「服务正常」误判成「本地没加载模型」，进而弹出「尚未配置 LLM」黄框。
+      //   2) 候选表写死 127.0.0.1，LM Studio 在内网另一台机（如 192.168.1.2）时发现不了。
+      let apiKey = ''
+      let baseUrl = ''
+      try {
+        const id = pm.getActiveProviderId()
+        const cfg = id ? pm.getAllProviderConfigs()[id] : undefined
+        apiKey = cfg?.apiKey || ''
+        baseUrl = cfg?.baseUrl || ''
+      } catch { /* 拿不到就按无鉴权探测 */ }
+      const found = await discoverLocalProviders(1200, apiKey, baseUrl ? [baseUrl] : [])
       return { found, guide: FREE_SETUP_GUIDE }
     } catch (err: any) {
       return { found: [], error: err?.message || String(err) }

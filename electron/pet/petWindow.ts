@@ -1476,6 +1476,11 @@ export function closePetWindow(): void {
  */
 export function togglePet(enable: boolean, mainWin?: BrowserWindow | null): boolean {
   if (enable) {
+    // 🔧 2026-10-04：启用桌宠时先关掉可能残留的独立聊天窗。
+    // 聊天已统一到主 Live2D 窗口的内嵌面板（见 pet-live2d.html 的 openChatWindow），
+    // 不应该再存在第二个窗口。旧版本启动的残留窗口会一直挂在屏幕上，
+    // 用户看到的就是「两个窗在跑」，而我们已经不再有任何地方会开它了。
+    closePetChatWindow()
     broadcastPetProgress(5, '正在创建窗口…')
     createPetWindow(mainWin)
     petEnabled = true

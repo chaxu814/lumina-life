@@ -2240,11 +2240,19 @@ function toggleChat(force) {
     setTimeout(() => { chatPanel.classList.remove('closing'); }, 200);
   }
 }
-// 主动打开聊天：优先独立可拖动窗口（可拖到屏幕任意位置）；无 IPC 时退回内嵌面板
+// 主动打开聊天：统一用主窗口内嵌面板。
+//
+// 🔧 2026-10-04：原来这里是「优先弹独立可拖动窗口，无 IPC 才回退内嵌面板」，
+// 而同一文件里还有三条路径（主动搭话 / 追问 / 生命视图）本来就直接用 toggleChat。
+// 结果就是同一功能两套实现、两套触发点：
+//   · 点角色身体、快捷键、工具栏 → 弹出独立 BrowserWindow（屏幕右侧）
+//   · 主动搭话等 → 主窗口内嵌面板（左侧）
+// 用户看到的是「两个窗口同时在」，像两个程序 —— 实际是自己在打架。
+//
+// 现在统一收到内嵌面板：主 Live2D 窗口就是唯一入口，不再产生第二个窗口。
+// 独立窗口的 IPC 仍保留在主进程（preload 仍暴露 petOpenChatWindow），
+// 但此处不再调用，不会有别处能把它复活。
 function openChatWindow() {
-  if (HAS_IPC) {
-    try { ipc.invoke('pet:open-chat-window'); return; } catch (e) {}
-  }
   toggleChat(true);
 }
 function submitChat() {

@@ -86,6 +86,23 @@ export function buildReasoningFallbackText(reasoning: string): string {
   return `${REASONING_FALLBACK_PREFIX}\n\n${body}`
 }
 
+/**
+ * 只取 baseUrl 的 origin（协议 + host + 端口），供报错信息使用。
+ *
+ * 报错信息会被写日志、可能进 UI，所以必须先把 userinfo（可能含 key）、
+ * path、query 全部丢掉；解析失败则返回空串而不是原文 —— 宁可少说，
+ * 也不能把凭据带出去。
+ */
+export function safeOrigin(baseUrl: string | undefined | null): string {
+  const raw = String(baseUrl || '').trim()
+  if (!raw) {return ''}
+  try {
+    return new URL(raw).origin
+  } catch {
+    return ''
+  }
+}
+
 export interface LLMEmitCallbacks {
   onThinking?: (text: string) => void
   onThinkingStream?: (text: string, isFirst: boolean, isLast: boolean) => void
@@ -516,8 +533,43 @@ export class LLMProvider {
     if (!streamText && this.reasoningAccum) {
       streamText = buildReasoningFallbackText(this.reasoningAccum)
     }
+
+    // 🔧 2026-10-04：空内容必须报错，不能静默返回 undefined。
+    //
+    // 真实踩坑：用户的 LM Studio 跑在 http://192.168.1.2:1234（漏了 /v1），
+    // 应用拼出 /chat/completions 打到非 API 路径，LM Studio 返回
+    // **HTTP 200 + 空 body** —— 不抛异常、不进 catch，streamText 一直是空串，
+    // 最终 `text: undefined`。界面上表现就是「发不出消息」且没有任何报错，
+    // 用户只能自己猜。
+    //
+    // ⚠️ 但「有工具调用」也是 content 为空 —— function calling 场景模型只回
+    //   tool_calls、content 本来就是空串。漏掉这个判断会把所有工具调用打成
+    //   「空回复错误」（这个回归真发生过，是 tests/llmProvider.test.ts 抓到的）。
+    //   所以只有「既没有文本、也没有工具调用」才算真的空。
+    //
+    // 注意不要泄露 apiKey —— 这里只带 baseUrl 的 origin。
+    const hasToolCalls = streamToolCalls && streamToolCalls.length > 0
+    if ((!streamText || !streamText.trim()) && !hasToolCalls) {
+      const origin = safeOrigin(this.config.baseUrl)
+      const hint = !this.config.baseUrl || !this.config.baseUrl.trim()
+        ? '未配置 API 地址'
+        : !origin
+          ? `API 地址格式无法解析（${String(this.config.baseUrl).slice(0, 60)}）`
+          : `${origin} 返回了空内容`
+      console.warn(`[LLMProvider] ⚠️ 空回复：${hint}（HTTP 200 但没有任何 content）`)
+      return {
+        error:
+          `模型服务返回了空内容（${hint}）。\n`
+          + '常见原因：\n'
+          + '· API 地址写错 —— 本地 LM Studio / Ollama 必须以 /v1 结尾，'
+          + '例如 http://192.168.1.2:1234/v1（端口在中间，别把 /v1 写在端口前面）\n'
+          + '· 打到了非 API 路径（返回 200 但不是模型输出）\n'
+          + '· 服务端没加载任何模型',
+      }
+    }
+
     return {
-      text: streamText || undefined,
+      text: streamText,
       toolCalls: streamToolCalls,
       usage: streamUsage,
     }

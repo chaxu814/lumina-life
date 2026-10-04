@@ -90,11 +90,25 @@ export function extractModels(fmt: 'ollama' | 'openai', data: any): string[] {
   }
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response | null> {
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs: number,
+  apiKey?: string,
+): Promise<Response | null> {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const res = await fetch(url, { signal: ctrl.signal, method: 'GET' })
+    // 🔧 2026-10-04：必须带上鉴权头。
+    //   LM Studio 从 0.3.x 起可以开启「Require Authentication」，开启后
+    //   /v1/models 会返回 401。而探测原先是不带任何 header 的裸 fetch，
+    //   于是：探测 401 → 判定「本地没加载模型」→ llmReady=false
+    //   → 界面弹出「尚未配置 LLM · 模拟回复模式」黄框。
+    //   实际模型服务完全正常，只是探测没鉴权 —— 典型的「失败路径不吭声」。
+    const headers: Record<string, string> = {}
+    if (apiKey && apiKey && apiKey !== 'local') {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
+    const res = await fetch(url, { signal: ctrl.signal, method: 'GET', headers })
     return res.ok ? res : null
   } catch {
     return null
@@ -104,8 +118,12 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
 }
 
 /** 探测单个候选（网络），失败返回 null */
-export async function probeCandidate(c: LocalCandidate, timeoutMs = 1200): Promise<DiscoveredProvider | null> {
-  const res = await fetchWithTimeout(c.baseUrl + c.modelsPath, timeoutMs)
+export async function probeCandidate(
+  c: LocalCandidate,
+  timeoutMs = 1200,
+  apiKey?: string,
+): Promise<DiscoveredProvider | null> {
+  const res = await fetchWithTimeout(c.baseUrl + c.modelsPath, timeoutMs, apiKey)
   if (!res) {return null}
   let data: any = null
   try { data = await res.json() } catch { return null }
@@ -117,13 +135,44 @@ export async function probeCandidate(c: LocalCandidate, timeoutMs = 1200): Promi
     baseUrl: c.baseUrl,
     models,
     recommendedModel: pickRecommendedModel(models, c.preferKeywords),
-    apiKey: 'local',
+    // 🔧 原来固定写死 'local' —— 那是个假占位值。开启鉴权后下游拿它当 Bearer 发出去必然 401。
+    // 有真实 key 就用它，没有就留空（让调用方按无鉴权处理）。
+    apiKey: apiKey && apiKey !== 'local' ? apiKey : '',
   }
 }
 
-/** 探测全部本地候选，返回所有可用的（顺序即推荐顺序） */
-export async function discoverLocalProviders(timeoutMs = 1200): Promise<DiscoveredProvider[]> {
-  const results = await Promise.all(LOCAL_CANDIDATES.map(c => probeCandidate(c, timeoutMs)))
+/**
+ * 探测全部本地候选，返回所有可用的（顺序即推荐顺序）。
+ *
+ * @param configuredApiKey 当前供应商的 apiKey（用于带鉴权探测）
+ * @param extraBases        额外要试的 baseUrl。
+ *   🔧 2026-10-04：候选表写死了 127.0.0.1，所以 LM Studio 跑在内网另一台机
+ *   （如 http://192.168.1.2:1234）时永远探测不到。把当前配置的端点也拿来试一次。
+ */
+export async function discoverLocalProviders(
+  timeoutMs = 1200,
+  configuredApiKey?: string,
+  extraBases: string[] = [],
+): Promise<DiscoveredProvider[]> {
+  const candidates: LocalCandidate[] = [...LOCAL_CANDIDATES]
+  for (const b of extraBases) {
+    const base = String(b || '').trim().replace(/\/+$/, '')
+    if (!base) {continue}
+    if (candidates.some(c => c.baseUrl === base)) {continue}
+    candidates.push({
+      id: 'configured',
+      label: '当前配置的本地服务',
+      baseUrl: base,
+      // 端点已含 /v1 时不能再拼一次，否则变成 /v1/v1/models
+      modelsPath: /\/v1$/i.test(base) ? '/models' : '/v1/models',
+      format: 'openai',
+      preferKeywords: [],
+    })
+  }
+
+  const results = await Promise.all(
+    candidates.map(c => probeCandidate(c, timeoutMs, configuredApiKey)),
+  )
   // 同一 baseUrl 去重（lm-studio 与 local-openai 同地址）
   const seen = new Set<string>()
   const out: DiscoveredProvider[] = []
