@@ -125,9 +125,31 @@ export class ChannelManager {
     console.log('[ChannelManager] 📡 所有渠道已停止')
   }
 
-  /** 获取渠道配置列表 */
+  /** 获取渠道配置列表（**不含 key**） */
   getConfigs(): ChannelConfig[] {
     return Array.from(this.configs.values())
+  }
+
+  /**
+   * 获取带 key 的配置条目。
+   *
+   * 【为什么不直接用 getConfigs()】
+   * `getConfigs()` 丢掉了 key，而 key 是**主键**：`updateConfig` / `startChannel` /
+   * `stopChannel` 全都按 key 索引配置。调用方拿不到 key 就只能自己编一个 ——
+   * 而编出来的 key 和 Map 里真实的 key 对不上，于是：
+   *
+   *   updateConfig('channel_0', cfg)  →  Map.set('channel_0', cfg)
+   *                                        ↑ 这是**新增一条**，不是更新原来那条
+   *
+   * 于是「保存一次渠道」会在 Map 里留下两条记录（真 key 那条 + 编的 key 那条），
+   * 界面上出现两张卡片，其中一张是空的；而首次保存前 `startChannel('channel_0')`
+   * 查无此 key，「测试」按钮必然失败。
+   *
+   * 所以：**凡是需要把配置交给外部再交回来的场景，都必须用本方法。**
+   * getConfigs() 只适合只读展示（不关心是��条）。
+   */
+  getConfigEntries(): Array<{ key: string; config: ChannelConfig }> {
+    return Array.from(this.configs.entries()).map(([key, config]) => ({ key, config }))
   }
 
   /** 更新渠道配置 */

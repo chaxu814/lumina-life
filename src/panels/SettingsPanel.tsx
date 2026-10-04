@@ -1108,9 +1108,13 @@ function ChannelSettings() {
         window.luminaAPI.channelGetConfigs(),
         window.luminaAPI.channelGetStatus(),
       ])
+      // 🔧 2026-10-04：此前这里 `c.forEach((item, i) => configMap[`channel_${i}`] = item)` ——
+      //   自己按下标编 key。主进程侧的 key 是真实主键（updateConfig 是 configs.set(key,…)），
+      //   编出来的 key 对不上，于是保存一次就多一条重复记录，界面上出现两张卡片。
+      //   现在服务端直接返回 key，这里原样使用。
       const configMap: Record<string, any> = {}
-      c.forEach((item: any, i: number) => {
-        configMap[`channel_${i}`] = item
+      ;(Array.isArray(c) ? c : []).forEach((item: any) => {
+        if (item?.key) {configMap[item.key] = item}
       })
       setConfigs(configMap)
       setStatus(Array.isArray(s) ? s : [])

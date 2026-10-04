@@ -1677,39 +1677,39 @@ function registerV27Ipc(mainWindow: BrowserWindow): void {
   // ── 📡 渠道配置 IPC (v16.0-fix) ────────────────────
   ipcMain.handle('channel:get-configs', async () => {
     try {
-      const configs = getChannelManager().getConfigs()
-      return configs.map((c, i) => ({
-        key: `channel_${i}`,
+      // 🔧 2026-10-04：此前这里用 `getConfigs().map((c, i) => ({ key: \`channel_${i}\` ... }))`
+      //   —— getConfigs() 丢掉了 key，调用方只能按**数组下标**编一个。
+      //   而 updateConfig(key, …) 是 `configs.set(key, …)`，于是保存一次就会
+      //   **新增一条**记录（真 key 那条 + 编的 channel_N 那条），
+      //   界面出现两张卡片、其中一张是空的；首次保存前 channel:test 也会因
+      //   「未找到渠道配置」而必然失败。
+      //   现在改成返回真实 key，让 key 能往返。
+      return getChannelManager().getConfigEntries().map(({ key, config: c }) => ({
+        key,
         type: c.type,
         name: c.name,
         enabled: c.enabled,
         credentials: c.credentials,
+        options: c.options,
       }))
     } catch { return [] }
   })
   ipcMain.handle('channel:update-config', async (_e, key: string, config: any) => {
     try {
       const cm = getChannelManager()
-      const existing = cm.getConfigs()
-      const idx = parseInt(key.replace('channel_', ''), 10) || -1
-      if (idx >= 0 && idx < existing.length) {
-        // 保留 options（前端配置表单不包含 options 字段）
-        const mergedOptions = config.options ?? existing[idx].options ?? {}
-        await cm.updateConfig(`channel_${idx}`, {
-          ...existing[idx],
-          ...config,
-          options: mergedOptions,
-        })
-      } else {
-        // 新增渠道
-        await cm.updateConfig(key, {
-          enabled: config.enabled,
-          type: config.type,
-          name: config.name,
-          credentials: config.credentials || {},
-          options: config.options ?? {},
-        })
-      }
+      if (!key) {return { ok: false, error: '缺少渠道 key' }}
+      // 🔧 2026-10-04：key 现在从 channel:get-configs 原样往返（真实主键），
+      //   updateConfig 是 `configs.set(key, …)`，同一个 key 就是**更新**而不是新增。
+      //   此前前端按下标编 key，导致每保存一次就多一条重复记录。
+      await cm.updateConfig(key, {
+        enabled: config.enabled === true,
+        type: config.type,
+        name: config.name,
+        credentials: config.credentials || {},
+        // options 必须合并而不是覆盖：前端的配置表单不包含 options 字段，
+        // 直接用 config.options 覆盖会把用户的通道选项（端口、模式等）静默抹掉。
+        options: { ...(config.options || {}) },
+      })
       return { ok: true }
     } catch (err: any) {
       return { ok: false, error: err.message }
