@@ -289,6 +289,18 @@ Live2D / VRM 需要会 Blender、会绑 3D 模型 —— 这把绝大多数想�
 
 Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有干活的 Agent 能力，有 Agent 能力的工具大多没有人格。**
 
+> 💡 **还有一个更硬的论据，藏在「桌宠」这个形态里。**
+>
+> MiniMax Code 的定时任务与远程控制，官方文档写的是「让 Agent **在电脑唤醒时**按计划执行」——
+> 也就是**强依赖桌面端 App 常驻**。openclaw 有 27 个 IM 渠道但**零人格**。
+>
+> **而桌宠本来就是必须常驻的。** 别人想要「长在用户电脑上陪着你」需要单独做一套常驻架构，
+> Lumina 从第一天就有。当 `proactiveEngine` 的主动性、情绪系统与 IM 渠道接在一起时，
+> 你得到的是一个**天然常驻 · 有情绪 · 有团队 · 能干活**的远程代理，
+> 而不是一个「需要保活且没有人格的代理」。
+>
+> **这不是功能优势，是架构优势 —— 它没法被后来者用加功能补上。**
+
 下面是与几个同类开源项目的**中性对比**。数据采集于 2026-10-03（来源：各项目 GitHub API / 官方文档）。我们特意把**别人比我们强的地方也列出来**——因为夸大成「全面碾压」既不真实，也容易让人不信。
 
 | 能力 | Lumina | [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) | [AIRI](https://github.com/moeru-ai/airi) | [openclaw](https://github.com/openclaw/openclaw) | [cc-haha](https://github.com/NanmiCoder/cc-haha) | [MiniMax Code](https://agent.minimax.cn/docs/code/welcome) |
@@ -348,9 +360,16 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据，**我们没做端到端真机验证** |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：2,500+ 用例全绿**（`vitest run` 184 文件 / 2557 用例，
-0 失败）；`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
-零违规，warning 用棘轮制只允许变小。</sub>
+Linux 为 roadmap。**测试规模：2,619 用例全绿**（`vitest run` 191 文件 / 2618 通过 / 1 skipped，
+实测 18.46s）；`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
+零违规，warning 用棘轮制只允许变小。
+
+复现命令（在仓库根目录执行）：
+
+```bash
+npx tsc --noEmit --strict   # 预期：0 错误
+npx vitest run             # 预期：191 文件 / 2618 passed / 1 skipped
+```</sub>
 
 > ⚠️ **一句实话**：本项目 90% 的能力描述来自**代码与测试**，而不是**真人使用数据**。
 > 我们没有做过可用性测试，没有留存数据，团队单人格开发。

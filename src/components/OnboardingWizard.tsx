@@ -8,7 +8,7 @@ import React, { useState } from 'react'
 import { useStore } from '../stores/appStore'
 import { persistLLMConfig } from '../services/llmPersist'
 
-type StepId = 'welcome' | 'llm' | 'personality' | 'done'
+type StepId = 'welcome' | 'llm' | 'personality' | 'team' | 'done'
 
 interface StepConfig {
   id: StepId
@@ -20,7 +20,43 @@ const STEPS: StepConfig[] = [
   { id: 'welcome',     title: '欢迎来到 Lumina Life 🌸',      subtitle: '你的桌面不再孤单' },
   { id: 'llm',         title: '连接你的 AI 大脑 🧠',           subtitle: 'Lumina 需要一个大语言模型才能思考' },
   { id: 'personality', title: '选择 Lumina 的性格 🎭',         subtitle: '你希望她以什么风格陪伴你？' },
+  { id: 'team',        title: 'Lumina 背后的团队 👥',           subtitle: '她不是一个人 —— 还有两位你看不见的同事' },
   { id: 'done',        title: '一切就绪！✨',                   subtitle: '准备开始你和 Lumina 的故事' },
+]
+
+// ─── 团队成员元数据 ──────────────────────────────────────
+/**
+ * 【为什么要专门有这一步】
+ *
+ * 2026-10-04 发布前评测查到一个 P1 缺陷：引导只有 4 步（welcome/llm/personality/done），
+ * **全程不提及三 Agent 团队**，而 `agents/yak/agent.json` / `agents/recha/agent.json`
+ * 里的模型名还是占位符 `your-model-name`。
+ *
+ * 后果很具体：`getConfiguredMembers()` 判定「已配置」的依据就是那份 agent.json，
+ * 所以新用户走完引导后，系统提示词里注入的团队状态表是
+ * 「❌ 未配置 LLM，调用会失败」——
+ * **他体验到的根本不是三 Agent 产品，而是一个普通助手。**
+ *
+ * 招牌能力默认不可见，等于没有招牌能力。
+ * 这一步的作用不是配置，是**告知**：让用户知道背后有人，以及他们默认会用同一个模型。
+ */
+const TEAM_MEMBERS = [
+  {
+    id: 'yak',
+    name: 'Yak',
+    icon: '🐍',
+    role: '代码工程师',
+    duties: ['写代码', '调试 bug', '重构', '跑测试验证'],
+    note: '可写文件、可跑命令、能提交 git',
+  },
+  {
+    id: 'recha',
+    name: '热茶',
+    icon: '🍵',
+    role: '审查员 / 反面论证',
+    duties: ['审阅代码', '挑逻辑漏洞', '风险评估'],
+    note: '只读：不能改文件、不能跑命令、不能提交',
+  },
 ]
 
 // ─── 预设 LLM 配置 ─────────────────────────────────────
@@ -314,13 +350,132 @@ function PersonalityStep({ onNext }: { onNext: () => void }) {
   )
 }
 
+function TeamStep({ onNext }: { onNext: () => void }) {
+  const llmConfig = useStore((s) => s.llmConfig)
+  // 默认全开：让成员跟随主模型。这样开箱即用时团队就是活的。
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(TEAM_MEMBERS.map(m => [m.id, true])))
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string>('')
+
+  /**
+   * 【为什么默认「跟随主模型」而不是让用户自己填】
+   *
+   * 新用户根本不知道该给三个 Agent 分别配什么模型，
+   * 而且多填一次 Key 就多一次放弃的机会。
+   * 现状是：主模型配好了，但两个 worker 还是占位符 → 团队是死的。
+   * 所以这里直接把主模型配置复制给两个 worker —— 一行代码换回整个招牌能力。
+   *
+   * 失败不阻断引导：设置面板里随时能单独配，用户不该被一个配置卡死在向导里。
+   */
+  const handleConfirm = async () => {
+    setBusy(true)
+    setNotice('')
+    const targets = TEAM_MEMBERS.filter(m => enabled[m.id])
+    if (targets.length === 0) {
+      setBusy(false)
+      onNext()
+      return
+    }
+    try {
+      const results: string[] = []
+      for (const m of targets) {
+        const res: any = await window.luminaAPI?.agentLlmSetConfig?.(m.id, {
+          provider: llmConfig.provider,
+          model: llmConfig.model,
+          endpoint: llmConfig.baseUrl,
+          apiKey: llmConfig.apiKey,
+          timeout: 600,
+        })
+        if (res && res.success === false) {
+          results.push(`${m.name}：${res.error || '未知错误'}`)
+        }
+      }
+      setNotice(results.length > 0
+        ? `⚠️ 部分成员未能配置：${results.join('；')}。你可以在设置 → LLM 模型配置里单独调整。`
+        : `✅ 团队已就绪，${targets.length} 位成员跟随主模型（${llmConfig.model}）`)
+    } catch (e: any) {
+      setNotice(`⚠️ 配置未保存：${e?.message || e}。不影响使用，随时可在设置里补。`)
+    } finally {
+      setBusy(false)
+    }
+    onNext()
+  }
+
+  return (
+    <div style={{ padding: '12px' }}>
+      <div style={{
+        fontSize: 12, lineHeight: 1.7, color: 'var(--text-secondary)',
+        background: 'var(--surface-1)', borderRadius: 8, padding: '10px 12px', marginBottom: 12,
+      }}>
+        你只会跟 <b>Lumina 🐱</b> 说话。她负责判断任务该谁做、派活、然后用人话把结果给你。
+        下面这两位<b>不会直接跟你对话</b>，但你能在桌宠上看到他们干活时的状态。
+      </div>
+
+      {TEAM_MEMBERS.map(m => (
+        <div key={m.id} style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '10px 12px', marginBottom: 8, borderRadius: 10,
+          border: '1px solid var(--border-medium)',
+          background: enabled[m.id] ? 'var(--accent-50)' : 'var(--surface-0)',
+          opacity: enabled[m.id] ? 1 : 0.55,
+          transition: 'all 0.15s',
+        }}>
+          <div style={{ fontSize: 24, lineHeight: 1.2 }}>{m.icon}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{m.name}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{m.role}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              {m.duties.join(' · ')}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>🔒 {m.note}</div>
+          </div>
+          <button
+            onClick={() => setEnabled(e => ({ ...e, [m.id]: !e[m.id] }))}
+            style={{
+              flexShrink: 0, alignSelf: 'center',
+              padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+              fontSize: 11, fontFamily: 'inherit', fontWeight: 500,
+              border: '1px solid var(--border-medium)',
+              background: enabled[m.id] ? 'var(--accent-500)' : 'var(--surface-1)',
+              color: enabled[m.id] ? '#fff' : 'var(--text-secondary)',
+            }}>
+            {enabled[m.id] ? '已启用' : '已关闭'}
+          </button>
+        </div>
+      ))}
+
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '8px 0 12px', lineHeight: 1.6 }}>
+        默认使用与你相同的大模型。如果你想让 Yak 用更强的模型、热茶用更稳的，
+        随时可以在 <b>设置 → LLM 模型配置</b> 里分别指定。
+      </div>
+
+      {notice && (
+        <div style={{
+          fontSize: 11, lineHeight: 1.6, marginBottom: 10, padding: '7px 10px', borderRadius: 6,
+          // 用项目实际定义的调色板（--green-100/--yellow-100）而不是自造变量名。
+          // 自造变量在 tsc 与 eslint 里都不会报错，只会在界面上静默失效 —— 这类 bug 很难查。
+          background: notice.startsWith('✅') ? 'var(--green-100)' : 'var(--yellow-100)',
+          color: 'var(--text-primary)',
+        }}>{notice}</div>
+      )}
+
+      <button onClick={handleConfirm} disabled={busy} className="onboarding-btn-primary" style={{ width: '100%' }}>
+        {busy ? '正在配置团队…' : '确认并继续'}
+      </button>
+    </div>
+  )
+}
+
 function DoneStep({ onFinish }: { onFinish: () => void }) {
   return (
     <div style={{ textAlign: 'center', padding: '32px 16px' }}>
       <div style={{ fontSize: 72, marginBottom: 12, animation: 'pulse 2s ease-in-out infinite' }}>🎉</div>
       <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>一切准备就绪！</h2>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 24 }}>
-        Lumina 🐱、热茶 🍵 和 Yak 📊 已经准备好为你工作。<br />
+        Lumina 🐱 已经准备好为你工作，背后的团队也已就位。<br />
         现在去跟她说第一句话吧！
       </p>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 20 }}>
@@ -418,7 +573,8 @@ export default function OnboardingWizard() {
           {current.id === 'llm' && (
             <LLMStep onNext={goNext} onSkip={skipAll} />
           )}
-          {current.id === 'personality' && <PersonalityStep onNext={handleFinish} />}
+          {current.id === 'personality' && <PersonalityStep onNext={goNext} />}
+          {current.id === 'team' && <TeamStep onNext={goNext} />}
           {current.id === 'done' && <DoneStep onFinish={handleFinish} />}
         </div>
 

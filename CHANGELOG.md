@@ -1,7 +1,134 @@
 # 📝 Changelog — Lumina Life
 
-## [Unreleased] — feature/v02-comprehensive-upgrade 🚀 发布前深度改造第二轮（2026-09-24）
+> **口径说明**：本文件记录**面向用户的真实变化**。发布前的审计过程、发现的问题与修复对照，
+> 见 [`docs/Lumina-发布前评测与复评-20261003.md`](docs/Lumina-发布前评测与复评-20261003.md)
+> 与 [`docs/Lumina-发布前深度评测-20261002.md`](docs/Lumina-发布前深度评测-20261002.md)。
+> 能力与竞品对比见 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)。
 
+---
+
+## [v0.1.0] — 首个公开版本（2026-10-03）
+
+> 这一版的核心不是「加功能」，是**把一批此前看起来能跑、实际跑不通的东西修好**。
+> 全部变更集中在发布前审计与真机验证，279 文件 / +23,021 行。
+
+### 🔴 致命：三 Agent 团队在**所有已发布的安装包里整个是坏的**
+
+首次**真机跑打包产物**（此前所有验证都是源码 + 单测）挖出：
+
+- **现象**：模型正确调用 `delegate_to`，工具返回「Yak 未配置 LLM」——
+  而启动日志刚打印过「✅ yak 独立 Runner 已创建」。
+- **根因**：`delegationManager.ts` 里的 `require('./core/agentOrchestrator')`
+  在 dev 模式能解析（源文件在磁盘上），**打包后必然失败** ——
+  打包器把源码扁平化进 `out/main/index.js`，运行时基准目录变成 `out/main/`，
+  而 `out/main/core/agentOrchestrator` 并不存在。
+  抛错被 `catch {}` 吞掉后，`getDelegationManager()` 退回一个**全新的空实例**（runners 为空），
+  `isConfigured('yak')` 恒为 false。
+- **影响**：三 Agent 团队 —— 本项目的招牌能力 —— 在已发布的安装包里全部失效。
+- **修法**：新增 `registerDelegationManagerInstance()`，由 `AgentOrchestrator.init()` 反向注册，
+  避免静态 import 成环。
+- **187 个测试、dev 模式完全看不出来。**
+
+> 这条修复是本版本存在的核心理由。它也说明一件事：
+> **对 Electron 应用，源码测试全绿不等于产品可用。**
+
+### 🔴 8 个孤儿工具对模型彻底不可达
+
+`resolveToolset()` 此前只读静态 `TOOLSETS` 常量表，**完全不读 `ToolDef.toolsets`**
+（尽管后者是必填字段）。结果 132 个已注册工具里有 **47 个对模型不可达**，
+包括 `team_message` / `hire_worker` / `adversarial_review` / `desktop_act` / `creator_*` / `lsp_*`，
+而 `agentTeamPersonas.ts` 还在教模型去调其中 5 个。
+
+修法：能力层（`team`/`lsp`/`browser`/`computer_use`/`creator`/`research`/`media`/`social`/`voice`/`news`）
+改为**声明式**；`chat`/`agent`/`developer` 三个模式层仍由静态表独占
+（它表达产品决策，不该被工具自身声明左右）。启动时打印各档可达数并对孤儿告警。
+
+### 🔴 「声称做了但没做」的幻觉缺口 —— 动作声明守卫
+
+任务质量基准实测（NeoHorse-1-4B）抓到此前未覆盖的一类幻觉：
+
+```
+任务：让它 memory_save 记住「煤球是只橘猫」
+回复：「✅ 记住了！以后聊天提到它我都知道啦～ 🐱」
+实际：应用日志里根本没有 memory_save 调用
+```
+
+已有防护都假设「工具确实被调用过」：
+记忆层的 source 权威性管的是**存进去之后**、工具失败 `ok:false` 管的是**调了但失败**、
+worker 空产出转失败管的是**子 Agent 不给结论**。这一次是**一次都没调**。
+
+修法：新增 `electron/actionClaimGuard.ts` —— 正则匹配「完成态措辞 + 动作动词」，
+配合否定模式排除（「我记不住」不算撒谎），在回复送出前插入提醒。
+**已知局限写在代码注释里**：反讽会误判、换个说法会漏检，**它是兜底提醒不是保证**。
+
+### 🟠 file_search 全盘扫描（一次 63.8 秒）
+
+实测日志：`[fileSearch] C:\: 1 结果, 63806ms`。用户没给路径时逐盘扫描全机。
+修法：默认作用域收敛到当前项目目录，全盘扫描需显式要求。
+
+### 🟠 沙箱 Windows 盘符路径拼接缺分隔符
+
+`D:\lumina-quality\fib.py` 被重定向成
+`C:\Users\xxx\sandbox\lumina\Dlumina-quality\fib.py` —— 冒号与反斜杠被吃掉。
+后果是用户按提示去原路径找文件会找不到。
+
+### 🟠 原生模块 ABI 事故 → 变成 CI 门禁
+
+better-sqlite3 预编译包是 Node 20（ABI 143），而 Electron 40 需要 ABI 148。
+后果：vitest 全绿（测试跑在 Node 下），但**打包后启动时** SQLite 初始化失败，
+记忆系统的 ReMe/Scroll 分支**静默降级**。
+
+修法：`test.yml` 新增独立 `native-abi` job，用 Electron 的 Node 模式真 `require` 一次原生模块。
+**能把自己的失败写成 CI 门禁，比事后修更重要。**
+
+### ✅ CI 承诺与实现对齐
+
+- `--strict` 类型检查此前挂着 `continue-on-error: true` ——
+  README 里「tsc --strict 零错误」这句宣传**在 CI 里根本没被执行**。v3.34 移除。
+- ESLint 约 5000 条历史 warning 改用**棘轮制**（基线只许降不许升，容忍 25 条跨平台波动）。
+- 覆盖率门禁：只对 19 个已建立实测的模块开启，并**如实写明** `reactEngine.ts`（含安全硬闸门
+  `checkRoleGate`）目前只有 ~42% 覆盖 —— **这是真实风险，不调阈值遮数字**。
+
+### 🟡 记忆证据链从死代码接通
+
+`memoryEvidence.ts`（16 KB）此前只有测试在测。现通过 `evidenceBridge.ts` 接入读写链路，
+与 `SOURCE_CONFIDENCE`（写入期硬约束）相连，**两套机制互不改写**。
+不变式：记忆权威性**只由 `source` 决定**，模型无权自封 `confidence: 1.0`。
+
+### 🟡 桌宠精灵表接入一等公民形态
+
+8×9 精灵表从「实验性彩蛋」升为一等形态，附带诚实的可用性标注
+（`modelKind` / `spritesheetModelKind`）。
+
+### 🟡 文档与宣传口径全面校正
+
+README 与 `docs/` 中若干**被高估的说法**改为双口径标注，并新增「被高估的地方」自我校正表：
+「132 个工具」标注为「已注册数，agent 模式模型实际可见 48 个」；
+「5 维情绪」标注为「3 个连续数值驱动 5 维表现」；
+「记忆证据链」标注为「领先的是本该领先的东西」。
+
+### 🧹 仓库卫生
+
+- 密钥扫描 0 真实命中（833 文件扫 `sk-*` / `Bearer` / `ghp_` / `AKIA`）
+- `.env` 已在 `.gitignore`；新增 `.gitattributes` 收敛 Windows/Linux 行尾差异
+- 消除死代码与双实现（`electron/mission/` 等），接通路由仲裁
+
+### 📊 本版本验证状态（实测，非引用）
+
+| 项 | 结果 |
+|---|---|
+| `tsc --noEmit --strict` | **0 错误**（且 CI 强制执行） |
+| `vitest run` | **191 文件 / 2618 用例全绿**（1 skipped），18.46s |
+| 平台 | **Windows 10/11 x64 为唯一实机验证**；macOS/Linux 代码已适配但未在真机验证 |
+| 人群数据 | **无**。本项目 90% 的能力描述来自代码与测试，而非真人使用数据 |
+
+---
+
+## [v0.2.0-draft] — feature/v02-comprehensive-upgrade（2026-09-24，未并入 master）
+
+> ⚠️ **本节内容未并入 `master`，仅存在于 `feature/v02-comprehensive-upgrade` 分支。**
+> 保留供追溯，其中多项已在 v0.1.0 中以不同方式重做（如 Live2D 透明窗根因、任务工作区事件转发）。
+>
 > 基于用户实机截图诊断的 8 大问题逐项修复。目标：Live2D 能显示、团队能干活、任务工作区是真的、三平台可用、英语能用、游戏有边界。
 
 ### 🐛 P0 修复（A）

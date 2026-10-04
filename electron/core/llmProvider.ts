@@ -13,7 +13,11 @@ import {
   describeLimitation,
   clampOutputTokens,
   isLocalEndpoint,
+  needsXmlToolInstructions,
+  injectXmlToolInstructions,
 } from './modelCompat'
+// XML 工具兼容提示的规格来源（惰性 require 封装在内部，避免与 tools/ 形成静态环）
+import { loadRuntimeXmlToolSpecs } from '../llm/xmlToolCall'
 import {
   resolveNativeKind,
   buildTransportPlan,
@@ -320,6 +324,15 @@ export class LLMProvider {
           const note = describeLimitation(kind, this.config.model)
           if (note) {console.warn(`[LLMProvider] 🔧 ${response.status} ${kind} → 降级：${note}`)}
           const degraded = degradeForKind(requestBody, kind)
+          // 🔧 2026-10-04：tools 被删后模型就不知道有哪些工具可用。
+          //  补一段 XML 调用说明，否则不支持原生协议的模型会静默退化成纯聊天。
+          //  详见 modelCompat.ts 中 degradeForKind 上方的契约说明。
+          if (needsXmlToolInstructions(kind)) {
+            const specs = loadRuntimeXmlToolSpecs(12)
+            const nextMessages = injectXmlToolInstructions(degraded.messages, specs, 12)
+            if (nextMessages) {degraded.messages = nextMessages}
+            console.log(`[LLMProvider] 🧩 已注入 XML 工具兼容提示（${specs.length} 个工具）`)
+          }
           const fallback = await this.callNonStreaming(opts, emit, degraded).catch(() => null)
           if (fallback && !fallback.error) {return fallback}
         }
@@ -578,7 +591,15 @@ export class LLMProvider {
             } catch { /* 缓存不可用忽略 */ }
             const note = describeLimitation(kind, this.config.model)
             if (note) {console.warn(`[LLMProvider] 🔧 非流式 ${res.status} ${kind} → 降级：${note}`)}
-            return await this.callNonStreaming(opts, emit, degradeForKind(requestBody, kind))
+            const degraded2 = degradeForKind(requestBody, kind)
+            // 与流式路径保持一致：tools 降级时必须补 XML 提示词，否则能力静默归零
+            if (needsXmlToolInstructions(kind)) {
+              const specs = loadRuntimeXmlToolSpecs(12)
+              const nextMessages = injectXmlToolInstructions(degraded2.messages, specs, 12)
+              if (nextMessages) {degraded2.messages = nextMessages}
+              console.log(`[LLMProvider] 🧩 非流式降级已注入 XML 工具兼容提示（${specs.length} 个工具）`)
+            }
+            return await this.callNonStreaming(opts, emit, degraded2)
           }
         }
         return { error: `非流式 LLM 返回 ${res.status}: ${errText.slice(0, 300)}` }

@@ -58,6 +58,67 @@ export interface XmlParseResult {
 }
 
 // ═══════════════════════════════════════════════════════════
+// 提示词侧：把工具清单转成 XML 调用说明
+//
+// 【为什么放在本模块】
+// 解析与提示词是同一件事的两面：模型按提示词的格式输出，我们按同一个格式解析。
+// 分开放必然漂移 —— 提示词说用 A 格式、解析器只认 B 格式，就是上面文件头
+// 描述的那类真实故障。本模块是「唯一事实源」，提示词侧也归它。
+// ═══════════════════════════════════════════════════════════
+
+/** 工具定义（ToolDef 的最小结构，避免本模块反向依赖 tools/registry） */
+export interface ToolDefLike {
+  name: string
+  description?: string
+  params?: unknown
+}
+
+/**
+ * 把工具定义列表转成 `XmlToolSpec[]`，供 `modelCompat.buildXmlToolInstructions` 使用。
+ *
+ * 【为什么要限制数量】
+ * 实测：1.4B 模型在 3 个工具里能选对 2 个，在 48 个工具里几乎必然选错。
+ * 兜底模式下把所有工具塞进提示词只会让弱模型更糟 —— 它会开始编造工具名。
+ * 所以宁可少列；不够用时让模型反问用户，比让它瞎猜安全。
+ */
+export function toXmlToolSpecs(
+  defs: ToolDefLike[] | undefined,
+  limit = 12,
+): Array<{ name: string; description?: string; params?: Record<string, unknown> }> {
+  if (!Array.isArray(defs)) {return []}
+  return defs.slice(0, limit).map(d => ({
+    name: d.name,
+    description: d.description,
+    params: d.params && typeof d.params === 'object' ? (d.params as Record<string, unknown>) : undefined,
+  }))
+}
+
+/**
+ * 从工具注册表实时拉取当前模式下可见的工具，转成 XML 调用说明所需的 spec。
+ *
+ * 【为什么用惰性 require 而不是静态 import】
+ * `tools/registry` 是叶子模块，但 `core/llmProvider` 被大量工具实现反向依赖。
+ * 静态 import 会在模块初始化期形成环，表现是「某个 import 是 undefined」——
+ * 这类 bug 只在特定加载顺序下现形，极难排查。
+ * 惰性 require 把解析时机推到调用时（此时所有模块都已就绪），
+ * 与本项目 `registrationFlag.ts` / `agentOrchestrator` 的断环手法一致。
+ *
+ * 失败返回空数组：调用方拿到空数组会跳过注入，行为退回到「没有兼容层」，
+ * 而不是抛错中断重试 —— **宁可能力弱，不可链路断**。
+ */
+export function loadRuntimeXmlToolSpecs(limit = 12): ReturnType<typeof toXmlToolSpecs> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getAllToolDefs } = require('../tools/registry') as {
+      getAllToolDefs: () => ToolDefLike[]
+    }
+    return toXmlToolSpecs(getAllToolDefs(), limit)
+  } catch {
+    return []
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // 工具
 // ═══════════════════════════════════════════════════════════
 

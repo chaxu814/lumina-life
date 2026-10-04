@@ -66,7 +66,11 @@ import {
   degradeForKind,
   describeLimitation,
   isLocalEndpoint,
+  needsXmlToolInstructions,
+  injectXmlToolInstructions,
 } from './core/modelCompat'
+// XML 工具调用提示词侧的规格构造（与解析器同源，避免提示词与解析漂移）
+import { loadRuntimeXmlToolSpecs } from './llm/xmlToolCall'
 // 工具审批 UI
 import { classifyApproval, formatDenyFeedback } from './tools/impl/approvalUI'
 // 情绪 ↔ 游戏化桥接（静态导入，打包后动态 require 解析不到）
@@ -3278,6 +3282,22 @@ private summarizer: ConversationSummarizer | null = null
       const note = describeLimitation(kind, this.config.model)
       if (note) {console.warn(`[AgentRunner] 🔧 ${status} ${kind} → 自动降级：${note}`)}
       cur = degradeForKind(cur, kind)
+
+      // 🔧 2026-10-04：tools 被删掉后，模型就不知道有哪些工具可用。
+      //  而 XML 工具调用兜底依赖模型输出 XML 标记 —— 得先把它「教」一遍，
+      //  否则不支持原生协议的模型会静默退化成纯聊天机器人（能力归零且无人知情）。
+      //  详见 modelCompat.ts 里 degradeForKind 上方的契约说明。
+      if (needsXmlToolInstructions(kind)) {
+        try {
+          const specs = loadRuntimeXmlToolSpecs(12)
+          const nextMessages = injectXmlToolInstructions(cur.messages, specs, 12)
+          if (nextMessages) {cur = { ...cur, messages: nextMessages }}
+          console.log(`[AgentRunner] 🧩 已注入 XML 工具兼容提示（${specs.length} 个工具）`)
+        } catch (e) {
+          // 注入失败不能阻断降级重试：没有提示词只是能力弱一点，总比不重试强
+          console.warn('[AgentRunner] XML 工具提示注入失败，降级重试仍继续:', e)
+        }
+      }
 
       let res = await fetch(`${this.config.baseUrl}/chat/completions`, {
         method: 'POST',
