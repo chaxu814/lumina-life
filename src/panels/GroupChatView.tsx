@@ -5,6 +5,11 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStore } from '../stores/appStore'
+// 群聊成员显示开关（2026-10-04）：用户可在「团队管理」里关掉某个成员。
+// 默认全开时后台成员持续发言会让人眼花缭乱。
+import { isAgentVisible } from '../services/teamVisibility'
+import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
+// 📋 任务工作区的开合状态来自同一个 store，所以「任务派发中心」旁边
 import { IconPlus, IconSend } from '../components/Icons'
 import AgentTaskBoard from '../components/AgentTaskBoard'
 import ThinkingStepList from '../components/ThinkingStepList'
@@ -536,12 +541,17 @@ export default function GroupChatView() {
     setCloudHintDismissed(true)
   }
 
+  // 📋 任务工作区：与顶部栏共用同一个 store（2026-10-04 入口移到这里）
+  const taskPanelOpen = useTaskWorkspace((s) => s.panelOpen)
+  const toggleTaskPanel = useTaskWorkspace((s) => s.togglePanel)
+
   // 🆕 历史会话
   const [sessions, setSessions] = useState<GCSession[]>(() => loadGCSessions())
   const [activeSessionId, setActiveSessionId] = useState(() => {
     const ss = loadGCSessions()
     return ss.length > 0 ? ss[0].id : newGCSessionId()
   })
+
 
   // 🆕 对话连续：记住上一轮谁回复
   const [lastAgent, setLastAgent] = useState<string | null>(null)
@@ -564,6 +574,25 @@ export default function GroupChatView() {
         time: formatDateLabel(Date.now()) },
     ]
   })
+  // 群聊可见性过滤：被关掉的成员不进入渲染列表（2026-10-04）
+  // 【为什么用 useMemo 而不是直接改 messages】
+  // 隐藏只是「不显示」，消息必须仍在会话里 —— 否则用户切回来看历史会发现凭空少了内容。
+  const [hiddenAgents, setHiddenAgents] = useState<Record<string, number>>({})
+  useEffect(() => {
+    const counts: Record<string, number> = {}
+    for (const m of messages) {
+      if (m.from !== 'user' && !isAgentVisible(m.from)) {
+        counts[m.from] = (counts[m.from] || 0) + 1
+      }
+    }
+    setHiddenAgents(counts)
+  }, [messages])
+  const visibleMessages = useMemo(
+    () => messages.filter(m => m.from === 'user' || isAgentVisible(m.from)),
+    [messages],
+  )
+  const hiddenCount = Object.values(hiddenAgents).reduce((a, b) => a + b, 0)
+
   const [input, setInput] = useState('')
   // 🛠️ v8.1: 输入框 key，当从其他面板回到聊天时重新挂载 textarea
   // 修复 Electron display:none→flex 后 <textarea> 可能无法点击的问题
@@ -4614,7 +4643,18 @@ export default function GroupChatView() {
           )
         })()}
         {/* 选中角色后隐藏初始系统欢迎消息 */}
-        {messages.filter(m => !(selectedRole && m.id === '0')).map((m, i) => (
+        {/* 折叠提示：让「隐藏」是可见的行为，而不是像消息丢了 */}
+        {hiddenCount > 0 && (
+          <div style={{
+            margin: '4px 12px', padding: '5px 10px', borderRadius: 6,
+            background: 'var(--surface-50)', border: '1px dashed var(--border-light)',
+            fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0,
+          }}>
+            {Object.entries(hiddenAgents).map(([id, n]) => `${n} 条 ${id}`).join("、")}
+            已折叠 · 可在「团队管理」里打开对应成员
+          </div>
+        )}
+        {visibleMessages.filter(m => !(selectedRole && m.id === '0')).map((m, i) => (
           <div key={m.id} className="msg-anim-in"
             onMouseEnter={() => m.from !== 'system' && setHoveredMsgId(m.id)}
             onMouseLeave={() => setHoveredMsgId(null)}
@@ -5203,7 +5243,24 @@ export default function GroupChatView() {
           >
             📋 任务派发中心
           </button>
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+          {/* 📋 任务工作区 —— 紧邻任务派发中心（2026-10-04 从顶部栏移来）
+               两者是同一件事的两面：派发 + 看结果，放一起省得来回找 */}
+          <button
+            onClick={toggleTaskPanel}
+            title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}
+            style={{
+              padding: '4px 10px', borderRadius: 6,
+              border: `1.5px solid ${taskPanelOpen ? 'var(--accent, #6366f1)' : 'var(--border-light)'}`,
+              background: taskPanelOpen ? 'var(--accent-50)' : 'var(--surface-50)',
+              cursor: 'pointer', fontSize: 12, display: 'flex',
+              alignItems: 'center', gap: 3, fontFamily: 'inherit',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-100)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = taskPanelOpen ? 'var(--accent, #6366f1)' : 'var(--border-light)'; e.currentTarget.style.background = taskPanelOpen ? 'var(--accent-50)' : 'var(--surface-50)' }}
+          >
+            {taskPanelOpen ? '📕' : '📋'} 任务工作区
+          </button>          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
             选择任务类型 → 选择执行者 → 一键派发给团队成员
           </span>
         </div>

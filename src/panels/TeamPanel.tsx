@@ -4,6 +4,9 @@
 // ============================================================
 
 import React, { useState, useEffect, useMemo } from 'react'
+// 群聊成员显示开关（2026-10-04）：默认全开时后台成员持续发言，
+// 消息流会眼花缭乱，让用户自己决定谁参与群聊。
+import { isAgentVisible, setAgentVisible, type ControllableAgentId } from '../services/teamVisibility'
 import TeamCollabSection from './TeamCollabSection'
 
 type AgentActivity = 'sleeping' | 'waking' | 'working' | 'social' | 'idle' | 'resting' | 'analyzing' | 'coding' | 'caring'
@@ -191,12 +194,22 @@ export default function TeamPanel() {
 
   // ── 渲染 ──
 
+  // 群聊可见性：写 localStorage 后用自定义事件通知同页其它订阅者
+  const [visibleAgents, setVisibleAgents] = useState<Record<ControllableAgentId, boolean>>(
+    () => ({ yak: isAgentVisible('yak'), recha: isAgentVisible('recha') }),
+  )
+  useEffect(() => {
+    const onChange = () => setVisibleAgents({ yak: isAgentVisible('yak'), recha: isAgentVisible('recha') })
+    window.addEventListener('gc-visible-agents-changed', onChange)
+    return () => window.removeEventListener('gc-visible-agents-changed', onChange)
+  }, [])
   return (
     <div style={{ padding: 16, height: '100%', overflowY: 'auto', background: 'var(--surface-50)' }}>
       <h3 style={{ marginBottom: 4, fontSize: 16 }}>👥 AI 小团队</h3>
       <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 16 }}>
         v2.7.1: 团队功能已迁移到聊天面板的「团队群聊」中。
       </p>
+
 
       {/* 固定成员卡片 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
@@ -223,6 +236,30 @@ export default function TeamPanel() {
                 }}>
                   {state.desc}
                 </div>
+                {/* 群聊显示开关 —— Lumina 恒可见（她是用户唯一的对话对象，
+                    隐藏她等于产品不可用），所以只给 yak / recha 渲染 */}
+                {(agent.id === 'yak' || agent.id === 'recha') && (
+                  <button
+                    onClick={() => {
+                      const next = !(agent.id === 'yak' ? visibleAgents.yak : visibleAgents.recha)
+                      setAgentVisible(agent.id as ControllableAgentId, next)
+                      setVisibleAgents({ yak: isAgentVisible('yak'), recha: isAgentVisible('recha') })
+                    }}
+                    title={visibleAgents[agent.id as ControllableAgentId]
+                      ? '该成员正在团队群聊里发言，点击隐藏'
+                      : '该成员已从群聊隐藏，点击恢复'}
+                    style={{
+                      flexShrink: 0, fontSize: 10, padding: '3px 9px', borderRadius: 10,
+                      cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                      border: '1px solid var(--border-medium)',
+                      background: visibleAgents[agent.id as ControllableAgentId]
+                        ? 'var(--green-100)' : 'var(--surface-100)',
+                      color: visibleAgents[agent.id as ControllableAgentId]
+                        ? 'var(--green-500)' : 'var(--text-tertiary)',
+                    }}>
+                    {visibleAgents[agent.id as ControllableAgentId] ? '🔇 群聊中' : '🔈 已隐藏'}
+                  </button>
+                )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 {agent.personality}

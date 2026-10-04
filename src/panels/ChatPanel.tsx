@@ -1505,14 +1505,9 @@ export default function ChatPanel() {
             )}
           </span>
 
-          {/* 📋 任务工作区切换按钮 — 唯一开合入口，激活态高亮 */}
-          <button onClick={toggleTaskPanel}
-            title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}
-            className={`tw-toolbar-btn ${taskPanelOpen ? 'active' : ''}`}
-            style={{
-              ...subtleBtn, padding: '4px 8px', gap: 4, fontSize: 11,
-              color: taskPanelOpen ? 'var(--accent-600)' : 'var(--text-secondary)',
-            }}><span style={{ fontSize: 13 }}>📋</span><span>任务工作区</span></button>
+          {/* 📋 任务工作区入口已移至群聊工具条（紧邻「任务派发中心」）—— 2026-10-04
+               这两个是同一件事的两面：派发与看结果，放在一起才不用来回找。
+               状态本来就在 useTaskWorkspace store，任何位置都能开关。 */}
 
           {/* 🔄 切换角色按钮 — 仅非群聊模式 */}
           {mode !== 'group' && (
