@@ -74,7 +74,7 @@ export function sanitizeThinkingText(raw: string | undefined | null): SanitizedT
     .split(/\r?\n+/)
     .filter((line) => {
       const bare = line.trim().replace(/^[>*-]\s+/, '')
-      if (!bare) return false
+      if (!bare) {return false}
       if (META_REASONING_PATTERNS.some((re) => re.test(bare))) {
         dropped++
         return false
