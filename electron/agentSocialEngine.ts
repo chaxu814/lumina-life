@@ -21,6 +21,7 @@ import { DEFAULT_CHAT_TRACK, DEFAULT_CODE_TRACK } from './agentTeamTypes'
 import { getTeamManager } from './agentTeamManager'
 import { globalEventBus, BusEvents } from './eventBus'
 import { TEAM_PERSONAS, TEAM_MEMBERS } from './agentTeamPersonas'
+import { getAgentConfig } from './agentConfig'
 import { llmCoordinator, PRIORITY } from './llmCoordinator'  // 🆕 v2.18: 智能 LLM 调度
 // 朋友圈 — 社交对话输出到朋友圈
 import { postObservation, postThought, postChatSummary } from './moments/autoPoster'
@@ -328,7 +329,6 @@ export class AgentSocialEngine {
     //    放宽策略：原要求全员配置（太严苛），现改为至少1个 Agent 能说话即可。
     //    对话中未配置的 Agent 会返回空回复并被自动跳过（见 isSubstantialReply 逻辑）。
     try {
-      const { getAgentConfig } = require('./agentConfig')
       const anyConfigured = (['lumina', 'yak', 'recha'] as TeamMemberId[]).some(
         (id: TeamMemberId) => getAgentConfig().isConfigured(id)
       )

@@ -68,6 +68,40 @@ jobs:
             *.xml
           retention-days: 7
 
+  bundle-requires:
+    # 打包断链门禁 —— 2026-10-04 新增。
+    #
+    # 【为什么这道门必须存在】
+    # 体检 out/main/index.js 时发现 68 条运行时相对 require 指向不存在的路径。
+    # 根因：为断循环依赖而写的运行时 require，在 electron-vite 扁平化打包后必然失效
+    #（模块已打进同一个文件，那个字符串路径却还在）。
+    #
+    # 这类故障**不会让构建失败，也不会让测试失败**：
+    # dev 模式能解析 → 正常；单测跑源码 → 正常；只有用户拿到安装包才炸。
+    # 已知实例：require('./agentConfig').getConfig() 双重错误（模块无此导出 + 路径不存在），
+    # 被 catch 吞掉后「情绪门控」开关从未生效过，而 UI 上它是给用户看的。
+    #
+    # 策略是棘轮：已知的记进基线，新增的即失败。与 lint-ratchet 同一思路。
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (produce out/main/index.js)
+        run: npm run build
+
+      - name: Bundle requires gate
+        run: node scripts/bundle-requires-gate.cjs
+
   native-abi:
     # 原生模块 ABI 门禁 —— 2026-10-03 发布审计的真实事故。
     # better-sqlite3 的预编译包是为 Node 20 (ABI 143) 打的，而 Electron 40 需要 ABI 148。

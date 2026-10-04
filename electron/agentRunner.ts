@@ -86,6 +86,8 @@ import { webSearch } from './tools/impl/search'
 import { extractUrls, collectUrls, saveCollected } from './tools/impl/contentCollector'
 // v6.0: Agent 独立 LLM 配置
 import { getAgentConfig } from './agentConfig'
+// 主配置（lumina-config.json）读取的单一入口：功能开关从这里读，不再各自 require
+import { readFeatureFlag } from './core/appConfig'
 import { getDelegationManager } from './delegationManager'
 // 🆕 Lucky 模式深度集成
 import { checkLuckyModeForReAct, setState as setLuckyState, getConfig as getLuckyConfig, getState as getLuckyState } from './luckyModeIntegration'
@@ -3368,8 +3370,12 @@ private summarizer: ConversationSummarizer | null = null
     //   读 features.emotionGating 开关：用户可关（键缺失 = 默认开）。
     let emotionGatingOn = true
     try {
-      const { getConfig } = require('./agentConfig')
-      emotionGatingOn = (getConfig() as any)?.features?.emotionGating !== false
+      // 🔧 2026-10-04：原实现 `require('./agentConfig').getConfig()` 双重错误
+      //   （模块不导出 getConfig + 打包后相对路径不存在），且被 catch 吞掉，
+      //   使 features.emotionGating **永远读到 undefined** ——
+      //   后果是用户在设置里关了「情绪门控」，工具仍被收紧，且无任何提示。
+      //   现统一走主配置单一入口。详见 electron/core/appConfig.ts。
+      emotionGatingOn = readFeatureFlag('emotionGating', true)
     } catch { /* 读不到就用默认 */ }
 
     const gate = emotionGatingOn

@@ -16,6 +16,9 @@
 // ============================================================
 
 import { app, BrowserWindow } from 'electron'
+// 🔧 2026-10-04：主配置功能开关的单一读取入口。替代原先调用了不存在 API
+//   （agentConfig.getConfig）的 require 路径。详见 core/appConfig.ts。
+import { readFeatureFlag } from '../core/appConfig'
 import {
   openPlay, addBeat, summarizePlay, renderScript, pickHighlight,
   type TheaterState, type TheaterEvent, type TheaterRole, type TheaterBeat,
@@ -91,12 +94,12 @@ function readFeatureFlags(): { theater: boolean } {
   }
   let theater = true   // 默认开
   try {
-    // 延迟 require：避免与 agentConfig 形成加载期循环依赖
-    const { getConfig } = require('./agentConfig')
-    const cfg: any = getConfig()
-    const v = cfg?.features?.theater
-    // 键缺失 = 默认开；只有显式 false 才关
-    theater = v !== false
+    // 🔧 2026-10-04：原实现是 `const { getConfig } = require('./agentConfig')`，
+    //   而 agentConfig 根本不导出 getConfig，且 require 在打包后必然解析失败。
+    //   两处失败都被下面的 catch 吞掉，导致 features.theater **永远读到 undefined** ——
+    //   即「任务剧场」开关从未生效。现在改用主配置的单一读取入口。
+    //   详见 electron/core/appConfig.ts 文件头的故障说明。
+    theater = readFeatureFlag('theater', true)
   } catch { /* 读不到就用默认 */ }
   _featureCache = { at: now, theater }
   return { theater }

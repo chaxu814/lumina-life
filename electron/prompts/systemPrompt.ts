@@ -12,6 +12,12 @@ import { getMemoryStore } from '../memory/memoryStore'
 import { getSkillsKnowledgeContext } from '../skillInstaller'
 import { getDynamicSkillLoader } from '../skillLoader'
 import { getTeamStatusTable, TEAM_MEMBERS } from '../agentTeamPersonas'
+// 🔧 2026-10-04：原为 `require('../orchestration/routingDecider')`。
+//   打包器把模块压平后该相对路径必然解析失败并抛错 —— 而这里的 catch 会把它
+//   当成「没有路由提示」而静默跳过，导致**意图路由在打包版里整体失效**（所有消息走 Lumina）。
+//   routingDecider 只 import 一个 type（无运行时依赖），不构成循环依赖，
+//   所以可以安全地改成静态 import。
+import { peekRouteHint, classifyByRules } from '../orchestration/routingDecider'
 import type { AgentRunConfig } from '../tools/types'
 import type { AgentMode, TeamMemberId } from '../agentTeamTypes'
 
@@ -496,7 +502,6 @@ export function buildSystemPrompt(
     const userText = options?.userInput
     if (userText && userText.trim()) {
       // 优先读异步仲裁缓存（含 LLM 语义判断）；没有则用纯规则兜底
-      const { peekRouteHint, classifyByRules } = require('../orchestration/routingDecider')
       let hint = peekRouteHint(userText)
 
       if (!hint) {

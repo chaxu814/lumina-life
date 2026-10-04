@@ -36,16 +36,42 @@ describe('featureFlags · 主进程默认值', () => {
 })
 
 describe('featureFlags · 三处判据一致（防止幽灵状态）', () => {
-  it('主进程运行时：剧场用 !== false', () => {
+  it('主进程运行时：剧场走单一开关入口', () => {
     const src = readSrc('electron/orchestration/theaterBridge.ts')
-    // 实现拆成了两行（先取值再判），不能要求它们在同一行
-    expect(src).toMatch(/features\?\.theater/)
-    expect(src).toMatch(/theater\s*=\s*v\s*!==\s*false/)
+    // 🔧 2026-10-04：原实现是 `require('./agentConfig').getConfig()` ——
+    //   agentConfig 根本不导出 getConfig，且 require 在打包后必然失败；
+    //   双重失败被 catch 吞掉，使 features.theater **永远读到 undefined**，
+    //   即「任务剧场」开关从未生效过，而 UI 上它是给用户看的。
+    //   判据已收敛到 core/appConfig.ts，这里只守「别又自己写一套」。
+    expect(src).toMatch(/readFeatureFlag\(\s*'theater'/)
+    // 调用点不得再做自己的判据（否则又是一处会漂移的第二真相）
+    expect(src).not.toMatch(/features\?\.theater/)
   })
 
-  it('主进程运行时：情绪门控用 !== false', () => {
+  it('主进程运行时：情绪门控走单一开关入口', () => {
     const src = readSrc('electron/agentRunner.ts')
-    expect(src).toMatch(/features\?\.emotionGating\s*!==\s*false/)
+    expect(src).toMatch(/readFeatureFlag\(\s*'emotionGating'/)
+    expect(src).not.toMatch(/features\?\.emotionGating/)
+  })
+
+  it('单一实现里用 !== false（键缺失 = 默认开），不得出现 === true', () => {
+    // 【为什么比原来守两处更强】
+    // 原来 theater 与 emotionGating 各写一份判据，改一处忘另一处就会出现
+    // 「界面显示开着、实际不工作」的幽灵状态。现在判据只有一份，守住它就够了。
+    //
+    // 【为什么要先去注释】
+    // 判据的说明文字里必然会提到「不要用 === true」这句话本身。
+    // 直接对原文做 not.toMatch 会把自己的说明当成违规 —— 守卫把自己卡死了。
+    // 沿用 agentQuality.test.ts 的 stripComments 做法：只对代码生效。
+    const code = readSrc('electron/core/appConfig.ts')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split(/\r?\n/)
+      .filter(line => !/^\s*\/\//.test(line))
+      .join('\n')
+    expect(code).toMatch(/!==\s*false/)
+    expect(code, '反向判据会把「键缺失」当成关闭').not.toMatch(/===\s*true/)
+    // 默认值必须显式来自调用方，不允许在实现里偷偷写死 false
+    expect(code).toMatch(/defaultOn\s*=\s*true/)
   })
 
   it('渲染进程：三个开关都用 !== false', () => {

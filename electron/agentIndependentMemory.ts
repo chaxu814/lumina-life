@@ -17,6 +17,10 @@
 // ============================================================
 
 import type { KnowledgeDomain, AgentPersona } from './agentTeamTypes'
+// 🔧 2026-10-04：原为两处 `require('./agentTeamPersonas')`。
+//   打包后相对路径必然解析失败并抛错（该模块已被压平进 out/main/index.js），
+//   导致独立记忆里取不到团队人格配置。已确认不构成循环依赖，改回静态 import。
+import { TEAM_PERSONAS } from './agentTeamPersonas'
 
 // ── Agent 记忆条目 ────────────────────────────────────
 
@@ -210,13 +214,11 @@ export class AgentIndependentMemory {
 
   isWithinKnowledge(agentId: string, domain: KnowledgeDomain): boolean {
     // v5.0: 从 TEAM_PERSONAS 获取知识域
-    const { TEAM_PERSONAS } = require('./agentTeamPersonas')
     const persona = TEAM_PERSONAS[agentId]
     return persona ? persona.knowledgeDomains.includes(domain) : false
   }
 
   getBlindSpotNote(agentId: string): string {
-    const { TEAM_PERSONAS } = require('./agentTeamPersonas')
     const persona = TEAM_PERSONAS[agentId]
     return persona ? persona.knowledgeBlindSpots.join('、') : ''
   }

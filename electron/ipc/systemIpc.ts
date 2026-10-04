@@ -4,6 +4,11 @@
 // ============================================================
 
 import { ipcMain, BrowserWindow } from 'electron'
+// 🔧 2026-10-04：原为多处 `require('../agentTeamPersonas')`。
+//   打包器把模块压平进 out/main/index.js 后，该相对路径必然解析失败并抛错，
+//   而 agentTeamPersonas 正是三 Agent 人格与团队状态表的定义模块 ——
+//   团队提示词会直接缺失。已确认与本文件不构成循环依赖，改回静态 import。
+import { TEAM_PERSONAS } from '../agentTeamPersonas'
 import { spawn, ChildProcess } from 'child_process'
 import { resolvePython } from '../pythonBin'
 import { join } from 'path'
@@ -244,7 +249,6 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     try {
       const config = loadConfig()
       if (config.agentLlmConfigs) {
-        const { TEAM_PERSONAS } = require('../agentTeamPersonas')
         for (const [id, cfg] of Object.entries(config.agentLlmConfigs) as any) {
           if (TEAM_PERSONAS[id]) {
             TEAM_PERSONAS[id].llmConfig = { ...TEAM_PERSONAS[id].llmConfig, ...cfg }
@@ -733,7 +737,6 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
    */
   ipcMain.handle('agent-llm:get-config', async (_event, params: { agentId: string }) => {
     try {
-      const { TEAM_PERSONAS } = require('../agentTeamPersonas')
       const persona = TEAM_PERSONAS[params.agentId]
       if (!persona) {return { error: 'Agent 不存在' }}
       return { config: persona.llmConfig || { enabled: false } }
@@ -757,7 +760,6 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
     }
   }) => {
     try {
-      const { TEAM_PERSONAS } = require('../agentTeamPersonas')
       const persona = TEAM_PERSONAS[params.agentId]
       if (!persona) {return { error: 'Agent 不存在' }}
 
@@ -767,9 +769,12 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
         ...params.config,
       } as any
 
+      // 🔧 2026-10-04：llmConfig 是可选字段。此前 persona 来自 require()（any），
+      //   类型检查形同虚设；改回静态 import 后这个真实的可选性暴露出来。
+      //   语义不变：没配独立 LLM 就是「全局共用」。
       console.log(
         `[AgentLLM] 💾 ${persona.name}(${params.agentId}) LLM: ` +
-        `${persona.llmConfig.enabled ? '独立 ' + persona.llmConfig.provider + '/' + persona.llmConfig.model : '全局共用'}`,
+        `${persona.llmConfig?.enabled ? '独立 ' + persona.llmConfig.provider + '/' + persona.llmConfig.model : '全局共用'}`,
       )
 
       // 持久化到 lumina-config.json
@@ -802,7 +807,6 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
    */
   ipcMain.handle('agent-llm:get-all-configs', async () => {
     try {
-      const { TEAM_PERSONAS } = require('../agentTeamPersonas')
       const result: Record<string, any> = {}
       for (const [id, persona] of Object.entries(TEAM_PERSONAS) as any) {
         result[id] = persona?.llmConfig || { enabled: false }
