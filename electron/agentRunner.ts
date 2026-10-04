@@ -2396,7 +2396,7 @@ private summarizer: ConversationSummarizer | null = null
         }
 
         // ═══════════════════════════════════════════════════════
-        // v3.34: 「声称做了但没做」检测
+        // 「声称做了但没做」检测
         //
         // 质量基准实测（1.4B）抳到：让它 memory_save 记住一件事，它回复
         // 「✅ 记住了！」，而本轮**一个工具都没调**。
@@ -2404,15 +2404,18 @@ private summarizer: ConversationSummarizer | null = null
         // ok:false / worker 空产出转失败）都假设「工具确实被调过」，
         // 而这里是**一次都没调**。
         //
-        // 本轮只要调用过任何工具就不判（避免对「先搜索再回答」误报），
-        // 只在「有完成态措辞 + 零工具调用 + 能对应到具体动作」时追加提醒。
-        if (!claimGuardChecked && finalText && lastToolNames.length === 0) {
-          const verdict = checkActionClaims({ text: finalText, toolsUsedThisTurn: [] })
+        // 🔧 2026-10-04：此前本块被 `lastToolNames.length === 0` 包住，
+        //   且调用时固定传 `toolsUsedThisTurn: []` —— 效果是「只有零工具时才判」。
+        //   这漏掉了一类很典型的弱模型幻觉：先调 datetime（等无关工具），
+        //   再说「已经记住了」→ memory_save 根本没被碰过，但守卫不报。
+        //   现在把**真实工具名**传进去，由 checkActionClaims 按动作逐个核对。
+        if (!claimGuardChecked && finalText) {
+          const verdict = checkActionClaims({ text: finalText, toolsUsedThisTurn: lastToolNames })
           if (verdict.suspected) {
             finalText += verdict.notice
             console.warn(
               `[AgentRunner] ⚠️ 动作声明未兑现: 声称「${verdict.labels.join('、')}」` +
-              `但本轮零工具调用。已向用户追加提醒。`,
+              `但本轮工具为 [${lastToolNames.join(', ') || '空'}]。已向用户追加提醒。`,
             )
           }
           claimGuardChecked = true

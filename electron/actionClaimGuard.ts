@@ -54,14 +54,23 @@ const NEGATION_PATTERNS = [
   /建议你自己|请你自己|你需要手动/,
 ]
 
-/** 每类动作对应的「合理工具」——只要本轮调用过其中任意一个，就不判为撒谎 */
+/** 每类动作对应的「合理工具」——只要本轮调用过其中任意一个，就不判为撒谎
+ *
+ *  🔧 2026-10-04：动作拆分得更细了。
+ *  之前「保存」一个裸词同时挂在「保存记忆」规则上，于是
+ *  「已保存到 report.md」会被当成记忆动作，而 file_write 不在记忆工具链里
+ *  → 升级成按动作核对后，这个组合产生了**误报**。
+ *  记忆必须由「记忆/记住/记下/存下」这类**记忆语义**触发；
+ *  「保存到/写入 X.md」归「写文件」，它俩是不同的动作、不同的工具链。
+ */
 const CLAIM_TOOL_MAP: Array<{ re: RegExp; tools: string[]; label: string }> = [
-  { re: /(?:记忆|记住|保存|存下|记下)/, tools: ['memory_save', 'memory_get'], label: '保存记忆' },
+  // 记忆动作：必须带记忆语义词，不能只看「保存」
+  { re: /(?:记忆|记住|记下|存下|想起来了|存好了)/, tools: ['memory_save', 'memory_get'], label: '保存记忆' },
+  { re: /(?:保存到|存到|写入|写到|已写入)/, tools: ['file_write', 'file_edit'], label: '写文件' },
   { re: /(?:提醒|定时|闹钟|计划任务)/, tools: ['cron_schedule', 'todo', 'time_capsule'], label: '创建定时/待办' },
   { re: /(?:发送|发给你|发过去|寄出)/, tools: ['mail_send', 'channel_send', 'notification'], label: '发送消息' },
   { re: /(?:删除|删掉|移除)/, tools: ['file_write', 'shell_exec'], label: '删除' },
-  { re: /(?:文件|文档|笔记|代码|脚本)/, tools: ['file_write', 'file_edit', 'shell_exec'], label: '写文件' },
-  { re: /(?:搜索|查了|查询|检索)/, tools: ['web_search', 'web_fetch', 'file_search', 'browser', 'memory_search'], label: '搜索' },
+  { re: /(?:文件|文档|笔记|代码|脚本)/, tools: ['file_write', 'file_edit', 'shell_exec'], label: '写文件' },  { re: /(?:搜索|查了|查询|检索)/, tools: ['web_search', 'web_fetch', 'file_search', 'browser', 'memory_search'], label: '搜索' },
   { re: /(?:下载|安装|更新|升级)/, tools: ['shell_exec', 'install_skill'], label: '安装/更新' },
   { re: /(?:导出|生成(?:了)?(?:一个)?(?:文件|报告|图表))/i, tools: ['creator_export', 'file_write'], label: '导出' },
 ]
@@ -88,12 +97,29 @@ export interface ClaimCheckResult {
  * 命中时返回的 notice 会被追加到用户可见的回复末尾。
  * 文案刻意写成「提醒」而不是「错误」—— 因为这只是一个可能误报的启发式，
  * 说成错误会让诚实回答的模型显得像坏了。
+ *
+ * ══ 2026-10-04 升级：从「本轮有任何工具就不判」改为「按动作逐个核对」══
+ *
+ * 旧逻辑是 `if (toolsUsedThisTurn.length > 0) return empty`，即
+ * 「只要本轮调过**任意一个**工具，整个检查就关掉」。
+ * 这会漏掉一类很典型的弱模型幻觉：
+ *
+ *   模型先调 `datetime`（或任何无关工具），再说「已经帮你记住了」
+ *   → 旧逻辑：调过工具了，不判
+ *   → 用户以为记下了，实际上 memory_save 一次都没调
+ *
+ * 而 CLAIM_TOOL_MAP 本来就为每个动作列了该用哪些工具，信息一直在那里，
+ * 只是没被用上。现在改为：每个动作单独核对它自己的工具列表。
+ *
+ * 保留的旧语义（这些是刻意设计，不是遗漏）：
+ *   · 零工具调用时全部动作都算未兑现，且文案与旧版一致
+ *   · 诚实说「我记不住 / 没法保存」不判
+ *   · 措辞像完成态但对应不上任何具体动作 → 不判（避免对「搞定！」过度打扰）
  */
 export function checkActionClaims(input: ClaimCheckInput): ClaimCheckResult {
   const { text, toolsUsedThisTurn } = input
   const empty: ClaimCheckResult = { suspected: false, labels: [], notice: '' }
   if (!text || !text.trim()) return empty
-  if (toolsUsedThisTurn.length > 0) return empty   // 本轮调过任何工具 → 不判
 
   // 模型明确说了「我没能/无法保存」之类 → 这是诚实，不判
   for (const ne of NEGATION_PATTERNS) {
@@ -105,18 +131,28 @@ export function checkActionClaims(input: ClaimCheckInput): ClaimCheckResult {
 
   // 有「完成态措辞」但零工具调用 → 只在能对应到某个具体动作时才提示，
   // 避免对「搞定了！（指我刚回答的问题）」这类误报。
-  const labels: string[] = []
+  const used = new Set(toolsUsedThisTurn)
+  const zeroTools = used.size === 0
+  const missed: string[] = []
   for (const m of CLAIM_TOOL_MAP) {
-    if (m.re.test(text)) labels.push(m.label)
+    if (!m.re.test(text)) continue
+    // 零工具 → 全部未兑现；否则看这个动作自己的工具链有没有被碰过
+    if (zeroTools || !m.tools.some(t => used.has(t))) {
+      missed.push(m.label)
+    }
   }
-  if (!labels.length) return empty
+  if (!missed.length) return empty
+
+  const body = zeroTools
+    ? '**没有实际调用任何工具**'
+    : `**本轮只调了「${[...used].join('、')}」，不包含完成「${missed.join('、')}」所需的工具**`
 
   return {
     suspected: true,
-    labels,
+    labels: missed,
     notice:
-      `\n\n> ⚠️ 提醒：这一轮我说了要做「${labels.join('、')}」，` +
-      `但**没有实际调用任何工具**。上面这句话可能是没执行就报告了结果。` +
+      `\n\n> ⚠️ 提醒：这一轮我说了要做「${missed.join('、')}」，但${body}。` +
+      `上面这句话可能是没执行就报告了结果。` +
       `你可以让我重试一次，或者直接问我「你到底存了没有」。`,
   }
 }
