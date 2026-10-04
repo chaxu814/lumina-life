@@ -101,8 +101,21 @@ export class SkillMarket {
   private reviews: SkillReview[] = []
 
   private communityRepos: string[] = [
+    // 🔧 2026-10-04：改为可覆盖。原先这个地址是硬编码的，而实测它**不可达**
+    // （仓库不存在或非公开），于是搜索会静默回落到静态索引 ——
+    // 用户以为在用「市场」，实际只看到随包内置的技能，没有任何第三方内容。
+    // 生态要能长出来，就得先有地方能长：允许通过环境变量指向自建的注册表。
+    process.env.LUMINA_SKILL_REGISTRY ||
     'https://raw.githubusercontent.com/nicetocu/lumina-skills/main/index.json',
   ]
+
+  /** 远端注册表最近一次健康状况（供 UI 如实告知用户「市场处于降级状态」） */
+  private registryHealth: {
+    lastCheckedAt: number
+    reachable: boolean
+    source: string
+    detail: string
+  } = { lastCheckedAt: 0, reachable: true, source: '', detail: '尚未检查' }
 
   private readonly MODELSCOPE_API = 'https://modelscope.cn/api/v1/models'
   private readonly MODELSCOPE_SEARCH_API = 'https://modelscope.cn/api/v1/search'
@@ -292,8 +305,26 @@ ${s.systemPrompt}
     }
   }
 
+  /**
+   * 远端注册表健康度。
+   *
+   * 【为什么要把它变成一个可查询的 API】
+   * 市场的搜索结果会把远端与静态索引**合并**展示，所以「远端挂了」这件事
+   * 在结果里是看不见的 —— 用户只会觉得「怎么都没有第三方的」。
+   * 把它变成显式状态，UI 才能如实说「当前仅显示内置技能：远端注册表不可达」。
+   */
+  getRegistryHealth(): {
+    lastCheckedAt: number
+    reachable: boolean
+    source: string
+    detail: string
+  } {
+    return { ...this.registryHealth }
+  }
+
   async searchCommunity(query: string, category?: SkillCategory): Promise<SkillSearchResult> {
     const allSkills: SkillMeta[] = []
+    const failures: string[] = []
 
     for (const repoUrl of this.communityRepos) {
       try {
@@ -301,7 +332,25 @@ ${s.systemPrompt}
         for (const s of (index.skills || [])) {
           allSkills.push(s as SkillMeta)
         }
-      } catch { continue }
+      } catch (err: any) {
+        // 🔧 2026-10-04：原来这里是 `catch { continue }` —— 远端拉不到时
+        // **什么都不留**。后果是用户看到「市场」里只有随包内置的技能，
+        // 却完全不知道是因为远端注册表不可达；开发者也会误以为「生态是空的」。
+        // 现在把失败记进健康度，供 UI 如实展示。
+        failures.push(`${repoUrl}（${err?.message || '未知错误'}）`)
+      }
+    }
+
+    // 记录本次远端可达性。**全部失败才算降级**：
+    // 配了多个注册表时，坏一个不该让整个市场被标成不可用。
+    const reachableCount = this.communityRepos.length - failures.length
+    this.registryHealth = {
+      lastCheckedAt: Date.now(),
+      reachable: reachableCount > 0,
+      source: this.communityRepos[0] || '',
+      detail: failures.length === 0
+        ? `${reachableCount} 个注册表可达`
+        : `${reachableCount}/${this.communityRepos.length} 可达；失败：${failures.join('；')}`,
     }
 
     let filtered = allSkills

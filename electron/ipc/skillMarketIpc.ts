@@ -39,6 +39,12 @@ export function registerSkillMarketIpc(): void {
     return market.searchCommunity(query, category)
   })
 
+  // ─── 远端注册表健康度 ─────────────────────────────
+  // 🔧 2026-10-04：搜索结果会把远端与静态索引**合并**返回，
+  //   所以「远端挂了」在结果里是看不见的 —— 用户只看到一市场内置技能，
+  //   完全不知道原因是注册表不可达。单独暴露健康度，UI 才能如实告知。
+  ipcMain.handle('skill-market:registry-health', async () => market.getRegistryHealth())
+
   // ─── 🔧 v2.17: 搜索魔搭社区 ───────────────────────
   ipcMain.handle('skill-market:modelscope-search', async (_event, query: string, category?: SkillCategory) => {
     return market.modelscopeSearch(query, category)

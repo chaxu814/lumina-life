@@ -27,6 +27,30 @@ declare global {
       getConfig: () => Promise<Record<string, any>>
       setConfig: (updates: Record<string, any>) => Promise<Record<string, any>>
 
+      // 📦 Skill 市场（2026-10-04 补齐）
+      // 【为什么这一组之前是空的】主进程 skillMarketIpc.ts 注册了 17 个通道，
+      //   但 preload 一个都没暴露，SkillMarketPanel 于是绕道不存在的
+      //   `window.electron.ipcRenderer` —— 整个技能市场面板是死的。
+      //   现在按 luminaAPI 的约定正式暴露。详见 tests/skillMarketWiring.test.ts。
+      skillMarketInstalled: () => Promise<any[]>
+      skillMarketSearch: (query: string, category?: string) => Promise<{ skills: any[]; total: number; query: string }>
+      skillMarketModelScopeSearch: (query: string, category?: string) => Promise<{ skills: any[]; total: number; query: string }>
+      skillMarketInstallCommunity: (skillId: string) => Promise<any>
+      skillMarketInstallLocal: () => Promise<any>
+      skillMarketUninstall: (skillId: string) => Promise<any>
+      skillMarketToggle: (skillId: string, enabled: boolean) => Promise<any>
+      /**
+       * 远端注册表健康度。
+       * 搜索结果会把远端与静态索引合并返回，所以「远端挂了」在结果里看不见 ——
+       * 用户只看到一市场内置技能，却不知道为什么没有第三方的。
+       */
+      skillMarketRegistryHealth: () => Promise<{
+        lastCheckedAt: number
+        reachable: boolean
+        source: string
+        detail: string
+      }>
+
       // LLM
       llmChat: (params: {
         provider?: string; apiKey: string; baseUrl: string; model: string

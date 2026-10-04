@@ -1083,6 +1083,42 @@ const api = {
     return () => { ipcRenderer.removeListener('reality:show:event', handler) }
   },
 
+  // ── 📦 Skill 市场 IPC ──────────────────────────────
+  // 🔧 2026-10-04：这些通道主进程早就注册了（skillMarketIpc.ts 共 17 个），
+  //   但**一个都没在 preload 暴露**。SkillMarketPanel 于是绕道
+  //   `(window as any).electron.ipcRenderer.invoke(...)`，
+  //   而 preload 根本没有 `window.electron` 这个通道 ——
+  //   每次调用都会抛 `Cannot read properties of undefined`。
+  //   结论：**整个技能市场面板是死的**，界面能渲染、按钮点了没反应。
+  //   现在把通道按 luminaAPI 的约定正式暴露。
+  skillMarketInstalled: () =>
+    ipcRenderer.invoke('skill-market:installed') as Promise<any>,
+  skillMarketSearch: (query: string, category?: string) =>
+    ipcRenderer.invoke('skill-market:search', query, category) as Promise<any>,
+  skillMarketModelScopeSearch: (query: string, category?: string) =>
+    ipcRenderer.invoke('skill-market:modelscope-search', query, category) as Promise<any>,
+  skillMarketInstallCommunity: (skillId: string) =>
+    ipcRenderer.invoke('skill-market:install-community', skillId) as Promise<any>,
+  skillMarketInstallLocal: () =>
+    ipcRenderer.invoke('skill-market:install-local') as Promise<any>,
+  skillMarketUninstall: (skillId: string) =>
+    ipcRenderer.invoke('skill-market:uninstall', skillId) as Promise<any>,
+  skillMarketToggle: (skillId: string, enabled: boolean) =>
+    ipcRenderer.invoke('skill-market:toggle', skillId, enabled) as Promise<any>,
+  /**
+   * 远端注册表健康度。
+   * 【为什么要单独暴露】搜索结果会把远端与静态索引**合并**返回，
+   * 所以「远端挂了」在结果里看不见 —— 用户只看到一市场内置技能，
+   * 却不知道为什么没有第三方的。UI 拿到这个才能如实告知。
+   */
+  skillMarketRegistryHealth: () =>
+    ipcRenderer.invoke('skill-market:registry-health') as Promise<{
+      lastCheckedAt: number
+      reachable: boolean
+      source: string
+      detail: string
+    }>,
+
   // ── 📦 Skill SDK ──────────────────────────────────
   skillSDKGenerate: (params: any) => ipcRenderer.invoke('skill-sdk:generate', params),
   skillSDKExport: (dirName: string, files: any) => ipcRenderer.invoke('skill-sdk:export', dirName, files),

@@ -64,7 +64,7 @@ export default function SkillMarketPanel() {
   // ── 加载已安装 ────────────────────────────────────
   const loadInstalled = useCallback(async () => {
     try {
-      const result = await (window as any).electron.ipcRenderer.invoke('skill-market:installed')
+      const result = await window.luminaAPI?.skillMarketInstalled?.()
       setInstalled(result.map((s: any) => ({ ...s, installed: true, source: 'local' })))
     } catch { setInstalled([]) }
   }, [])
@@ -74,7 +74,7 @@ export default function SkillMarketPanel() {
     const q = query ?? searchQuery
     const c = cat ?? searchCategory
     try {
-      const result = await (window as any).electron.ipcRenderer.invoke('skill-market:search', q, c || undefined)
+      const result = await window.luminaAPI?.skillMarketSearch?.(q, c || undefined)
       setMarketSkills(result.skills.map((s: any) => {
         const isInstalled = installed.some(i => i.id === s.id)
         return { ...s, installed: isInstalled, enabled: isInstalled ? installed.find(i => i.id === s.id)?.enabled : false }
@@ -87,7 +87,7 @@ export default function SkillMarketPanel() {
     const q = query ?? searchQuery
     const c = cat ?? searchCategory
     try {
-      const result = await (window as any).electron.ipcRenderer.invoke('skill-market:modelscope-search', q, c || undefined)
+      const result = await window.luminaAPI?.skillMarketModelScopeSearch?.(q, c || undefined)
       setMarketSkills(result.skills.map((s: any) => {
         const isInstalled = installed.some(i => i.id === s.id)
         return { ...s, installed: isInstalled, enabled: isInstalled ? installed.find(i => i.id === s.id)?.enabled : false, source: 'modelscope' }
@@ -107,7 +107,7 @@ export default function SkillMarketPanel() {
   const install = async (skillId: string) => {
     setInstalling(skillId)
     try {
-      const result = await (window as any).electron.ipcRenderer.invoke('skill-market:install-community', skillId)
+      const result = await window.luminaAPI?.skillMarketInstallCommunity?.(skillId)
       if (result.success) {
         showNotif('✅ 安装成功！')
         loadInstalled()
@@ -124,7 +124,7 @@ export default function SkillMarketPanel() {
   // ── 卸载 ──────────────────────────────────────────
   const uninstall = async (skillId: string) => {
     try {
-      await (window as any).electron.ipcRenderer.invoke('skill-market:uninstall', skillId)
+      await window.luminaAPI?.skillMarketUninstall?.(skillId)
       showNotif('🗑️ 已卸载')
       loadInstalled()
       if (selectedSkill?.id === skillId) {setSelectedSkill(null)}
@@ -136,7 +136,7 @@ export default function SkillMarketPanel() {
   // ── 切换启用 ──────────────────────────────────────
   const toggleEnable = async (skillId: string, enabled: boolean) => {
     try {
-      await (window as any).electron.ipcRenderer.invoke('skill-market:toggle', skillId, enabled)
+      await window.luminaAPI?.skillMarketToggle?.(skillId, enabled)
       loadInstalled()
     } catch {}
   }
@@ -144,7 +144,7 @@ export default function SkillMarketPanel() {
   // ── 导入本地 ──────────────────────────────────────
   const importLocal = async () => {
     try {
-      const result = await (window as any).electron.ipcRenderer.invoke('skill-market:install-local')
+      const result = await window.luminaAPI?.skillMarketInstallLocal?.()
       if (result.success) {showNotif('✅ 导入成功！')}
       else if (result.error !== '用户取消') {showNotif('❌ ' + (result.error || '导入失败'))}
       loadInstalled()
