@@ -60,6 +60,17 @@ export default function SkillMarketPanel() {
   const [installing, setInstalling] = useState<string | null>(null)
   const [notification, setNotification] = useState('')
   const [marketSource, setMarketSource] = useState<'community' | 'modelscope'>('community')  // 🔧 v2.17
+  /**
+   * 远端注册表健康度。
+   * 【为什么必须读它】搜索结果会把远端与静态索引**合并**返回，
+   * 所以「远端挂了」在结果里是看不见的 —— 用户只会看到一市场内置技能，
+   * 合理地以为「这软件生态不好」，而真实原因（索引 URL 不可达）没人告诉他。
+   * 之前我把这个能力做完了（SkillMarket.getRegistryHealth + IPC + preload），
+   * 却**没让 UI 读它** —— 又一个「做了但没接线」的死能力。
+   */
+  const [registryHealth, setRegistryHealth] = useState<{
+    reachable: boolean; source: string; detail: string
+  } | null>(null)
 
   // ── 加载已安装 ────────────────────────────────────
   const loadInstalled = useCallback(async () => {
@@ -157,6 +168,16 @@ export default function SkillMarketPanel() {
     setTimeout(() => setNotification(''), 3000)
   }
 
+  // ── 搜索后读取注册表健康度 ──────────────────────────
+  // 搜索必然触发一次远端拉取，所以顺带拿健康度，零额外开销。
+  useEffect(() => {
+    let alive = true
+    window.luminaAPI?.skillMarketRegistryHealth?.()
+      .then((h: any) => {if (alive) {setRegistryHealth(h)}})
+      .catch(() => {if (alive) {setRegistryHealth(null)}})
+    return () => {alive = false}
+  }, [marketSkills])
+
   // ── 过滤 ──────────────────────────────────────────
   const filteredInstalled = installed.filter(s => {
     if (searchQuery) {
@@ -182,6 +203,22 @@ export default function SkillMarketPanel() {
         <button style={{ ...styles.tabBtn, ...(tab === 'market' ? styles.tabActive : {}) }}
           onClick={() => setTab('market')}>🛒 市场</button>
       </div>
+
+      {/* ⚠️ 注册表降级提示 —— 远端不可达时说清真相 */}
+      {/* 【为什么必须有】市场搜索会把远端与静态索引**合并**返回，
+          所以「远端挂了」在列表里完全看不见。用户会看到一市场内置技能，
+          合理地以为「这软件生态差」—— 而真实原因（索引地址不可达）没人告诉他。
+          实测：默认注册表 URL 当前不可达，所以这个提示实际上**总该出现**。 */}
+      {tab === 'market' && registryHealth && !registryHealth.reachable && (
+        <div style={{
+          padding: '8px 10px', marginBottom: 10, borderRadius: 6,
+          fontSize: 11, lineHeight: 1.7,
+          background: 'var(--yellow-100)', color: 'var(--text-primary)',
+        }}>
+          ⚠️ 当前只显示**随包内置**的技能：远端注册表不可达（{registryHealth.source}）。<br />
+          这不代表生态为空。设置 <code>LUMINA_SKILL_REGISTRY</code> 可指向自建索引。
+        </div>
+      )}
 
       {/* 🔧 v2.17: 市场来源切换 */}
       {tab === 'market' && (
