@@ -12,6 +12,7 @@
 // ============================================================
 
 import React, { useMemo } from 'react'
+import { sanitizeThinkingText } from '../services/thinkingSanitizer'
 import type { ThinkingStep } from '../chat/chatShared'
 
 /** 按步骤类型决定图标；label 自带的前缀 emoji 在这里剥掉，避免重复 */
@@ -93,22 +94,34 @@ interface Props {
 
 const ThinkingStepList: React.FC<Props> = ({ steps, animate = true }) => {
   const rows = useMemo(
-    () => steps.map((s, i) => ({
-      step: s,
-      icon: stepIcon(s.type),
-      title: stripEmoji(s.label) || s.label,
-      // 错峰入场最多铺前 8 步，再多就一起进，避免长列表末尾干等
-      i: Math.min(i, 8),
-    })),
+    () => steps.map((s, i) => {
+      // 🧠 2026-10-04：推理文本清洗的收口点就在这里。
+      // 四个 thinking_stream 累积入口（协作 / 阶段 / 群聊 / 决策讨论）都把内容
+      // 攒进 step.result，再统一交给本组件渲染 —— 所以清洗一次就全覆盖，
+      // 不用去 4 个流式入口分别改（分片流在那里逐块清洗会把行截断）。
+      const isReasoning = s.type === 'thinking'
+      const clean = isReasoning ? sanitizeThinkingText(s.result) : null
+      return {
+        step: s,
+        icon: stepIcon(s.type),
+        title: stripEmoji(s.label) || s.label,
+        // 错峰入场最多铺前 8 步，再多就一起进，避免长列表末尾干等
+        i: Math.min(i, 8),
+        // 整段被判定为元推理时 result 变空串 —— 用空串而不是 undefined，
+        // 否则会被下面的 `step.result &&` 当成「有详情」而留下空白行。
+        detail: isReasoning ? (clean?.text || '') : (s.result || ''),
+        foreignLang: !!clean?.foreignLang,
+      }
+    }),
     [steps],
   )
 
   return (
     <div className="tsl-list">
-      {rows.map(({ step, icon, title, i }) => {
+      {rows.map(({ step, icon, title, i, detail, foreignLang }) => {
         const isError = step.type === 'tool_error'
         const isDone = step.type === 'tool_end'
-        const hasDetail = !!(step.result || step.args)
+        const hasDetail = !!(detail || step.args)
         return (
           <div
             key={step.id || `${step.timestamp}-${i}`}
@@ -137,9 +150,15 @@ const ThinkingStepList: React.FC<Props> = ({ steps, animate = true }) => {
                   <span className="tsl-sub-text">{step.args}</span>
                 </div>
               )}
-              {step.result && (
+              {detail && (
                 <div className="tsl-sub tsl-sub-result">
-                  <span className="tsl-sub-text">{step.result}</span>
+                  {/* 模型用非中文推理时标注出来 —— 不静默丢弃，用户有权知道 */}
+                  {foreignLang && (
+                    <div className="tsl-sub-key" title="模型这一段用英文推理，原始内容保留在下方">
+                      英文推理
+                    </div>
+                  )}
+                  <span className="tsl-sub-text">{detail}</span>
                 </div>
               )}
               {!hasDetail && step.type === 'thinking' && (
