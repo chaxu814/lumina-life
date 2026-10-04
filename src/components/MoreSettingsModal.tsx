@@ -18,6 +18,9 @@ import SkillDevPanel from '../panels/SkillDevPanel'
 //  等于完全没有入口。现在同时挂上「更多设置」和 panelMap 两条路。
 import SwimlaneCanvas from '../panels/SwimlaneCanvas'
 import MemoryTrialBenchPanel from '../panels/MemoryTrialBenchPanel'
+// 🔬 2026-10-04：两个孤儿面板接上入口（此前全仓零引用）
+import EmotionDashboardPanel from '../panels/EmotionDashboardPanel'
+import ProactiveSettingsPanel from '../panels/ProactiveSettingsPanel'
 import PluginPanelContainer from './PluginPanelContainer'
 import SettingsPanel from '../panels/SettingsPanel'
 import AppearancePanel from '../panels/AppearancePanel'  // 🎨 外观主题
@@ -41,6 +44,8 @@ const SIDEBAR_ITEMS = [
   { id: 'skills',      icon: '⚡',  label: '技能管理' },
   { id: 'swimlane',    icon: '🛳️', label: '团队泳道' },
   { id: 'memorytrial', icon: '⚖️', label: '记忆审判台' },
+  { id: 'emotionsdash', icon: '🎭', label: '情绪仪表盘' },
+  { id: 'proactive', icon: '🔔', label: '主动推送' },
   { id: 'usage',       icon: '📊', label: '用量限额' },
   { id: 'diagnostics', icon: '🔍', label: '诊断工具' },
   { id: 'test',        icon: '🧪', label: '测试覆盖' },
@@ -297,6 +302,8 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             {activeSection === 'skilldev'    && <SkillDevPanel />}
   {activeSection === 'swimlane'    && <SwimlaneCanvas />}
   {activeSection === 'memorytrial' && <MemoryTrialBenchPanel />}
+  {activeSection === 'emotionsdash' && <EmotionDashboardPanel />}
+  {activeSection === 'proactive' && <ProactiveSettingsPanel />}
             {activeSection === 'modelStore'  && <ModelStorePanel />}
             {activeSection === 'plugins'    && <PluginPanelContainer />}
             {activeSection === 'appearance' && <AppearancePanel />}

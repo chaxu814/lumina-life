@@ -29,6 +29,12 @@ import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8
 //  与 SkillMarketPanel 那个 bug 同类：接缝在中间层，两侧都看起来正常。
 import SwimlaneCanvas from './panels/SwimlaneCanvas'            // 团队依赖泳道画布
 import MemoryTrialBenchPanel from './panels/MemoryTrialBenchPanel'  // 记忆审判台
+// 🔬 2026-10-04：这两个面板此前是孤儿（全仓零引用）。
+//   EmotionDashboardPanel 调用的 teamEmotions API 从不存在（用 ?. 静默 no-op）；
+//   ProactiveSettingsPanel 的后端 pushIpc 一直都在，只是没入口。
+//   现在补齐后端 + 挂载。
+import EmotionDashboardPanel from './panels/EmotionDashboardPanel'  // 情绪仪表盘
+import ProactiveSettingsPanel from './panels/ProactiveSettingsPanel'  // 主动推送设置
 import Toast from './components/Toast'
 import { showToast } from './components/Toast'
 import ProactiveToast from './components/ProactiveToast'  // 🆕 v3.8.1
@@ -117,6 +123,8 @@ const panelMap: Record<string, React.FC> = {
   tasks: TasksPanel, // 🗓️ 任务工作区（托盘菜单「任务工作区」入口）
   swimlane: SwimlaneCanvas,           // 🔬 团队依赖泳道画布（2026-10-04 接上）
   memorytrial: MemoryTrialBenchPanel, // ⚖️ 记忆审判台（2026-10-04 接上）
+  emotionsdash: EmotionDashboardPanel, // 🎭 情绪仪表盘（2026-10-04 补后端后接上）
+  proactive: ProactiveSettingsPanel,  // 🔔 主动推送设置（2026-10-04 接上）
 }
 
 export default function App() {

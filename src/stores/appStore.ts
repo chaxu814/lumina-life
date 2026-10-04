@@ -6,7 +6,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { showToast } from '../components/Toast'  // 🆕 Lucky 场景感知 Toast
 
-export type PanelType = "chat" | "mail" | "settings" | "agent" | "security" | "skills" | "usage" | "diagnostics" | "tasks" | "bridge" | "profile" | "bookmarks" | "knowledge" | "skillmarket" | "deepresearch" | "dream" | "reality" | "skilldev" | "social" | "familytree" | "testcoverage" | "news" | "team" | "memory" | "emotions" | "plugins" | "more" | "teamcommunity" | "sandbox" | "swimlane" | "memorytrial"
+export type PanelType = "chat" | "mail" | "settings" | "agent" | "security" | "skills" | "usage" | "diagnostics" | "tasks" | "bridge" | "profile" | "bookmarks" | "knowledge" | "skillmarket" | "deepresearch" | "dream" | "reality" | "skilldev" | "social" | "familytree" | "testcoverage" | "news" | "team" | "memory" | "emotions" | "plugins" | "more" | "teamcommunity" | "sandbox" | "swimlane" | "memorytrial" | "emotionsdash" | "proactive"
 
 export interface ChatMessage {
   id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number
@@ -91,12 +91,10 @@ export function getDisabledToolNames(skillConfig: SkillConfig): string[] {
   return disabled
 }
 
-export interface BridgeConfig {
-  discord: { enabled: boolean; token: string }
-  wechat: { enabled: boolean; token: string }
-  telegram: { enabled: boolean; token: string }
-  feishu: { enabled: boolean; token: string }
-}
+// 🗑️ 2026-10-04：BridgeConfig 随 BridgePanel 一并删除。
+//   BridgePanel 只读写这个 store 字段，**没有任何后端 IPC** —— 用户勾了
+//   Discord/飞书会以为连上了，实际什么都不会发生。挂上去是假界面，比死代码更糟。
+//   功能已由「设置 → 渠道配置」（7 个真实适配器）覆盖。
 
 export interface TokenUsage {
   total: number; today: number; limit: number
@@ -213,9 +211,6 @@ interface AppStore {
 
   skillConfig: SkillConfig
   setSkillConfig: (c: Partial<SkillConfig>) => void
-
-  bridgeConfig: BridgeConfig
-  setBridgeConfig: (c: Partial<BridgeConfig>) => void
 
   tokenUsage: TokenUsage
   addTokenUsage: (model: string, tokens: number, agentId?: string) => void
@@ -690,12 +685,6 @@ export const useStore = create<AppStore>()(
       skillConfig: { enabled: ['weather', 'search', 'browser', 'memory', 'code', 'files', 'desktop', 'audio', 'notify', 'timer', 'proactive', 'image'] },
       setSkillConfig: (c) => set((s) => ({ skillConfig: { ...s.skillConfig, ...c } })),
 
-      bridgeConfig: {
-        discord: { enabled: false, token: '' }, wechat: { enabled: false, token: '' },
-        telegram: { enabled: false, token: '' }, feishu: { enabled: false, token: '' },
-      },
-      setBridgeConfig: (c) => set((s) => ({ bridgeConfig: { ...s.bridgeConfig, ...c } })),
-
       tokenUsage: { total: 0, today: 0, limit: 100000, lastResetDate: '', byModel: [], byAgent: [], history: [] },
       addTokenUsage: (model: string, tokens: number, agentId?: string) => set((s) => {
         const todayStr = new Date().toISOString().slice(0, 10)
@@ -999,7 +988,6 @@ export const useStore = create<AppStore>()(
         agentMode: state.agentMode,
         securityConfig: state.securityConfig,
         skillConfig: state.skillConfig,
-        bridgeConfig: state.bridgeConfig,
         tokenUsage: state.tokenUsage,
         cronTasks: state.cronTasks,
         profile: state.profile,  // 🔧 v2.14: 持久化气泡颜色等个性化设置

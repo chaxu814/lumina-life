@@ -28,6 +28,9 @@ import { swimlaneFromBoard, swimlaneFromTrace, type SwimlaneModel } from '../tea
 //   已确认无循环依赖：teamSharedBoard / llmTrace 只 import electron / fs / path。
 import { getSharedBoard } from '../team/teamSharedBoard'
 import { getTaskTrace } from '../team/llmTrace'
+// 情绪数据源：per-agent 失败连击 + 全局因果状态。两者都是**真实驱动**的
+// （worker 真的失败过 / 真的重试过），不是新造一个没人写的假 store。
+import { getWorkerFailureStreak, snapshotEmotionCausality, getCausalFrontendThree } from '../pet/emotionCausalityBridge'
 
 /** 审判台单例：裁决历史必须跨会话留存，否则「记错了」这个反馈等于没给 */
 let _bench: MemoryTrialBench | null = null
@@ -39,6 +42,31 @@ function getBench(): MemoryTrialBench {
     _bench = new MemoryTrialBench()
   }
   return _bench
+}
+
+/** 效价夹到 [-1,+1]（mood 的口径） */
+function clamp11(v: number): number {
+  if (!Number.isFinite(v)) {return 0}
+  return Math.max(-1, Math.min(1, v))
+}
+
+/** 比例夹到 [0,1]（energy / affinity 的口径） */
+function clamp01(v: number): number {
+  if (!Number.isFinite(v)) {return 0.5}
+  return Math.max(0, Math.min(1, v))
+}
+
+/**
+ * 由真实数值生成标签。
+ * 【为什么不叫 emotionFusion 的 label】那个 class 是**单实例桌宠**的平滑层，
+ * 带自己的状态与漂移；这里只需要一个无状态的映射，不能把桌宠的状态混进团队仪表盘。
+ */
+function labelOf(mood: number, energy: number, streak: number): string {
+  if (streak >= 3) {return '受挫 😟'}
+  if (mood <= -0.3) {return '低落 😕'}
+  if (mood >= 0.5) {return '愉快 😄'}
+  if (energy < 0.35) {return '疲惫 😪'}
+  return '平静 😐'
 }
 
 export function registerObservabilityIpc(): void {
@@ -92,6 +120,50 @@ export function registerObservabilityIpc(): void {
   //   在这里动态 require 会与 tools 形成环（项目里已因此踩过一次）。
   //   所以走惰性 require，失败时返回 null —— 面板会显示「还没有可画的协作任务」
   //   而不是白屏。这与 SwimlaneCanvas 现有的降级分支一致。
+  // ─── 团队情绪（情绪仪表盘）─────────────────────────────
+  // 【为什么数据源是这两个，而不是新造一个 store】
+  // 1. snapshotEmotionCausality —— 全局因果状态，由**真实的** worker 失败 /
+  //    验证重试 / 用户否定驱动（2026-10-04 已接进门控，所以它真的在动）。
+  // 2. getWorkerFailureStreak(agentId) —— 每个成员**自己的**失败连击数。
+  //    这是 per-agent 的真实历史，而不是给三个 Agent 塞同一份值。
+  //
+  // 【明确不伪造的部分】
+  // history（时间序列）返回空数组 —— 项目里目前没有情绪时序存储。
+  // 编一条假曲线出来比留空更糟：用户会以为那是真实波动。
+  ipcMain.handle('team:emotions', async () => {
+    try {
+      const snap = snapshotEmotionCausality()
+      const f3 = getCausalFrontendThree()
+      // mood 是 [-1,+1] 效价，energy/affinity 是 [0,1]；无因果数据时回落中性值
+      const baseMood = Number.isFinite(f3?.mood) ? f3.mood : 0
+      const baseEnergy = Number.isFinite(f3?.energy) ? f3.energy : 0.7
+      const baseAffinity = Number.isFinite(f3?.affinity) ? f3.affinity : 0.5
+
+      const emotions: Record<string, unknown> = {}
+      for (const id of ['lumina', 'yak', 'recha']) {
+        const streak = Math.max(0, getWorkerFailureStreak(id as 'lumina' | 'yak' | 'recha'))
+        // 某个 agent 连续失败越多，affinity（信任）掉得越多
+        const penalty = Math.min(0.3, streak * 0.06)
+        const mood = clamp11(baseMood - penalty)
+        const affinity = clamp01(baseAffinity - penalty)
+        const energy = clamp01(baseEnergy - streak * 0.04)
+        emotions[id] = {
+          mood,
+          energy,
+          affinity,
+          label: labelOf(mood, energy, streak),
+          // 失败连击是**真实**的，面板可以用它解释「为什么她今天心情差」
+          failureStreak: streak,
+          // 明确留空：没有情绪时序存储就不编曲线
+          history: [],
+        }
+      }
+      return { ok: true, emotions, hasLiveData: Boolean(snap) }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err), emotions: {} }
+    }
+  })
+
   ipcMain.handle('swimlane:get', async (): Promise<SwimlaneModel | null> => {
     try {
       // 优先看板（有依赖关系），退回 trace（有起止时间）。两者都空则返回 null，

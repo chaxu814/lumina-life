@@ -57,6 +57,25 @@ declare global {
       memoryTrialHistory: (memoryKey?: string) => Promise<{ ok: boolean; records?: any[]; error?: string }>
       /** 嵌套形状：SwimlaneCanvas 按 `window.luminaAPI.swimlane.get()` 取 */
       swimlane: { get: () => Promise<any> }
+      /**
+       * 团队情绪。
+       * 【为什么之前声明了却没实现】EmotionDashboardPanel 用 `?.` 调它，
+       *   而 preload 从来没有这个方法 —— 所以它永远静默 no-op，面板空白。
+       *   「可选链掩盖了缺失的实现」是本项目反复出现的一类。
+       */
+      teamEmotions: () => Promise<{
+        ok: boolean
+        hasLiveData?: boolean
+        emotions?: Record<string, {
+          mood: number
+          energy: number
+          affinity: number
+          label: string
+          failureStreak: number
+          history: Array<{ time: number; mood: number; energy: number }>
+        }>
+        error?: string
+      }>
 
       // LLM
       llmChat: (params: {

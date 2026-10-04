@@ -1099,6 +1099,26 @@ const api = {
   swimlane: {
     get: () => ipcRenderer.invoke('swimlane:get') as Promise<any>,
   },
+  /**
+   * 团队情绪（情绪仪表盘）。
+   * 🔧 2026-10-04：EmotionDashboardPanel 此前调用 `teamEmotions()` 但 preload 里
+   *   **从来不存在**（且用 `?.` 所以静默 no-op），面板永远空白。
+   *   现在补上，数据来自真实的 worker 失败连击 + 因果状态，不是假曲线。
+   */
+  teamEmotions: () =>
+    ipcRenderer.invoke('team:emotions') as Promise<{
+      ok: boolean
+      hasLiveData?: boolean
+      emotions?: Record<string, {
+        mood: number
+        energy: number
+        affinity: number
+        label: string
+        failureStreak: number
+        history: Array<{ time: number; mood: number; energy: number }>
+      }>
+      error?: string
+    }>,
 
   // ── 📦 Skill 市场 IPC ──────────────────────────────
   // 🔧 2026-10-04：这些通道主进程早就注册了（skillMarketIpc.ts 共 17 个），

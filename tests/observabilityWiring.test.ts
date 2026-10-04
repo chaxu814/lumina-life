@@ -50,6 +50,27 @@ describe('可观测性 · ① 主进程注册了 IPC', () => {
       expect(src, `未注册 ${ch}`).toContain(`ipcMain.handle('${ch}'`)
     }
   })
+
+  it('team:emotions 已注册（情绪仪表盘此前调用的 API 从不存在）', () => {
+    const src = code('electron/ipc/observabilityIpc.ts')
+    expect(src).toContain("ipcMain.handle('team:emotions'")
+  })
+
+  it('情绪数据源是真实的：因果快照 + per-agent 失败连击', () => {
+    const src = code('electron/ipc/observabilityIpc.ts')
+    // 【为什么锁这条】不锁的话，下一个人可能"简化"成返回三个硬编码中性值，
+    // 面板依然能渲染 —— 但那就是假数据，用户会以为那是真实情绪。
+    expect(src).toContain('snapshotEmotionCausality')
+    expect(src).toContain('getWorkerFailureStreak')
+  })
+
+  it('情绪 history 明确留空，不伪造时间序列', () => {
+    const src = code('electron/ipc/observabilityIpc.ts')
+    // 项目里没有情绪时序存储。编一条假曲线比留空更糟。
+    const m = src.match(/team:emotions[\s\S]{0,2000}/)
+    expect(m, '未找到 team:emotions 处理体').not.toBeNull()
+    expect(m![0]).toMatch(/history:\s*\[\]/)
+  })
 })
 
 describe('可观测性 · ② preload 暴露了对应 API', () => {
@@ -57,7 +78,7 @@ describe('可观测性 · ② preload 暴露了对应 API', () => {
     const src = code('electron/preload.ts')
     for (const m of [
       'memoryTrialReview', 'memoryTrialSubmit', 'memoryTrialStats',
-      'memoryTrialHistory', 'swimlane',
+      'memoryTrialHistory', 'swimlane', 'teamEmotions',
     ]) {
       expect(src, `preload 未暴露 ${m}`).toMatch(new RegExp(`\\b${m}\\b`))
     }
@@ -94,12 +115,14 @@ describe('可观测性 · ③ 面板真的被挂载了（这是之前漏掉的�
     expect(src).toMatch(/import\s+MemoryTrialBenchPanel\s+from/)
   })
 
-  it('PanelType 联合类型包含这两个 id', () => {
+  it('PanelType 联合类型包含这四个 id', () => {
     const src = read('src/stores/appStore.ts')
     const m = src.match(/export type PanelType\s*=\s*([^\n]+)/)
     expect(m, '未找到 PanelType').not.toBeNull()
     expect(m![1]).toContain('"swimlane"')
     expect(m![1]).toContain('"memorytrial"')
+    expect(m![1]).toContain('"emotionsdash"')
+    expect(m![1]).toContain('"proactive"')
   })
 
   it('「更多设置」里两个入口都在：清单 + 内容渲染', () => {
