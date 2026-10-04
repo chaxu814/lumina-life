@@ -127,6 +127,9 @@ export default function MemoryTrialBenchPanel() {
         const s = await api.memoryTrialStats?.()
         if (s && s.ok !== false) {setStats(s.stats ?? null)}
       } catch (e) {
+        // 统计读不到不应阻断列表（用户仍能审判单条记忆），
+        // 但必须留痕，否则「统计一直是 0」会与「真的没有争议」无法区分。
+        // eslint-disable-next-line no-console
         console.warn('[MemoryTrialBench] 统计读取失败，列表仍可用：', errText(e))
       }
     } catch (e) {

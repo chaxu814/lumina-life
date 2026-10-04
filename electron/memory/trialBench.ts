@@ -217,6 +217,9 @@ const LIFECYCLES: readonly string[] = ['confirmed', 'pending', 'outdated', 'cont
 
 /** 裁决归一化：非法值返回 null，让调用方决定「拒绝」而不是「猜一个」 */
 export function normalizeVerdict(raw: unknown): TrialVerdict | null {
+  // `== null` 是刻意的：它同时匹配 null 与 undefined，而 `=== null` 漏掉 undefined。
+  // 这里要的是「既不是字符串也不是有效值」的统一入口。
+  // eslint-disable-next-line eqeqeq
   const s = (typeof raw === 'string' ? raw : raw == null ? '' : String(raw)).trim().toLowerCase()
   return VERDICTS.includes(s) ? (s as TrialVerdict) : null
 }
@@ -284,6 +287,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function str(v: unknown): string {
   if (typeof v === 'string') {return v}
+  // 同上：null 与 undefined 都归一为空串
+  // eslint-disable-next-line eqeqeq
   if (v == null) {return ''}
   if (typeof v === 'number' || typeof v === 'boolean') {return String(v)}
   return ''
@@ -549,6 +554,9 @@ export class MemoryTrialBench {
     } catch (e) {
       // 读不到事实不该让审判台不可用：没有落库事实时，
       // 仍然可以用证据链把记忆摊开给用户看（hasFactBinding=false）
+      // 降级是真实存在的路径，必须留痕；
+      // 静默吞掉会让「记忆展示不全」变成无法排查的灵异问题。
+      // eslint-disable-next-line no-console
       console.warn('[TrialBench] 读取事实失败，本次仅按证据链展示：', errText(e))
       return []
     }

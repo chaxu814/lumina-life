@@ -108,7 +108,6 @@ export function toXmlToolSpecs(
  */
 export function loadRuntimeXmlToolSpecs(limit = 12): ReturnType<typeof toXmlToolSpecs> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { getAllToolDefs } = require('../tools/registry') as {
       getAllToolDefs: () => ToolDefLike[]
     }

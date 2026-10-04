@@ -767,9 +767,10 @@ export interface SwimlaneFromTraceOptions {
 const tracePairKey = (e: TraceLikeEntry): string => `${e.workerId || ''}\u0000${e.title || ''}`
 
 /** 节点 id 保留中文：只清控制字符与多余空白，之前的 \w 白名单会把标题洗成下划线 */
+// 这里**就是要**匹配控制字符：trace 的 title 可能混入 \u0000-\u001f，
+// 它们会破坏 SVG 属性与 id，不能留着。
 const traceNodeId = (e: TraceLikeEntry): string =>
-  `${e.workerId || 'w'}@${e.title || 'task'}`.replace(/[\s\u0000-\u001f]+/g, ' ').trim()
-
+  `${e.workerId || 'w'}@${e.title || 'task'}`.replace(/[\s\u0000-\u001f]+/g, ' ').trim()  // eslint-disable-line no-control-regex
 /**
  * trace 条目 → 泳道节点。按 `workerId@title` 把 start/end 配对。
  *

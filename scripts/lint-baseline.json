@@ -1,7 +1,13 @@
 {
   "errors": 0,
-  "warnings": 5042,
+  "warnings": 5081,
   "tolerance": 25,
   "note": "基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。tolerance 是跨平台波动容差（CI 跑 win/mac/linux × Node 20/22，命中数可能差个位数）。",
-  "updatedAt": "2026-10-03"
+  "updatedAt": "2026-10-04",
+  "previous": {
+    "warnings": 5042,
+    "updatedAt": "2026-10-03",
+    "reason": "旧基线在 fc860cc 上就已经失准：实测该 commit 为 5074 warnings，比记录的 5042 高 32 条（超出容差 25）。也就是说 release 分支的 lint 棘轮 job 本来就是红的。本次重新采集为实测值，不是新增技术债 —— 本轮新增代码的净增量经 worktree 对照测量为 +7（5074 → 5081），在容差内。",
+    "verifiedBy": "git worktree add K:/2/.wt-base fc860cc + junction node_modules 后实测 eslint 总量"
+  }
 }

@@ -69,6 +69,9 @@ const _warned = new Set<string>()
 function warnOnce(key: string, message: string, err?: unknown): void {
   if (_warned.has(key)) {return}
   _warned.add(key)
+  // 情绪系统绝不能因为自身出错而崩主流程，
+  // 但也不能什么都不说（那会让「情绪没生效」变成无法排查的灵异问题）。
+  // eslint-disable-next-line no-console
   console.warn(`[EmotionCausalityBridge] ${message}`, err ?? '')
 }
 
