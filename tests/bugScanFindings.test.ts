@@ -62,9 +62,22 @@ describe('bugScan · 供应商按钮落盘', () => {
     expect(bare, '仍有按钮只改内存不落盘').toBe(0)
   })
 
-  it('三个供应商按钮改走 switchAndPersist', () => {
-    const n = (src.match(/switchAndPersist\(useStore\.getState\(\)/g) || []).length
-    expect(n).toBeGreaterThanOrEqual(3)
+  it('每个供应商按钮组都落盘（主区走 switchAndPersist，Team Agent 走 handleAgentProvider）', () => {
+    // 2026-10-04：移除「免费模型（OpenCode Zen）」入口后，供应商按钮组从 3 组变 4 组中的 2 组主区 + 2 组 Team Agent。
+    // 原先断言 `switchAndPersist >= 3` 只是把「按钮数量」当成了「落盘覆盖」的代理指标；
+    // 且它没覆盖 Team Agent 区（那里按设计走 handleAgentProvider，不是 switchAndPersist）。
+    // 真正的不变式是：没有任何供应商按钮绕开落盘入口。上面那条「零裸调用」是这个不变式的硬保证，
+    // 这里再确认两条落盘路径都还在、且都被实际调用。
+    const groups = (src.match(/LLM_PROVIDERS\.filter\([^)]*\)\.map/g) || [])
+    expect(groups.length, '供应商按钮组数量异常').toBe(4)
+
+    // 主区（本地组 + 云端组）
+    const mainPersist = (src.match(/switchAndPersist\(useStore\.getState\(\)/g) || []).length
+    expect(mainPersist, '主区供应商按钮有未落盘的').toBe(2)
+
+    // Team Agent 区（本地组 + 云端组）
+    const agentPersist = (src.match(/handleAgentProvider\(p\.id/g) || []).length
+    expect(agentPersist, 'Team Agent 供应商按钮有未落盘的').toBe(2)
   })
 })
 

@@ -5,9 +5,16 @@ import { persistLLMConfig, switchAndPersist } from '../../services/llmPersist'
 import { SettingSection, SettingRow, SettingRowLast, SettingBtn, SettingInput, ButtonGroup, StatusBadge } from '../../components/SettingsUI'
 import ModelPickerModal from './ModelPickerModal'
 
-/* ── 供应商列表 ── */
-const LLM_PROVIDERS = [
-  { id: 'opencode-zen', name: '🎯 OpenCode Zen (免费)', url: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free', free: true },
+/* ── 供应商列表 ──
+ *
+ * 2026-10-04 移除了「免费模型（OpenCode Zen）」入口。
+ * free 字段保留在类型里：老用户的 localStorage 可能仍存着 provider: 'opencode-zen'，
+ * 渲染时若直接访问不存在的字段会炸，所以过滤条件保留 !p.free 只是恒真。
+ */
+interface LLMProviderDef {
+  id: string; name: string; url: string; model: string; free?: boolean
+}
+const LLM_PROVIDERS: LLMProviderDef[] = [
   { id: 'lmstudio', name: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '' },
   { id: 'ollama', name: 'Ollama (本地)', url: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' },
   { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o' },
@@ -386,21 +393,6 @@ export default function SettingsLLM() {
 
         {/* 主体 */}
         <div style={{ padding: 16 }}>
-          {/* 免费模型 */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>🎯</span> {t('llm.free_models_title')}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {LLM_PROVIDERS.filter(p => p.free).map(p => (
-                <ProviderBtn key={p.id} p={p} active={llmConfig.provider === p.id}
-                  onClick={() => { void switchAndPersist(useStore.getState(), p.id, p.url, p.model, p.id === 'opencode-zen' ? { apiKey: 'public' } : undefined); setLlmStatus('idle') }} />
-              ))}
-            </div>
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
-              {t('llm.free_models_desc')}
-            </div>
-          </div>
 
           {/* 本地模型 */}
           <div style={{ marginBottom: 14 }}>
@@ -683,19 +675,6 @@ export default function SettingsLLM() {
                     </span>
                   </div>
 
-                  {/* 模型快速选择 */}
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 11 }}>🎯</span> 免费模型
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-                    {LLM_PROVIDERS.filter(p => p.free).map(p => (
-                      <button key={p.id} onClick={() => handleAgentProvider(p.id, p.url, p.model)} style={agentLabelStyle(cfg.provider === p.id)}>
-                        {cfg.provider === p.id ? <span style={{ color: '#3b82f6', fontSize: 10 }}>●</span> : <span style={{ color: '#d1d5db', fontSize: 10 }}>○</span>}
-                        {p.name.replace('🎯 ', '').replace('🚀 ', '')}
-                        {p.free && <span style={{ fontSize: 8, fontWeight: 700, background: '#22c55e', color: '#fff', borderRadius: 3, padding: '0 4px', lineHeight: '14px' }}>免费</span>}
-                      </button>
-                    ))}
-                  </div>
 
                   <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 11 }}>🖥️</span> 本地模型

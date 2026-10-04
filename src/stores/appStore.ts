@@ -609,8 +609,20 @@ export const useStore = create<AppStore>()(
           const newProviderConfigs: Record<string, LLMConfig> = {}
           for (const [id, cfg] of Object.entries(configs) as any) {
             if (cfg.enabled || id === activeId) {
-              // maxTokens 是用户的"最大输出"偏好（后端不存）：激活供应商继承当前值，其余沿用各自上次值，避免每次同步被打回 8192
-              const inheritedMaxTokens = (id === activeProviderId ? get().llmConfig.maxTokens : get().providerConfigs[id]?.maxTokens) || 8192
+              // 「最大输出 / 上下文窗口」是纯用户偏好 —— 后端 providerGetAll 不带这两项，
+              // 一旦这里回落到后端值或旧快照，用户保存的设置每次启动就被打回原形。
+              // 激活的那一个（注意用 activeId 而非 activeProviderId：上面自愈可能已把两者改成不同 provider）
+              // 继承当前 llmConfig 的值；其余沿用各自上次值。
+              const isActive = id === activeId
+              const cur = get().llmConfig
+              const prev = get().providerConfigs[id]
+              // 注意 ?? 而非 ||：maxTokens=0 无意义可回落，但 contextWindow=0 是合法值（0=自动检测）
+              const inheritedMaxTokens = isActive
+                ? (cur.maxTokens ?? prev?.maxTokens ?? 8192)
+                : (prev?.maxTokens ?? 8192)
+              const inheritedContextWindow = isActive
+                ? (cur.contextWindow ?? prev?.contextWindow ?? 0)
+                : (prev?.contextWindow ?? cfg.maxContextTokens ?? 0)
               newProviderConfigs[id] = {
                 provider: id,
                 baseUrl: cfg.baseUrl || '',
@@ -618,7 +630,7 @@ export const useStore = create<AppStore>()(
                 model: cfg.model || '',
                 temperature: get().llmConfig.temperature || 0.7,
                 maxTokens: inheritedMaxTokens,
-                contextWindow: cfg.maxContextTokens || 0,
+                contextWindow: inheritedContextWindow,
               }
             }
           }

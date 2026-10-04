@@ -64,8 +64,17 @@ describe('providerPersistence · applyLocal 必须落盘', () => {
     // 断言：不得存在裸的 switchLLMProvider(p.id ...) 调用点。
     const bare = (src.match(/switchLLMProvider\(p\.id/g) || []).length
     expect(bare, '仍有 ProviderBtn 只改内存不落盘').toBe(0)
-    const m = (src.match(/switchAndPersist\(useStore\.getState\(\)/g) || []).length
-    expect(m, '三个供应商按钮应改走 switchAndPersist').toBeGreaterThanOrEqual(3)
+
+    // 2026-10-04：移除「免费模型（OpenCode Zen）」入口后，主区供应商按钮组从 3 组变 2 组
+    // （本地：LM Studio / Ollama；云端：其余）。原先的 `>= 3` 把「按钮数量」当成了
+    // 「落盘覆盖」的代理指标 —— 但真正的不变式是「每个按钮组都走落盘入口」，
+    // 而上面那条零裸调用才是它的硬保证。这里改为精确断言，不再随按钮增删而失效。
+    const mainPersist = (src.match(/switchAndPersist\(useStore\.getState\(\)/g) || []).length
+    expect(mainPersist, '主区供应商按钮应改走 switchAndPersist').toBe(2)
+
+    // Team Agent 区的按钮组按设计走 handleAgentProvider（独立落盘路径），也不能丢。
+    const agentPersist = (src.match(/handleAgentProvider\(p\.id/g) || []).length
+    expect(agentPersist, 'Team Agent 供应商按钮应走 handleAgentProvider').toBe(2)
   })
 
   it('🔑 保存按钮不再硬编码上下文窗口（曾丢弃用户设置）', () => {
