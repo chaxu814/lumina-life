@@ -28,6 +28,14 @@
     -webkit-app-region: drag;
     cursor: move;
   }
+  /* 🔧 2026-10-04：聊天记录区也能拖窗。
+     之前只有标题栏是 drag 区 —— 用户在正文里按住鼠标拖动，窗口纹丝不动，
+     很容易理解成「这窗只能在桌宠那一块里动」。
+     正文里有选项按钮和表情按钮，所以整块设为 drag 后再逐个声明 no-drag。 */
+  #chat-panel .cp-log { -webkit-app-region: drag; }
+  #chat-panel .cp-opt-btn,
+  #chat-panel .cp-quick-btn,
+  #chat-panel .cp-emoji-item { -webkit-app-region: no-drag; }
   #chat-panel .cp-head .cp-title { display: flex; align-items: center; gap: 8px; }
   #chat-panel .cp-head .cp-avatar {
     width: 30px; height: 30px; border-radius: 50%;
@@ -123,6 +131,12 @@
     color: #2a6abb; transition: all .15s;
   }
   #chat-panel .cp-opt-btn:hover { background: rgba(74,158,255,0.16); transform: translateX(2px); }
+  /* 收起动画：先压高度再淡出，避免选项消失时下方内容瞬移 */
+  #chat-panel .cp-msg-options.leaving {
+    opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0;
+    overflow: hidden; pointer-events: none;
+    transition: opacity .18s, max-height .18s, padding .18s;
+  }
   #chat-panel .cp-input-row {
     display: flex; gap: 8px; padding: 10px 12px 12px; flex: none;
     border-top: 1px solid rgba(100,130,180,0.1);
@@ -227,20 +241,41 @@ function addChatMsg(role, text) {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 function showTyping(show) { typingEl.classList.toggle('show', show); if (show) chatLog.scrollTop = chatLog.scrollHeight; }
+// 当前显示中的选项组。
+// 【为什么要记下来，而不是每次各自 append】
+// 旧实现每次都新建一个 wrap 追加到聊天记录末尾，**从不清理上一组**。
+// 多轮之后会同时存在多组 A/B/C，点掉一组还能看到别的 ——
+// 用户感知就是「点了选择它不收回」。
+let _activeOptions = null;
+
+/** 收起当前选项组（带淡出动画，避免下方内容突然上跳） */
+function clearChatOptions() {
+  const w = _activeOptions;
+  _activeOptions = null;
+  if (!w || !w.isConnected) return;
+  w.classList.add('leaving');
+  setTimeout(() => { try { w.remove() } catch (_) {} }, 180);
+}
+
 function addChatOptions(options) {
+  const list = (options || []).slice(0, 3);
+  if (!list.length) return;
+  // 新的选项组出现时先收掉旧的 —— 同一时刻只该有一组可选项
+  clearChatOptions();
   const wrap = document.createElement('div');
   wrap.className = 'cp-msg-options';
-  (options || []).slice(0, 3).forEach((o, i) => {
+  list.forEach((o, i) => {
     const b = document.createElement('button');
     b.className = 'cp-opt-btn';
     b.textContent = String.fromCharCode(65 + i) + '. ' + o;
-    b.onclick = () => { wrap.remove(); sendText(o); };
+    b.onclick = () => { clearChatOptions(); sendText(o); };
     wrap.appendChild(b);
   });
   chatLog.appendChild(wrap);
+  _activeOptions = wrap;
   chatLog.scrollTop = chatLog.scrollHeight;
 }
-function clearChat() { chatLog.innerHTML = ''; }
+function clearChat() { _activeOptions = null; chatLog.innerHTML = ''; }
 
 // 由主 Agent 回复文本本地派生动作/表情（纯关键词启发式，**不发任何 LLM**）。
 // 替代旧的"同一轮再打一次 pet:chat 意图 LLM"——那会和完整回复并发抢同一个本地模型。

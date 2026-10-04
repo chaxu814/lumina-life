@@ -497,6 +497,45 @@ export default function GroupChatView() {
   const isCloudAPI = llmConfig.apiKey?.startsWith('sk-') || llmConfig.baseUrl?.includes('api.openai.com') || llmConfig.baseUrl?.includes('api.moonshot') || llmConfig.baseUrl?.includes('api.deepseek')
   const isLocalLLM = llmConfig.baseUrl?.includes('localhost') || llmConfig.baseUrl?.includes('127.0.0.1') || llmConfig.baseUrl?.includes('ollama')
 
+  // ── 🔧 2026-10-04：提示框的两个真问题 ──
+  // (a) 「本地 LLM 模式」原本只看 baseUrl 是不是 localhost，
+  //     所以**模型已经连好了它还一直显示**（绿框 + 黄框常驻占位）。
+  //     改成真正探测一次 LM Studio / Ollama 有没有加载模型。
+  // (b) 「云端 API 模式」是常驻横幅占位置。改为可关闭，
+  //     且**每天重新提示一次**（记日期，不永久隐藏）。
+  // null = 尚未探测完；true = 本地模型已就绪；false = 没就绪（该提醒）
+  const [localModelReady, setLocalModelReady] = useState<boolean | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (!(llmReady && isLocalLLM)) { setLocalModelReady(null); return }
+    window.luminaAPI?.providerDiscoverLocal?.()
+      .then((r: any) => {
+        if (!alive) return
+        // found 里真的带 models 才算「模型已加载」
+        const ready = Array.isArray(r?.found) && r.found.some(
+          (f: any) => Array.isArray(f?.models) && f.models.length > 0,
+        )
+        setLocalModelReady(ready)
+      })
+      .catch(() => { if (alive) { setLocalModelReady(false) } })
+    return () => { alive = false }
+  }, [llmReady, isLocalLLM, llmConfig.baseUrl])
+
+  // 云端提示的关闭状态：记「关到哪一天」，跨天自动复活
+  const CLOUD_HINT_KEY = 'gc-cloud-hint-dismissed-at'
+  const [cloudHintDismissed, setCloudHintDismissed] = useState(() => {
+    try {
+      const v = localStorage.getItem(CLOUD_HINT_KEY)
+      if (!v) return false
+      const today = new Date().toISOString().slice(0, 10)
+      return v === today
+    } catch { return false }
+  })
+  const dismissCloudHint = () => {
+    try { localStorage.setItem(CLOUD_HINT_KEY, new Date().toISOString().slice(0, 10)) } catch {}
+    setCloudHintDismissed(true)
+  }
+
   // 🆕 历史会话
   const [sessions, setSessions] = useState<GCSession[]>(() => loadGCSessions())
   const [activeSessionId, setActiveSessionId] = useState(() => {
@@ -3793,23 +3832,34 @@ export default function GroupChatView() {
       )}
 
       {/* ── 云端/本地提示 ── */}
-      {llmReady && isCloudAPI && (
+      {llmReady && isCloudAPI && !cloudHintDismissed && (
         <div style={{
           margin: '4px 12px', padding: '6px 10px', borderRadius: 6,
           background: 'var(--accent-50)', border: '1px solid #bfdbfe', fontSize: 10,
           color: '#1d4ed8', flexShrink: 0,
         }}>
-          ☁️ 云端 API 模式 · 使用云端API时，注意消耗tokens数量，也意味着群聊消耗tokens的数量比普通Agent消耗更多
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ flex: 1 }}>☁️ 云端 API 模式 · 群聊的 tokens 消耗比普通 Agent 更多，注意用量</span>
+            {/* 关闭只挡今天；明天会再提醒一次 —— 长期不提醒，用量出问题也不知道 */}
+            <button onClick={dismissCloudHint}
+              title="今天不再提示（明天会重新提醒）"
+              style={{
+                border: 'none', background: 'transparent', cursor: 'pointer',
+                color: '#1d4ed8', fontSize: 13, lineHeight: 1, padding: '2px 4px',
+                borderRadius: 4,
+              }}>✕</button>
+          </div>
         </div>
       )}
-      {llmReady && isLocalLLM && (
+            {/* 🔧 已连好就整体不显示；探测未完成时也不打扰用户 */}
+      {llmReady && isLocalLLM && localModelReady === false && (
         <div style={{
           margin: '4px 12px', padding: '8px 12px', borderRadius: 6,
           background: 'var(--green-100)', border: '1px solid var(--green-500)', fontSize: 10,
           color: '#166534', flexShrink: 0, lineHeight: 1.6,
         }}>
-          <div style={{ fontWeight: 600, marginBottom: 2 }}>🖥️ 本地 LLM 模式</div>
-          <div>请确保本地服务正在运行。</div>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>⚠️ 本地 LLM 模式 · 未检测到已加载的模型</div>
+          <div>请确认本地服务正在运行，且已加载至少一个模型。</div>
           <div style={{ marginTop: 4, padding: '4px 8px', borderRadius: 4, background: 'var(--yellow-100)', border: '1px solid #fcd34d', color: '#92400e', fontSize: 10 }}>
             ⚠️ <strong>LM Studio 用户注意：</strong>请先在 LM Studio 的 <strong>Developer</strong> 页面加载至少一个模型，否则会提示 <code>No models loaded</code> 错误。加载后无需重启 Lumina。
           </div>
