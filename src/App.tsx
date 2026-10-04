@@ -24,6 +24,11 @@ import TasksPanel from './panels/TasksPanel'  // 🗓️ 任务工作区（托�
 import { initThemeClient } from './services/themeClient'  // 🎨 主题皮肤生态
 
 import PluginPanelContainer from './components/PluginPanelContainer'  // 🆕 v8.1: 插件面板
+// 🔬 2026-10-04：这两个面板写完时**没有被挂到 panelMap**，
+//  所以永远不会被渲染 —— 有单测有 UI，运行时一行都执行不到。
+//  与 SkillMarketPanel 那个 bug 同类：接缝在中间层，两侧都看起来正常。
+import SwimlaneCanvas from './panels/SwimlaneCanvas'            // 团队依赖泳道画布
+import MemoryTrialBenchPanel from './panels/MemoryTrialBenchPanel'  // 记忆审判台
 import Toast from './components/Toast'
 import { showToast } from './components/Toast'
 import ProactiveToast from './components/ProactiveToast'  // 🆕 v3.8.1
@@ -110,6 +115,8 @@ const panelMap: Record<string, React.FC> = {
   plugins: PluginPanelContainer, // 🆕 v8.1: 插件面板
   more: MoreSettingsPanel, // ⚙️ v1.0: 更多设置（整合入口）
   tasks: TasksPanel, // 🗓️ 任务工作区（托盘菜单「任务工作区」入口）
+  swimlane: SwimlaneCanvas,           // 🔬 团队依赖泳道画布（2026-10-04 接上）
+  memorytrial: MemoryTrialBenchPanel, // ⚖️ 记忆审判台（2026-10-04 接上）
 }
 
 export default function App() {

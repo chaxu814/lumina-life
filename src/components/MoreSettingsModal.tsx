@@ -14,6 +14,10 @@ import UsagePanel from '../panels/UsagePanel'
 import DiagnosticsPanel from '../panels/DiagnosticsPanel'
 import TestCoveragePanel from '../panels/TestCoveragePanel'
 import SkillDevPanel from '../panels/SkillDevPanel'
+// 🔬 2026-10-04：两个新面板写完时既没进 panelMap 也没进这里，
+//  等于完全没有入口。现在同时挂上「更多设置」和 panelMap 两条路。
+import SwimlaneCanvas from '../panels/SwimlaneCanvas'
+import MemoryTrialBenchPanel from '../panels/MemoryTrialBenchPanel'
 import PluginPanelContainer from './PluginPanelContainer'
 import SettingsPanel from '../panels/SettingsPanel'
 import AppearancePanel from '../panels/AppearancePanel'  // 🎨 外观主题
@@ -35,6 +39,8 @@ const SIDEBAR_ITEMS = [
   { id: 'workflow',    icon: '📋', label: '工作流' },
   { id: 'modelStore',  icon: '🪆', label: 'Live2D 模型' },
   { id: 'skills',      icon: '⚡',  label: '技能管理' },
+  { id: 'swimlane',    icon: '🛳️', label: '团队泳道' },
+  { id: 'memorytrial', icon: '⚖️', label: '记忆审判台' },
   { id: 'usage',       icon: '📊', label: '用量限额' },
   { id: 'diagnostics', icon: '🔍', label: '诊断工具' },
   { id: 'test',        icon: '🧪', label: '测试覆盖' },
@@ -289,6 +295,8 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             {activeSection === 'diagnostics' && <DiagnosticsPanel />}
             {activeSection === 'test'        && <TestCoveragePanel />}
             {activeSection === 'skilldev'    && <SkillDevPanel />}
+  {activeSection === 'swimlane'    && <SwimlaneCanvas />}
+  {activeSection === 'memorytrial' && <MemoryTrialBenchPanel />}
             {activeSection === 'modelStore'  && <ModelStorePanel />}
             {activeSection === 'plugins'    && <PluginPanelContainer />}
             {activeSection === 'appearance' && <AppearancePanel />}

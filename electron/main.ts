@@ -144,6 +144,7 @@ import { getCommandRouter, CommandRouter } from './chatCommands'
 // 命令处理??+ Skill Market + Debug 面板
 import { registerCommandHandlers } from './ipc/commandIpc'
 import { registerSkillMarketIpc } from './ipc/skillMarketIpc'
+import { registerObservabilityIpc } from './ipc/observabilityIpc'
 import { registerComputerUseIpc } from './ipc/computerUseIpc'  // 🖥??v3.10
 import { registerTeamCollabIpc } from './ipc/teamCollabIpc'  // 🤝 v3.20: 信箱/任务板/动态 worker/CU 策略
 import { registerGitAgentIpc } from './ipc/gitAgentIpc'  // 📝 v3.11
@@ -685,6 +686,7 @@ for (const { id } of orch.listRunners()) {
   // 3. 注册所??IPC handler
   registerAgentIpc(mainWindow)
   registerCommandHandlers()                           // 🆕 v3.5: 斜杠命令处理??  registerSkillMarketIpc()                            // 🆕 v3.5: Skill 市场 IPC
+  registerObservabilityIpc()                           // 🔬 记忆审判台 + 团队泳道画布 IPC
   registerComputerUseIpc()                            // 🖥??v3.10: 桌面操控 IPC
   registerGitAgentIpc()                               // 📝 v3.11: Git Agent IPC
   registerMCPIpc()                                    // 🔌 v3.11: MCP IPC

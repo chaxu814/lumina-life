@@ -39,17 +39,24 @@ declare global {
       skillMarketInstallLocal: () => Promise<any>
       skillMarketUninstall: (skillId: string) => Promise<any>
       skillMarketToggle: (skillId: string, enabled: boolean) => Promise<any>
-      /**
-       * 远端注册表健康度。
-       * 搜索结果会把远端与静态索引合并返回，所以「远端挂了」在结果里看不见 ——
-       * 用户只看到一市场内置技能，却不知道为什么没有第三方的。
-       */
+      /** 远端注册表健康度。 */
       skillMarketRegistryHealth: () => Promise<{
         lastCheckedAt: number
         reachable: boolean
         source: string
         detail: string
       }>
+
+      // 🔬 可观测性（2026-10-04 补齐）
+      // 【为什么这一组之前是空的】两个面板写完时模块外零引用 ——
+      //   有单测有 UI，但没 IPC、没 preload、没挂载，运行时一行都跑不到。
+      memoryTrialReview: () => Promise<{ ok: boolean; items?: any[]; error?: string }>
+      memoryTrialSubmit: (payload: { memoryKey: string; verdict: string; reason?: string }) =>
+        Promise<{ ok: boolean; result?: any; error?: string }>
+      memoryTrialStats: () => Promise<{ ok: boolean; stats?: any; error?: string }>
+      memoryTrialHistory: (memoryKey?: string) => Promise<{ ok: boolean; records?: any[]; error?: string }>
+      /** 嵌套形状：SwimlaneCanvas 按 `window.luminaAPI.swimlane.get()` 取 */
+      swimlane: { get: () => Promise<any> }
 
       // LLM
       llmChat: (params: {

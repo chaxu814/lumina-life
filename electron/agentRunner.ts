@@ -22,6 +22,10 @@ import { registerAllTools } from './tools/index'
 import { isToolAllowedForRole } from './rolePolicy'
 import { parseXmlToolCalls as parseXmlToolCallsShared } from './llm/xmlToolCall'
 import { applyEmotionGate, renderGateNotice } from './orchestration/emotionGating'
+// 🧩 情绪因果链：把「真实任务历史」接进门控。此前这两个函数无人调用。
+// 静态 import 是安全的：emotionCausalityBridge 只依赖 electron/pet/* 与 memory/*，
+// 这条链上没有任何模块回引 agentRunner（已核对）。
+import { getCausalFrontendThree, getCausalGatingHints } from './pet/emotionCausalityBridge'
 import { enterAgentContext } from './tools/agentRunContext'
 import { getMemoryStore } from './memory/memoryStore'
 import { getAgentChatsManager } from './agentChatsManager'
@@ -3381,8 +3385,40 @@ private summarizer: ConversationSummarizer | null = null
       emotionGatingOn = readFeatureFlag('emotionGating', true)
     } catch { /* 读不到就用默认 */ }
 
+    // ── 🔗 情绪因果链接入（2026-10-04）──
+    // 此前 getCausalFrontendThree() / getCausalGatingHints() 写好了（67 个用例），
+    // 却**没有任何生产代码调用它们** —— 与 SkillMarketPanel、两个新面板同一类死模块。
+    // 情绪此前由「桌宠表情」驱动（表现层），现在接上「真实任务历史」（因果层）：
+    //   Yak 连续失败 → confidence 下降 → 焦虑升高 → 真的收紧不可逆工具
+    //
+    // 【安全前提：只收紧不放宽】
+    // 取两者中**更焦虑**的那个，而不是用因果值覆盖情绪值 ——
+    // 这样因果链只会让门控更严，永远不会因为某次失败把门控放松。
+    let gateEmotion = this._currentEmotion
+    let causalNote = ''
+    try {
+      const causalEmotion = getCausalFrontendThree()
+      if (gateEmotion) {
+        // 逐维取「更负/更低」的一侧：mood 取小、energy 取小
+        gateEmotion = {
+          ...gateEmotion,
+          mood: Math.min(gateEmotion.mood, causalEmotion.mood),
+          energy: Math.min(gateEmotion.energy, causalEmotion.energy),
+        }
+      } else {
+        gateEmotion = causalEmotion
+      }
+      const hints = getCausalGatingHints()
+      if (hints.tighten.length > 0) {
+        causalNote = hints.reasons.join('；')
+      }
+    } catch {
+      // 情绪因果链自身出错时绝不能连带搞挂门控 —— 主流程优先级高于情绪表现
+      gateEmotion = this._currentEmotion
+    }
+
     const gate = emotionGatingOn
-      ? applyEmotionGate(tools, this._currentEmotion)
+      ? applyEmotionGate(tools, gateEmotion)
       : { tools, suppressed: [], reasons: [], gated: false, notice: '' }
     if (gate.gated) {
       tools = gate.tools
@@ -3391,6 +3427,9 @@ private summarizer: ConversationSummarizer | null = null
       console.log(
         `[getToolsForMode] 😶 情绪收紧：暂缓 ${gate.suppressed.length} 个工具（${gate.reasons.join('；')}）`,
       )
+    }
+    if (causalNote) {
+      console.log(`[getToolsForMode] 🧩 情绪因果链：${causalNote}`)
     }
 
     return { tools, toolsetName }

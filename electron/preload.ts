@@ -1083,6 +1083,23 @@ const api = {
     return () => { ipcRenderer.removeListener('reality:show:event', handler) }
   },
 
+  // ── 🔬 可观测性 IPC（记忆审判台 + 团队泳道画布）──────────
+  // 🔧 2026-10-04：这两个面板写完时**模块外零引用** —— 有单测、有 UI，
+  //   但没有 IPC、没有 preload、没有挂载，运行时一行都执行不到。
+  //   与 SkillMarketPanel 那个 bug 同类，所以这次把三层一并接上并加守卫测试。
+  memoryTrialReview: () =>
+    ipcRenderer.invoke('memory-trial:review') as Promise<{ ok: boolean; items?: any[]; error?: string }>,
+  memoryTrialSubmit: (payload: { memoryKey: string; verdict: string; reason?: string }) =>
+    ipcRenderer.invoke('memory-trial:submit', payload) as Promise<{ ok: boolean; result?: any; error?: string }>,
+  memoryTrialStats: () =>
+    ipcRenderer.invoke('memory-trial:stats') as Promise<{ ok: boolean; stats?: any; error?: string }>,
+  memoryTrialHistory: (memoryKey?: string) =>
+    ipcRenderer.invoke('memory-trial:history', memoryKey) as Promise<{ ok: boolean; records?: any[]; error?: string }>,
+  /** 泳道图数据。形状是嵌套对象，因为 SwimlaneCanvas 按 `swimlane.get()` 取 */
+  swimlane: {
+    get: () => ipcRenderer.invoke('swimlane:get') as Promise<any>,
+  },
+
   // ── 📦 Skill 市场 IPC ──────────────────────────────
   // 🔧 2026-10-04：这些通道主进程早就注册了（skillMarketIpc.ts 共 17 个），
   //   但**一个都没在 preload 暴露**。SkillMarketPanel 于是绕道
