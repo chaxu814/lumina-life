@@ -18,6 +18,11 @@ import { getTeamStatusTable, TEAM_MEMBERS } from '../agentTeamPersonas'
 //   routingDecider 只 import 一个 type（无运行时依赖），不构成循环依赖，
 //   所以可以安全地改成静态 import。
 import { peekRouteHint, classifyByRules } from '../orchestration/routingDecider'
+// 模糊任务守卫：判定「该不该先问再动」，并生成问句与可点选项。
+// 【为什么放在这里而不写成工具】
+// 工具是给模型「可以调」的；而模糊判定必须在**首字响应之前**发生——
+// 模型一旦开始输出，就已经在猜了。写进 prompt 才能拦住「先想再答」的那个瞬间。
+import { assessVagueness, renderClarificationRule, hasSpecificTarget } from '../orchestration/vagueTaskGuard'
 import type { AgentRunConfig } from '../tools/types'
 import type { AgentMode, TeamMemberId } from '../agentTeamTypes'
 
@@ -516,6 +521,24 @@ export function buildSystemPrompt(
 
       if (hint) {
         parts.push(`\n## 🧭 路由提醒\n${hint}`)
+      }
+
+      // ── 模糊任务守卫 ──
+      // 「优化一下这个项目」这类请求，模型最常见的处理方式是**挑一个看起来最像的
+      // 解释直接开工**（弱模型尤其如此）—— 猜对是运气，猜错用户要重做一遍。
+      // 这里先把「该不该问」用规则算清楚，问句与选项也由规则生成，
+      // 模型只负责转述，不负责自己想该问什么。
+      //
+      // 上文是否有锚点：用「本次消息里是否已经出现具体目标」近似 ——
+      // 拿不到真正的会话历史时，保守处理（宁可多问一次）。
+      const anchored = hasSpecificTarget(userText)
+      const vagueness = assessVagueness(userText, {
+        assumeCoding: true,
+        deicticsResolvable: anchored,
+      })
+      const rule = renderClarificationRule(vagueness)
+      if (rule) {
+        parts.push(`\n${rule}`)
       }
     }
   } catch { /* 路由提示失败绝不能影响主流程 */ }
