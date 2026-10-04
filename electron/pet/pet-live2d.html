@@ -124,6 +124,19 @@
     background: linear-gradient(135deg, rgba(74,158,255,0.15), rgba(107,181,255,0.10));
     border-bottom: 1px solid rgba(100,130,180,0.12);
     font-weight: 700; font-size: 13px; cursor: move;
+    /* 🔧 2026-10-04：标题栏作为拖动抓手，窗口才能被拖到屏幕任意位置。
+       之前 #pet-container 整块 no-drag、页面里也没有任何 drag 区域，
+       于是「cursor: move」只是视觉暗示，按住标题栏拖不动任何东西。
+       标题栏里的按钮要显式 no-drag，否则点不到。 */
+    -webkit-app-region: drag;
+  }
+  /* 标题栏内的可交互控件不能吃拖动事件，否则按下去变成拖窗口而不是点击 */
+  #chat-panel .cp-head .cp-actions,
+  #chat-panel .cp-head button,
+  #chat-panel .cp-head select,
+  #chat-panel .cp-head input,
+  #chat-panel .cp-head .cp-avatar {
+    -webkit-app-region: no-drag;
   }
   #chat-panel .cp-head .cp-title { display: flex; align-items: center; gap: 8px; }
   #chat-panel .cp-head .cp-avatar {

@@ -41,7 +41,8 @@ const MAX_CRASH_REPORTS = 10
 
 interface CrashRecord {
   at: string
-  kind: 'unhandledRejection' | 'uncaughtException'
+  /** render-process-gone / child-process-gone：渲染进程崩溃（GPU/WebGL/内存），2026-10-05 补 */
+  kind: 'unhandledRejection' | 'uncaughtException' | 'render-process-gone'
   message: string
   stack?: string
 }
@@ -120,6 +121,24 @@ export function installCrashGuard(): void {
       process.exit(1)
     }, 300)
   })
+
+  // ── 渲染进程崩溃：GPU / WebGL / 内存都可能触发，Live2D 是高发区 ──
+  // 🔧 2026-10-05：之前只接了主进程的 unhandledRejection / uncaughtException，
+  // 渲染进程崩溃是另一条通路，完全没被记录。
+  // 后果：桌宠（Live2D 走 WebGL）黑屏/白屏/整窗消失时，
+  // 用户看到的是「应用崩了」，但磁盘上没有任何证据 —— 只能靠猜。
+  // （%APPDATA%\lumina-life\.lumina-crashed 那个标记不是证据：
+  //   它在每次启动时写、只有走完 before-quit 才删，所以「上次强杀/关窗口」也会留下。）
+  const recordRendererGone = (_e: unknown, wc: unknown, details: unknown) => {
+    const d = (details || {}) as { reason?: string; exitCode?: number }
+    let url = 'unknown'
+    try { url = (wc as any)?.webContents?.getURL?.() || 'unknown' } catch { /* ignore */ }
+    const message = `渲染进程退出: reason=${d.reason || 'unknown'} exitCode=${d.exitCode ?? 'n/a'} url=${url}`
+    console.error('[CrashGuard] 💥 ' + message)
+    writeCrashRecord({ at: new Date().toISOString(), kind: 'render-process-gone', message, stack: '' })
+  }
+  app.on('render-process-gone', recordRendererGone as any)
+  app.on('child-process-gone', recordRendererGone as any)
 
   console.log('[CrashGuard] ✅ 全局异常兜底已安装（不再因单个 Promise reject 而崩溃）')
 }
