@@ -498,9 +498,19 @@ export default function GroupChatView() {
   useEffect(() => { loadAgentLlmConfigs() }, [])
 
   // LLM 配置检测
-  const llmReady = !!(llmConfig.model && llmConfig.apiKey)
+  //
+  // 🔧 2026-10-04 修复：旧判据是 `!!(llmConfig.model && llmConfig.apiKey)`，**强制要求 API Key**。
+  // 但 LM Studio / Ollama 走 localhost，本来就不存在 Key —— 本地模型配好了也被判成「未配置」，
+  // 于是黄色提示框常驻、Agent 全部退回预设话术。用户的 LM Studio 里明明加载着 qwen2.5:7b，
+  // 只是 apiKey 是空字符串，就被这个条件直接打死。
+  //
+  // 现在拆成两层：
+  //   · llmConfigured —— 端点 / 模型配了没（云端要 Key，本地不要）
+  //   · llmReady      —— 最终能不能真发请求。本地额外要求模型真的加载了；
+  //                      探测未完成时（null）不阻塞，避免刚打开就闪一下「模拟模式」。
   const isCloudAPI = llmConfig.apiKey?.startsWith('sk-') || llmConfig.baseUrl?.includes('api.openai.com') || llmConfig.baseUrl?.includes('api.moonshot') || llmConfig.baseUrl?.includes('api.deepseek')
   const isLocalLLM = llmConfig.baseUrl?.includes('localhost') || llmConfig.baseUrl?.includes('127.0.0.1') || llmConfig.baseUrl?.includes('ollama')
+  const llmConfigured = !!(llmConfig.model && (llmConfig.apiKey || isLocalLLM))
 
   // ── 🔧 2026-10-04：提示框的两个真问题 ──
   // (a) 「本地 LLM 模式」原本只看 baseUrl 是不是 localhost，
@@ -510,21 +520,33 @@ export default function GroupChatView() {
   //     且**每天重新提示一次**（记日期，不永久隐藏）。
   // null = 尚未探测完；true = 本地模型已就绪；false = 没就绪（该提醒）
   const [localModelReady, setLocalModelReady] = useState<boolean | null>(null)
-  useEffect(() => {
-    let alive = true
-    if (!(llmReady && isLocalLLM)) { setLocalModelReady(null); return }
-    window.luminaAPI?.providerDiscoverLocal?.()
+  const [localDetecting, setLocalDetecting] = useState(false)
+  // 探测逻辑抽成函数：初始挂载和「↻ 重新检测」按钮共用一套判定，
+  // 免得两处判定漂移（曾经出现初始判定通过、按钮判定不通过的隐患）。
+  const probeLocal = () => {
+    setLocalDetecting(true)
+    return window.luminaAPI?.providerDiscoverLocal?.()
       .then((r: any) => {
-        if (!alive) return
         // found 里真的带 models 才算「模型已加载」
         const ready = Array.isArray(r?.found) && r.found.some(
           (f: any) => Array.isArray(f?.models) && f.models.length > 0,
         )
-        setLocalModelReady(ready)
+        return ready
       })
-      .catch(() => { if (alive) { setLocalModelReady(false) } })
+      .catch(() => false)
+      .finally(() => { setLocalDetecting(false) })
+  }
+  const retryLocalDetect = () => { probeLocal().then((ready) => { setLocalModelReady(ready) }) }
+
+  useEffect(() => {
+    let alive = true
+    if (!(llmConfigured && isLocalLLM)) { setLocalModelReady(null); return }
+    probeLocal().then((ready) => { if (alive) { setLocalModelReady(ready) } })
     return () => { alive = false }
-  }, [llmReady, isLocalLLM, llmConfig.baseUrl])
+  }, [llmConfigured, isLocalLLM, llmConfig.baseUrl])
+
+  // 本地：探测出 false 才算「没就绪」；null（探测中）先按就绪处理，避免闪烁
+  const llmReady = llmConfigured && (isLocalLLM ? localModelReady !== false : true)
 
   // 云端提示的关闭状态：记「关到哪一天」，跨天自动复活
   const CLOUD_HINT_KEY = 'gc-cloud-hint-dismissed-at'
@@ -3856,7 +3878,23 @@ export default function GroupChatView() {
         }}>
           <strong>⚠️ 尚未配置 LLM</strong><br />
           当前为<strong>模拟回复模式</strong>，Agent 的回复是预设的固定话术。
-          <br />请在 <strong>设置 → LLM 配置</strong> 中填写 API Key 和模型，三位 Agent 将拥有真实的个性化对话能力。
+          <br />
+          {/* 本地模型走到这里时，缺的不是 API Key（本地根本不需要），
+              而是 LM Studio / Ollama 里没加载模型。文案要指向真正的动作，否则用户会去设置里
+              找 Key 找半天。 */}
+          {isLocalLLM
+            ? <>请确认 <strong>LM Studio / Ollama 正在运行且已加载模型</strong>，然后在 <strong>设置 → LLM 配置</strong> 中选择该模型。本地模型不需要 API Key。</>
+            : <>请在 <strong>设置 → LLM 配置</strong> 中填写 API Key 和模型，三位 Agent 将拥有真实的个性化对话能力。</>}
+          <div style={{ marginTop: 6 }}>
+            <button
+              onClick={() => useStore.getState().setActivePanel('settings')}
+              style={{
+                border: '1px solid var(--yellow-500)', background: 'transparent',
+                color: 'var(--yellow-700, #92400e)', fontSize: 11, fontWeight: 600,
+                padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
+              }}
+            >⚙️ 去设置</button>
+          </div>
         </div>
       )}
 
@@ -3891,6 +3929,14 @@ export default function GroupChatView() {
           <div>请确认本地服务正在运行，且已加载至少一个模型。</div>
           <div style={{ marginTop: 4, padding: '4px 8px', borderRadius: 4, background: 'var(--yellow-100)', border: '1px solid #fcd34d', color: '#92400e', fontSize: 10 }}>
             ⚠️ <strong>LM Studio 用户注意：</strong>请先在 LM Studio 的 <strong>Developer</strong> 页面加载至少一个模型，否则会提示 <code>No models loaded</code> 错误。加载后无需重启 Lumina。
+            <button
+              onClick={() => { void retryLocalDetect() }}
+              style={{
+                marginLeft: 6, border: '1px solid #fcd34d', background: 'transparent',
+                color: '#92400e', fontSize: 10, fontWeight: 600, padding: '1px 8px',
+                borderRadius: 4, cursor: localDetecting ? 'wait' : 'pointer',
+              }}
+            >{localDetecting ? '检测中…' : '↻ 重新检测'}</button>
           </div>
         </div>
       )}
