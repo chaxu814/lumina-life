@@ -100,6 +100,8 @@ import { checkLuckyModeForReAct, setState as setLuckyState, getConfig as getLuck
 // ═══════════════════════════════════════════════════════════
 import { LLMProvider } from './core/llmProvider'
 import { ReActEngine } from './core/reactEngine'
+import { getPermissionStore } from './permission/permissionStore'
+import { decide as decidePermission } from './permission/permissionTier'
 import { getTeamRegistry } from './core/teamRegistry'
 // ═══════════════════════════════════════════════════════════
 // v9.2: 从 core/agentUtils 导入独立工具函数
@@ -117,6 +119,20 @@ import {
   KNOWN_MODEL_WINDOWS as _KNOWN_MODEL_WINDOWS,
 } from './core/agentUtils'
 import { cleanToolNoiseText } from './agent/toolNoise'
+import { resolveCapabilities, type ServerFacts } from './core/modelCapabilities'
+import { recallServerFacts, rememberServerFacts, parseServerFactsFor } from './core/modelServerFacts'
+// 🔧 P0-2：主对话入口需要告知调度器「用户活跃」，以暂停后台 LLM 任务。
+import { llmCoordinator } from './llmCoordinator'
+
+/**
+ * 【已下沉到 core/modelCapabilities.ts】
+ *
+ * 原来的 resolveOutputBudget 是按「上下文窗口 × 比例」猜输出上限，
+ * 本质上仍然是「给当前这个模型打补丁」。现在改成统一的能力画像：
+ * 参数量 → 档位 → 上下文/输出/超时，命名家族 → 特征，
+ * 并硬约束 outputBudget ≤ contextWindow / 2。
+ * 好处是**明天发布的新模型不用改代码**。
+ */
 // v3.34: 「声称做了但没做」检测（质量基准实测抓到的幻觉缺口）
 import { checkActionClaims } from './actionClaimGuard'
 
@@ -631,6 +647,19 @@ private summarizer: ConversationSummarizer | null = null
   /** 🆕 v9.0: QwenPaw 风格压缩摘要缓存 — 跨轮次保留 */
   private _compressedSummary: string | null = null
 
+  /** 🔧 P0-3 / P1-4：已解析生效的上下文窗口（用户值与【服务端事实】取 min）。
+   *
+   *  为什么要单独存一个字段：
+   *   detectContextLimit() 是 async（它要读服务端事实 / 拉 /models），
+   *   而 compactContext() 是同步方法且签名被多处以 void 调用 —— 不能 await。
+   *   于是这里存一份 detectContextLimit() 每次算完后同步写回的结果，
+   *   供同步路径读取。
+   *
+   *  不这么做的后果：压缩路径读 (config as any).contextWindow = 用户填的值，
+   *  绕过 P0-3 的 min 修正 → 用户填 256000、模型实际 32K 时
+   *  压缩要到 85K 才触发，而对话在 32K 就爆了。 */
+  private _effectiveContextWindow: number = 0
+
   /** 🆕 v9.0: 情绪状态 — 由前端通过 IPC 设置，注入 system prompt */
   private _currentEmotion: { mood: number; energy: number; affinity: number; label?: string } | null = null
 
@@ -643,6 +672,19 @@ private summarizer: ConversationSummarizer | null = null
   private _llmProvider: LLMProvider | null = null
   /** 🆕 v9.3: 独立 ReAct Engine（保留供备用引用，不再用于主循环） */
   private _reactEngine: ReActEngine | null = null
+  /**
+   * 最近一次「没能给出有效回复」的诊断原因。
+   * 由 runReActLoop 写入，兜底文案读取并展示给用户。
+   * 没有它的话，用户看到的只有一句完全无法排查的道歉。
+   */
+  private lastFailureReason = ''
+  /**
+   * 本轮最近一次「XML 工具调用解析失败」的原因。
+   * 声明在类上而不是 runReActLoop 的局部变量：
+   * 实际填值发生在 callLLM（另一个函数）里，而读取发生在 runReActLoop 出口。
+   * 放局部变量会跨不过作用域，诊断信息又会再次丢失 —— 这正是它以前消失的原因。
+   */
+  private lastXmlDiagnostic = ''
   /** 🆕 v9.3: 是否使用新模块（已弃用 — FIX-3 统一走 runReActLoop） */
   private _useNewModules = true
 
@@ -885,8 +927,25 @@ private summarizer: ConversationSummarizer | null = null
       if (llm.apiKey) {this.config.apiKey = llm.apiKey}
       if (llm.timeout) {(this.config as any).timeout = llm.timeout}
       if (llm.maxContextTokens) {
-        (this.config as any).contextWindow = llm.maxContextTokens
-        ;(this.config as any).maxTokens = llm.maxContextTokens
+        // 🔒 能力画像：不再把「能读多少」当成「能写多少」。
+        //
+        // 🐛 真 bug：旧代码 `maxTokens = llm.maxContextTokens`，
+        //   131072 被 clampOutputTokens 夹到 32768，于是每轮都向
+        //   4B 小模型要 32768 个输出 token —— 物理上做不到，
+        //   响应被截断在半句，症状就是「模型返回了无法识别的内容」。
+        //
+        // 现在交给 modelCapabilities：按参数量档位推导，
+        // 硬约束 outputBudget ≤ contextWindow / 2，
+        // 且**不认识新模型也能给出合理画像**（靠名字里的参数量）。
+        const caps = resolveCapabilities({
+          modelName: llm.model || this.config.model,
+          explicitContextWindow: llm.maxContextTokens,
+          // 探测本地模型时已经把服务端事实存下来了，这里同步读回。
+          // 读不到就自动回退到「参数量档位估算」——两级都失效才会用最保守的档。
+          server: (recallServerFacts(llm.model || this.config.model) as ServerFacts | null) ?? undefined,
+        })
+        ;(this.config as any).contextWindow = caps.contextWindow
+        ;(this.config as any).maxTokens = caps.outputBudget
       }
     } catch (err) {
       console.warn(`[AgentRunner] 无法加载 AgentConfig:`, err)
@@ -1049,7 +1108,16 @@ private summarizer: ConversationSummarizer | null = null
       const estimator = new TokenEstimator()
       const estimatedTokens = estimator.estimateMessages(this.messages)
       // 🔧 动态预算：使用模型实际上下文窗口，而非硬编码 128K
-      const ctxWindow = (this.config as any).contextWindow || 0
+      //
+      //   🔧 P1-4 + P0-3 配套：这里原来读的是 (this.config as any).contextWindow，
+      //   也就是【用户填的值】——绕过了 detectContextLimit() 里 P0-3 加的
+      //   「与服务端事实取 min」。结果 P0-3 在压缩路径上完全不生效：
+      //   用户填 256000、模型实际 32768，这里仍按 256000 算预算。
+      //   compactContext 是同步方法（签名被多处以 void 调用），不能 await
+      //   异步的 detectContextLimit()，所以改读它同步写回的字段。
+      const ctxWindow = this._effectiveContextWindow
+        || (this.config as any).contextWindow
+        || 0
 
       // 无需压缩 & 无已有摘要 → 跳过
       if (
@@ -1084,7 +1152,14 @@ private summarizer: ConversationSummarizer | null = null
       }
 
       // 传统压缩模式
-      const result = compactMessages(this.messages, this._compressedSummary)
+      // 🔧 P1-4 修正（2026-10-05）：把 ctxWindow 传进去。
+      //   旧写法 compactMessages(this.messages, this._compressedSummary) 漏了第三个参数，
+      //   于是 getCompactorBudget(undefined) 直接返回硬编码常量
+      //   COMPACTOR_TOKEN_BUDGET = 131_072 → 触发线 = 131072 × 0.65 ≈ 85K token。
+      //   后果：模型真实窗口只有 32K 时，压缩要到 85K 才触发 —— 而对话在 32K 就已经爆了。
+      //   「判断要不要压缩」那一行传了 ctxWindow，「真的去压缩」这一行没传，
+      //   两处不一致，且后者才是实际生效的。
+      const result = compactMessages(this.messages, this._compressedSummary, ctxWindow)
       if (!result) {return}
 
       this.messages = result.messages
@@ -1296,6 +1371,16 @@ private summarizer: ConversationSummarizer | null = null
 
   async sendMessage(text: string): Promise<string> {
     this.abortController = new AbortController()
+    // 🔧 P0-2：标记用户活跃，暂停后台 LLM 任务（记忆精炼 / 新闻摘要 / 主动关心）。
+    //
+    //   为什么放这里而不是各处 IPC：sendMessage 是【所有入口的汇聚点】——
+    //   主界面 agent:chat、桌宠小窗、IM 渠道桥（channelAgentBridge）、
+    //   REST API 路由最终都会走到这里。原先只在 agentIpc.ts:154 调了一次
+    //   markUserActive，于是「从桌宠小窗发消息」时协调器完全不知道你在用，
+    //   后台任务照跑不误 → 本地单卡推理下互相抢 GPU → 「时不时卡顿」。
+    //
+    //   幂等：markUserActive 只是刷新时间戳，重复调用无害。
+    try { llmCoordinator.markUserActive() } catch { /* 协调器不可用不应阻断对话 */ }
     // P1: _autoContinueCount 重置已移除
     this._autoContinueCount = 0  // 🆕 v16.0-fix: 每次 sendMessage 重置
     this._lastIntentHash = ''    // 🆕 v16.0-fix: 重置意图句式追踪
@@ -1816,12 +1901,21 @@ private summarizer: ConversationSummarizer | null = null
       //   ② 给一个真正有用的下一步（重说一次 / 换个说法 / 换模型）
       //   ③ 带一句可排查的线索，��便用户反馈时能提供
       if (!result || result.trim().length === 0) {
+        // 🩺 把「为什么空」写进用户看得见的文案。
+        //   以前这段只知道「结果是空的」，用户截图反馈时说不出任何信息，
+        //   只能自己去翻 DevTools。
+        //   现在把最近一次的诊断（哪个工具名未注册 / 参数怎么解析不过去 /
+        //   连续几轮空内容）直接附上，用户一句「它说 XX 失败了」就够定位了。
+        const why = this.lastFailureReason
+          || (this.config.model ? `模型 ${this.config.model} 连续多轮返回空内容` : '连续多轮返回空内容')
         result = '这轮我没能给出有效回复（模型返回了无法识别的内容，不一定是你的问题）。\n' +
-          '可以试试：① 让我再说一次；② 换个说法或补充点上下文；③ 如果反复出现，换一个模型试试。'
+          `可以试试：① 让我再说一次；② 换个说法或补充点上下文；③ 如果反复出现，换一个模型试试。\n` +
+          `【技术信息·可忽略】失败原因：${why}`
         console.error(
           '[AgentRunner] ❌ 全部恢复路径失败。诊断信息：' +
           `mode=${this.config.mode} model=${this.config.model || 'n/a'} ` +
-          `messages=${this.messages.length} roundLimit=${this.config.maxToolCalls ?? 30}`,
+          `messages=${this.messages.length} roundLimit=${this.config.maxToolCalls ?? 30} ` +
+          `reason=${why}`,
         )
       }
     }
@@ -1833,6 +1927,83 @@ private summarizer: ConversationSummarizer | null = null
   // ═════════════════════════════════════════════════════════
   // ReAct 循环
   // ═════════════════════════════════════════════════════════
+
+  /**
+   * 安全解析工具参数。模型偶尔会输出不合法 JSON，
+   * 这里绝不能抛 —— 抛了就变成「循环异常」，真正的错误反而被掩盖。
+   */
+  private safeArgs(tc: { function: { arguments?: string } }): Record<string, unknown> {
+    try { return JSON.parse(tc.function.arguments || '{}') } catch { return {} }
+  }
+
+  /**
+   * 🔒 三档权限档位裁决。
+   *
+   * 返回 null = 放行；返回非空字符串 = 应当拦截，且这个字符串就是
+   * 写给模型的**可读原因**（模型需要知道为什么被拒才能换条路走）。
+   *
+   * 为什么在这里而不是 ReActEngine：ReActEngine 实例化后从未被 .run() 调用
+   * （FIX-3 之后统一走 runReActLoop），挂在那边等于没挂。
+   */
+  private checkPermissionTier(toolName: string, args: Record<string, unknown>): string | null {
+    try {
+      const store = getPermissionStore()
+      const st = store.get()
+      const decision = decidePermission({
+        tier: st.tier,
+        workspaceRoot: store.effectiveWorkspaceRoot(),
+        args,
+        command: typeof args.command === 'string' ? args.command : undefined,
+        toolName,
+        agentId: this.config.personaId,
+      })
+
+      if (decision.action === 'allow') { return null }
+      if (decision.action === 'deny') {
+        return `🔒 权限拦截（${decision.category}）：${decision.reason}`
+      }
+
+      // ask：走既有审批流，行为与安全审查保持一致
+      if (this.config.skipApproval) {
+        // 无人审批环境（CLI/headless）：中风险放行，高风险拒绝。
+        // 不能因为「没人点确认」就等于「全放行」。
+        if (decision.risk === 'high') {
+          return `🔒 无人审批环境，已拒绝高风险操作：${decision.reason}`
+        }
+        return null
+      }
+      const req = getApprovalService().requestApproval({
+        sessionId: this.sessionId,
+        agentId: this.config.personaId || 'default',
+        toolName,
+        toolArgs: args as Record<string, never>,
+        description: `${toolName}: ${JSON.stringify(args).slice(0, 100)}`,
+        riskLevel: decision.risk as 'medium' | 'high' | 'critical',
+        threatCategories: [decision.category],
+        securityFindings: [decision.reason],
+      })
+      if (req) {
+        return `🔐 权限档位要求确认（${decision.reason}）\n请回复 /approve ${req.id} 批准，或 /deny ${req.id} 拒绝。\n不想每次确认？到发送栏右侧的权限选择器切成「完全权限」。`
+      }
+      return null
+    } catch (e) {
+      // 裁决层自己出错时，**不能默���放行**。安全层的失败必须失败关闭。
+      console.error('[AgentRunner] 权限裁决异常，按拒绝处理:', e)
+      return '🔒 权限裁决异常，本次操作已拒绝（安全侧失败关闭）'
+    }
+  }
+
+  /** 🔒 角色硬闸门：当前 persona 无权用这个工具则拦下。返回 null = 放行 */
+  private checkRoleGateFor(toolName: string): string | null {
+    try {
+      const verdict = isToolAllowedForRole(this.config.personaId, toolName)
+      if (verdict.allowed) { return null }
+      return `⛔ 角色闸门：${this.config.personaId || 'lumina'} 无权使用 ${toolName} —— ${verdict.reason}`
+    } catch (e) {
+      const err = e as Error
+      return `⛔ 角色闸门异常，已拒绝：${err?.message || String(e)}`
+    }
+  }
 
   /**
    * 核心 ReAct 循环：LLM 推理 → 工具调用 → 结果反馈 → 继续推理，直到 LLM 返回最终响应
@@ -2027,6 +2198,26 @@ private summarizer: ConversationSummarizer | null = null
               })
               continue
             }
+
+            // 🔒 三档权限 + 角色硬闸门（真实执行路径）
+            //   ⚠️ 这两道闸门之前只挂在 ReActEngine.checkPermission() 上，
+            //   而 ReActEngine 实例化后**从未被 .run() 调用**
+            //   （FIX-3 之后统一走本文件的 runReActLoop）
+            //   —— 也就是说那套逻辑是死代码，权限档位实际不生效。
+            //   这里才是必须执行的位置。
+            //   单发与并行两条路径都要有，漏一条就能被多工具并行绕过。
+            const permBlock = this.checkPermissionTier(fn.name, args)
+            if (permBlock) {
+              this.emit({ type: 'tool_start', tool: fn.name, args })
+              this.emit({ type: 'tool_end', tool: fn.name, result: { callId: '', ok: false, content: '', error: permBlock } })
+              this.messages.push({ role: 'tool', content: notExecutedNote(permBlock), tool_call_id: tc.id })
+              continue
+            }
+            const roleBlock = this.checkRoleGateFor(fn.name)
+            if (roleBlock) {
+              this.messages.push({ role: 'tool', content: notExecutedNote(roleBlock), tool_call_id: tc.id })
+              continue
+            }
             if (guardResult.requiresApproval && !this.config.skipApproval) {
               // 创建审批请求
               const approvalReq = getApprovalService().requestApproval({
@@ -2197,6 +2388,18 @@ private summarizer: ConversationSummarizer | null = null
                 })
                 continue
               }
+
+              // 🔒 与单发路径对称：并行分支同样必须过权限与角色闸门
+              const pPerm = this.checkPermissionTier(tc.function.name, this.safeArgs(tc))
+              if (pPerm) {
+                this.messages.push({ role: 'tool', content: notExecutedNote(pPerm), tool_call_id: tc.id })
+                continue
+              }
+              const pRole = this.checkRoleGateFor(tc.function.name)
+              if (pRole) {
+                this.messages.push({ role: 'tool', content: notExecutedNote(pRole), tool_call_id: tc.id })
+                continue
+              }
               if (guardResult.requiresApproval && !this.config.skipApproval) {
                 this.messages.push({
                   role: 'tool',
@@ -2231,6 +2434,28 @@ private summarizer: ConversationSummarizer | null = null
                 })
               }
             }
+          }
+
+          // 🐛 P0 修复：工具调用轮里的「人话」也要留底。
+          //
+          // 旧实现在这一整段里从不给 finalText 赋值 —— finalText 只在
+          // 「纯文本回复」分支才有。于是：
+          //   模型这一轮说「我先看看这个文件」+ 发起工具调用
+          //   → continue 下一轮
+          //   下一轮它又只发工具调用，或循环直接耗尽
+          //   → finalText 始终是 ''
+          //   → 连续空回复恢复 → 「这轮我没能给出有效回复」
+          //
+          // 而模型**明明说了话**。用户看到一句完全无法排查的道歉，
+          // 而不是「我先看看这个文件」。这正是「内容凭空消失」——
+          // 整个项目里最难查的一类 bug。
+          //
+          // 修法：工具分支入口先把清理后的正文存进 finalText，
+          // 下一轮如果模型给出真正的最终回答会覆盖它；
+          // 如果循环耗尽，至少还留着「它当时想干什么」。
+          const turnProse = cleanToolNoiseText((response.text || '').trim())
+          if (turnProse) {
+            finalText = turnProse
           }
 
           // 🆕 Lucky 模式检测：工具调用后检查
@@ -2564,6 +2789,13 @@ private summarizer: ConversationSummarizer | null = null
     // 重复结构化块截断（同一段新闻/列表/搜索输出最多出现 1 次）
     finalText = _stripRepeatedBlocks(finalText)
 
+    // 🩺 记下失败原因，供 sendMessage 的兜底文案展示给用户。
+    //   没这一步的话，用户只会看到「没能给出有效回复」而给不出任何复现信息。
+    if (!finalText) {
+      this.lastFailureReason = this.lastXmlDiagnostic
+        || `模型 ${this.config.model || '未知'} 连续 ${consecutiveEmptyCount} 轮未产出可用内容`
+    }
+
     return finalText
   }
 
@@ -2609,17 +2841,62 @@ private summarizer: ConversationSummarizer | null = null
    */
 
   private async detectContextLimit(): Promise<number> {
-    // 用户手动指定 > 自动检测
-    if (this.config.contextWindow && this.config.contextWindow > 0) {
-      return this.config.contextWindow
-    }
-
     const model = this.config.model
     const cacheKey = `${this.config.baseUrl}::${model}`
 
+    // 🔧 P0-3 修正（2026-10-05）：用户填写值与【服务端事实】取 min。
+    //
+    //   旧写法：用户填了 256000 就直接 return，导致下面 Step 1 的 /models 探测
+    //   （唯一能拿到真实 n_ctx 的地方）永远执行不到。
+    //
+    //   为什么这会造成「首 token 两分钟」：
+    //     · 用户在设置里把上下文窗口填成 256000（长上下文模型的常见量级）
+    //     · 但实际跑的是 9B Q8 —— 这类模型在 LM Studio 里的 n_ctx
+    //       常见值是 8K / 16K / 32K / 64K，不可能是 256K
+    //     · trimContext() 于是拿到 256000 × 0.85 = 217,600 token 的历史预算，
+    //       永远不会触发裁剪
+    //     → 每轮都把 4 万+ token 全量 re-prefill
+    //     → 消费级显卡上 9B Q8 约 200~500 tok/s → 97~240 秒才出第一个 token
+    //     → 撞上 FIRST_TOKEN_TIMEOUT 看门狗 → 降级非流式 → 界面假死
+    //
+    //   为什么是 min 而不是「直接信服务端」：
+    //   服务端没报告时（多数服务不给这个字段）会得到 null，
+    //   此时必须保留用户的值 —— 用户是唯一的信息源，不能凭空丢。
+    //
+    //   服务端事实从哪来：modelServerFacts 在【探测本地模型时】已经从
+    //   /v1/models 的 max_context_length / n_ctx / max_model_len 读到了，
+    //   这里同步读回，零额外网络请求。
+    const serverWindow = recallServerFacts(model)?.contextWindow ?? null
+    const userWindow = (this.config.contextWindow && this.config.contextWindow > 0)
+      ? this.config.contextWindow
+      : null
+
+    if (userWindow != null || serverWindow != null) {
+      // 两者都有 → 取小；只有一方 → 用那一方
+      const effective = (userWindow != null && serverWindow != null)
+        ? Math.min(userWindow, serverWindow)
+        : (userWindow ?? serverWindow)!
+
+      if (userWindow != null && serverWindow != null && userWindow > serverWindow) {
+        console.warn(
+          `[AgentRunner] ⚠️ 上下文窗口以服务端为准：用户填 ${TokenEstimator.format(userWindow)}`
+          + ` > 服务端报告 ${TokenEstimator.format(serverWindow)}`
+          + '（模型实际只能吃这么多，填大了会导致每轮 prefill 超时、首 token 极慢）',
+        )
+      }
+
+      _detectedContextCache.set(cacheKey, effective)
+      // 🔧 P1-4：同步写回，供 compactContext() 这类同步方法读取。
+      this._effectiveContextWindow = effective
+      return effective
+    }
+
     // 已缓存
     const cached = _detectedContextCache.get(cacheKey)
-    if (cached != null) {return cached}
+    if (cached != null) {
+      this._effectiveContextWindow = cached
+      return cached
+    }
 
     // ── Step 1: 查询 API /models 端点 ──
     try {
@@ -2630,35 +2907,35 @@ private summarizer: ConversationSummarizer | null = null
 
       if (res.ok) {
         const data = await res.json()
-        const models: any[] = data.data || []
 
-        // vLLM 可能返回 max_model_len
-        const match = models.find((m: any) => m.id === model)
-        if (match) {
-          const limit = match.max_context_length
-            || match.context_length
-            || match.context_window
-            || match.max_model_len     // vLLM
-            || match.max_tokens
-
-          if (limit && limit > 0) {
-            console.log(`[AgentRunner] ✅ API 检测: ${model} = ${TokenEstimator.format(limit)} tokens`)
-            _detectedContextCache.set(cacheKey, limit)
-            return limit
-          }
+        // 🔧 P0-3 配套：复用 modelServerFacts 的【多厂商字段遍历】。
+        //   旧代码只认 4 个字段名（max_context_length / context_length /
+        //   context_window / max_model_len），漏掉了：
+        //     · llama.cpp server 的 meta.n_ctx（藏在 meta 对象里）
+        //     · Ollama 的 model_info["<arch>.context_length"]
+        //   而 modelServerFacts 已经在做遍历候选路径这件事 ——
+        //   判断服务商要维护一张表，而服务商在增加、字段在变；
+        //   遍历候选路径则新服务商接上就自动生效。
+        //   同时把结果 rememberServerFacts 存下来，供下次 detectContextLimit
+        //   同步读回 —— 与 llm.maxContextTokens 分支用同一份事实，不重复探测。
+        const parsed = parseServerFactsFor(data, model)
+        if (parsed?.contextWindow && parsed.contextWindow > 0) {
+          console.log(
+            `[AgentRunner] ✅ API 检测: ${model} = ${TokenEstimator.format(parsed.contextWindow)} tokens`
+            + (parsed.supportsTools === false ? '（服务端报告：不支持工具调用）' : ''),
+          )
+          rememberServerFacts(model, parsed)
+          _detectedContextCache.set(cacheKey, parsed.contextWindow)
+          this._effectiveContextWindow = parsed.contextWindow
+          return parsed.contextWindow
         }
 
-        // 模糊匹配：模型名不在列表，用第一个模型的数据
-        if (!match && models.length > 0) {
-          const first = models[0]
-          const limit = first.max_context_length || first.context_length
-            || first.context_window || first.max_model_len
-          if (limit) {
-            console.log(`[AgentRunner] ⚠️ "${model}" 不在列表，使用首个模型窗口: ${TokenEstimator.format(limit)}`)
-            _detectedContextCache.set(cacheKey, limit)
-            return limit
-          }
-        }
+        // 🔧 P0-3：删掉「模型名不在列表就拿首个模型的窗口」。
+        //   旧行为是取 models[0] 的窗口 —— 在 LM Studio 同时加载了多个模型时
+        //   （一个 32K 一个 1M），会把【别的模型】的窗口安到当前模型头上。
+        //   认错模型的代价比拿不到更大：窗口算大了就是每轮 prefill 超时。
+        //   拿不到就继续往下走（数据库匹配 / 参数量推测），
+        //   那两条至少是「按本模型名字猜」，不会张冠李戴。
       }
     } catch (e: any) {
       // /models 端点不可用，继续下一步
@@ -2670,6 +2947,7 @@ private summarizer: ConversationSummarizer | null = null
       if (modelLower.includes(key)) {
         console.log(`[AgentRunner] 📚 数据库匹配: "${model}" → ${key} = ${TokenEstimator.format(limit)} tokens`)
         _detectedContextCache.set(cacheKey, limit)
+        this._effectiveContextWindow = limit
         return limit
       }
     }
@@ -2686,13 +2964,24 @@ private summarizer: ConversationSummarizer | null = null
       else if (size >= 7) {limit = 131_072}    // 7-13B 普遍支持 128K
       console.log(`[AgentRunner] 🔮 参数推测: ${size}B → ${TokenEstimator.format(limit)} tokens`)
       _detectedContextCache.set(cacheKey, limit)
+      this._effectiveContextWindow = limit
       return limit
     }
 
-    // ── Step 4: 完全未知 → 256K 保守默认 ──
-    const fallback = 262_144
-    console.log(`[AgentRunner] ❓ "${model}" 未知模型，使用默认 ${TokenEstimator.format(fallback)} tokens`)
+    // ── Step 4: 完全未知 → 保守默认 ──
+    // 🔧 P0-3：旧的默认值是 262144（256K）。对「完全未知」的名字用 256K 开头是
+    //   【最危险】的选择 —— 一旦模型实际只有 32K，每轮都会全量 prefill 而不报错，
+    //   用户只会觉得「很卡」而找不到原因。
+    //   改为 32768：一个 32K 窗口对绝大多数本地/中小模型都够用，
+    //   而超出的代价只是「触发一次压缩」，远小于「每轮 prefill 超时」。
+    //   而且此时 Step 1 通常已经拿到过服务端事实、不会走到这里。
+    const fallback = 32_768
+    console.log(
+      `[AgentRunner] ❓ "${model}" 未知模型，使用保守默认 ${TokenEstimator.format(fallback)} tokens`
+      + '（长对话时会自动压缩；如需更大窗口请在设置里手动指定）',
+    )
     _detectedContextCache.set(cacheKey, fallback)
+    this._effectiveContextWindow = fallback
     return fallback
   }
 
@@ -2954,23 +3243,50 @@ private summarizer: ConversationSummarizer | null = null
     const earlyResults = new Map<string, { content: string; error?: string }>()
 
     try {
-      // 用 AbortSignal.timeout() 统一管理超时
+      // 🔧 P0-1 修正（2026-10-05）：超时与用户中止必须【组合】，不能【二选一】。
+      //
+      //   旧写法：abortSignal ? (abortSignal.aborted ? abortSignal : timeoutSignal) : timeoutSignal
+      //   实际后果（两条都是 bug）：
+      //     · 用户【没】点停止时（99% 的时间）→ 只挂 timeoutSignal
+      //       → 用户的「停止」按钮对这次请求【完全无效】，点了也不会中断。
+      //     · 用户【已】点停止时 → 只挂 abortSignal
+      //       → 这条请求【永远没有超时保护】，后端挂起就永久占用连接。
+      //   症状：偶发「停不下来」「一直转圈」，且日志里看不到任何超时记录。
+      //
+      //   正确语义是「任意一个触发就取消」= AbortSignal.any([...]).
+      //   AbortSignal.any 自带去重：任一 signal 已 aborted 时立即进入 aborted 态，
+      //   不需要再手写 aborted 分支。
       const timeoutMs = effectiveTimeout * 1000
       const timeoutSignal = AbortSignal.timeout(timeoutMs)
-      // 如果用户中止 + 超时，取最近的
       const fetchSignal = abortSignal
-        ? (abortSignal.aborted ? abortSignal : timeoutSignal)
+        ? AbortSignal.any([abortSignal, timeoutSignal])
         : timeoutSignal
 
-      const streamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
+      // 🔧 P1-3 配套：本地 OpenAI 兼容端点 401 → 去掉鉴权头重试一次。
+      //   与 llmProvider.call() 的行为保持一致（那边早就有了，这里一直没跟上）。
+      //   本地 LM Studio / Ollama 通常不鉴权，但用户很容易在设置里填一个占位 key，
+      //   结果就是 401 Invalid token —— 而不重试的话错误信息对用户毫无指导意义。
+      const bodyStr = JSON.stringify({ ...requestBody, stream: true })
+      const baseHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      const withAuth = this.config.apiKey && !isLocalEndpoint(this.config.baseUrl)
+
+      let streamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({ ...requestBody, stream: true }),
+        headers: withAuth ? { ...baseHeaders, Authorization: `Bearer ${this.config.apiKey}` } : baseHeaders,
+        body: bodyStr,
         signal: fetchSignal,
       })
+
+      if (streamRes.status === 401 && isLocalEndpoint(this.config.baseUrl) && this.config.apiKey) {
+        console.warn('[AgentRunner] 本地端点返回 401（疑似误填 API Key），去掉鉴权头重试一次')
+        try { await streamRes.body?.cancel() } catch { /* ignore */ }
+        streamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: baseHeaders,
+          body: bodyStr,
+          signal: fetchSignal,
+        })
+      }
 
       if (!streamRes.ok) {
         const errBody = await streamRes.text().catch(() => '')
@@ -2978,10 +3294,7 @@ private summarizer: ConversationSummarizer | null = null
           console.log(`[AgentRunner] 模型不支持流式 → 执行非流式请求`)
           const nonStreamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.config.apiKey}`,
-            },
+            headers: withAuth ? { ...baseHeaders, Authorization: `Bearer ${this.config.apiKey}` } : baseHeaders,
             body: JSON.stringify({ ...requestBody, stream: false }),
             signal: fetchSignal,
           })
@@ -3181,7 +3494,16 @@ private summarizer: ConversationSummarizer | null = null
           this._reasoningAccum = ''
           return { text: partialText, usage: streamUsage }
         }
-        return { error: `模型响应超时，请稍后重试或简化问题` }
+        // 🔧 P1-1 配套（内联路径）：同样【不】降级到非流式。
+        //   流式慢的原因（prefill 重 / 上下文过大 / GPU 被后台任务占用）
+        //   在非流式路径【完全相同】，重发只会丢掉已有内容、白算一遍 prefill，
+        //   并让用户在 600s 内看不到任何反馈。
+        //   零字可收时给出可行动的错误，并把最可能的成因（上下文窗口填大了）点出来。
+        return {
+          error: `模型响应超时（${effectiveTimeout}s 内未收到内容）。`
+            + '如果每次都超时，请在「设置 → LLM 模型」里把上下文窗口改成与服务端实际值一致'
+            + '（0=自动检测）——窗口填得比模型实际能吃的还大，会导致每轮重新预填充全部历史。',
+        }
       }
       console.error(`[AgentRunner] 流式异常:`, err.message)
       return { error: `LLM 请求失败: ${err.message?.slice(0, 150) || err}` }
@@ -3214,6 +3536,13 @@ private summarizer: ConversationSummarizer | null = null
     // ══════════════════════════════════════════════════════
     // 白名单用已注册的完整工具名：防止 <b>、<br> 这类 HTML 标签被误当成工具。
     const xmlResult = parseXmlToolCallsShared(streamText, getToolNames())
+
+    // 🩺 解析失败时把原因存起来：一旦这轮最终也没产出内容，
+    //   兜底文案就能告诉用户「到底是哪个工具名没被认识」而不是一句道歉。
+    //   以前 xmlResult.diagnostic 在这里算完就扔了。
+    if (xmlResult.hadToolCallIntent && xmlResult.calls.length === 0) {
+      this.lastXmlDiagnostic = xmlResult.diagnostic || '工具调用格式无法识别'
+    }
 
     if (xmlResult.calls.length > 0) {
       if (tools.length === 0) {
