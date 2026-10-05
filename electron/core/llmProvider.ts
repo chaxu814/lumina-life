@@ -257,8 +257,21 @@ export class LLMProvider {
     }
     const effectiveTimeout = httpTimeoutSeconds > 0 ? httpTimeoutSeconds * 1000 : 1_800_000 // 默认 30min
 
+    // 🔧 P0-1 修正（2026-10-05）：外部 signal、内部超时、看门狗必须【组合】。
+    //
+    //   旧写法：const masterSignal = opts.signal || controller.signal
+    //   实际后果：只要调用方传了 opts.signal（agentRunner 的包装器、petWindow 等都会传），
+    //   masterSignal 就是 opts.signal，controller.abort('timeout') 对 fetch 【毫无作用】。
+    //   于是 maxTimeout 和看门狗同时失效 —— 请求既不会超时、也不会被看门狗打断。
+    //   症状：本地模型卡住时界面永久转圈，日志里既没有超时也没有看门狗记录。
+    //
+    //   AbortSignal.any 语义 =「任意一个触发就取消」，且自带去重。
+    //   三路必须【全部】入列：外部取消 / 总超时 / 看门狗，漏哪一路哪路就失效。
     const controller = new AbortController()
-    const masterSignal = opts.signal || controller.signal
+    const timeoutSignal = AbortSignal.timeout(effectiveTimeout)
+    const masterSignal = AbortSignal.any(
+      opts.signal ? [opts.signal, timeoutSignal, controller.signal] : [timeoutSignal, controller.signal],
+    )
 
     const maxTimeout = setTimeout(() => controller.abort('timeout'), effectiveTimeout)
 
@@ -483,41 +496,61 @@ export class LLMProvider {
       if (watchdogTimer) {clearTimeout(watchdogTimer)}
 
       if (err.name === 'AbortError' || String(err.message).includes('abort')) {
-        if (masterSignal.aborted && opts.signal?.aborted) {
+        if (opts.signal?.aborted) {
           return { error: '用户中止', aborted: true }
         }
+        // 🔧 P0-1 配套：现在能区分是谁取消的了。
+        //   旧代码只看 masterSignal.aborted，而 masterSignal 就是 opts.signal，
+        //   所以「超时」和「用户中止」被当成同一件事，报错文案全是错的。
+        const byTimeout = timeoutSignal.aborted
+        const byWatchdog = controller.signal.aborted && !byTimeout
 
         const alive = await checkConnectionAlive(this.config.baseUrl).catch(() => false)
         if (!alive) {
           return { error: '💀 LLM 服务连接断开' }
         }
 
-        // 流式超时但已有部分内容 → 直接返回
+        emit?.onThinkingStream?.('', false, true)
+        this.reasoningStarted = false
+        this.reasoningAccum = ''
+
         const partialText = (streamText || '').trim()
-        if (partialText.length > 20) {
-          console.warn(`[LLMProvider] 🐢 流式超时 (${effectiveTimeout}ms) 但已有 ${partialText.length} 字 → 直接返回`)
-          emit?.onThinkingStream?.('', false, true)
-          this.reasoningStarted = false
-          this.reasoningAccum = ''
-          // truncated: true 让上层知道这段文本随时可能断在半句上：
-          // 不标的话，调用方会把它当完整结论展示，用户就只能看到半截答案而毫无提示。
-          // toolCalls 同样必须带出去 —— 模型可能刚说「我来帮你搜索一下…」就调了工具，
-          // 丢掉 tool_calls 会让这轮对话到此为止，再没有下文。
+        const partialToolCalls = buildAccumulatedToolCalls()
+        const reason = byWatchdog ? '看门狗超时（服务端长时间无数据）' : `请求超时（${Math.round(effectiveTimeout / 1000)}s）`
+
+        // 🔧 P1-1 / P1-2 修正（2026-10-05）：删除「流式超时 → 降级非流式重发」。
+        //
+        //   旧逻辑：partialText.length <= 20 时，重发一个完整的非流式请求。
+        //   为什么这是错的（三条）：
+        //     1. 流式慢的【原因】在非流式路径【完全相同】——重发不会变快，
+        //        反而把已收到的流式内容丢掉。
+        //     2. 非流式最长等 600s 且【零反馈】，用户看到的是「假死」而不是「慢」，
+        //        等于把可观测的慢，换成了不可观测的卡。
+        //     3. 白白多算一遍完整 prefill。对本地 9B 模型这是双倍时间。
+        //   且 20 字阈值是任意的：模型常以「我来帮你搜索一下」（7 字）开头，
+        //   触发重发的概率并不低。
+        //
+        //   正确做法：如实返回已收到的内容 + truncated 标记，交由上层展示提示。
+        //   用户宁可看到「可能不完整」的前半段，也不要一个永远转圈的对话框。
+        console.warn(
+          `[LLMProvider] 🐢 流式中断：${reason}，已收 ${partialText.length} 字 / ${partialToolCalls?.length ?? 0} 个工具调用`,
+        )
+        if (partialText.length > 0 || partialToolCalls) {
           return {
-            text: partialText,
-            toolCalls: buildAccumulatedToolCalls(),
+            text: partialText || undefined,
+            toolCalls: partialToolCalls,
             usage: streamUsage,
             truncated: true,
           }
         }
 
-        // 内容太少 → 降级非流式
-        console.warn(`[LLMProvider] 🐢 流式超时且内容不足 → 降级非流式`)
-        emit?.onThinkingStream?.('', false, true)
-        this.reasoningStarted = false
-        this.reasoningAccum = ''
-
-        return await this.callNonStreaming(opts, emit)
+        // 一个字都没收到：这不是「截断」，是彻底失败，必须给出可行动的错误。
+        return {
+          error: byWatchdog
+            ? `模型服务长时间无响应（${reason}）。本地模型在 prefill 阶段可能就已超时——`
+              + '建议在「设置 → LLM 模型」里把上下文窗口调成与模型实际 n_ctx 一致（不是越大越好）。'
+            : `模型响应超时（${reason}）。可尝试：缩短对话 / 换更快的模型 / 调高超时。`,
+        }
       }
 
       return { error: err.message || String(err) }

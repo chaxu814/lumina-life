@@ -24,6 +24,33 @@ export interface ToolDef {
    *  长耗时编排类工具必须声明 —— 超时 + 重试 + Promise.race 不取消底层 promise
    *  意味着「超时」不等于「停止」，每次超时会重跑整个流程而上一轮还在跑。 */
   timeoutMs?: number
+
+  // ── 🔧 P0-4 副作用语义（2026-10-05）─────────────────────────────
+  //
+  // 【为什么加这两个字段】
+  // executeToolWithRetry 用 Promise.race 做超时，而 Promise.race 【不会取消】
+  // 输掉的那个分支。所以一次「超时」的真实含义是：底层调用【还在跑】，
+  // 只是我们不等了，然后 retry 又发起了一次同样的调用。
+  //
+  // 对只读工具（file_read / web_search / ocr）这没问题，最多慢一点。
+  // 对有副作用的工具则是事故：
+  //   · mail_send    → 用户收到 3 封邮件，而 UI 显示「执行失败」
+  //   · file_write   → 同一份内容写 3 遍（被中断时可能只留半份）
+  //   · shell        → 同一条命令跑 3 次（rm / git push / 部署脚本）
+  //   · computer_use → 重复点击、重复输入
+  // 且这些工具全项目【没有任何一处声明自己能否重放】。
+  //
+  // 【两个字段的语义，不要混】
+  //   sideEffect —— 执行会改变外部世界（文件/网络/系统/真实输入）。
+  //   idempotent —— 重复执行【安全】且结果等价（幂等）。
+  //   判定规则：sideEffect && !idempotent → 禁止自动重试。
+  //
+  // 【缺省值刻意保守】
+  // 不声明时按 sideEffect=true + idempotent=false 处理 —— 即【不重试】。
+  // 宁可少重试一次让用户手动再点，也不要默默发 3 封邮件。
+  // 「不确定有没有副作用」在安全上等同于「有副作用」。
+  sideEffect?: boolean
+  idempotent?: boolean
 }
 
 export interface ToolCall {

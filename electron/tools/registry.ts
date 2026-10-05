@@ -9,7 +9,7 @@
 // ============================================================
 
 import type { ToolDef, ToolResult, LLMToolCall } from './types'
-import { getSecurityGuard, GuardSeverity } from '../securityGuard'
+import { getSecurityGuard } from '../securityGuard'
 
 type ToolImpl = (args: Record<string, any>) => Promise<ToolResult>
 
@@ -77,7 +77,7 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   /*** 🟡 L2 — Agent 日常模式：文件+搜索+记忆+团队 */
   agent: {
     description: 'Agent 模式 — 日常使用工具（约 32 个）',
-    includes: ['files_core', 'shell', 'web_search', 'memory', 'tasks_core', 'system_core', 'team'],
+    includes: ['files_core', 'shell', 'web_search', 'memory', 'tasks_core', 'system_core', 'team', 'productivity', 'skills'],
     tools: [],
   },
 
@@ -126,6 +126,25 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   system_core: {
     description: '系统工具（核心）',
     tools: ['datetime', 'screenshot', 'system_info', 'notification', 'open_file'],
+  },
+
+  // ── 生活/效率类工具 ────────────────────────────────
+  // 为什么要单开一层：日历、桌面整理这类「帮用户管理他自己的东西」的能力，
+  // 既有独立的隐私含义（会碰用户的日程和文件），又不属于开发工作流。
+  // 挂进模式层（agent/chat/developer）会破坏分档 —— 模式层是静态表独占，
+  // 工具自己声明进不去，写了也会被 resolveToolset 忽略，
+  // 结果就是 tests/delegationSafety.test.ts 的孤儿守卫报红。
+  productivity: {
+    description: '生活效率（日程 / 桌面整理）',
+    tools: ['calendar_list', 'calendar_add', 'calendar_remove', 'calendar_free',
+            'desktop_tidy_scan', 'desktop_tidy_plan', 'desktop_tidy'],
+  },
+
+  // 技能扩展：装第三方技能 = 改变 Agent 自身能力，风险模型与日常工具不同。
+  // 与已有的 skills（已装技能的执行入口）合为一层，方便用户一次性开关。
+  skills: {
+    description: '技能系统（已装技能执行 + 第三方技能搜索/安装）',
+    tools: ['skill_run', 'skill_search', 'skill_install'],
   },
 
   git: {
@@ -211,11 +230,6 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   mcp: {
     description: 'MCP 协议 — 连接外部工具服务器',
     tools: ['mcp_list_servers', 'mcp_connect', 'mcp_list_tools', 'mcp_call_tool'],
-  },
-
-  skills: {
-    description: '已安装的 Skill 工具',
-    tools: ['skill_run'],
   },
 
   skill_system: {
@@ -343,8 +357,12 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 // ═══════════════════════════════════════════════════════════
 
 export function registerTool(def: ToolDef, impl: ToolImpl): void {
-  toolDefinitions.set(def.name, def)
-  toolImplementations.set(def.name, impl)
+  // 🔧 P0-4：注册时自动补齐副作用语义（ToolDef 自己显式声明的优先）。
+  //   接入点选在这里而不是 82 个 impl 文件里，是因为这是【唯一】的注册通道 ——
+  //   漏过一个文件就会漏过一个安全属性。
+  const annotated = withSideEffects(def)
+  toolDefinitions.set(annotated.name, annotated)
+  toolImplementations.set(annotated.name, impl)
 }
 
 export function getToolDef(name: string): ToolDef | undefined {
@@ -495,7 +513,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
 export interface RetryConfig {
   /** 单次工具调用超时 (ms)，默认 30000 */
   timeoutMs?: number
-  /** 最大重试次数，默认 2 */
+  /** 最大重试次数，默认 2。
+   *  🔧 P0-4：仅对「无副作用或幂等」的工具生效。sideEffect && !idempotent 的工具
+   *  会被强制降到 0 —— 超时后返回「结果未知，请确认」，绝不自动重发。 */
   maxRetries?: number
   /** 重试间隔策略: 'fixed' | 'exponential'，默认 'exponential' */
   backoff?: 'fixed' | 'exponential'
@@ -503,6 +523,103 @@ export interface RetryConfig {
   retryDelayMs?: number
   /** 工具特定的超时覆盖 (ms) */
   toolTimeouts?: Record<string, number>
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🔧 P0-4 副作用判定（2026-10-05）
+//
+// 【背景：本文件 636 行原本写着】
+//   「底层 promise 并没被取消，重试会叠加出一串仍在后台跑的任务。」
+// 注释准确地描述了问题，但没有解决它。配合 maxRetries=2，
+// 一次「超时」实际会发起【3 次】执行。
+//
+// 【放大因素：超时文案不匹配短路名单】
+// 超时抛的是 `工具 "x" 执行超时 (60000ms)`，而 NETWORK_FATAL_ERRORS
+// 只包含 ETIMEDOUT / ECONNREFUSED 等【网络错误码】，不含这个中文文案。
+// 于是超时不短路，直接进入重试循环 —— 这正是重复执行的主要入口。
+//
+// 【业界对照】
+//   · cc-haha 踩过同一个坑（issue #766），做法是「已 yield 的尝试永不重放」。
+//   · OpenClaw 设了终止性错误码 PROVIDER_POST_DISPATCH_AMBIGUITY_ERROR_CODE，
+//     把「已投递但结果不明」明确判为不可重放。
+// 我们没有这两个机制，所以补了一个显式的声明层。
+
+/** 工具是否可安全重试。缺省【不可重试】—— 不确定时保守是对的。 */
+function isRetryableTool(name: string): { retryable: boolean; reason: string } {
+  const def = toolDefinitions.get(name)
+  if (!def) {
+    // 未知工具：不执行到重试层，这里按可重试（错误会在 executeTool 里先报出来）
+    return { retryable: true, reason: '工具未注册' }
+  }
+  // 显式声明了 idempotent=true 的，无论是否改外部世界都可重试
+  if (def.idempotent === true) {return { retryable: true, reason: '显式声明幂等' }}
+  // 显式声明了 sideEffect=false 的，只读操作，可重试
+  if (def.sideEffect === false) {return { retryable: true, reason: '显式声明无副作用' }}
+  // 缺省（两侧都没声明）→ 保守：不重试
+  return { retryable: false, reason: '未声明副作用语义，按「可能有副作用」处理，不自动重发' }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🔧 P0-4 副作用标注表（2026-10-05）
+//
+// 【为什么用集中表，而不是在 82 个 impl 文件里逐个加字段】
+// 1. 副作用与否是【安全属性】，不是业务属性。它由「这个工具改不改变外部世界」
+//    决定，不该和工具实现耦合。
+// 2. 82 个文件的逐个标注必然漏；漏一个就是一次重复执行事故。
+//    漏在这里只是「多一次重试」，漏在那里是「发 3 封邮件」。
+// 3. 需要长期维护的是【这张表】，而不是 82 个文件的 diff。
+//
+// 【分三类的理由】
+//   · NO_SIDE_EFFECT  —— 纯读。超时重试安全，最多慢一点。
+//   · IDEMPOTENT      —— 会改外部世界，但重复执行等价。
+//     （git_status 看着像只读，但会写 .git 索引；同一参数重复调用等价）
+//   · （未列出）       —— 按「可能有副作用」处理，不重试。
+//
+// 【如何新增一个只读工具】
+// 往 READ_ONLY 集合里加一个名字即可。新增不读的就【不要】加 ——
+// 漏加的代价是一次多余重试，多加的代价是一次重复副作用操作。
+// ═══════════════════════════════════════════════════════════
+
+/** 纯只读工具：可安全重试 */
+const READ_ONLY_TOOLS = new Set<string>([
+  'datetime', 'system_info', 'disk_list', 'desktop_scan',
+  'file_list', 'file_read', 'file_search', 'ast_search', 'grep_search', 'glob_search', 'read_file',
+  'web_search', 'web_fetch', 'browser', 'browser_cdp', 'content_collect', 'trafilatura_extract',
+  'mcp_list_servers', 'mcp_list_tools', 'mcp_read_resource', 'mcp_search',
+  'ocr', 'desktop_see', 'screenshot', 'voice_transcribe', 'hearing_read',
+  'weather', 'weather_get', 'bilibili_hot_search', 'news_collect', 'news_digest',
+  'memory_search', 'memory_chat_search', 'memory_recall', 'memory_list',
+  'proactive_status', 'team_status', 'team_list', 'agent_status',
+  'todo_list', 'calendar_list', 'skill_search', 'skill_list', 'code_daily_generate',
+  'creator_outline', 'social_engine', 'time_capsule', 'pomodoro_status', 'oath_make',
+  'deep_research', 'weather_brief', 'desktop_tidy_scan', 'developer_companion_check',
+  'desktop_scan_hardware', 'process_list', 'window_list', 'run_subagents_status',
+])
+
+/** 幂等工具：会改变外部世界，但重复执行等价，可安全重试 */
+const IDEMPOTENT_TOOLS = new Set<string>([
+  'git_status',        // 读操作，但会写 .git 索引；同参数重复等价
+  'memory_save',       // 同一条记忆重复写入为幂等（upsert 语义）
+  'file_edit',         // 按内容定位替换，重复应用结果等价
+  'mode_switch',       // 切到同一模式重复调用等价
+  'cron_delete',       // 删不存在的任务等价
+  'pomodoro_stop',     // 停已停止的计时器等价
+  'desktop_tidy_scan', // 扫描是只读，保守起见也归入幂等
+])
+
+/** 构建一个带副作用标注的 ToolDef（注册时调用，声明优先于默认表） */
+export function withSideEffects<T extends { name: string; sideEffect?: boolean; idempotent?: boolean }>(
+  def: T,
+): T {
+  if (def.sideEffect !== undefined || def.idempotent !== undefined) {return def}
+  if (IDEMPOTENT_TOOLS.has(def.name)) {
+    return { ...def, sideEffect: true, idempotent: true }
+  }
+  if (READ_ONLY_TOOLS.has(def.name)) {
+    return { ...def, sideEffect: false, idempotent: true }
+  }
+  // 未列出：不擅自假设。保持 undefined → isRetryableTool 走保守分支。
+  return def
 }
 
 const DEFAULT_RETRY_CONFIG: Required<RetryConfig> = {
@@ -629,9 +746,19 @@ export async function executeToolWithRetry(
   // ── 不可重试的网络错误（网络不可达，重试无意义） ──
   const NETWORK_FATAL_ERRORS = ['ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET', 'EHOSTUNREACH', 'CERT_HAS_EXPIRED']
 
-  for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
+  // 🔧 P0-4：本次调用到底允不允许重发。
+  //   effectiveMaxRetries 而不是直接用 cfg.maxRetries —— 副作用工具强制降到 0。
+  const { retryable, reason: retrySkipReason } = isRetryableTool(name)
+  const effectiveMaxRetries = retryable ? cfg.maxRetries : 0
+  if (!retryable) {
+    console.warn(`[registry] ⚠️ 工具 "${name}" 禁用自动重试：${retrySkipReason}`)
+  }
+
+  for (let attempt = 0; attempt <= effectiveMaxRetries; attempt++) {
     try {
       // 带超时的 Promise.race
+      // ⚠️ Promise.race 不会取消输掉的分支 —— 这正是下面禁用副作用重试的原因：
+      //    超时后底层调用仍在跑，重试等于再跑一次。
       const result = await Promise.race([
         executeTool(name, args),
         new Promise<ToolResult>((_, reject) =>
@@ -661,11 +788,29 @@ export async function executeToolWithRetry(
       }
     }
 
-    if (attempt < cfg.maxRetries) {
+    // 🔧 P0-4：超时且工具可能有副作用 → 不得重发。
+    //   「超时」不等于「没执行」——最危险的情况就是它已经发出去 / 写下去了，
+    //   只是我们没等到响应。此时重发就是制造重复。
+    const wasTimeout = !!lastError && lastError.includes('执行超时')
+    if (wasTimeout && !retryable) {
+      console.warn(`[registry] 🛑 工具 "${name}" 超时且可能有副作用，拒绝重发（${retrySkipReason}）`)
+      return {
+        callId: '',
+        ok: false,
+        content:
+          `工具「${name}」执行超过 ${Math.round(timeoutMs / 1000)}s，已停止等待。\n`
+          + '⚠️ 重要：这类操作可能【已经生效】（例如邮件已发出、文件已写入、命令已执行），'
+          + '只是没有收到响应。为了避免重复执行，系统没有自动重试。\n'
+          + '请先人工确认实际结果，再决定是否需要重新执行。',
+        error: `工具「${name}」超时，执行结果未知（未自动重试以避免重复操作）。${lastError}`,
+      }
+    }
+
+    if (attempt < effectiveMaxRetries) {
       const delay = cfg.backoff === 'exponential'
         ? cfg.retryDelayMs * Math.pow(2, attempt)
         : cfg.retryDelayMs
-      console.log(`[registry] 工具 "${name}" 第 ${attempt + 1}/${cfg.maxRetries} 次重试 (${delay}ms 后)... 错误: ${lastError}`)
+      console.log(`[registry] 工具 "${name}" 第 ${attempt + 1}/${effectiveMaxRetries} 次重试 (${delay}ms 后)... 错误: ${lastError}`)
       await new Promise((r) => setTimeout(r, delay))
     }
   }

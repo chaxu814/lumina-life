@@ -13,6 +13,8 @@
 import { getMemoryStore, normalizeFactSource } from './memory/memoryStore'
 import { globalEventBus, BusEvents } from './eventBus'
 import { isEnabled } from './core/featureFlags'
+// 🔧 P0-2：接入 LLM 优先级协调器，防止记忆精炼抢占用户对话的本地推理资源。
+import { llmCoordinator, PRIORITY } from './llmCoordinator'
 import type { AgentEvent } from './tools/types'
 import type { RelationshipEventKind } from './memory/relationshipEvents'
 
@@ -29,6 +31,32 @@ export interface RefinerConfig {
 export const AUTO_REFINE_EVERY_N_TURNS = 8
 export const globalTurnCount = 0
 
+// ═══════════════════════════════════════════════════════════
+// 🔧 P0-2 后台任务调度（2026-10-05）
+//
+// 【背景：为什么这里必须加闸门】
+// autoRefine 一次会跑【4 次 LLM 调用】（事实 / 关系事件 / 反思 / 人格），
+// 而且是在 agentRunner 一轮对话【刚结束】时立刻触发的。
+//
+// 在本地单卡推理（LM Studio + 消费级显卡）下，后果是：
+//   用户上一条消息刚结束 → 记忆精炼的 4 次 prefill 抢占了整张卡
+//   → 用户紧接着发下一条 → 请求排在 LM Studio 队列里等它跑完
+//   → 界面表现：对话「时不时」卡一下。
+// 这就是「间歇性卡顿」的完整成因 —— 它取决于后台任务那一刻有没有在跑。
+//
+// 【本函数的做法】
+// 不自己实现排队，而是复用已有的 llmCoordinator（它已经实现了五级优先级、
+// 用户活跃时暂停后台、空闲后逐级恢复）。记忆精炼属于 PRIORITY.MEMORY。
+//
+// 【为什么用 waitForPermission 而不是 requestPermission】
+// 记忆精炼是「锦上添花」而非「必须有」：拿不到许可时直接放弃这一轮是
+// 合理的，下次摘要触发时会自然补上。用 requestPermission 会静默丢弃，
+// 用 waitForPermission 则会在用户空闲后自动补做 —— 不丢数据，也不抢资源。
+// ═══════════════════════════════════════════════════════════
+
+/** 等待许可的最长时间。超过则放弃本轮精炼，不阻塞调用方。 */
+const REFINE_PERMISSION_TIMEOUT_MS = 8_000
+
 /**
  * 自动三层精炼 — 从对话摘要中提取事实、反思、更新人格
  */
@@ -38,6 +66,12 @@ export async function autoRefine(
 ): Promise<void> {
   const store = getMemoryStore()
   if (!store) {return}
+
+  // 🔧 P0-2：先要许可，拿不到就安静退出。
+  if (!llmCoordinator.requestPermission('MemoryRefiner', PRIORITY.MEMORY)) {
+    console.log('[MemoryRefiner] 用户活跃中，本轮精炼跳过（摘要数据不会丢，下次会补）')
+    return
+  }
 
   try {
     const summaries = store.getRecentSummaries?.(2) ?? []
@@ -63,6 +97,11 @@ export async function autoRefine(
     globalEventBus.emit(BusEvents.MEMORY_SUMMARIZED, { summary: '三层记忆精炼完成' })
   } catch (err) {
     console.error('[MemoryRefiner] 自动精炼失败:', err)
+  } finally {
+    // 🔴 必须在 finally 里释放。
+    //   漏释放会让 runningRequests 里的 source 永远不被清除，
+    //   后续 requestPermission 对这个 source 的判断会一直失真。
+    llmCoordinator.releasePermission('MemoryRefiner')
   }
 }
 

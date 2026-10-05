@@ -716,6 +716,18 @@ export async function compactMessagesAsync(
 export function compactMessages(
   messages: AgentMessage[],
   compressedSummary: string | null,
+  // 🔧 P1-4 修正（2026-10-05）：把 contextWindow 传下去。
+  //   函数体第 636 行已经在用 getCompactorBudget(contextWindow) 了，
+  //   但参数列表里【根本没有这个形参】—— 调用方传不传都拿到 undefined，
+  //   于是每次都走 `return COMPACTOR_TOKEN_BUDGET`（131_072）这个硬编码分支。
+  //   结果：压缩触发线固定在 131072 × 0.65 ≈ 85K token。
+  //
+  //   后果：模型真实窗口只有 32K 时，对话在 32K 就溢出了，
+  //   而压缩器要到 85K 才会动手 —— 永远不会触发。
+  //   修好之后：getCompactorBudget(32768) → 32768 × 0.65 ≈ 21K 就开始压缩。
+  //
+  //   形参缺省保留 undefined 行为（向后兼容），但调用方 agentRunner 已改为显式传入。
+  contextWindow?: number,
 ): {
   messages: AgentMessage[]
   summary: CompactorSummary
