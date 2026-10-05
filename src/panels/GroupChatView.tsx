@@ -27,6 +27,7 @@ import { injectEmotionStyles } from '../components/AgentEmotionBar'
 import { addBookmark } from '../services/messageBookmarks'
 import { showToast } from '../components/Toast'
 import LinkifiedText from '../components/LinkifiedText'
+import PermissionSelector, { usePermission } from '../components/PermissionSelector'
 import TeamPanel from './TeamPanel'  // 🆕 团队面板整合
 import { buildAgentPromptLite } from '../data/agentSouls'
 import {
@@ -526,6 +527,13 @@ export default function GroupChatView() {
   // null = 尚未探测完；true = 本地模型已就绪；false = 没就绪（该提醒）
   const [localModelReady, setLocalModelReady] = useState<boolean | null>(null)
   const [localDetecting, setLocalDetecting] = useState(false)
+  /** 🔧 2026-10-05：探测的真实失败原因（null = 就绪或尚未探测） */
+  const [localProbeInfo, setLocalProbeInfo] = useState<{
+    ok: boolean
+    kind: string | null
+    headline: string
+    advice: string
+  } | null>(null)
   // 探测逻辑抽成函数：初始挂载和「↻ 重新检测」按钮共用一套判定，
   // 免得两处判定漂移（曾经出现初始判定通过、按钮判定不通过的隐患）。
   const probeLocal = () => {
@@ -536,9 +544,22 @@ export default function GroupChatView() {
         const ready = Array.isArray(r?.found) && r.found.some(
           (f: any) => Array.isArray(f?.models) && f.models.length > 0,
         )
+        // 🔧 2026-10-05：把探测的【真实失败原因】留下来。
+        //   旧实现只回一个布尔值，于是「服务没开」「key 不对」「没加载模型」
+        //   三种完全不同的故障，在界面上全部渲染成同一句「尚未配置 LLM」。
+        //   用户因此反复去检查 API 地址 —— 而真实原因可能只是 key 不对。
+        if (!ready) { setLocalProbeInfo(r?.summary || null) } else { setLocalProbeInfo(null) }
         return ready
       })
-      .catch(() => false)
+      .catch((e: any) => {
+        setLocalProbeInfo({
+          ok: false,
+          kind: 'http',
+          headline: '本地模型探测失败',
+          advice: `无法完成探测：${e?.message || e}`,
+        })
+        return false
+      })
       .finally(() => { setLocalDetecting(false) })
   }
   const retryLocalDetect = () => { probeLocal().then((ready) => { setLocalModelReady(ready) }) }
@@ -740,6 +761,9 @@ export default function GroupChatView() {
   const gcDragCounter = useRef(0)
   const [gcDragOver, setGcDragOver] = useState(false)
   const [gcDragFiles, setGcDragFiles] = useState<Array<{name:string,size:number,type:string}>>([])
+
+  // 🔒 三档权限：主进程持久化的全局档位，Lumina / 热茶 / Yak 共用同一份
+  const { perm, setTier: setPermTier } = usePermission()
 
   const answerHandlerRef = useRef<((ev: any, msgId?: string) => void) | null>(null)
 
@@ -3881,15 +3905,31 @@ export default function GroupChatView() {
           background: 'var(--yellow-100)', border: '1px solid var(--yellow-500)', fontSize: 12,
           lineHeight: 1.7, flexShrink: 0,
         }}>
-          <strong>⚠️ 尚未配置 LLM</strong><br />
-          当前为<strong>模拟回复模式</strong>，Agent 的回复是预设的固定话术。
-          <br />
-          {/* 本地模型走到这里时，缺的不是 API Key（本地根本不需要），
-              而是 LM Studio / Ollama 里没加载模型。文案要指向真正的动作，否则用户会去设置里
-              找 Key 找半天。 */}
-          {isLocalLLM
-            ? <>请确认 <strong>LM Studio / Ollama 正在运行且已加载模型</strong>，然后在 <strong>设置 → LLM 配置</strong> 中选择该模型。本地模型不需要 API Key。</>
-            : <>请在 <strong>设置 → LLM 配置</strong> 中填写 API Key 和模型，三位 Agent 将拥有真实的个性化对话能力。</>}
+          <strong>⚠️ {isLocalLLM && localProbeInfo ? localProbeInfo.headline : '尚未配置 LLM'}</strong><br />
+          {isLocalLLM && localProbeInfo ? (
+            <>
+              {/* 🔧 2026-10-05：直接把探测到的真实原因和建议说清楚。
+                  旧文案恒定引导用户去「检查 API 地址 / 加载模型」，
+                  而本例的真实原因是 401 鉴权失败 —— 用户照旧文案排查会完全走错方向。 */}
+              <span style={{ display: 'block', margin: '4px 0' }}>{localProbeInfo.advice}</span>
+              {llmConfig.baseUrl ? (
+                <span style={{ display: 'block', margin: '2px 0', opacity: 0.85 }}>
+                  当前端点：<code>{llmConfig.baseUrl}</code>
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              当前为<strong>模拟回复模式</strong>，Agent 的回复是预设的固定话术。
+              <br />
+              {/* 本地模型走到这里时，缺的不是 API Key（本地根本不需要），
+                  而是 LM Studio / Ollama 里没加载模型。文案要指向真正的动作，否则用户会去设置里
+                  找 Key 找半天。 */}
+              {isLocalLLM
+                ? <>请确认 <strong>LM Studio / Ollama 正在运行且已加载模型</strong>，然后在 <strong>设置 → LLM 配置</strong> 中选择该模型。本地模型不需要 API Key。</>
+                : <>请在 <strong>设置 → LLM 配置</strong> 中填写 API Key 和模型，三位 Agent 将拥有真实的个性化对话能力。</>}
+            </>
+          )}
           <div style={{ marginTop: 6 }}>
             <button
               onClick={() => useStore.getState().setActivePanel('settings')}
@@ -5325,10 +5365,12 @@ export default function GroupChatView() {
         padding: '2px 12px 6px', display: 'flex', gap: 8, alignItems: 'center',
         fontSize: 10, color: 'var(--text-secondary)',
       }}>
-        <span style={{ flex: 1 }}>
+        <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
           {gcAttachments.length > 0 ? `📎 ${gcAttachments.length} 个文件待发送  ·  ` : ''}
           {sttListening ? `🎤 语音中${sttStatus?.error ? ' (出错)' : ''}  ·  ` : ''}
           Shift+Enter 换行 · /help 查看命令
+          {/* 🔒 三档权限：与单聊共用同一个后端档位，改一处两边生效 */}
+          <PermissionSelector perm={perm} onChange={setPermTier} />
         </span>
         {/* 🆕 上下文用量指示器 */}
         <ContextUsageIndicator />

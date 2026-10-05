@@ -32,10 +32,55 @@
      之前只有标题栏是 drag 区 —— 用户在正文里按住鼠标拖动，窗口纹丝不动，
      很容易理解成「这窗只能在桌宠那一块里动」。
      正文里有选项按钮和表情按钮，所以整块设为 drag 后再逐个声明 no-drag。 */
-  #chat-panel .cp-log { -webkit-app-region: drag; }
+  /* 🔧 2026-10-05：拖拽区从「整块正文」收回到「标题栏 + 显式手柄」。
+     问题现场：聊天记录区整体是 drag，用户滚不动正文、点不准选项，
+     而且拖拽时窗口贴着桌宠窗口一起动，观感上就是「只能在这个范围内拖」。
+
+     实际行为澄清：-webkit-app-region: drag 是【系统级】的，
+     窗口本身可以拖到屏幕任意位置，不受桌宠窗口约束 ——
+     真正的限制来自「正��区被 drag 吃掉」，而不是窗口边界。
+     所以修法是：把 drag 收回标题栏（本来就该 drag）+ 底部拖动手柄，
+     正文恢复为正常区域（滚轮滚动 + 文字可选 + 按钮可点）。
+
+     额外收益：去掉 user-select: none 对正文的影响，消息内容可以复制了。 */
+  #chat-panel .cp-head { -webkit-app-region: drag; }
+  #chat-panel .cp-log { -webkit-app-region: no-drag; overflow-y: auto; }
+  /* 底部拖动手柄：空白处也能自由拖窗，不用非得瞄准标题栏 */
+  #chat-panel .cp-drag-handle {
+    -webkit-app-region: drag; cursor: move;
+    display: flex; align-items: center; justify-content: center;
+    gap: 5px; flex: none; height: 14px;
+  }
+  #chat-panel .cp-drag-handle::before {
+    content: ''; width: 34px; height: 3px; border-radius: 2px;
+    background: rgba(120,150,200,0.35);
+  }
+  #chat-panel .cp-drag-handle:hover::before { background: rgba(74,158,255,0.6); }
+  /* 🔧 2026-10-05：选项组【容器】也必须声明 no-drag。
+     -webkit-app-region 是【继承】的：父级是 drag 时，未声明的子元素跟着是 drag。
+     旧实现只给按钮（.cp-opt-btn）加了 no-drag，而包裹它们的 .cp-msg-options 没有。
+     后果：点选项时，按钮的【周边区域】属于 drag → 触发窗口移动而不是点击，
+           用户看到的就是「点了没反应、选项不消失」。 */
+  #chat-panel .cp-msg-options { -webkit-app-region: no-drag; }
+  /* 🔧 2026-10-05：已选回看条。点完选项后缩成这行，点击可展开当时的完整选项。
+     需求原话：「选择完之后应该是收起状态，后期还可以打开查看」。 */
+  #chat-panel .cp-msg-chosen {
+    -webkit-app-region: no-drag; cursor: pointer; user-select: none;
+    margin: 2px 12px 4px 44px; padding: 4px 10px; border-radius: 8px;
+    font-size: 11px; color: #7a8ba8; background: rgba(120,150,200,0.07);
+    border: 1px dashed rgba(120,150,200,0.25);
+    transition: all .15s;
+  }
+  #chat-panel .cp-msg-chosen:hover { background: rgba(74,158,255,0.10); color: #4a7fb5; }
+  #chat-panel .cp-msg-chosen.open {
+    background: rgba(74,158,255,0.08); border-style: solid;
+    border-color: rgba(74,158,255,0.3); color: #3a6a9a;
+  }
   #chat-panel .cp-opt-btn,
   #chat-panel .cp-quick-btn,
   #chat-panel .cp-emoji-item { -webkit-app-region: no-drag; }
+  /* 正文可选中、可复制 */
+  #chat-panel .cp-msg { user-select: text; -webkit-user-select: text; }
   #chat-panel .cp-head .cp-title { display: flex; align-items: center; gap: 8px; }
   #chat-panel .cp-head .cp-avatar {
     width: 30px; height: 30px; border-radius: 50%;
@@ -205,6 +250,10 @@
     <input id="pet-chat-input" type="text" placeholder="和 Lumina 说点什么…" autocomplete="off" />
     <button class="cp-input-btn" id="pet-chat-send" title="发送">➤</button>
   </div>
+  <!-- 🔧 2026-10-05：底部拖动手柄。
+       标题栏也能拖，但那条只有 48px 高、容易拖不准；手柄让用户不用瞄准就能
+       把窗口拖到屏幕任意位置，悬停变亮作为可拖提示。 -->
+  <div class="cp-drag-handle" title="按住拖动窗口"></div>
 </div>
 
 <script>
@@ -247,6 +296,8 @@ function showTyping(show) { typingEl.classList.toggle('show', show); if (show) c
 // 多轮之后会同时存在多组 A/B/C，点掉一组还能看到别的 ——
 // 用户感知就是「点了选择它不收回」。
 let _activeOptions = null;
+/** 已选择过的选项（按顺序），用于底部「重看选项」入口 */
+let _optionHistory = [];
 
 /** 收起当前选项组（带淡出动画，避免下方内容突然上跳） */
 function clearChatOptions() {
@@ -255,6 +306,23 @@ function clearChatOptions() {
   if (!w || !w.isConnected) return;
   w.classList.add('leaving');
   setTimeout(() => { try { w.remove() } catch (_) {} }, 180);
+}
+
+/** 🔧 2026-10-05：构建「已选」回看条。
+ *  需求：点完选项应该收起，但用户可能想回去看当时有哪些选项。
+ *  做法：把整组缩成一行灰色文字「A. 帮写 prompt（已选 B. 我自己搞）」，点击展开。 */
+function buildChosenBar(list, chosenIndex) {
+  const bar = document.createElement('div');
+  bar.className = 'cp-msg-chosen';
+  bar.title = '点击展开这轮的全部选项';
+  const letters = list.map((_, i) => String.fromCharCode(65 + i));
+  bar.textContent = `选项 ${letters.join(' / ')} · 已选 ${letters[chosenIndex]}`;
+  bar.onclick = () => {
+    if (bar.classList.contains('open')) { bar.classList.remove('open'); return }
+    bar.classList.add('open');
+    bar.textContent = `选项 ${letters.join(' / ')} · 已选 ${letters[chosenIndex]}（点击收起）`;
+  };
+  return bar;
 }
 
 function addChatOptions(options) {
@@ -268,14 +336,22 @@ function addChatOptions(options) {
     const b = document.createElement('button');
     b.className = 'cp-opt-btn';
     b.textContent = String.fromCharCode(65 + i) + '. ' + o;
-    b.onclick = () => { clearChatOptions(); sendText(o); };
+    b.onclick = () => {
+      // 🔧 2026-10-05：先发出消息，再把选项组换成「已选」回看条。
+      // 旧实现是 clearChatOptions() 后直接 sendText，选项消失得无痕 ——
+      // 用户想确认自己刚才选了什么、当时还有哪些选项，就只能往上翻。
+      _optionHistory.push({ list, chosenIndex: i });
+      try { wrap.replaceWith(buildChosenBar(list, i)); } catch (e) {}
+      _activeOptions = null;
+      sendText(o);
+    };
     wrap.appendChild(b);
   });
   chatLog.appendChild(wrap);
   _activeOptions = wrap;
   chatLog.scrollTop = chatLog.scrollHeight;
 }
-function clearChat() { _activeOptions = null; chatLog.innerHTML = ''; }
+function clearChat() { _activeOptions = null; _optionHistory = []; chatLog.innerHTML = ''; }
 
 // 由主 Agent 回复文本本地派生动作/表情（纯关键词启发式，**不发任何 LLM**）。
 // 替代旧的"同一轮再打一次 pet:chat 意图 LLM"——那会和完整回复并发抢同一个本地模型。

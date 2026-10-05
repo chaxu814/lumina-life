@@ -2073,12 +2073,18 @@ private summarizer: ConversationSummarizer | null = null
       // 🧠 轮次标记 —— 说清楚这是"开始第 N 轮处理"，而不是假装模型在思考。
       //   之前每轮无条件发"思考中... (第 N 轮)"，与模型是否真的在推理无关，
       //   在没有 reasoning_content 的模型上就成了唯一的思考展示（看起来像假思考）。
-      this.emit({
-        type: 'thinking',
-        text: round === 0
-          ? `开始处理（第 1 轮）`
-          : `第 ${round + 1} 轮处理中`,
-      })
+      //
+      //   🔧 2026-10-05：不再每轮都发。
+      //   一次多轮任务（如 web_search 失败后重试）会发 5~6 次，
+      //   而每一条又与同轮的 reasoning 步骤成对出现 —— 面板里 15 步有一半是它。
+      //   现在只在【第一轮】发一次，后续轮次完全静默：
+      //   · 面板不再被轮次标记刷屏
+      //   · 后续轮次的真实动作（工具调用、入参、结果）仍然全部可见
+      //   · 想看「第几轮」的排查需求，由 ThinkingStepList 的「还有 N 条」承担
+      //   首轮用「开始处理」而不是「第 1 轮」—— 第 1 轮本来就是起点，标出来是冗余。
+      if (round === 0) {
+        this.emit({ type: 'thinking', text: '开始处理' })
+      }
 
       try {
         const response = await this.callLLM(tools)

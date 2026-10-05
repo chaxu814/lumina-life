@@ -33,7 +33,30 @@ describe('本地探测：必须带鉴权', () => {
 
   it('IPC 调用方确实把当前 key 和端点传进去了', () => {
     const src = fs.readFileSync('electron/core/providerManager.ts', 'utf-8')
-    expect(src).toMatch(/discoverLocalProviders\(1200, apiKey, baseUrl \? \[baseUrl\] : \[\]\)/)
+    // 🔧 2026-10-05：调用点改为 discoverLocalProvidersDetailed。
+    //   原因：旧版把 401 / 连不上 / 没加载模型一律压成 found:[]，
+    //   前端只能统一显示「尚未配置 LLM」——用户无法判断到底该改地址还是改 key。
+    //   Detailed 版本额外返回 failures + summary，把原因如实报上来。
+    expect(src).toMatch(/discoverLocalProvidersDetailed\(/)
+    // 超时从 1200ms 提到 3000ms：局域网首包超过 1.2s 很常见，
+    // 1.2s 会把「服务正常但慢」误判成「连不上」。
+    expect(src).toMatch(/discoverLocalProvidersDetailed\(3000,/)
+    // 端点与 key 仍必须来自激活供应商（不能丢）
+    expect(src).toMatch(/extraBases\.push\(baseUrl\)/)
+    expect(src).toMatch(/extraKeys\.push\(apiKey\)/)
+  })
+
+  it('探测还应把 Agent 独立配置纳入候选（配置漂移时的兜底）', () => {
+    const src = fs.readFileSync('electron/core/providerManager.ts', 'utf-8')
+    // 实测故障：用户配好了 lmstudio 并「同步到 Team」，但激活供应商仍是旧的
+    // deepseek（且 key 为空）→ 探测拿空 key → 401 → 误报「尚未配置 LLM」。
+    // 修法：把 agent-llm-configs.json 里的端点/key 也拿来试。
+    expect(src).toMatch(/getAgentConfig\(\)/)
+    expect(src).toMatch(/\['lumina',\s*'recha',\s*'yak'\]/)
+    expect(src).toMatch(/extraBases\.push\(c\.endpoint\)/)
+    // 逐个 key 试，第一个能用的写回激活供应商
+    expect(src).toMatch(/r\.summary\.kind !== 'auth'/)
+    expect(src).toMatch(/setProviderConfig/)
   })
 })
 

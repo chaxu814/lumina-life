@@ -103,6 +103,24 @@
 }
 .tsl-sub-muted { color: var(--text-tertiary, #8993a4); font-style: italic; }
 
+/* 🔧 2026-10-05：「还有 N 条」展开入口。
+   需求：思考过程默认只展示前 6 条，其余折叠为一行入口 ——
+   既降低默认噪音，又不丢失可核查性。 */
+.tsl-more {
+  display: block; width: 100%; margin: 6px 0 2px 0;
+  padding: 5px 10px; border-radius: 6px; font-size: 11.5px; cursor: pointer;
+  color: var(--text-secondary, #6b7686);
+  background: var(--surface-50, #f7f8fa);
+  border: 1px dashed var(--border-light, #e5e7eb);
+  transition: all .15s; text-align: center; font-family: inherit;
+}
+.tsl-more:hover {
+  color: var(--accent, #4a9eff);
+  background: var(--surface-100, #eef2ff);
+  border-color: var(--accent, #4a9eff);
+  border-style: solid;
+}
+
 /* 结果行给一个极浅的底 + 左边线，长文本再长也不糊 */
 .tsl-sub-result {
   margin-top: 1px;

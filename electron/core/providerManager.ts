@@ -217,13 +217,10 @@ export class ProviderManager {
         try {
           const raw = fs.readFileSync(this.configPath, 'utf-8')
           this.store = JSON.parse(raw)
-          // 解密内存中的 API Key
-          for (const id of Object.keys(this.store.providers)) {
-            const cfg = this.store.providers[id]
-            if (cfg.apiKey) {cfg.apiKey = decryptApiKey(cfg.apiKey)}
-          }
+          // 🔒 不在这里解密，也不 return。
+          //   旧实现在这一行之后就 return 了，导致后面的统一归一化被跳过
+          //   —— 而解密恰恰是它本该做的事。
           console.log(`[ProviderManager] ✅ 已加载 ${Object.keys(this.store.providers).length} 个供应商配置`)
-          return
         } catch (err) {
           console.error('[ProviderManager] ⚠️ 配置解析失败，将重建:', err)
         }
@@ -234,7 +231,57 @@ export class ProviderManager {
       this._migrateFromEnv()
     }
 
+    // ══════════════════════════════════════════════════════════
+    // 🔒 不变量：this.store 里的 apiKey **永远是明文**
+    // ══════════════════════════════════════════════════════════
+    //
+    // 🐛 真实故障（用户报「配好了却提示尚未配置 LLM」）：
+    //   解密循环原先只写在 `if (!qpSynced)` 的磁盘加载分支里，
+    //   而那个分支结束就 return 了。一旦走 QwenPaw 同步路径
+    //   （qpSynced === true），**解密一次都没跑过**。
+    //
+    //   后果链：
+    //     内存里存的是 v1:xxx 密文
+    //     → getAllProviderConfigs() 直接把密文交给调用方（它不解密）
+    //     → provider:discover-local 拿密文当 Bearer 发出去
+    //     → LM Studio（开了鉴权）返回 401
+    //     → found=[] → localModelReady=false → llmReady=false
+    //     → 界面显示「尚未配置 LLM · 模拟回复模式」
+    //
+    //   而模型其实**完全正常**，对话链路走的是 getActiveConfig()
+    //   → getProviderConfig()（那一处会解密），所以能真跑。
+    //   于是就成了「能聊天但说没连接」这种自相矛盾的现象。
+    //
+    // 修法不是「在另一个分支也加解密」（那只是换个地方再犯），
+    // 而是把这个不变量提到**所有加载路径之后**统一执行一次。
+    this.normalizeStoreKeys()
+
     this._save()
+  }
+
+  /**
+   * 归一化：确保内存 store 里的 apiKey 是明文。
+   *
+   * 对已经是明文的值是幂等的（decryptApiKey 遇到非 v1: 前缀原样返回），
+   * 所以可以无条件反复调用，不必关心之前走过哪条加载路径。
+   */
+  private normalizeStoreKeys(): void {
+    const providers = this.store?.providers
+    if (!providers) {return}
+    let changed = 0
+    for (const id of Object.keys(providers)) {
+      const cfg = providers[id]
+      if (cfg?.apiKey) {
+        const plain = decryptApiKey(cfg.apiKey)
+        if (plain !== cfg.apiKey) {
+          cfg.apiKey = plain
+          changed++
+        }
+      }
+    }
+    if (changed > 0) {
+      console.log(`[ProviderManager] 🔓 已解密 ${changed} 个供应商的 API Key`)
+    }
   }
 
   // ── 查询供应商定义 ──────────────────────────────────
@@ -282,7 +329,13 @@ export class ProviderManager {
       const saved = this.store.providers[def.id]
       result[def.id] = {
         baseUrl: saved?.baseUrl || def.defaultBaseUrl,
-        apiKey: saved?.apiKey || '',
+        // 🔒 读时解密（幂等）。
+        //   这一层是纵深防御：load() 里已经统一解密过了，理论上这里拿到的一定是明文。
+        //   但历史上正是因为「某条路径忘了解密」，让 provider:discover-local
+        //   拿密文当 Bearer 发出去、被 LM Studio 判 401、最终误报「未配置 LLM」。
+        //   调用方（尤其 IPC 边界）不应该需要知道 store 里存的是密文还是明文，
+        //   所以出口再兜一次。decryptApiKey 对明文是 no-op，成本可忽略。
+        apiKey: saved?.apiKey ? decryptApiKey(saved.apiKey) : '',
         model: saved?.model || def.defaultModel,
         enabled: saved?.enabled || false,
         timeout: saved?.timeout || 600,
@@ -839,8 +892,12 @@ export function registerProviderIpc(): void {
 
   // ── 一键检测本地模型（Ollama / LM Studio，免 Key）──
   ipcMain.handle('provider:discover-local', async () => {
+    // 引导文案在 catch 分支里也要用，所以提到 try 外面声明
+    let FREE_SETUP_GUIDE: any[] = []
     try {
-      const { discoverLocalProviders, FREE_SETUP_GUIDE } = await import('./localProviderDiscovery')
+      const mod = await import('./localProviderDiscovery')
+      const { discoverLocalProvidersDetailed } = mod
+      FREE_SETUP_GUIDE = mod.FREE_SETUP_GUIDE
       // 🔧 2026-10-04：探测要带上当前供应商的 apiKey，并额外试一次当前配置的端点。
       //   1) LM Studio 开启鉴权后 /v1/models 返回 401，不带 key 探测会把
       //      「服务正常」误判成「本地没加载模型」，进而弹出「尚未配置 LLM」黄框。
@@ -853,13 +910,79 @@ export function registerProviderIpc(): void {
         apiKey = cfg?.apiKey || ''
         baseUrl = cfg?.baseUrl || ''
       } catch { /* 拿不到就按无鉴权探测 */ }
-      const found = await discoverLocalProviders(1200, apiKey, baseUrl ? [baseUrl] : [])
-      return { found, guide: FREE_SETUP_GUIDE }
+
+      // 🔧 2026-10-05：探测端点不应该只依赖【激活供应商】。
+      //   实测故障：用户刚在设置里配好并「保存配置」+「同步到 Team」，
+      //   但激活供应商仍是旧的云端项（且 key 为空）→ 探测拿到空 key
+      //   → LM Studio（开了鉴权）返回 401 → 前端判定「尚未配置 LLM」。
+      //   而用户视角里「我明明填好并保存了」。
+      //   修法：把 Agent 独立配置里的端点/key 也纳入探测候选。
+      //   哪个能用就用哪个 —— 探测的目的是「找到一个能用的」，不是「验证某个特定来源」。
+      const extraBases: string[] = []
+      const extraKeys: string[] = []
+      if (baseUrl) { extraBases.push(baseUrl) }
+      if (apiKey && apiKey !== 'local') { extraKeys.push(apiKey) }
+      try {
+        // Agent 独立配置（agent-llm-configs.json）也纳入探测候选。
+        // 用 getAll() 而非其他方法名 —— AgentConfigManager 的方法就叫 getAll()。
+        const cfgs = getAgentConfig()?.getAll?.() || {} as Record<string, any>
+        for (const id of ['lumina', 'recha', 'yak']) {
+          const c: any = (cfgs as any)[id]
+          if (c?.endpoint && !extraBases.includes(c.endpoint)) {
+            extraBases.push(c.endpoint)
+          }
+          if (c?.apiKey && c.apiKey !== 'local' && !extraKeys.includes(c.apiKey)) {
+            extraKeys.push(c.apiKey)
+          }
+        }
+      } catch { /* 拿不到 Agent 配置就按已有候选探测 */ }
+
+      // 逐个 key 试：只要有一个能通就算成功。
+      // 原因：LM Studio 可能已换过 key，而各处配置不同步。
+      // 第一个能用的 key 会回传给调用方，并立即写回激活供应商。
+      let lastResult: any = null
+      let usedKey = ''
+      for (const k of (extraKeys.length ? extraKeys : [''])) {
+        const r = await discoverLocalProvidersDetailed(3000, k, extraBases)
+        lastResult = r
+        if (r.found.length > 0) { usedKey = k; break }
+        // 只有 auth 类失败才值得换 key 试；连不上/没加载模型换 key 也没用
+        if (r.summary.kind !== 'auth') { break }
+      }
+
+      // 探测成功但用的是别的来源的 key → 写回激活供应商，避免下次又 401
+      if (usedKey && usedKey !== apiKey) {
+        const cfgId = baseUrl
+          ? (pm.getAllProviderConfigs().lmstudio?.baseUrl === baseUrl ? 'lmstudio' : pm.getActiveProviderId())
+          : pm.getActiveProviderId()
+        if (cfgId) {
+          try {
+            const cur = pm.getAllProviderConfigs()[cfgId]
+            if (cur) {
+              pm.setProviderConfig(cfgId, { ...cur, apiKey: usedKey })
+              pm.setActiveProvider(cfgId)
+              console.log(`[ProviderManager] 🔑 已把探测通过的 API Key 写回供应商「${cfgId}」`)
+            }
+          } catch { /* 写回失败不阻断探测结果返回 */ }
+        }
+      }
+
+      return { ...lastResult, guide: FREE_SETUP_GUIDE }
     } catch (err: any) {
-      return { found: [], error: err?.message || String(err) }
+      return {
+        found: [],
+        failures: [],
+        summary: {
+          ok: false,
+          kind: 'http',
+          headline: '本地模型探测出错',
+          advice: `探测过程发生异常：${err?.message || err}`,
+        },
+        guide: FREE_SETUP_GUIDE,
+        error: err?.message || String(err),
+      }
     }
   })
-
   // ── 一键接入发现的本地模型（写配置 + 激活，无需 Key）──
   ipcMain.handle('provider:apply-local', (_event, input: { id?: string; baseUrl?: string; model?: string }) => {
     try {

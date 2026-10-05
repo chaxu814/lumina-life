@@ -11,7 +11,7 @@
 // 所有文字左边线严格对齐。
 // ============================================================
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { sanitizeThinkingText } from '../services/thinkingSanitizer'
 import type { ThinkingStep } from '../chat/chatShared'
 
@@ -93,8 +93,66 @@ interface Props {
 }
 
 const ThinkingStepList: React.FC<Props> = ({ steps, animate = true }) => {
+  // 🔧 2026-10-05：简化思考过程显示。
+  //
+  // 【用户反馈的现象】一次搜索任务产生「思考过程（15 步）」，其中大量是：
+  //   开始处理（第 1 轮）
+  //     开始处理（第 1 轮）      ← 重复
+  //   推理完成
+  //     <整段英文推理草稿>
+  //   第 2 轮处理中
+  //     第 2 轮处理中            ← 重复
+  //   第 3 轮处理中
+  //     第 3 轮处理中            ← 重复
+  //   ...
+  //   正在读取网页：https://...
+  //
+  // 问题不在于「步数多」（工具调用本来就会产生多条），
+  // 而在于【轮次标记本身是噪音】：
+  //   · 用户关心的是「它做了什么」，不是「这是第几轮」
+  //   · 轮次标记与同名的 reasoning 步骤成对出现，视觉上完全重复
+  //   · 15 步里有一半是这两类，翻开面板要滚很久才能看到真正有用的工具记录
+  //
+  // 【本组件的简化策略】
+  //   1. 过滤掉纯轮次标记（开始处理 / 第 N 轮处理中）—— 它们不携带信息
+  //   2. 连续的重复 label 只保留一条
+  //   3. 步骤数上限默认 6 条，超出折叠为「还有 N 条…」（点开可见）
+  // 工具调用、成功/失败、耗时、入参/结果等【全部保留】——
+  // 那是用户真正要看的可核查信息。
+  const MAX_VISIBLE = 6
+  /** 用户是否展开了被折叠的尾部 */
+  const [expanded, setExpanded] = useState(false)
+
+  const visible = useMemo(() => {
+    const isRoundMarker = (s: ThinkingStep): boolean => {
+      const t = stripEmoji(s.label || '')
+      return /^开始处理（第\s*\d+\s*轮）$/.test(t)
+        || /^第\s*\d+\s*轮处理中$/.test(t)
+        || t === '开始处理'
+    }
+    // 1) 去掉轮次标记
+    const noMarkers = steps.filter(s => !isRoundMarker(s))
+    // 2) 去掉连续的相同 label（模型常在流式时重复 emit 同一句）
+    const deduped: ThinkingStep[] = []
+    for (const s of noMarkers) {
+      const prev = deduped[deduped.length - 1]
+      if (prev && prev.type === s.type && stripEmoji(prev.label) === stripEmoji(s.label)) {
+        // 保留更长的 result（后到的通常是累积后的完整内容）
+        if ((s.result?.length ?? 0) > (prev.result?.length ?? 0)) {
+          deduped[deduped.length - 1] = { ...prev, result: s.result }
+        }
+        continue
+      }
+      deduped.push(s)
+    }
+    return deduped
+  }, [steps])
+
+  // 默认只展示前 MAX_VISIBLE 条；用户点「还有 N 条」后才展示全部
+  const shown = expanded ? visible : visible.slice(0, MAX_VISIBLE)
+  const hidden = visible.length - Math.min(shown.length, MAX_VISIBLE)
   const rows = useMemo(
-    () => steps.map((s, i) => {
+    () => shown.map((s, i) => {
       // 🧠 2026-10-04：推理文本清洗的收口点就在这里。
       // 四个 thinking_stream 累积入口（协作 / 阶段 / 群聊 / 决策讨论）都把内容
       // 攒进 step.result，再统一交给本组件渲染 —— 所以清洗一次就全覆盖，
@@ -113,7 +171,7 @@ const ThinkingStepList: React.FC<Props> = ({ steps, animate = true }) => {
         foreignLang: !!clean?.foreignLang,
       }
     }),
-    [steps],
+    [shown],
   )
 
   return (
@@ -168,6 +226,28 @@ const ThinkingStepList: React.FC<Props> = ({ steps, animate = true }) => {
           </div>
         )
       })}
+
+      {/* 🔧 2026-10-05：隐藏部分的展开入口。
+          「简化」不等于「删除」—— 用户仍能一键看到完整列表，
+          但默认不再需要滚过十几行噪音才能找到工具调用。 */}
+      {hidden > 0 && (
+        <button
+          type="button"
+          className="tsl-more"
+          onClick={() => setExpanded(true)}
+        >
+          ▾ 还有 {hidden} 条（点击展开完整过程）
+        </button>
+      )}
+      {expanded && visible.length > MAX_VISIBLE && (
+        <button
+          type="button"
+          className="tsl-more"
+          onClick={() => setExpanded(false)}
+        >
+          ▴ 收起（已显示全部 {visible.length} 条）
+        </button>
+      )}
     </div>
   )
 }

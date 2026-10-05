@@ -134,8 +134,15 @@ describe('④ 失败提示要说人话', () => {
   })
 
   it('轮次标记不再假装模型在思考', () => {
-    expect(agentRunner).toContain('开始处理（第 1 轮）')
-    expect(agentRunner).not.toContain('text: `思考中... (第 ${round + 1} 轮)`')
+    // 🔧 2026-10-05：轮次标记文案从「开始处理（第 1 轮）」简化为「开始处理」。
+    //   第 1 轮本来就是起点，标出来是冗余；且每轮都发会把思考面板刷成 15 步噪音。
+    //   现在只在首轮发一次，后续轮次静默。
+    expect(agentRunner).toContain("text: '开始处理'")
+    expect(agentRunner).not.toContain('思考中... (第 ${round + 1} 轮)')
+    // 回归：后续轮次不得再发「第 N 轮处理中」
+    expect(agentRunner).not.toContain('轮处理中')
+    // 回归：必须在 if (round === 0) 守卫内，否则又会变成每轮都发
+    expect(agentRunner).toMatch(/if \(round === 0\)\s*\{\s*this\.emit\(\{\s*type: 'thinking', text: '开始处理'/)
   })
 })
 
