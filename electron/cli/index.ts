@@ -27,6 +27,8 @@ import { handleConfig } from './config'
 import { handleSkill } from './skill'
 import { handleCron } from './cron'
 import { handleDoctor } from './doctor'
+// 🆕 2026-10-05：模型体检报告
+import { handleModelHealth } from './modelHealth'
 
 // ═══════════════════════════════════════════════════════════
 // CLI 命令注册表
@@ -52,8 +54,7 @@ const COMMANDS: CliCommand[] = [
     description: '直接执行一个工具',
     usage: 'lumina tool run <toolName> --key value [--key2 value2]',
     handler: handleTool,
-  },
-  {
+  },  {
     name: 'agent', alias: 'a',
     description: '查看/管理 Agent 状态',
     usage: 'lumina agent list | lumina agent status <agentId>',
@@ -88,6 +89,12 @@ const COMMANDS: CliCommand[] = [
     description: '系统诊断',
     usage: 'lumina doctor',
     handler: handleDoctor,
+  },
+  {
+    name: 'health', alias: 'h',
+    description: '模型体检报告 — 上下文窗口 / 工具能力 / 视觉能力体检，并给出可操作建议',
+    usage: 'lumina health [--model <模型名> --baseUrl <API 地址> --context <窗口大小>]',
+    handler: handleModelHealth,
   },
 ]
 

@@ -121,6 +121,13 @@ import {
 import { cleanToolNoiseText } from './agent/toolNoise'
 import { resolveCapabilities, type ServerFacts } from './core/modelCapabilities'
 import { recallServerFacts, rememberServerFacts, parseServerFactsFor } from './core/modelServerFacts'
+// 🔧 P1-3：主对话接入 nativeBridge，让 Anthropic / Gemini / Azure 的原生协议可用。
+import {
+  resolveNativeKind,
+  buildTransportPlan,
+  parseNativeCompletion,
+  createNativeStreamParser,
+} from './core/nativeBridge'
 // 🔧 P0-2：主对话入口需要告知调度器「用户活跃」，以暂停后台 LLM 任务。
 import { llmCoordinator } from './llmCoordinator'
 
@@ -3262,28 +3269,63 @@ private summarizer: ConversationSummarizer | null = null
         ? AbortSignal.any([abortSignal, timeoutSignal])
         : timeoutSignal
 
+      // 🔧 P1-3 完整版（2026-10-05）：主对话接入 nativeBridge。
+      //
+      //   【原问题】这条路径直接 fetch(`${baseUrl}/chat/completions`) 并发 OpenAI 形状的
+      //   请求体。当用户在设置里把端点配成 Anthropic Claude / Gemini / Azure 时：
+      //     · URL 错了（缺 /v1/messages、缺 Gemini 的 :streamGenerateContent）
+      //     · 鉴权头错了（Anthropic 要 x-api-key，Gemini 要 x-goog-api-key）
+      //     · 请求体错了（Anthropic 的 system 要提到顶层、不能用 messages[0].role）
+      //   结果是【必然失败】，而 llmProvider 那边早就处理了这一切 —— 两条路径能力不一致。
+      //
+      //   【为什么不是把整段换成 llmProvider.call()】
+      //   本函数内联流里有 llmProvider 不具备的行为：增量工具提示（incremental_tool）、
+      //   坏参数计数阻断、earlyResults 预执行缓存。整体重写风险高于收益，
+      //   且 nativeBridge 的接口设计恰好允许「只换传输层、保留上层循环」。
+      //
+      //   【本次做法】只用 buildTransportPlan 做【传输层翻译】，
+      //   配合 createNativeStreamParser 把各家 SSE 归一成 OpenAI chunk，
+      //   于是下面所有 delta 逻辑一行都不用改。
+      //   协议识别优先级：显式 protocol > baseUrl 自动推断。
+      const nativeKind = resolveNativeKind(this.config.baseUrl, (this.config as any).protocol)
+      if (nativeKind !== 'openai') {
+        console.log(`[AgentRunner] 🌉 原生协议 ${nativeKind} → 已翻译为正确 URL/鉴权/请求体`)
+      }
+
+      const buildPlan = (stream: boolean) => buildTransportPlan(
+        nativeKind,
+        this.config.baseUrl,
+        this.config.apiKey || '',
+        this.config.model,
+        { ...requestBody, stream },
+      )
+      const streamPlan = buildPlan(true)
+
       // 🔧 P1-3 配套：本地 OpenAI 兼容端点 401 → 去掉鉴权头重试一次。
       //   与 llmProvider.call() 的行为保持一致（那边早就有了，这里一直没跟上）。
       //   本地 LM Studio / Ollama 通常不鉴权，但用户很容易在设置里填一个占位 key，
       //   结果就是 401 Invalid token —— 而不重试的话错误信息对用户毫无指导意义。
-      const bodyStr = JSON.stringify({ ...requestBody, stream: true })
-      const baseHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
-      const withAuth = this.config.apiKey && !isLocalEndpoint(this.config.baseUrl)
+      //   只对 openai 协议生效：Anthropic/Gemini 的鉴权头各家不同，去掉后必然仍失败。
+      const noAuthPlan = { ...streamPlan, headers: { ...streamPlan.headers } }
+      delete noAuthPlan.headers.Authorization
+      delete noAuthPlan.headers['x-api-key']
+      delete noAuthPlan.headers['x-goog-api-key']
 
-      let streamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
+      let streamRes = await fetch(streamPlan.url, {
         method: 'POST',
-        headers: withAuth ? { ...baseHeaders, Authorization: `Bearer ${this.config.apiKey}` } : baseHeaders,
-        body: bodyStr,
+        headers: streamPlan.headers,
+        body: JSON.stringify(streamPlan.body),
         signal: fetchSignal,
       })
 
-      if (streamRes.status === 401 && isLocalEndpoint(this.config.baseUrl) && this.config.apiKey) {
+      if (streamRes.status === 401 && nativeKind === 'openai' && isLocalEndpoint(this.config.baseUrl)
+        && this.config.apiKey) {
         console.warn('[AgentRunner] 本地端点返回 401（疑似误填 API Key），去掉鉴权头重试一次')
         try { await streamRes.body?.cancel() } catch { /* ignore */ }
-        streamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        streamRes = await fetch(noAuthPlan.url, {
           method: 'POST',
-          headers: baseHeaders,
-          body: bodyStr,
+          headers: noAuthPlan.headers,
+          body: JSON.stringify(noAuthPlan.body),
           signal: fetchSignal,
         })
       }
@@ -3292,15 +3334,21 @@ private summarizer: ConversationSummarizer | null = null
         const errBody = await streamRes.text().catch(() => '')
         if (streamRes.status === 404) {
           console.log(`[AgentRunner] 模型不支持流式 → 执行非流式请求`)
-          const nonStreamRes = await fetch(`${this.config.baseUrl}/chat/completions`, {
+          const nonStreamPlan = buildPlan(false)
+          const nonStreamRes = await fetch(nonStreamPlan.url, {
             method: 'POST',
-            headers: withAuth ? { ...baseHeaders, Authorization: `Bearer ${this.config.apiKey}` } : baseHeaders,
-            body: JSON.stringify({ ...requestBody, stream: false }),
+            headers: nonStreamPlan.headers,
+            body: JSON.stringify(nonStreamPlan.body),
             signal: fetchSignal,
           })
           if (!nonStreamRes.ok) {return { error: `LLM 错误 (${nonStreamRes.status}): ${(await nonStreamRes.text().catch(() => '')).slice(0, 200)}` }}
-          const data = await nonStreamRes.json()
-          const choice = data.choices?.[0]
+          // 🔧 P1-3：非流式响应同样要经 parseNativeCompletion 归一，
+          //   否则 Anthropic/Gemini 的响应体没有 data.choices，下面的
+          //   `data.choices?.[0]` 永远是 undefined → 报「LLM 返回为空」。
+          const data = nativeKind === 'openai' || nativeKind === 'azure'
+            ? await nonStreamRes.json()
+            : parseNativeCompletion(nativeKind, await nonStreamRes.json().catch(() => null))
+          const choice = data?.choices?.[0]
           if (!choice) {return { error: 'LLM 返回为空' }}
           const msg = choice.message
           // 🔧 顺序修正：content 优先、reasoning_content 兜底。
@@ -3359,6 +3407,15 @@ private summarizer: ConversationSummarizer | null = null
         //   抢先跑会用半截参数得到错结果，再被缓存当成最终结果使用。已整体移除，
         //   正确性优先于几百毫秒的延迟。
 
+        // 🔧 P1-3：openai/azure 的 SSE 本身就是 OpenAI chunk；anthropic/gemini 经
+        //   createNativeStreamParser 归一成 OpenAI chunk，于是下面所有 delta 逻辑
+        //   无需任何分支。这正是 nativeBridge 接口设计的用意。
+        const nativeParser = (nativeKind === 'openai' || nativeKind === 'azure')
+          ? null
+          : createNativeStreamParser(nativeKind)
+        /** Anthropic SSE：每个 data 前有一行 `event: xxx`，记录下来供 parser 使用 */
+        let sseEvent = ''
+
         this.emit({ type: 'thinking_stream', text: '', isFirst: true, isLast: false })
 
         while (true) {
@@ -3370,13 +3427,26 @@ private summarizer: ConversationSummarizer | null = null
           const lines = buffer.split('\n')
           buffer = lines.pop() || ''
 
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) {continue}
-            const data = line.slice(6).trim()
-            if (data === '[DONE]') {continue}
+          for (const rawLine of lines) {
+            const line = rawLine.trim()
+            if (!line) {continue}
+
+            // Anthropic / Gemini 的事件名行（OpenAI 不会发这一行）
+            if (line.startsWith('event:')) {
+              sseEvent = line.slice(6).trim()
+              continue
+            }
+            if (!line.startsWith('data:')) {continue}
+            const data = line.slice(5).trim()
+            if (!data || data === '[DONE]') {continue}
 
             try {
-              const chunk = JSON.parse(data)
+              // 归一后的 chunks；openai 走 null 分支时直接解析原体
+              const chunks = nativeParser
+                ? nativeParser.feed(sseEvent, data)
+                : [JSON.parse(data)]
+              for (const chunk of chunks) {
+              if (!chunk) {continue}
               const delta = chunk.choices?.[0]?.delta
               if (!delta) {continue}
 
@@ -3440,6 +3510,7 @@ private summarizer: ConversationSummarizer | null = null
               }
 
               if (chunk.usage) {streamUsage = chunk.usage}
+              } // ← 闭合 nativeParser 归一后的 for
             } catch { /* skip malformed chunk */ }
           }
         }

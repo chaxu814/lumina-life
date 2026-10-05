@@ -10,6 +10,8 @@ import { ipcMain, BrowserWindow } from 'electron'
 import * as os from 'os'
 import * as fs from 'fs'
 import * as path from 'path'
+// 🆕 2026-10-05：模型体检报告
+import { buildModelHealthReport, formatHealthReportText } from '../core/modelHealthReport'
 
 // ═══════════════════════════════════════════════════════════
 // 诊断数据存储
@@ -152,6 +154,55 @@ export function getDiagnosticsStore(): DiagnosticsStore {
 }
 
 export function registerDiagnosticsIpc(mainWindow: BrowserWindow): void {
+  // ─── 模型体检报告（2026-10-05）───────────────────────────
+  // 把已有但对用户不可见的模型能力信息（服务端 n_ctx / 工具支持 / 视觉能力 /
+  // 运行实测反馈）聚合成一份能读懂、能行动的诊断。
+  //
+  // 为什么放在 diagnostics 而不是 settings：
+  //   它是【诊断】而非【配置】。用户是「模型出问题了才来看」，
+  //   不需要每次打开设置都被一堆能力字段干扰。
+  ipcMain.handle('diagnostics:modelHealth', async (_event, params: {
+    modelName?: string
+    baseUrl?: string
+    userContextWindow?: number | null
+  }) => {
+    const modelName = String(params?.modelName || '').trim()
+    const baseUrl = String(params?.baseUrl || '').trim()
+    if (!modelName || !baseUrl) {
+      return {
+        error: '未配置 LLM 模型 —— 请先在「设置 → LLM 模型」里选择一个模型与 API 地址。',
+      }
+    }
+    try {
+      return buildModelHealthReport({
+        modelName,
+        baseUrl,
+        userContextWindow: params?.userContextWindow ?? null,
+      })
+    } catch (err: any) {
+      // 体检本身不该把用户带崩：报告生成失败时也要给出一句人话
+      return { error: `生成体检报告失败: ${err?.message || err}` }
+    }
+  })
+
+  // 纯文本版：供 CLI / 「复制报告」按钮使用
+  ipcMain.handle('diagnostics:modelHealthText', async (_event, params: {
+    modelName?: string
+    baseUrl?: string
+    userContextWindow?: number | null
+  }) => {
+    const modelName = String(params?.modelName || '').trim()
+    const baseUrl = String(params?.baseUrl || '').trim()
+    if (!modelName || !baseUrl) {return '未配置 LLM 模型。'}
+    try {
+      return formatHealthReportText(buildModelHealthReport({
+        modelName, baseUrl, userContextWindow: params?.userContextWindow ?? null,
+      }))
+    } catch (err: any) {
+      return `生成体检报告失败: ${err?.message || err}`
+    }
+  })
+
   // ─── 摘要 ──────────────────────────────────────────
   ipcMain.handle('diagnostics:summary', async () => {
     return store.getSummary()
