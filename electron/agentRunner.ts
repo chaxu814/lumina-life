@@ -2554,7 +2554,15 @@ private summarizer: ConversationSummarizer | null = null
     //   没这一步的话，用户只会看到「没能给出有效回复」而给不出任何复现信息。
     if (!finalText) {
       this.lastFailureReason = this.lastXmlDiagnostic
-        || `模型 ${this.config.model || '未知'} 连续 ${consecutiveEmptyCount} 轮未产出可用内容`
+        || (consecutiveEmptyCount > 0
+          // 🔧 2026-10-07：旧文案无条件是「连续 N 轮未产出可用内容」，
+          //   于是会出现「连续 0 轮未产出可用内容」这种自相矛盾的诊断
+          //   （截图里就是这样）—— 用户拿到一句读不通的话，反而更难排查。
+          //   N=0 说明计数器没动过，真实成因多半是**工具调用轮之后没有收尾**
+          //   （模型只回了 tool_calls、没给最终回答），文案要如实说这一点。
+          ? `模型 ${this.config.model || '未知'} 连续 ${consecutiveEmptyCount} 轮未产出可用内容`
+          : `模型 ${this.config.model || '未知'} 本轮未产出可用内容`
+            + `（可能是工具调用轮之后没有给出最终回答，或模型只输出了思考内容）`)
     }
 
     return finalText
@@ -2700,6 +2708,38 @@ private summarizer: ConversationSummarizer | null = null
       }
     } catch (e: any) {
       // /models 端点不可用，继续下一步
+    }
+
+    // ── Step 1b: LM Studio 原生端点（2026-10-07 实测补充）──
+    //
+    // 【为什么需要】实测发现 LM Studio 的 **OpenAI 兼容端点 /v1/models
+    //   什么能力都不报** —— 每个条目只有 id/object/owned_by，没有
+    //   max_context_length。于是 Step 1 永远拿不到值，只能退到「参数量推测」。
+    //   而它真正的元数据在**原生端点 /api/v0/models**：
+    //     { max_context_length: 262144, type: 'vlm', capabilities: ['tool_use'] }
+    //   多试一次这个端点，本地模型的窗口就能拿到**真实值**而不是猜的。
+    try {
+      const root = String(this.config.baseUrl || '').replace(/\/+$/, '').replace(/\/v1$/, '')
+      const res = await fetch(`${root}/api/v0/models`, {
+        headers: { 'Authorization': `Bearer ${this.config.apiKey}` },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const parsed = parseServerFactsFor(data, model)
+        if (parsed?.contextWindow && parsed.contextWindow > 0) {
+          console.log(
+            `[AgentRunner] ✅ LM Studio 原生 API 检测: ${model} = `
+            + `${TokenEstimator.format(parsed.contextWindow)} tokens`,
+          )
+          rememberServerFacts(model, parsed)
+          _detectedContextCache.set(cacheKey, parsed.contextWindow)
+          this._effectiveContextWindow = parsed.contextWindow
+          return parsed.contextWindow
+        }
+      }
+    } catch {
+      // 原生端点不可用（非 LM Studio 服务），继续下一步
     }
 
     // ── Step 2: 已知模型数据库匹配 ──

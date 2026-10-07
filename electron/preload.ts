@@ -189,7 +189,7 @@ const api = {
   providerDiscoverLocal: () =>
     ipcRenderer.invoke('provider:discover-local') as Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>,
   providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) =>
-    ipcRenderer.invoke('provider:apply-local', input) as Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; error?: string }>,
+    ipcRenderer.invoke('provider:apply-local', input) as Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; contextWindow?: number; contextDetected?: boolean; error?: string }>,
 
   // ─── TTS ────────────────────────────────────────────────
   ttsSpeak: (params: TTSSpeakParams) =>

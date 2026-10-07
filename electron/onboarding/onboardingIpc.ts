@@ -82,7 +82,7 @@ export function registerOnboardingIpc(): void {
   })
 
   // ── 一键接入探测到的本地模型（免 Key，复用 providerManager） ──
-  ipcMain.handle('onboarding:apply-local', (_e, input: { id?: string; baseUrl?: string; model?: string }) => {
+  ipcMain.handle('onboarding:apply-local', async (_e, input: { id?: string; baseUrl?: string; model?: string }) => {
     try {
       const pm = getProviderManager()
       const idMap: Record<string, string> = { ollama: 'ollama', lmstudio: 'lmstudio', 'lm-studio': 'lmstudio' }
@@ -90,19 +90,24 @@ export function registerOnboardingIpc(): void {
       const base = input?.baseUrl
         ? (input.baseUrl.endsWith('/v1') ? input.baseUrl : input.baseUrl.replace(/\/$/, '') + '/v1')
         : (id === 'ollama' ? 'http://127.0.0.1:11434/v1' : 'http://127.0.0.1:1234/v1')
+      const model = input?.model || pm.getDefinition(id)?.defaultModel || ''
+      // 🩺 2026-10-07：接入时探测服务端真实上下文窗口，不再硬编码 128000
+      //   （128K 会让本地小模型被当成大窗口用 → 不裁剪历史 → 首字极慢）。
+      const { probeContextWindow } = await import('../core/localProviderDiscovery')
+      const probedContext = await probeContextWindow(base, model)
       pm.setProviderConfig(id, {
         baseUrl: base,
         apiKey: 'local',
-        model: input?.model || pm.getDefinition(id)?.defaultModel || '',
+        model,
         enabled: true,
         timeout: 120,
-        maxContextTokens: 128000,
+        maxContextTokens: probedContext ?? 0,   // 真实值优先；拿不到填 0（自动检测）
       })
       pm.setActiveProvider(id)
       // 记录到向导状态
       const store = getStore()
       store.update((draft) => ({ ...setProvider(draft, id, 'local') }))
-      return { ok: true, id, baseUrl: base, model: input?.model || '' }
+      return { ok: true, id, baseUrl: base, model, contextWindow: probedContext ?? 0 }
     } catch (err: any) {
       return { ok: false, error: err?.message || String(err) }
     }

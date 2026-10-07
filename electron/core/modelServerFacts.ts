@@ -188,6 +188,14 @@ function findContext(obj: Record<string, unknown>, depth = 0): number | null {
 
 function findVision(obj: Record<string, unknown>, depth = 0): boolean | null {
   if (!obj || typeof obj !== 'object' || depth > 2) {return null}
+  // 🩺 LM Studio 原生 API（/api/v0/models）用 `type: 'vlm'` 标记视觉模型。
+  //   它的 OpenAI 兼容端点（/v1/models）**什么能力都不报** —— 只看 /v1/models
+  //   会把一个 VLM 误判成「不支持图片输入」。这里认这个字段。
+  if (typeof obj.type === 'string') {
+    const t = obj.type.trim().toLowerCase()
+    if (t === 'vlm' || t === 'vision') {return true}
+    if (t === 'llm' || t === 'embeddings') {return false}
+  }
   for (const k of ['supportsVision', 'vision', 'multimodal', 'is_multimodal', 'capabilities', 'input_modalities', 'modalities']) {
     if (k in obj) {
       const b = toBool(obj[k])
@@ -216,6 +224,13 @@ function findTools(obj: Record<string, unknown>, depth = 0): boolean | null {
     if (k in obj) {
       const b = toBool(obj[k])
       if (b !== null) {return b}
+      // 🩺 LM Studio 原生 API 用 `capabilities: ['tool_use']` 声明工具能力。
+      //   只在**明确列出** tool/function 时返回 true；没列到就返回 null（未知），
+      //   避免把「只是没写」误判成「不支持」。
+      if (Array.isArray(obj[k])) {
+        const arr = (obj[k] as unknown[]).map(x => String(x).toLowerCase())
+        if (arr.some(x => x.includes('tool') || x.includes('function'))) {return true}
+      }
     }
   }
   for (const k of ['meta', 'details', 'capabilities', 'config']) {

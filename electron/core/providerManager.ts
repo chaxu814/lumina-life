@@ -984,7 +984,20 @@ export function registerProviderIpc(): void {
     }
   })
   // ── 一键接入发现的本地模型（写配置 + 激活，无需 Key）──
-  ipcMain.handle('provider:apply-local', (_event, input: { id?: string; baseUrl?: string; model?: string }) => {
+  //
+  // 🩺 2026-10-07「智能检测」：接入时**顺便探测服务端的真实上下文窗口**。
+  //
+  // 【修的是什么】旧实现硬编码 `maxContextTokens: 128000`。对本地小模型这是
+  //   致命的：runner 以为窗口有 128K → 不裁剪历史 → 每轮全量 prefill，
+  //   首字响应从秒级变成分钟级（与主对话的 P0-3 完全同一个坑）。
+  //   用户点「一键检测本地模型」本意就是「别让我手填」，结果却被塞了一个
+  //   和模型毫不相干的 128K。
+  //
+  // 【现在怎么做】接入时拉一次 /v1/models，用 parseServerFactsFor 读服务端
+  //   自己报的 max_context_length / n_ctx / max_model_len：
+  //     · 读到了 → 用真实值，并 rememberServerFacts 供后续同步读取
+  //     · 读不到 → 填 0（自动检测），让 runner 走服务端真相，**绝不猜一个大的**
+  ipcMain.handle('provider:apply-local', async (_event, input: { id?: string; baseUrl?: string; model?: string }) => {
     try {
       // 探测结果 id 映射到 providerManager 已知供应商
       const idMap: Record<string, string> = { ollama: 'ollama', 'lm-studio': 'lmstudio', 'local-openai': 'lmstudio' }
@@ -992,16 +1005,30 @@ export function registerProviderIpc(): void {
       const base = input?.baseUrl
         ? (input.baseUrl.endsWith('/v1') ? input.baseUrl : input.baseUrl.replace(/\/$/, '') + '/v1')
         : (id === 'ollama' ? 'http://127.0.0.1:11434/v1' : 'http://127.0.0.1:1234/v1')
+      const model = input?.model || pm.getDefinition(id)?.defaultModel || ''
+
+      // 智能探测真实上下文窗口（6s 硬超时，失败不阻断接入）
+      const { probeContextWindow } = await import('./localProviderDiscovery')
+      const probedContext = await probeContextWindow(base, model)
+      if (probedContext) {
+        console.log(`[ProviderManager] 🩺 探测到 ${model} 真实上下文窗口: ${probedContext}`)
+      }
+
       pm.setProviderConfig(id, {
         baseUrl: base,
         apiKey: 'local',
-        model: input?.model || pm.getDefinition(id)?.defaultModel || '',
+        model,
         enabled: true,
         timeout: 120,
-        maxContextTokens: 128000,
+        // 真实值优先；拿不到就填 0（自动检测）—— 绝不再猜一个大的
+        maxContextTokens: probedContext ?? 0,
       })
       pm.setActiveProvider(id)
-      return { success: true, id, model: input?.model, baseUrl: base }
+      return {
+        success: true, id, model, baseUrl: base,
+        contextWindow: probedContext ?? 0,
+        contextDetected: probedContext !== null,
+      }
     } catch (err: any) {
       return { success: false, error: err?.message || String(err) }
     }

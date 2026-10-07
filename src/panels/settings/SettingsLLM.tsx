@@ -201,7 +201,10 @@ export default function SettingsLLM() {
         baseUrl: r.baseUrl || '',
         apiKey: st.llmConfig.apiKey || '',
         model: r.model || '',
-        contextWindow: st.llmConfig.contextWindow,
+        // 🩺 2026-10-07：上下文窗口用**接入时探测到的真实值**，不再沿用旧配置。
+        //   沿用旧值会把上一次的 256000/128000 带到新模型上 —— 正是「本地小模型
+        //   被当成 256K 用」的根源。探测不到时用 0（自动检测）。
+        contextWindow: typeof r.contextWindow === 'number' ? r.contextWindow : 0,
       })
       if (!saved.ok) {
         // 落盘失败必须告知用户：否则又会出现「界面改了但重启丢失」

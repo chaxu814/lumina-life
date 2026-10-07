@@ -9,6 +9,8 @@
 // 纯逻辑（候选表/归一化）可单测；网络探测用 fetch，带超时与失败兜底。
 // ============================================================
 
+import { parseServerFactsFor, rememberServerFacts, type ServerModelFacts } from './modelServerFacts'
+
 export interface LocalCandidate {
   id: string
   label: string
@@ -400,3 +402,73 @@ export const FREE_SETUP_GUIDE = [
     body: '未配置大模型时，桌宠仍具备内驱力驱动的自主行为、情绪与本地安全护栏，只是对话与主动思考会降级为本地规则。',
   },
 ]
+
+// ═══════════════════════════════════════════════════════════
+// 🩺 接入时的「真实上下文窗口」探测（2026-10-07）
+//
+// 【为什么需要】「一键接入本地模型」曾经把 maxContextTokens 硬编码成
+//   128000 / 256000。对本地小模型这是致命的：
+//     runner 以为窗口有 128K → 不裁剪历史 → 每轮全量 prefill
+//     → 首字响应从秒级变成分钟级（与主对话 P0-3 完全同一个坑）。
+//   用户点「一键检测」本意就是「别让我手填」，结果却被塞了一个与模型
+//   毫不相干的巨大窗口。
+//
+// 【现在】接入时拉一次 /v1/models，读服务端自己报的
+//   max_context_length / n_ctx / max_model_len，**不猜、直接问**。
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 探测某个本地端点的**完整能力事实**（上下文窗口 / 视觉 / 工具调用）。
+ *
+ * 【为什么试两个端点】这是 2026-10-07 实测发现的真问题：
+ *   · LM Studio 的 **OpenAI 兼容端点 `/v1/models` 什么能力都不报** ——
+ *     实测返回的每个模型条目都只有 id/object/owned_by，**没有 max_context_length**，
+ *     于是自动检测永远拿不到窗口，VLM 也被误判成「不支持图片」。
+ *   · 它真正的元数据在**原生端点 `/api/v0/models`**：会给出
+ *     `max_context_length` / `type: 'vlm'` / `capabilities: ['tool_use']`。
+ *   所以顺序是「先 OpenAI 兼容（多数服务在这里报），再 LM Studio 原生」。
+ *
+ * @returns 事实对象；两个端点都没拿到有用信息时返回 null。
+ */
+export async function probeLocalFacts(
+  baseUrl: string,
+  model: string,
+  timeoutMs = 6_000,
+): Promise<ServerModelFacts | null> {
+  const root = String(baseUrl || '').trim().replace(/\/+$/, '').replace(/\/v1$/, '')
+  if (!/^https?:\/\//.test(root)) {return null}
+  const endpoints = [`${root}/v1/models`, `${root}/api/v0/models`]
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { Authorization: 'Bearer local' },
+      })
+      if (!res.ok) {continue}
+      const data = await res.json()
+      const facts = parseServerFactsFor(data, model)
+      if (facts && (facts.contextWindow || facts.supportsVision !== null || facts.supportsTools !== null)) {
+        rememberServerFacts(model, facts)
+        return facts
+      }
+    } catch {
+      // 这个端点不可用，试下一个
+    }
+  }
+  return null
+}
+
+/**
+ * 探测某个 OpenAI 兼容端点的真实上下文窗口。
+ *
+ * @returns 真实值（>0）；探测失败 / 服务端未报告 → null。
+ *          调用方应把 null 转成 **0（自动检测）**，绝不要填一个猜的大值。
+ */
+export async function probeContextWindow(
+  baseUrl: string,
+  model: string,
+  timeoutMs = 6_000,
+): Promise<number | null> {
+  const facts = await probeLocalFacts(baseUrl, model, timeoutMs)
+  return facts?.contextWindow && facts.contextWindow > 0 ? facts.contextWindow : null
+}

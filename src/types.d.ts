@@ -237,7 +237,7 @@ declare global {
       providerFetchModels: (id: string, override?: { baseUrl?: string; apiKey?: string }) => Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>
       providerTestConnection: (id: string) => Promise<{ success: boolean; latency?: number; error?: string }>
       providerDiscoverLocal: () => Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>
-      providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) => Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; error?: string }>
+      providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) => Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; contextWindow?: number; contextDetected?: boolean; error?: string }>
 
       onAgentEvent: (callback: (event: {
         type: string; text?: string; tool?: string
