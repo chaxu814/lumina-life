@@ -189,15 +189,27 @@ docs/_ref/
 /*总览-*.html
 /*总览-*.md
 /draft_*/
+# 内部交付说明（含本机内网 IP / token 处理记录，绝不进公开仓库）
+/*交付说明*.md
+/*交付报告*.md
+# docs/ 下的内部评测 / 竞品调研报告（大写 Lumina- 前缀；小写的产品文档不在此列）
+/docs/Lumina-*.md
+/docs/competitor-research-*.md
+/docs/发布修复交付报告-*.md
 
 # ── 测试运行时产生的临时备份 ─────────────────────────────────
 # memoryEvidence 相关用例会往仓库根目录写
 # memory-evidence-test-<n>.json.bak.<ISO时间戳> —— 它们是测试 fixture 的
 # 自动备份，不含任何信息，却因为某次误提交进了版本库，把仓库根目录弄得很脏。
 # 现在取消跟踪 + 加入 ignore；磁盘上的旧文件可以随时手动删。
+/memory-evidence-test-*.json
 /memory-evidence-test-*.json.bak.*
 *.json.bak.*
 /.cowork-temp/
+
+# 运行时探针 / 状态文件（每次运行都会重新生成）
+/.doctor_probe
+/async-tasks.json
 
 # ── VitePress build output (regenerated on deploy) ──
 docs/.vitepress/dist/
@@ -209,3 +221,21 @@ docs/.vitepress/cache/
 
 # 发布卫生：评测过程的调试截图不进仓库（约 2.2MB）
 docs/gaming-autoplay-evidence/
+
+# ── Live2D 示例模型：授权限制，不随仓库分发 ─────────────────
+# Cubism 官方示例模型「Mao」受 Live2D Cubism SDK 再分发条款约束，
+# 公开仓库属于「再分发」。请从 Live2D 官方渠道自行获取后在应用内导入。
+# 保底形象是无外部素材的程序化小猫（Cat），永远可用。
+/electron/pet/assets/Mao/
+
+# ── Agent 内部脚手架，不属于产品文档 ────────────────────────
+/knowledge/
+/stt-server/
+
+# ── 精灵表 UGC 资产：必须入库 ─────────────────────────────
+# 上面的 *.png 是为了挡住测试截图与运行期产物；
+# 但 examples/sprites/ 是**产品资产**（社区创作的入口与模板），
+# 不入库的话新用户克隆下来就没有起步文件，UGC 飞轮转不起来。
+!examples/sprites/**/*.png
+!docs/images/**/*.png
+!resources/*.png

@@ -1,11 +1,15 @@
 # LuminaLife 文档站 · 自动部署到 GitHub Pages
-# 推送到 main 分支时自动构建 VitePress 文档并发布
+# 推送到默认分支时自动构建 VitePress 文档并发布
+#
+# 【分支说明】main 与 master 都要监听：仓库早期用 master，部分协作者用 main，
+# 只写一个会导致另一条推送线上的文档更新静默不发布（v0.1.0 前就踩过这个坑）。
+# 若将来统一分支名，这里的 main 可以删。
 
 name: Deploy Docs
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths:
       - 'docs/**'
       - '.github/workflows/deploy-docs.yml'

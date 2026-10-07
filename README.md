@@ -8,6 +8,14 @@
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
 
+<p align="center">
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-3324%20passing%20%2F%20229%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="3324 tests passing across 229 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
+  <img src="https://img.shields.io/badge/code-258k%20lines-4c1?style=flat-square&labelColor=1a1a2e" alt="258k lines of code">
+</p>
+
 <h1 align="center">
   🌸 Lumina Life
 </h1>
@@ -32,6 +40,24 @@
   <a href="#-screenshots"><b>📸 截图</b></a> ·
   <a href="#-roadmap"><b>🗺️ 路线图</b></a>
 </p>
+
+---
+
+## ⚠️ 已知问题（发布前如实告知）
+
+我们不把已知问题藏进 Issue 列表。首次公开发布前，以下是**我们已知、且尚未解决**的问题：
+
+| 严重度 | 问题 | 影响 | 计划 |
+|---|---|---|---|
+| 🟠 | **仅 Windows 实机验证** | macOS/Linux 代码已适配但**从未真机验收**；Computer Use 的键鼠注入、沙箱规则库强依赖 Windows API | v1.3.0 |
+| 🟠 | **IM 渠道未经端到端真机验证** | 7 个适配器已接线，**仅 Telegram 默认开启**，其余需自配凭据 | v1.0 |
+| 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
+| 🟡 | **无第三方技能生态** | 技能市场通道已通，但**生态是空的**，装不到第三方技能 | 待社区 |
+| 🟡 | **`agentRunner.ts` 单文件 3782 行** | LLM 调用 / ReAct 循环 / 工具执行耦合在一起，外部贡献者可读性差 | 发布后重构 |
+| 🔵 | **约 5100 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
+
+> 💡 **在 Windows + LM Studio 上遇到「很卡 / 首 token 很慢」？先跑 `lumina health`（或界面「更多设置 → 诊断工具 → 🩺 模型体检」）。**
+> 它多半会直接告诉你原因：上下文窗口填得比模型实际能吃的大了。这是我们已经解决、但需要你看见的诊断能力。
 
 ---
 
@@ -292,7 +318,7 @@ Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有�
 > 💡 **还有一个更硬的论据，藏在「桌宠」这个形态里。**
 >
 > MiniMax Code 的定时任务与远程控制，官方文档写的是「让 Agent **在电脑唤醒时**按计划执行」——
-> 也就是**强依赖桌面端 App 常驻**。openclaw 有 27 个 IM 渠道但**零人格**。
+> 也就是**强依赖桌面端 App 常驻**。openclaw 有 32 个 IM 渠道但**零人格**。
 >
 > **而桌宠本来就是必须常驻的。** 别人想要「长在用户电脑上陪着你」需要单独做一套常驻架构，
 > Lumina 从第一天就有。当 `proactiveEngine` 的主动性、情绪系统与 IM 渠道接在一起时，
@@ -301,7 +327,11 @@ Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有�
 >
 > **这不是功能优势，是架构优势 —— 它没法被后来者用加功能补上。**
 
-下面是与几个同类开源项目的**中性对比**。数据采集于 2026-10-03（来源：各项目 GitHub API / 官方文档）。我们特意把**别人比我们强的地方也列出来**——因为夸大成「全面碾压」既不真实，也容易让人不信。
+下面是与几个同类开源项目的**中性对比**。数据采集于 **2026-10-04/05**（来源：各项目 GitHub API / 官方仓库 / 官方文档站）。我们特意把**别人比我们强的地方也列出来**——因为夸大成「全面碾压」既不真实，也容易让人不信。
+
+> 📌 **对标数据会过时，我们选择标注日期而不是假装它不会变。**
+> 下面标了 ✅/❌ 的每一格都来自当日实读官方材料；判断变化了就改，并更新这里的日期。
+> 凡我们无法从官方材料验证的，一律写「不可验证」而不是猜测。
 
 | 能力 | Lumina | [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) | [AIRI](https://github.com/moeru-ai/airi) | [openclaw](https://github.com/openclaw/openclaw) | [cc-haha](https://github.com/NanmiCoder/cc-haha) | [MiniMax Code](https://agent.minimax.cn/docs/code/welcome) |
 |------|--------|------------------|----------------|----------------------|------------------|---------------------|
@@ -309,32 +339,70 @@ Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有�
 | **拟人情感** | ✅ 3 连续数值 + 亲密度 + 昼夜节律 | ✅ 会主动 | ✅ 表情丰富 | ❌ 零人格 | ⚠️ 状态提示 | ❌ 零人格 |
 | **桌宠绑定真实执行状态** | ✅ **唯一** | ❌ | ❌ | ❌ | ⚠️ 状态提示+跳转 | ❌ 无形象 |
 | **桌宠形象形态** | ✅ Live2D/VRM/精灵表/MMD/猫咪 | ✅ 五形态 | ✅ **五种（含 Spine/立绘）** | ❌ | ⚠️ 8×9 精灵表 | ❌ 无形象 |
-| **多端支持** | ❌ **仅 Windows 实机** | ✅ Steam + 移动端内测 | ✅ Web/Electron/iOS/Android/PWA | ✅ 5 端原生 App | ✅ 三平台 | ✅ 桌面/CLI/Headless/ACP |
-| **IM 渠道** | ⚠️ **7 个适配器已接线**（Telegram/微信/QQ/钉钉/Slack/Discord/openclaw），默认关闭、需自配凭据、未经端到端真机验证 | ⚠️ | ✅ 4+ | ✅ **27 个** | ✅ 8 个 | ✅ 微信/飞书/Telegram/Lark |
-| **本地推理** | ❌ 需外挂 LM Studio | ⚠️ | ✅ **WebGPU 真本地** | ⚠️ | ⚠️ | ⚠️ 自带托管模型 |
-| **Computer Use** | ✅ 键鼠/OCR/UIA | ⚠️ 截图 | ✅ 看屏幕 | ⚠️ | ✅ macOS 原生 | ✅ |
-| **桌面安全沙箱** | ✅ 四层 + 26 规则 + 三层角色闸门 | ❌ | ❌ | ⚠️ | ⚠️ | ⚠️ 5 级权限 |
+| **多端支持** | ⚠️ **Windows 实机验证**；macOS/Linux CI 覆盖但未实机验收 | ✅ Steam + 移动端内测 | ✅ Web/Electron/iOS/Android/PWA | ✅ 5 端原生 App | ✅ 三平台 | ✅ 桌面/CLI/Headless/ACP |
+| **IM 渠道** | ⚠️ **7 个适配器已接线，仅 Telegram 默认开启**，其余需自配凭据、未经端到端真机验证 | ⚠️ | ✅ 4+ | ✅ **32 个** | ✅ 8 个 | ✅ 微信/飞书/Telegram/Lark |
+| **本地推理** | ❌ 需外挂 LM Studio | ❌ | ⚠️ **路线图未勾选**（`[ ] Pure in-browser local (WebGPU) inference`）；可接 Ollama/vLLM | ⚠️ local models 作为插件 | ⚠️ LM Studio/Ollama | ⚠️ 自带托管模型 |
+| **Computer Use** | ✅ 键鼠/OCR/UIA + **情绪可收紧权限** | ⚠️ 截图 | ⚠️ **已有 `services/computer-use-mcp`**（macOS 桌面编排 + 审批队列 + 审计 + 15 个 browser_dom 工具），仍限 macOS | ⚠️ 看屏幕 | ✅ macOS 原生（不占真实鼠标） | ✅ |
+| **桌面安全沙箱** | ✅ 四层 + 26 规则 + 三层角色闸门 | ⚠️ 未展开 | ⚠️ 审批队列（CU 层） | ✅ trusted gateway 架构 | ✅ 五档权限 | ⚠️ 5 级权限 |
 | **团队社交** | ✅ 群聊 + 朋友圈 + 早安 | ✅ | ⚠️ | ❌ | ❌ | ❌ |
-| **记忆系统** | ✅ BM25+RRF+五维证据 | ✅ **35+ 模块，最深** | ⚠️ Roadmap 未完成 | ⚠️ 纯 Markdown | ✅ 继承 Claude Code | ⚠️ 不可验证 |
-| **社区体量** | 0（未发布） | 3,009 ★ | 49,956 ★ | **391,213 ★** | 14,849 ★ | 闭源商业 |
+| **记忆系统** | ✅ BM25+RRF+五维证据 | ✅ **35+ 模块，最深** | ❌ **Memory Alaya 至今 WIP 未勾选** | ⚠️ 纯 Markdown | ✅ 继承 Claude Code | ⚠️ 闭源不可验证 |
+| **社区体量** | 0（未发布） | 3,009 ★ | 49,956 ★ | **391,294 ★** | 14,860 ★ | 闭源商业 |
 
 **一句话总结各自的长处**：
 
 - **N.E.K.O**：形态与分发（Steam 已上架 + 创意工坊）比我们成熟，记忆模块 35+ 个比我们深。**它是我们唯一 ~85% 重叠的镜像对手。**
-- **AIRI**：形象工程比我们好（5 种渲染后端、6 语言 i18n、winget/brew/nix 分发），且有 **WebGPU 真本地推理**。但它自己的 Roadmap 上 **Memory 那一格还没打勾**。
-- **openclaw**：生态规模比我们大**三个数量级**，27 个渠道 + ClawHub 技能生态定义了行业标准。但**零人格**。
+- **AIRI**：形象工程比我们好（5 种渲染后端、6 语言 i18n、winget/brew/nix 分发）。**我们上一版对比表写它「WebGPU 真本地推理 ✅」，这是错的**——其官方 Roadmap 上该项仍为 `[ ]` 未勾选。它的 `services/computer-use-mcp` 也比我们上一版写的「看屏幕」强得多：已有 macOS 桌面编排、审批队列、审计日志、trace 与 15 个浏览器 DOM 工具，只是**尚未跨出 macOS**。但它自己的 Roadmap 上 **Memory Alaya 那一格至今没打勾**。
+- **openclaw**：生态规模比我们大**三个数量级**，32 个渠道 + ClawHub 技能生态定义了行业标准。但**零人格**。我们上一版写的「27 个渠道」是旧快照，实际官方 channels 文档已列 32 个。
 - **cc-haha**：可视化多 Agent 工程台（依赖泳道画布、动态 Workflow、模型 trace）比我们做得细，但作者自己写明其桌宠「只是个状态提示和跳转入口，不能替你批准权限」——**我们恰好越过了这条线**。且其记忆 100% 继承 Claude Code。
 - **MiniMax Code**：功能集最接近的闭源产品（Agent Team + 电脑操控 + 微信 IM + 远程控制 + Goal 机制），但**完全没有形象 / 情绪 / 陪伴层**。它抢的是「要效率」，我们卖的是「要陪伴」，不抢同一批人。
 
 **我们仍然不如别人的地方**（说在前面）：社区体量（openclaw 大三个数量级）·
-多端覆盖（AIRI/N.E.K.O/cc-haha/MiniMax Code）· 应用内本地推理（AIRI）· 分发渠道
-（N.E.K.O 的 Steam）· IM 渠道**已接线但未经真机验证**（所有对手都已跑通）· 人格厚度（N.E.K.O 的 `persona/` 8 模块
+多端覆盖（AIRI/N.E.K.O/cc-haha/MiniMax Code）· 应用内本地推理（AIRI 路线图方向）· 分发渠道
+（N.E.K.O 的 Steam）· IM 渠道**已接线但仅 Telegram 开启、均未经真机验证**（所有对手都已跑通）· 人格厚度（N.E.K.O 的 `persona/` 8 模块
 vs 我们每人 55~75 行身份文件）· 多 Agent 可视化（cc-haha / MiniMax Code）。
 
 Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再补多端。**
 这个交集目前是空的 —— 详见 [docs/BENCHMARKS.md](docs/BENCHMARKS.md)。
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
+
+---
+
+## 🔬 Quality Gates · 工程底座
+
+我们不靠 star 数说话，靠能跑的东西说话。**下面每一项都是我们本机实测跑出来的，
+不是 CI 徽章上的转述。**（数据采样：2026-10-05 · commit `072cb22`）
+
+| 闸门 | 命令 | 实测结果 |
+|---|---|---|
+| 测试套件 | `npm test` | **229 个测试文件 · 3324 个用例通过**（1 skipped），22.1 s |
+| 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error** |
+| 代码规范 | `npm run lint` | **0 error**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
+| CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
+| 打包 | `.github/workflows/release.yml` | Windows / macOS / Linux 三平台；**无签名证书时降级出包而不失败** |
+
+**代码规模**（不含依赖与构建产物）：
+
+| 模块 | 行数 | 占比 |
+|---|---:|---:|
+| `electron/` 主进程 | 174,994 | 68% |
+| `src/` 渲染进程 | 51,721 | 20% |
+| `tests/` | 33,000+ | **12%** |
+| 其余（python / scripts / agents / skills） | 2,925 | 1% |
+| **合计** | **260,000+** | 100% |
+
+> 📌 **测试代码占全仓 12%**。同赛道的头部项目靠社区规模或基金会输血，
+> Lumina 在发布时什么都没有，只能靠自己写的测试。
+> 这是我们最想让你看的一个数字——它比上面任何功能列表都更能说明工程质量。
+
+**为什么我们把这块写进 README 而不是藏在 CONTRIBUTING 里**：
+一个 0 star 的开源项目，专业用户判断能不能信的唯一客观依据就是**质量闸门**，
+因为他们搜不到任何 issue、discussion 或第三方评测。如果你正在考虑用 Lumina
+跑真任务，这张表应该比功能列表更能帮你做决定。
+
+**我们也如实说明短板**：`tsc --strict` 是绿的，但 `eslint` 仍有约 5100 条
+`no-explicit-any` warning（集中在测试与 LLM 消息边界）。它不阻塞发布——
+因为有棘轮机制管着只会减少；但我们不假装它是零。
 
 ### 📊 我们的诚实能力边界
 
@@ -360,15 +428,15 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据，**我们没做端到端真机验证** |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：2,619 用例全绿**（`vitest run` 191 文件 / 2618 通过 / 1 skipped，
-实测 18.46s）；`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
+Linux 为 roadmap。**测试规模：3,071 用例全绿**（`vitest run` 212 文件 / 3070 通过 / 1 skipped，
+实测 24.77s）；`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
 
 复现命令（在仓库根目录执行）：
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：191 文件 / 2618 passed / 1 skipped
+npx vitest run             # 预期：212 文件 / 3070 passed / 1 skipped
 ```</sub>
 
 > ⚠️ **一句实话**：本项目 90% 的能力描述来自**代码与测试**，而不是**真人使用数据**。

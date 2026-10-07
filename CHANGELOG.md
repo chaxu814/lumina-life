@@ -1,3 +1,81 @@
+﻿## [Unreleased] — 发布前阻断项修复 + 5 项创新功能落地 (2026-10-05)
+
+> 对应 `docs/Lumina-竞品深度评测与发布建议-20261005.md` 第七节的 P0~P2 清单。
+> 测试基线：3252 → **3324** 用例（+72），`tsc --strict` 0 error，eslint 0 error。
+
+### 发布阻断项（P0）
+
+- **移除 Live2D 示例模型 Mao**（`electron/pet/assets/Mao/`，8.8 MB）
+  - 原因：**不是「不能商用」**。官方条款 2.1.3 明确允许 Live2D 原创角色「使用・改変・配布」，
+    且对「一般ユーザー / 小規模事業者」（年销售额 < 1,000 万円）不区分営利非営利。
+    真正的原因是第 4.1.7 条禁止与「可能构成竞争的中间件」组合——
+    而「可能构成竞争」这个措辞，恰恰对「做 Live2D 桌宠应用」的项目留了最大的解释空间，
+    且判断权完全在 Live2D 手上。
+  - 其余约束一并记录于 `THIRD_PARTY_NOTICES.md`：第 7.3 条违约要销毁派生物
+    （GitHub 星标会被牵连，Steam 只是下架）、第 2.1.3.2 条超 1,000 万円须事前书面申请、
+    第 2.1.5 条强制署名不可删除（与 AGPL 允许 fork 删声明冲突）、第 2.1.3 条音声数据不得再分发
+  - 替代：保底形象改为**程序化 Canvas 2D 小猫**（零外部素材、零授权风险、任何情况下都能加载）
+  - 联动：模型库、渲染页解析、异常回退、IPC、历史设置迁移全部改为引用单一真源
+    `FALLBACK_MODEL_ID` / `FALLBACK_ENTRY_REL`
+  - `THIRD_PARTY_NOTICES.md` 重写：逐条对照表 + 「商业化前置条件」章节
+    （含官方固定署名文案原文），并附条款原文链接与「非法律意见」声明
+- **修复 `deploy-docs.yml` 分支不匹配**：只监听 `main` 而默认分支是 `master`，
+  文档站永远不会部署。改为 `[main, master]`
+- **清理内部脚手架**：`knowledge/`、`stt-server/` 移出版本控制并加入 `.gitignore`
+- 放行 `examples/sprites/**/*.png`（原被通用 `*.png` 规则挡掉，UGC 资产无法入库）
+
+### 事实校正（P1）
+
+- README 对比表：AIRI 的 Computer Use 不再写「看屏幕」——
+  其 `services/computer-use-mcp` 已有 macOS 桌面编排、审批队列、审计日志、trace 与 15 个 browser_dom 工具
+- openclaw 渠道数 27 → **32**（旧快照）
+- 统一 AIRI WebGPU 结论：官方 Roadmap 仍为 `[ ]` 未勾选（此前 BENCHMARKS 与竞品文档自相矛盾）
+- 对比表数据日期改为 **2026-10-04/05**，并加注「会过时，我们选择标注日期而不是假装它不会变」
+
+### 渠道诚实度闸门
+
+- 新增 `CHANNEL_CAPABILITIES` 能力登记表（成熟度的唯一真源）
+- **Telegram 是唯一标记为 `verified` 的渠道**（已完成端到端真机验证）
+- 其余 6 个适配器标记 `experimental`，**默认拒绝启动**，需配置 `allowExperimental: true` 显式放行
+- 首次运行的默认配置只预置 telegram 模板（且不启用）
+- `getStatus()` 新增 `maturity` / `note` 字段供 UI 直接渲染角标
+
+### README 工程叙事（P2）
+
+- 顶部新增四个质量徽章（tests / tsc --strict / eslint / CI matrix）与代码量徽章
+- 新增 **Quality Gates · 工程底座** 章节：实测数据、代码规模表、测试占比论证、如实说明的短板
+
+### 重构（P2）
+
+- `agentRunner.ts` 4041 → **3772 行**：检索预处理（约 280 行）抽离到
+  `electron/agentRunner.preprocess.ts`，纯搬运不改行为
+  - 保留 `import` + `re-export` 双重导出（只写 re-export 会断掉内部调用）
+  - `tests/agentRunnerPreprocess.test.ts` 钉住拆分契约
+
+### 创新功能
+
+1. **情绪可审计**（`orchestration/emotionAudit.ts`）
+   「她为什么不帮我」终于可被解释。情绪收紧记录情绪快照、命中规则、代码位置与恢复条件；
+   用户可放行**这一轮**（不是永久解锁、不是权限授权）。已接入 `getToolsForMode` + IPC + preload。
+2. **情绪回流**（`memory/emotionalMemory.ts`）
+   给事实附加情绪权重。旁挂表 `fact_emotions`，不 ALTER `facts` 核心表。
+   21 天半衰期、复现次数对数加成、保守的事件→标签映射（不让 LLM 猜情绪）。
+3. **可见性分档**（`orchestration/visibility.ts`）
+   陪伴 / 协作 / 审计三档，运行时即时切换。铁则一在陪伴模式下原样保留；
+   **权限审批与错误事件在任何档位都可见**——藏掉它们是安全倒退而非体验优化。
+4. **精灵表 UGC 飞轮**（`scripts/make-sprite-template.mjs` + `examples/sprites/`）
+   零依赖 PNG 编码器生成 8×9 模板（2048×2304，61 有效帧，行标签 + 帧序号 + 有效/未用格着色）；
+   附 AI 生成提示词模板与社区贡献流程。
+5. **跨 Agent 记忆互通**（`memory/openExport.ts`）
+   导出的不是裸事实，而是**带可信度标注的开放格式**（`lumina-memory/v1`）：
+   authority（来源 + 置信度上限）/ provenance / emotion / trust 分档。
+   校验器对缺 authority 的条目一律降级为 low，对 trust 与 authority 冲突的条目以重算为准。
+
+### 顺带修掉的 bug
+
+- `modelLibrary.getActiveModel()` 把 **JSON 字符串**传给了 `deserialize()`（它要的是对象），
+  导致库文件里的 `currentId` 永远解析不出来，所有导入的模型都被静默忽略、退回保底形象
+
 # 📝 Changelog — Lumina Life
 
 > **口径说明**：本文件记录**面向用户的真实变化**。发布前的审计过程、发现的问题与修复对照，
@@ -452,3 +530,4 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 ---
 
 > 完整的发布版本和下载链接见 [GitHub Releases](https://github.com/chaxu814/lumina-life/releases)。
+
