@@ -552,7 +552,10 @@ export function LuminaDailyReport() {
                   apiKey: cfg.apiKey || '',
                   model: cfg.model,
                   temperature: 0.7,
-                  maxTokens: 262144,
+                  // 🔧 2026-10-07：输出预算从 262144 降到 8192。
+                  //   262144 是「最多生成 256K token」——没有任何模型需要这个，
+                  //   本地服务端还可能因此拒绝请求。contextWindow 保持 0（自动检测）。
+                  maxTokens: 8192,
                   contextWindow: 0,
                 }
                 break

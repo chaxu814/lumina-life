@@ -7,7 +7,7 @@
 //   - 自动 git diff 分析变更
 //   - LLM 生成合规 commit message (Conventional Commits)
 //   - 自动 commit + push
-//   - 编程协作模式集成：热茶/Yak 写代码 → Lumina 审查 → 自动提交
+//   - 编程协作模式集成：Yak 写代码 → 热茶 审查 → 自动提交
 //   - 安全：只提交工作区内的变更，never force push
 // ============================================================
 

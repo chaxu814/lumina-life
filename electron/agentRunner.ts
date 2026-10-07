@@ -122,6 +122,15 @@ import {
 import { cleanToolNoiseText } from './agent/toolNoise'
 import { resolveCapabilities, type ServerFacts } from './core/modelCapabilities'
 import { recallServerFacts, rememberServerFacts, parseServerFactsFor } from './core/modelServerFacts'
+// 🧭 路由预热（静态导入）。
+//   2026-10-07：这里原本是 `require('./orchestration/routingDecider')`。
+//   打包器把源码压平进 out/main/index.js 后，该相对路径**必然解析失败**，
+//   而外层 catch 会把它当成「没有路由提示」静默跳过 —— 于是**打包版里
+//   LLM 路由仲裁整体失效**（歧义任务永远走纯规则）。systemPrompt.ts 里
+//   同类 require 早已修成静态 import，这处漏了。
+//   routingDecider 只依赖一个 type 与纯函数 clarifyScope，不构成循环依赖。
+import { warmRouteHint } from './orchestration/routingDecider'
+import type { TeamMemberId } from './agentTeamTypes'
 // 🔧 P1-3：主对话接入 nativeBridge，让 Anthropic / Gemini / Azure 的原生协议可用。
 import {
   resolveNativeKind,
@@ -1188,11 +1197,11 @@ private summarizer: ConversationSummarizer | null = null
     //   仲裁失败/超时一律静默退回纯规则，绝不影响首字响应。
     if (this.config.personaId === 'lumina' && text && text.trim()) {
       try {
-        const { warmRouteHint } = require('./orchestration/routingDecider')
-        const arbiter = async (q: string): Promise<string | null> => {
+        const arbiter = async (q: string): Promise<TeamMemberId | null> => {
           // 独立 provider 实例：绝不复用 this._llmProvider（它会改写 this.messages）
           try {
-            const { LLMProvider } = require('./core/llmProvider')
+            // 🔧 2026-10-07：LLMProvider 已在文件顶部静态导入，这里的
+            //   `require('./core/llmProvider')` 既多余、打包后又必然失败。
             const p = new LLMProvider({
               baseUrl: this.config.baseUrl || '',
               apiKey: this.config.apiKey || '',
@@ -1210,7 +1219,8 @@ private summarizer: ConversationSummarizer | null = null
             })
             const raw = String(r?.text || r?.content || '').trim()
             const m = /lumina|yak|recha/i.exec(raw)
-            return m ? m[0].toLowerCase() : null
+            // 只接受合法成员 id（静态导入后类型收紧了：返回 any 的 require 已不存在）
+            return m ? (m[0].toLowerCase() as TeamMemberId) : null
           } catch { return null }
         }
         warmRouteHint(text, undefined, { llmClassify: arbiter })

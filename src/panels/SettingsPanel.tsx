@@ -668,13 +668,16 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
 
   // ── v10.0: 保存配置到后端 ProviderManager ──────────
   const saveProviderToBackend = async () => {
-    const { provider, baseUrl, apiKey, model } = useStore.getState().llmConfig
+    const { provider, baseUrl, apiKey, model, contextWindow } = useStore.getState().llmConfig
     if (!provider) {return}
     setSavingProvider(true)
     try {
       // 1) 保存配置
+      // 🔧 2026-10-07：上下文窗口取用户实际配置（0=自动检测），不再硬编码 256000。
+      //   硬编码会把本地小模型当成 256K 用 → 不裁剪历史 → 首字极慢。
       await window.luminaAPI?.providerSaveConfig?.(provider, {
-        baseUrl, apiKey: apiKey || '', model, enabled: true, timeout: 600, maxContextTokens: 256000,
+        baseUrl, apiKey: apiKey || '', model, enabled: true, timeout: 600,
+        maxContextTokens: contextWindow || 0,
       })
       // 2) 设为激活
       await window.luminaAPI?.providerSetActive?.(provider)

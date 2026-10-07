@@ -183,7 +183,11 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
     setLLMConfig({ provider: providerId, baseUrl, model, apiKey: key })
     try {
       await window.luminaAPI?.providerSaveConfig?.(providerId, {
-        baseUrl, apiKey: key, model, enabled: true, timeout: 600, maxContextTokens: 256000,
+        baseUrl, apiKey: key, model, enabled: true, timeout: 600,
+        // 🔧 2026-10-07：填 0（自动检测）而不是硬编码 256000。
+        //   引导流程对**本地模型**同样会走到这里，256K 会让小模型被当成大窗口用
+        //   → 不裁剪历史 → 首字从秒级变分钟级。0 交给 runner 走服务端真相。
+        maxContextTokens: 0,
       })
       await window.luminaAPI?.providerSetActive?.(providerId)
     } catch { /* 后端暂不可用时忽略，用户可在设置页再配置 */ }
