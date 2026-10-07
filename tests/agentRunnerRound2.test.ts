@@ -170,7 +170,11 @@ describe('④ 团队角色统一：Yak=代码工程师，热茶=审查员', () =
     expect(rechaSoul).toContain('审查员')
     expect(rechaSoul).toContain('不写代码、不执行命令')
     expect(rechaAgents).toContain('审查员')
-    expect(rechaAgents).toContain('绝对不能写代码')
+    // 2026-10-07：措辞从「绝对不能写代码」改为「权限是只读：不写代码…」——
+    // 守卫意图不变（热茶不得写代码），但禁止生硬回「我不会写代码」，
+    // 改为给出可行路径（详见 recha/AGENTS.md 与 tests/groupChatRouting.test.ts）。
+    expect(rechaAgents).toContain('不写代码')
+    expect(rechaAgents).toContain('绝对不要说「我不会写代码」')
   })
 
   it('与群聊人设（agentSouls）方向一致，没有反向', () => {

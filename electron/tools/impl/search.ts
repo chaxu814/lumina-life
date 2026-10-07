@@ -132,10 +132,35 @@ function resultQualityScore(r: { title: string; link: string; desc: string }): n
   return score
 }
 
-function normalizeResults(results: Array<{ title: string; link: string; desc: string }>, max: number): string {
+function normalizeResults(results: Array<{ title: string; link: string; desc: string }>, max: number, query?: string): string {
+  // ── 相关性过滤（2026-10-07）──────────────────────────────
+  //
+  // 【要解决的真实故障】用户搜「美股 宏观 消息 2026年10月7日 美联储」，
+  //   BING 返回的第一条是「美（汉语文字）_百度百科 —— 美（拼音：měi）为汉语
+  //   一级通用字」。它长度 > 20，通过了 isValidResult() 的全部检查，
+  //   于是被当成「有效结果」返回、还写进了缓存，**回退链根本没触发**。
+  //
+  // 【为什么靠长度/黑名单拦不住】垃圾结果永远是「有内容、无错误串」的。
+  //   唯一能判的是**它和查询到底有没有关系**。这里用 CJK 2-gram 重叠度：
+  //   查询的 2-gram 与结果文本（标题+摘要）的 2-gram 交集为空 → 判为无关。
+  //
+  //   上面那条垃圾的 2-gram 是 {美汉,汉语,语文,文字,百度,百科,拼音…}，
+  //   与查询 {美股,宏观,消息,美联,联储…} 交集为空 → 被正确剔除。
+  const qTokens = query ? relevanceTokens(query) : null
+
+  const scored = results
+    .filter(r => {
+      if (!r.title) {return false}
+      // 词典/百科单字条目：标题形如「美（汉语文字）」——与任何查询都不该算数
+      if (isDictionaryEntry(r.title)) {return false}
+      // 无查询上下文时不过滤（保持旧行为）
+      if (!qTokens || qTokens.size < 2) {return true}
+      const rTokens = relevanceTokens(`${r.title} ${r.desc}`)
+      return countOverlap(qTokens, rTokens) > 0
+    })
+
   const uniq = new Map<string, { title: string; link: string; desc: string }>()
-  for (const r of results) {
-    if (!r.title) {continue}
+  for (const r of scored) {
     const key = r.title.toLowerCase().slice(0, 60) || r.link.toLowerCase()
     const prev = uniq.get(key)
     const curScore = resultQualityScore(r)
@@ -144,6 +169,59 @@ function normalizeResults(results: Array<{ title: string; link: string; desc: st
   const out = Array.from(uniq.values()).slice(0, max)
   if (out.length === 0) {return '（未找到有效结果）'}
   return out.map((r, i) => `${i + 1}. ${r.title}\n   ${decodeBingRedirect(r.link)}\n   ${r.desc}`).join('\n\n')
+}
+
+// ═══════════════════════════════════════════════════════════
+// 相关性判定（2026-10-07）
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 抽取用于相关性比对的 token：
+ *   · 英文/数字词（长度 ≥ 2）
+ *   · CJK 2-gram（中文无空格，用相邻二字切分）
+ * 纯数字（年份等）会被排除，避免「2026」这种噪声制造假相关。
+ */
+export function relevanceTokens(s: string): Set<string> {
+  const out = new Set<string>()
+  if (!s) {return out}
+  const norm = s.toLowerCase()
+  for (const m of norm.matchAll(/[a-z]{2,}|\d{3,}/g)) {
+    const tok = m[0]
+    if (/^[a-z]+$/.test(tok)) {out.add(tok); continue}
+    // 年份（1900–2099）几乎不携带检索意图，只会制造假相关（如查询与结果
+    // 都含「2026」就被判为相关）—— 排除。
+    if (/^(19|20)\d{2}$/.test(tok)) {continue}
+    // 其余 4 位以上的数字保留：股票代码（002519 / 00700）是有意义的检索词
+    if (tok.length >= 4) {out.add(tok)}
+  }
+  const cjk = norm.replace(/[^\u4e00-\u9fa5]+/g, ' ')
+  for (const seg of cjk.split(/\s+/)) {
+    for (let i = 0; i + 2 <= seg.length; i++) {out.add(seg.slice(i, i + 2))}
+  }
+  return out
+}
+
+export function countOverlap(a: Set<string>, b: Set<string>): number {
+  let n = 0
+  for (const t of a) {if (b.has(t)) {n++}}
+  return n
+}
+
+/**
+ * 词典 / 百科「单字条目」判定。
+ * 形如「美（汉语文字）_百度百科」「好_百度百科」—— 这类结果几乎总是
+ * 「查询被拆成单字」或「引擎给出的词典卡片」，对信息检索没有价值。
+ */
+export function isDictionaryEntry(title: string): boolean {
+  const t = title.trim()
+  if (!t) {return false}
+  // 「X（拼音/释义…）」开头的单字条目
+  if (/^[\u4e00-\u9fa5]（[^）]{0,12}）/.test(t)) {return true}
+  // 纯单字 + 百科/词典来源
+  if (/^[\u4e00-\u9fa5]$/.test(t.replace(/[_\-–—\s]*(百度百科|维基百科|词典|汉典|在线新华字典).*$/, ''))) {
+    return true
+  }
+  return false
 }
 
 /** 验证结果是否有效（非空、非验证页、非错误） */
@@ -303,8 +381,11 @@ async function searchBing(query: string, count: number): Promise<string> {
       const desc = descMatch ? stripHtml(descMatch[1]).slice(0, 220) : ''
       results.push({ title, link, desc })
     }
-    const content = normalizeResults(results, count)
-    cacheSet(cacheKey, content)
+    const content = normalizeResults(results, count, query)
+    // 🔧 只缓存**有效**结果。否则「无结果」与「垃圾结果」会被缓存住，
+    //   用户反复搜同一个词时永远拿到同一份垃圾，回退引擎的结果被缓存挡住。
+    //   （2026-10-07「搜到单字词典」那次，缓存就是帮凶。）
+    if (isValidResult(content)) {cacheSet(cacheKey, content)}
     return content
   } catch (e) {
     return `Bing 搜索出错: ${e instanceof Error ? e.message : String(e)}`
@@ -351,8 +432,11 @@ async function searchGoogle(query: string, count: number): Promise<string> {
       }
     }
 
-    const content = normalizeResults(results, count)
-    cacheSet(cacheKey, content)
+    const content = normalizeResults(results, count, query)
+    // 🔧 只缓存**有效**结果。否则「无结果」与「垃圾结果」会被缓存住，
+    //   用户反复搜同一个词时永远拿到同一份垃圾，回退引擎的结果被缓存挡住。
+    //   （2026-10-07「搜到单字词典」那次，缓存就是帮凶。）
+    if (isValidResult(content)) {cacheSet(cacheKey, content)}
     return content
   } catch (err: any) {
     return `Google 搜索出错: ${err.message}`
@@ -403,8 +487,11 @@ async function searchBaidu(query: string, count: number): Promise<string> {
       }
     }
 
-    const content = normalizeResults(results, count)
-    cacheSet(cacheKey, content)
+    const content = normalizeResults(results, count, query)
+    // 🔧 只缓存**有效**结果。否则「无结果」与「垃圾结果」会被缓存住，
+    //   用户反复搜同一个词时永远拿到同一份垃圾，回退引擎的结果被缓存挡住。
+    //   （2026-10-07「搜到单字词典」那次，缓存就是帮凶。）
+    if (isValidResult(content)) {cacheSet(cacheKey, content)}
     return content
   } catch (err: any) {
     return `百度搜索出错: ${err.message}`
@@ -444,7 +531,7 @@ async function searchBrave(query: string, count: number, apiKey?: string): Promi
     }
 
     if (results.length === 0) {return `Brave 搜索 "${query}" 未找到结果`}
-    return normalizeResults(results, count)
+    return normalizeResults(results, count, query)
   } catch (e) {
     return `Brave 搜索出错: ${e instanceof Error ? e.message : String(e)}`
   }

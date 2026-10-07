@@ -99,7 +99,7 @@ import { checkLuckyModeForReAct, setState as setLuckyState, getConfig as getLuck
 // ═══════════════════════════════════════════════════════════
 // v9.3: 独立 LLM 通信 + ReAct 循环模块
 // ═══════════════════════════════════════════════════════════
-import { LLMProvider } from './core/llmProvider'
+import { LLMProvider, buildReasoningFallbackText } from './core/llmProvider'
 import { ReActEngine } from './core/reactEngine'
 import { getPermissionStore } from './permission/permissionStore'
 import { decide as decidePermission } from './permission/permissionTier'
@@ -3350,6 +3350,30 @@ private summarizer: ConversationSummarizer | null = null
     const earlyResultsObj: Record<string, { content: string; error?: string }> = {}
     for (const [id, result] of earlyResults) {
       earlyResultsObj[id] = result
+    }
+
+    // 🧠 推理模型兜底（2026-10-07）
+    //
+    // 【要解决的故障】用户用「MiMo v2.6 Distill Qwen 9B」等**蒸馏/推理模型**时，
+    //   得到「连续 0 轮未产出可用内容」。根因是这类模型把全部输出放进
+    //   `reasoning_content`（思维链），而 `content` 始终为空 —— 于是
+    //   streamText 一直是空的，最终 text=undefined，上层报「无法识别的内容」。
+    //
+    //   非流式路径早就有这个兜底（见上面 `content 优先、reasoning_content 兜底`），
+    //   但**流式路径漏了** —— 而流式才是主路径。这里补齐，两条路径行为一致。
+    //
+    //   仅在没有工具调用、且 content 确实为空时启用；有内容时绝不覆盖。
+    //   复用 llmProvider 的 buildReasoningFallbackText —— 它会加一句人话前缀
+    //   说明「这是模型的思考内容、不是正式回答」，两条路径行为保持一致。
+    if (!streamText && !streamToolCalls?.length) {
+      const reasoningFallback = (this._reasoningAccum || '').trim()
+      if (reasoningFallback.length > 20) {
+        console.warn(
+          `[AgentRunner] 🧠 content 为空，回退使用 reasoning_content（${reasoningFallback.length} 字）` +
+          ` —— 该模型（${this.config.model || '未知'}）把输出放在了思维链里`,
+        )
+        streamText = buildReasoningFallbackText(reasoningFallback)
+      }
     }
 
     if (streamToolCalls?.length) {

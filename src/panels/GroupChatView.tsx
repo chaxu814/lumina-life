@@ -168,7 +168,9 @@ function buildHistoryForAgent(
   runningHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options?: { skipSystem?: boolean },
 ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-  const MAX_HISTORY_TOKENS = Math.floor((contextWindow || 262144) * 0.55)
+  // 🔧 2026-10-07: 未知窗口时用**保守**默认（32K），不再假设 256K。
+  //   假设 256K 会让历史预算算得过大 → 给本地小模型塞进远超其承载能力的上下文。
+  const MAX_HISTORY_TOKENS = Math.floor((contextWindow || 32768) * 0.55)
   const PER_MSG_OVERHEAD = 8
   const MAX_OTHER_MSGS = 30      // 🔧 P2-fix: 其他 Agent 最多保留条数（8→30，减少群聊上下文截断）
   const MAX_OWN_CHARS = 4000     // 🔧 P2-fix: 自己/用户/系统消息上限（2000→4000，保留更多细节）
@@ -1494,11 +1496,37 @@ export default function GroupChatView() {
   /** 🆕 v3.7: 根据任务类型路由到正确的 Agent — 热茶编码、Yak分析、Lumina日常+讨论 */
   const routeToAgent = (intent: ReturnType<typeof detectTaskIntent>) => {
     switch (intent) {
-      case 'coding':   return AGENTS.find(a => a.id === 'recha')!    // 🆕 v3.7: 热茶负责编码
-      case 'analysis': return AGENTS.find(a => a.id === 'yak')!      // 🆕 v3.7: Yak 负责分析
-      case 'discussion': return AGENTS.find(a => a.id === 'lumina')! // 🆕 v3.7: 讨论由 Lumina 牵头
+      // 🔧 2026-10-07 修复：这两行曾经**接反了** —— coding 派给热茶、analysis 派给 Yak。
+      //   热茶是「只读审查员」，没有写权限；把编码请求派给她，她只能回
+      //   「我不会写代码」，用户得到的是死胡同。
+      //   项目里 delegate_to 的注释早就写过这个坑（「历史版本这里是反的，
+      //   会把编码任务派给没有写权限的一方，等于任务注定失败」）——
+      //   主委托路径修了，**群聊这条路由漏了**。
+      case 'coding':   return AGENTS.find(a => a.id === 'yak')!      // 写代码 → Yak（代码工程师）
+      case 'analysis': return AGENTS.find(a => a.id === 'recha')!    // 审查/分析 → 热茶（审查员）
+      case 'discussion': return AGENTS.find(a => a.id === 'lumina')! // 讨论由 Lumina 牵头
       case 'chat':     return AGENTS.find(a => a.id === 'lumina')!
     }
+  }
+
+  /**
+   * 🆕 2026-10-07 能力守卫：@ 了只读成员（热茶）却要它「动手写」时，
+   * 改派给有写权限的成员（Yak）。
+   *
+   * 【为什么】热茶的权限是只读（rolePolicy deny file_write/file_edit/shell_exec），
+   *   被要求写代码时它**物理上做不到**，只能回一句「我不会写代码」。
+   *   用户看到的是「我叫他们写代码，他们说不会」——死胡同，且显得团队无能。
+   *   改派之后用户直接拿到代码，而且**只在「目标确实做不到」时才改**：
+   *   明确的审查意图仍然尊重用户的 @ 选择。
+   */
+  const upgradeReadOnlyTarget = (targetId: string, text: string, intent: ReturnType<typeof detectTaskIntent>): string | null => {
+    if (targetId !== 'recha') {return null}
+    // 明确的审查/评估意图 → 尊重用户选择，不改派
+    if (/审查|review|评审|复核|挑错|找错|找bug|风险|评估|对比|权衡|检查|看看有没有问题/i.test(text)) {
+      return null
+    }
+    // 其余判为编码 → 交给有写权限的 Yak
+    return intent === 'coding' ? 'yak' : null
   }
 
   /** 🆕 v3.0: 生成工具操作的详细描述 */
@@ -1605,8 +1633,8 @@ export default function GroupChatView() {
         mode: effectiveMode as 'chat' | 'agent',
         maxToolCalls: override?.maxToolCalls ?? 12,
         temperature: override?.temperature ?? 0.05,  // 🧠 极低温度：代码必须准确
-        maxTokens: override?.maxTokens ?? 262144,
-        contextWindow: 262144,
+        maxTokens: override?.maxTokens ?? 16384,
+        contextWindow: llmConfig.contextWindow || 0,
         disabledTools: codingDisabled,
       }
     }
@@ -1625,7 +1653,7 @@ export default function GroupChatView() {
         maxToolCalls: override?.maxToolCalls ?? 4,  // 学习场景不需要太多工具轮次
         temperature: override?.temperature ?? 0.1,  // 🧠 低温度：知识必须准确
         maxTokens: override?.maxTokens ?? 16384,   // 学习回答可以稍长
-        contextWindow: 262144,
+        contextWindow: llmConfig.contextWindow || 0,
         disabledTools: chatModeDisabled,
       }
     }
@@ -1643,8 +1671,8 @@ export default function GroupChatView() {
         mode: effectiveMode as 'chat' | 'agent',
         maxToolCalls: override?.maxToolCalls ?? 8,
         temperature: override?.temperature ?? 0.2,  // 🧠 中低温度：信息/代码需要准确
-        maxTokens: override?.maxTokens ?? 262144,
-        contextWindow: 262144,
+        maxTokens: override?.maxTokens ?? 16384,
+        contextWindow: llmConfig.contextWindow || 0,
         disabledTools: chatModeDisabled,
       }
     }
@@ -1662,8 +1690,8 @@ export default function GroupChatView() {
         mode: effectiveMode as 'chat' | 'agent',
         maxToolCalls: override?.maxToolCalls ?? 6,
         temperature: override?.temperature ?? 0.5,  // 🧠 中等温度：写作需要一定创意
-        maxTokens: override?.maxTokens ?? 262144,
-        contextWindow: 262144,
+        maxTokens: override?.maxTokens ?? 16384,
+        contextWindow: llmConfig.contextWindow || 0,
         disabledTools: chatModeDisabled,
       }
     }
@@ -1680,8 +1708,8 @@ export default function GroupChatView() {
       mode: effectiveMode as 'chat' | 'agent',
       maxToolCalls: override?.maxToolCalls ?? 6,
       temperature: override?.temperature ?? 0.7,  // 默认温度：日常聊天保持自然
-      maxTokens: override?.maxTokens ?? 262144,
-      contextWindow: 262144,
+      maxTokens: override?.maxTokens ?? 16384,
+      contextWindow: llmConfig.contextWindow || 0,
       disabledTools: chatModeDisabled,
     }
   }
@@ -1862,10 +1890,31 @@ export default function GroupChatView() {
     const effectiveLlmConfig = getAgentLlmConfig(effectiveAgentId) || {
       provider: llmConfig.provider, model: llmConfig.model,
       endpoint: llmConfig.baseUrl, apiKey: llmConfig.apiKey,
-      contextWindow: 262144, timeout: 600,
+      // 🔧 2026-10-07: 兜底也取用户实际配置，不再硬编码 262144（见下方 CTX_WIN 注释）
+      contextWindow: llmConfig.contextWindow || 0,
+      maxTokens: llmConfig.maxTokens || 16384,
+      timeout: 600,
     }
 
-    // ── 大型工程：全协作流水线（热茶编码→Yak审查→热茶修复→Lumina测试）──
+    // 🩺 上下文窗口 / 输出上限 —— 取用户实际配置，**不再硬编码 262144（256K）**。
+    //
+    // 【为什么必须改】硬编码 256K 对本地模型（尤其小模型）是致命的：
+    //   ① runner 以为窗口有 256K → 不裁剪历史 → 每轮全量 prefill，
+    //      首字响应从秒级变成分钟级（与主对话的 P0-3 同一个坑）；
+    //   ② max_tokens 索要 256K 输出，本地服务端会拒绝或截断
+    //      → 表现正是「模型连续 0 轮未产出可用内容」。
+    //   0 = 交给 runner 自动检测（服务端报告优先），云端模型不受影响。
+    const CTX_WIN = Number(effectiveLlmConfig.contextWindow) > 0
+      ? Number(effectiveLlmConfig.contextWindow)
+      : 0
+    const OUT_BUDGET = Math.min(
+      Number((effectiveLlmConfig as { maxTokens?: number }).maxTokens) > 0
+        ? Number((effectiveLlmConfig as { maxTokens?: number }).maxTokens)
+        : 16384,
+      CTX_WIN > 0 ? Math.max(1024, Math.floor(CTX_WIN / 4)) : 16384,
+    )
+
+    // ── 大型工程：全协作流水线（Yak 编码→热茶审查→Yak 修复→Lumina测试）──
     if (isCoding && codeScale === 'large' && llmReady) {
       // 思考过程追踪 — 每个协作阶段都会累积
       let phaseThinkingAccum: ThinkingStep[] = []
@@ -1897,7 +1946,7 @@ export default function GroupChatView() {
         phaseStepStartTimes = new Map()
       }
 
-      // ── 编程协作：热茶(写码) → Yak(审查) → 热茶(修复) → Lumina(测试) ──
+      // ── 编程协作：Yak(写码) → 热茶(审查) → Yak(修复) → Lumina(测试) ──
       const currentPhase = collabPhaseRef.current  // 捕获当前阶段号
       const unsubTool = subscribeAgentEvents((ev: any) => {
         // 用户中止时立即停止累积思考步骤
@@ -1976,7 +2025,7 @@ export default function GroupChatView() {
           }, collabCurrentMsgIdRef.current)
         } else if (ev.type === 'token_update' && ev.delta !== undefined && ev.delta > 0) {
           // 团队协作 token 追踪
-          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'recha')
+          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'yak')
         }
       })
       // fix: 使用 ref 替代 let 变量
@@ -2004,7 +2053,7 @@ export default function GroupChatView() {
             content: (m.content || '').slice(0, 24000),
           }))
         // token 动态截断：保留最新消息不超过上下文窗口 50%
-        const CONTEXT_WIN = effectiveLlmConfig?.contextWindow || 262144
+        const CONTEXT_WIN = effectiveLlmConfig?.contextWindow || 0
         const BUDGET = Math.floor(CONTEXT_WIN * 0.5)
         let est = 0
         const result: typeof raw = []
@@ -2023,8 +2072,8 @@ export default function GroupChatView() {
 
       try {
 
-        // 精简角色提示词 — 支持多轮迭代修复（🆕 v3.7: 热茶编码、Yak审阅）
-        const coderPrompt = `你是热茶，Lumina 团队的代码工程师。收到了编程任务。
+        // 精简角色提示词 — 支持多轮迭代修复（🆕 v3.7: Yak 编码、热茶审阅）
+        const coderPrompt = `你是 Yak，Lumina 团队的代码工程师。收到了编程任务。
 
 ⚠️ 铁律（违反就是失败）：
 1. 第一反应必须是 file_read 看现状 或 file_write 直接写 —— 不要先给建议再问要不要写
@@ -2037,7 +2086,7 @@ export default function GroupChatView() {
    只有在真的无法判断时，才向用户提问并说明缺什么信息
 6. 做不到的事直接说做不到，不要用模糊话术搪塞过去`
 
-        const reviewerPrompt = `你是 Yak，审阅热茶的代码。看完直接给结论。
+        const reviewerPrompt = `你是热茶，审阅 Yak 的代码。看完直接给结论。
 规则：
 - file_read 读代码 → 给出"通过"或"有问题"的明确结论
 - 有问题必须说具体位置和原因，不许写"建议优化一下"这种无法执行的话
@@ -2046,7 +2095,7 @@ export default function GroupChatView() {
 - ⛔ 审阅要覆盖真实风险：逻辑错误、边界情况、异常未处理、安全隐患都要看。
   确实没发现问题就明说没发现，不要为了显得尽责而编造问题`
 
-        const testerPrompt = `你是 Lumina，用 shell_exec 跑热茶写的程序并报告结果。
+        const testerPrompt = `你是 Lumina，用 shell_exec 跑 Yak 写的程序并报告结果。
 规则：
 - 只跑命令，不评价代码
 - 成功：简短说输出结果，以 "✅" 开头
@@ -2072,19 +2121,19 @@ export default function GroupChatView() {
             : ''
           
           // ─────────────────────────────────
-          // Phase 1: 热茶编码/修复
+          // Phase 1: Yak 编码/修复
           // ─────────────────────────────────
-          setReplyingAgent('recha')
-          setLastAgent('recha')
-          updateEmotion('recha', userText, { isGroupChat: true })
+          setReplyingAgent('yak')
+          setLastAgent('yak')
+          updateEmotion('yak', userText, { isGroupChat: true })
 
-          const coderMsgId = `recha-${Date.now()}`
+          const coderMsgId = `yak-${Date.now()}`
           collabCurrentMsgIdRef.current = coderMsgId
           collabPhaseRef.current++  // 🔧 v5.4fix: 递增阶段号
           resetCollabAccum()
           const coderMsg: GCMsg = {
             id: coderMsgId,
-            from: 'recha', fromIcon: '🍵', fromName: '热茶',
+            from: 'yak', fromIcon: '📊', fromName: 'Yak',
             content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, coderMsg])
@@ -2097,32 +2146,32 @@ export default function GroupChatView() {
           
           const codingCfg = getTaskConfig(true)
           const phase1Result = await agentChatWithTimeout({
-            text: `[${codingIteration === 1 ? '热茶，用户让你写代码。你是编码者，直接动手，不要只说建议。' : '热茶，上一轮测试发现错误，请修复代码！'}]\n\n${phase1Task}`,
+            text: `[${codingIteration === 1 ? 'Yak，用户让你写代码。你是编码者，直接动手，不要只说建议。' : 'Yak，上一轮测试发现错误，请修复代码！'}]\n\n${phase1Task}`,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
-              personaId: 'recha',
+              personaId: 'yak',
               model: effectiveLlmConfig.model,
               baseUrl: effectiveLlmConfig.baseUrl,
               apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
-              maxTokens: 262144,
+              maxTokens: OUT_BUDGET,
               maxToolCalls: codingIteration === 1 ? 12 : 15,
               disabledTools: codingCfg.disabledTools,
               skipApproval: true,
-              contextWindow: 262144,
+              contextWindow: CTX_WIN,
               systemPrompt: coderPrompt,
               socialMode: true,
             },
-            conversationHistory: buildHistoryForAgent(messages, 'recha', codingCfg.contextWindow, runningHistory),
+            conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
           })
 
           let coderReply = (phase1Result.content || '代码已写好').trimStart()
           // 🆕 团队阶段错误检测：若是超时/错误兜底文本，中断协作链并提示重试
           if (phase1Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(coderReply)) {
-            console.log('[GroupChat] ⛔ 热茶阶段出错或超时，中断协作链')
+            console.log('[GroupChat] ⛔ Yak 阶段出错或超时，中断协作链')
             setMessages(prev => prev.map(m => m.id === coderMsgId
-              ? { ...m, content: '（热茶处理失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
+              ? { ...m, content: '（Yak 处理失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
             runningHistoryRef.current = runningHistory
             setSending(false); setReplyingAgent(null); setLastAgent(null)
             return
@@ -2132,27 +2181,27 @@ export default function GroupChatView() {
           animateTyping(coderMsgId, coderReply)
           // v14.0-fix: Phase 1 完成后追加结果到 runningHistory（🆕 P2: 扩到 3000 字符避免信息丢失）
           runningHistory.push(
-            { role: 'user', content: `[热茶 收到需求] ${fullText.slice(0, 500)}` },
-            { role: 'assistant', content: `[热茶 输出] ${coderReply.slice(0, 3000)}` },
+            { role: 'user', content: `[Yak 收到需求] ${fullText.slice(0, 500)}` },
+            { role: 'assistant', content: `[Yak 输出] ${coderReply.slice(0, 3000)}` },
           )
           runningHistoryRef.current = runningHistory // 🆕 v16.0-fix: 同步到 ref
 
           if (abortRef.current) { setSending(false); setReplyingAgent(null); return }
 
           // ─────────────────────────────────
-          // Phase 2: Yak 审查
+          // Phase 2: 热茶审查
           // ─────────────────────────────────
-          setReplyingAgent('yak')
-          setLastAgent('yak')
-          updateEmotion('yak', userText, { isGroupChat: true })
+          setReplyingAgent('recha')
+          setLastAgent('recha')
+          updateEmotion('recha', userText, { isGroupChat: true })
 
-          const reviewMsgId = `yak-${Date.now()}`
+          const reviewMsgId = `recha-${Date.now()}`
           collabCurrentMsgIdRef.current = reviewMsgId
           collabPhaseRef.current++  // 🔧 v5.4fix: 递增阶段号
           resetCollabAccum()
           const reviewMsg: GCMsg = {
             id: reviewMsgId,
-            from: 'yak', fromIcon: '📊', fromName: 'Yak',
+            from: 'recha', fromIcon: '🍵', fromName: '热茶',
             content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, reviewMsg])
@@ -2160,31 +2209,31 @@ export default function GroupChatView() {
           collabMsgs.push(reviewMsg)
           
           const phase2Result = await window.luminaAPI.agentChat({
-            text: `[Yak，热茶刚写完了代码，你来审阅一下。]\n\n用户需求：${fullText.slice(0, 500)}\n\n热茶回复的代码：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
+            text: `[热茶，Yak 刚写完了代码，你来审阅一下。]\n\n用户需求：${fullText.slice(0, 500)}\n\nYak 回复的代码：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
-              personaId: 'yak',
+              personaId: 'recha',
               model: effectiveLlmConfig.model,
               baseUrl: effectiveLlmConfig.baseUrl,
               apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
-              maxTokens: 262144,
+              maxTokens: OUT_BUDGET,
               maxToolCalls: 5,
               skipApproval: true,
-              contextWindow: 262144,
+              contextWindow: CTX_WIN,
               systemPrompt: reviewerPrompt,
               socialMode: true,
             },
-            conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
+            conversationHistory: buildHistoryForAgent(messages, 'recha', codingCfg.contextWindow, runningHistory),
           })
 
           const reviewReply = (phase2Result.content || '审阅完成').trimStart()
           // 🆕 团队阶段错误检测
           if (phase2Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(reviewReply)) {
-            console.log('[GroupChat] ⛔ Yak 审阅阶段出错或超时，中断协作链')
+            console.log('[GroupChat] ⛔ 热茶审阅阶段出错或超时，中断协作链')
             setMessages(prev => prev.map(m => m.id === reviewMsgId
-              ? { ...m, content: '（Yak 审阅失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
+              ? { ...m, content: '（热茶审阅失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
             runningHistoryRef.current = runningHistory
             setSending(false); setReplyingAgent(null); setLastAgent(null)
             return
@@ -2194,28 +2243,28 @@ export default function GroupChatView() {
           animateTyping(reviewMsgId, reviewReply)
           // v14.0-fix: Phase 2 完成后追加审查结果到 runningHistory（🆕 P2: 扩到 3000 字符）
           runningHistory.push(
-            { role: 'assistant' as const, content: `[Yak 审阅] ${reviewReply.slice(0, 3000)}` },
+            { role: 'assistant' as const, content: `[热茶审阅] ${reviewReply.slice(0, 3000)}` },
           )
           runningHistoryRef.current = runningHistory // 🆕 v16.0-fix: 同步到 ref
 
           if (abortRef.current) { setSending(false); setReplyingAgent(null); return }
 
           // ─────────────────────────────────
-          // Phase 3: 热茶修复（根据审查意见）
+          // Phase 3: Yak 修复（根据审查意见）
           // ─────────────────────────────────
           const needsFix = /问题|错误|改进|建议|修改|优化|修复|不妥|漏洞|隐患|改成|应该|需要|缺少|缺失/.test(reviewReply)
 
           if (!abortRef.current && needsFix) {
-            setReplyingAgent('recha')
-            setLastAgent('recha')
+            setReplyingAgent('yak')
+            setLastAgent('yak')
 
-            const fixMsgId = `recha-fix-${Date.now()}`
+            const fixMsgId = `yak-fix-${Date.now()}`
             collabCurrentMsgIdRef.current = fixMsgId
             collabPhaseRef.current++  // 🔧 v5.4fix: 递增阶段号
             resetCollabAccum()
             const fixMsg: GCMsg = {
               id: fixMsgId,
-              from: 'recha', fromIcon: '🍵', fromName: '热茶',
+              from: 'yak', fromIcon: '📊', fromName: 'Yak',
               content: '', time: formatDateLabel(Date.now()),
             }
             setMessages(prev => [...prev, fixMsg])
@@ -2223,31 +2272,31 @@ export default function GroupChatView() {
             collabMsgs.push(fixMsg)
             
             const phase3Result = await agentChatWithTimeout({
-              text: `[热茶，Yak 审查了你的代码，有一些建议。请根据审阅意见修改代码。]\n\nYak 的审阅意见：${reviewReply.slice(0, 500)}`,
+              text: `[Yak，热茶审查了你的代码，有一些建议。请根据审阅意见修改代码。]\n\n热茶的审阅意见：${reviewReply.slice(0, 500)}`,
               config: {
                 mode: codingCfg.mode,
                 isGroupChat: true,
-                personaId: 'recha',
+                personaId: 'yak',
                 model: effectiveLlmConfig.model,
                 baseUrl: effectiveLlmConfig.baseUrl,
                 apiKey: effectiveLlmConfig.apiKey,
                 temperature: 0.15,
-                maxTokens: 262144,
+                maxTokens: OUT_BUDGET,
                 maxToolCalls: 8,
                 skipApproval: true,
-                contextWindow: 262144,
+                contextWindow: CTX_WIN,
                 systemPrompt: coderPrompt,
                 socialMode: true,
               },
-              conversationHistory: buildHistoryForAgent(messages, 'recha', codingCfg.contextWindow, runningHistory),
+              conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
             })
             
             const fixReply = (phase3Result.content || '修复完成').trimStart()
             // 🆕 团队阶段错误检测
             if (phase3Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(fixReply)) {
-              console.log('[GroupChat] ⛔ 热茶修复阶段出错或超时，中断协作链')
+              console.log('[GroupChat] ⛔ Yak 修复阶段出错或超时，中断协作链')
               setMessages(prev => prev.map(m => m.id === fixMsgId
-                ? { ...m, content: '（热茶修复失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
+                ? { ...m, content: '（Yak 修复失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
               runningHistoryRef.current = runningHistory
               setSending(false); setReplyingAgent(null); setLastAgent(null)
               return
@@ -2257,7 +2306,7 @@ export default function GroupChatView() {
             animateTyping(fixMsgId, fixReply)
             // v14.0-fix: Phase 3 完成后追加修复结果（🆕 P2: 扩到 3000 字符）
             runningHistory.push(
-              { role: 'assistant' as const, content: `[热茶 修复] ${fixReply.slice(0, 3000)}` },
+              { role: 'assistant' as const, content: `[Yak 修复] ${fixReply.slice(0, 3000)}` },
             )
             runningHistoryRef.current = runningHistory // 🆕 v16.0-fix: 同步到 ref
             
@@ -2288,7 +2337,7 @@ export default function GroupChatView() {
           collabMsgs.push(testMsg)
           
           const phase4Result = await agentChatWithTimeout({
-            text: `[Lumina，热茶和 Yak 完成了编码和审阅，你来测试一下代码是否能正常运行。]\n\n用户需求：${fullText.slice(0, 500)}\n\n热茶的代码概要：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
+            text: `[Lumina，Yak 和热茶完成了编码和审阅，你来测试一下代码是否能正常运行。]\n\n用户需求：${fullText.slice(0, 500)}\n\nYak 的代码概要：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
@@ -2297,10 +2346,10 @@ export default function GroupChatView() {
               baseUrl: effectiveLlmConfig.baseUrl,
               apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
-              maxTokens: 262144,
+              maxTokens: OUT_BUDGET,
               maxToolCalls: 6,
               skipApproval: true,
-              contextWindow: 262144,
+              contextWindow: CTX_WIN,
               systemPrompt: testerPrompt,
               socialMode: true,
             },
@@ -2381,7 +2430,7 @@ export default function GroupChatView() {
       return
     }
 
-    // ── 中型工程：热茶编码 + Yak 审查（自动修复，无测试阶段）──
+    // ── 中型工程：Yak 编码 + 热茶审查（自动修复，无测试阶段）──
     if (isCoding && codeScale === 'medium' && llmReady) {
       let phaseThinkingAccum: ThinkingStep[] = []
       let phaseStepIds = new Set<string>()
@@ -2471,7 +2520,7 @@ export default function GroupChatView() {
             timestamp: Date.now(),
           }, collabCurrentMsgIdRef.current)
         } else if (ev.type === 'token_update' && ev.delta !== undefined && ev.delta > 0) {
-          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'recha')
+          addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'yak')
         }
       })
       collabCurrentMsgIdRef.current = ''
@@ -2490,7 +2539,7 @@ export default function GroupChatView() {
                 : 'assistant' as const,
             content: (m.content || '').slice(0, 24000),
           }))
-        const CONTEXT_WIN = effectiveLlmConfig?.contextWindow || 262144
+        const CONTEXT_WIN = effectiveLlmConfig?.contextWindow || 0
         const BUDGET = Math.floor(CONTEXT_WIN * 0.5)
         let est = 0
         const result: typeof raw = []
@@ -2506,7 +2555,7 @@ export default function GroupChatView() {
       runningHistoryRef.current = runningHistory
 
       try {
-        const coderPrompt = `你是热茶，Lumina 团队的代码工程师。收到了编程任务。
+        const coderPrompt = `你是 Yak，Lumina 团队的代码工程师。收到了编程任务。
 
 ⚠️ 铁律（违反就是失败）：
 1. 第一反应必须是 file_read 看现状 或 file_write 直接写 —— 不要先给建议再问要不要写
@@ -2519,7 +2568,7 @@ export default function GroupChatView() {
    只有在真的无法判断时，才向用户提问并说明缺什么信息
 6. 做不到的事直接说做不到，不要用模糊话术搪塞过去`
 
-        const reviewerPrompt = `你是 Yak，审阅热茶的代码。看完直接给结论。
+        const reviewerPrompt = `你是热茶，审阅 Yak 的代码。看完直接给结论。
 规则：
 - file_read 读代码 → 给出"通过"或"有问题"的明确结论
 - 有问题必须说具体位置和原因，不许写"建议优化一下"这种无法执行的话
@@ -2540,18 +2589,18 @@ export default function GroupChatView() {
             ? `\n\n⚠️ 【第${codingIteration}轮修改】上一轮审查发现问题：${previousErrorContext.slice(0, 500)}\n请修改代码解决这些问题后再验证。`
             : ''
 
-          // ── Phase 1: 热茶编码/修复 ──
-          setReplyingAgent('recha')
-          setLastAgent('recha')
-          updateEmotion('recha', userText, { isGroupChat: true })
+          // ── Phase 1: Yak 编码/修复 ──
+          setReplyingAgent('yak')
+          setLastAgent('yak')
+          updateEmotion('yak', userText, { isGroupChat: true })
 
-          const coderMsgId = `recha-md-${Date.now()}`
+          const coderMsgId = `yak-md-${Date.now()}`
           collabCurrentMsgIdRef.current = coderMsgId
           collabPhaseRef.current++
           resetCollabAccum()
           const coderMsg: GCMsg = {
             id: coderMsgId,
-            from: 'recha', fromIcon: '🍵', fromName: '热茶',
+            from: 'yak', fromIcon: '📊', fromName: 'Yak',
             content: '', time: formatDateLabel(Date.now()),
           }
           setMessages(prev => [...prev, coderMsg])
@@ -2564,67 +2613,7 @@ export default function GroupChatView() {
 
           const codingCfg = getTaskConfig(true)
           const phase1Result = await agentChatWithTimeout({
-            text: `[${codingIteration === 1 ? '热茶，用户让你写代码。你是编码者，直接动手，不要只说建议。' : '热茶，上一轮审查发现代码有问题，请修复！'}]\n\n${phase1Task}`,
-            config: {
-              mode: codingCfg.mode,
-              isGroupChat: true,
-              personaId: 'recha',
-              model: effectiveLlmConfig.model,
-              baseUrl: effectiveLlmConfig.baseUrl,
-              apiKey: effectiveLlmConfig.apiKey,
-              temperature: 0.15,
-              maxTokens: 262144,
-              maxToolCalls: codingIteration === 1 ? 12 : 15,
-              disabledTools: codingCfg.disabledTools,
-              skipApproval: true,
-              contextWindow: 262144,
-              systemPrompt: coderPrompt,
-              socialMode: true,
-            },
-            conversationHistory: buildHistoryForAgent(messages, 'recha', codingCfg.contextWindow, runningHistory),
-          })
-
-          let coderReply = (phase1Result.content || '代码已写好').trimStart()
-          // 🆕 团队阶段错误检测：若是超时/错误兜底文本，中断协作链并提示重试
-          if (phase1Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(coderReply)) {
-            console.log('[GroupChat] ⛔ 热茶阶段出错或超时，中断协作链')
-            setMessages(prev => prev.map(m => m.id === coderMsgId
-              ? { ...m, content: '（热茶处理失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
-            runningHistoryRef.current = runningHistory
-            setSending(false); setReplyingAgent(null); setLastAgent(null)
-            return
-          }
-          setMessages(prev => prev.map(m => m.id === coderMsgId
-            ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-          animateTyping(coderMsgId, coderReply)
-          runningHistory.push(
-            { role: 'user', content: `[热茶 收到需求] ${fullText.slice(0, 500)}` },
-            { role: 'assistant', content: `[热茶 输出] ${coderReply.slice(0, 3000)}` },
-          )
-          runningHistoryRef.current = runningHistory
-
-          if (abortRef.current) { setSending(false); setReplyingAgent(null); return }
-
-          // ── Phase 2: Yak 审查 ──
-          setReplyingAgent('yak')
-          setLastAgent('yak')
-          updateEmotion('yak', userText, { isGroupChat: true })
-
-          const reviewMsgId = `yak-md-${Date.now()}`
-          collabCurrentMsgIdRef.current = reviewMsgId
-          collabPhaseRef.current++
-          resetCollabAccum()
-          const reviewMsg: GCMsg = {
-            id: reviewMsgId,
-            from: 'yak', fromIcon: '📊', fromName: 'Yak',
-            content: '', time: formatDateLabel(Date.now()),
-          }
-          setMessages(prev => [...prev, reviewMsg])
-          setMsgCounter(c => c + 1)
-          collabMsgs.push(reviewMsg)
-
-          const phase2Result = await window.luminaAPI.agentChat({
-            text: `[Yak，热茶刚写完了代码，你来审阅一下。]\n\n用户需求：${fullText.slice(0, 500)}\n\n热茶的代码：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
+            text: `[${codingIteration === 1 ? 'Yak，用户让你写代码。你是编码者，直接动手，不要只说建议。' : 'Yak，上一轮审查发现代码有问题，请修复！'}]\n\n${phase1Task}`,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
@@ -2633,22 +2622,82 @@ export default function GroupChatView() {
               baseUrl: effectiveLlmConfig.baseUrl,
               apiKey: effectiveLlmConfig.apiKey,
               temperature: 0.15,
-              maxTokens: 262144,
-              maxToolCalls: 5,
+              maxTokens: OUT_BUDGET,
+              maxToolCalls: codingIteration === 1 ? 12 : 15,
+              disabledTools: codingCfg.disabledTools,
               skipApproval: true,
-              contextWindow: 262144,
-              systemPrompt: reviewerPrompt,
+              contextWindow: CTX_WIN,
+              systemPrompt: coderPrompt,
               socialMode: true,
             },
             conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
           })
 
+          let coderReply = (phase1Result.content || '代码已写好').trimStart()
+          // 🆕 团队阶段错误检测：若是超时/错误兜底文本，中断协作链并提示重试
+          if (phase1Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(coderReply)) {
+            console.log('[GroupChat] ⛔ Yak 阶段出错或超时，中断协作链')
+            setMessages(prev => prev.map(m => m.id === coderMsgId
+              ? { ...m, content: '（Yak 处理失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
+            runningHistoryRef.current = runningHistory
+            setSending(false); setReplyingAgent(null); setLastAgent(null)
+            return
+          }
+          setMessages(prev => prev.map(m => m.id === coderMsgId
+            ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
+          animateTyping(coderMsgId, coderReply)
+          runningHistory.push(
+            { role: 'user', content: `[Yak 收到需求] ${fullText.slice(0, 500)}` },
+            { role: 'assistant', content: `[Yak 输出] ${coderReply.slice(0, 3000)}` },
+          )
+          runningHistoryRef.current = runningHistory
+
+          if (abortRef.current) { setSending(false); setReplyingAgent(null); return }
+
+          // ── Phase 2: 热茶审查 ──
+          setReplyingAgent('recha')
+          setLastAgent('recha')
+          updateEmotion('recha', userText, { isGroupChat: true })
+
+          const reviewMsgId = `recha-md-${Date.now()}`
+          collabCurrentMsgIdRef.current = reviewMsgId
+          collabPhaseRef.current++
+          resetCollabAccum()
+          const reviewMsg: GCMsg = {
+            id: reviewMsgId,
+            from: 'recha', fromIcon: '🍵', fromName: '热茶',
+            content: '', time: formatDateLabel(Date.now()),
+          }
+          setMessages(prev => [...prev, reviewMsg])
+          setMsgCounter(c => c + 1)
+          collabMsgs.push(reviewMsg)
+
+          const phase2Result = await window.luminaAPI.agentChat({
+            text: `[热茶，Yak 刚写完了代码，你来审阅一下。]\n\n用户需求：${fullText.slice(0, 500)}\n\nYak 的代码：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
+            config: {
+              mode: codingCfg.mode,
+              isGroupChat: true,
+              personaId: 'recha',
+              model: effectiveLlmConfig.model,
+              baseUrl: effectiveLlmConfig.baseUrl,
+              apiKey: effectiveLlmConfig.apiKey,
+              temperature: 0.15,
+              maxTokens: OUT_BUDGET,
+              maxToolCalls: 5,
+              skipApproval: true,
+              contextWindow: CTX_WIN,
+              systemPrompt: reviewerPrompt,
+              socialMode: true,
+            },
+            conversationHistory: buildHistoryForAgent(messages, 'recha', codingCfg.contextWindow, runningHistory),
+          })
+
           const reviewReply = (phase2Result.content || '审阅完成').trimStart()
           // 🆕 团队阶段错误检测
           if (phase2Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(reviewReply)) {
-            console.log('[GroupChat] ⛔ Yak 审阅阶段出错或超时，中断协作链')
+            console.log('[GroupChat] ⛔ 热茶审阅阶段出错或超时，中断协作链')
             setMessages(prev => prev.map(m => m.id === reviewMsgId
-              ? { ...m, content: '（Yak 审阅失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
+              ? { ...m, content: '（热茶审阅失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
             runningHistoryRef.current = runningHistory
             setSending(false); setReplyingAgent(null); setLastAgent(null)
             return
@@ -2657,26 +2706,26 @@ export default function GroupChatView() {
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
           animateTyping(reviewMsgId, reviewReply)
           runningHistory.push(
-            { role: 'assistant' as const, content: `[Yak 审阅] ${reviewReply.slice(0, 3000)}` },
+            { role: 'assistant' as const, content: `[热茶审阅] ${reviewReply.slice(0, 3000)}` },
           )
           runningHistoryRef.current = runningHistory
 
           if (abortRef.current) { setSending(false); setReplyingAgent(null); return }
 
-          // ── Phase 3: 热茶修复（如果需要）──
+          // ── Phase 3: Yak 修复（如果需要）──
           const needsFix = /问题|错误|改进|建议|修改|优化|修复|不妥|漏洞|隐患|改成|应该|需要|缺少|缺失/.test(reviewReply)
 
           if (!abortRef.current && needsFix) {
-            setReplyingAgent('recha')
-            setLastAgent('recha')
+            setReplyingAgent('yak')
+            setLastAgent('yak')
 
-            const fixMsgId = `recha-fix-${Date.now()}`
+            const fixMsgId = `yak-fix-${Date.now()}`
             collabCurrentMsgIdRef.current = fixMsgId
             collabPhaseRef.current++
             resetCollabAccum()
             const fixMsg: GCMsg = {
               id: fixMsgId,
-              from: 'recha', fromIcon: '🍵', fromName: '热茶',
+              from: 'yak', fromIcon: '📊', fromName: 'Yak',
               content: '', time: formatDateLabel(Date.now()),
             }
             setMessages(prev => [...prev, fixMsg])
@@ -2684,31 +2733,31 @@ export default function GroupChatView() {
             collabMsgs.push(fixMsg)
 
             const phase3Result = await agentChatWithTimeout({
-              text: `[热茶，Yak 审查了你的代码，有一些建议。请根据审查意见修改代码。]\n\nYak 的审查意见：${reviewReply.slice(0, 500)}`,
+              text: `[Yak，热茶审查了你的代码，有一些建议。请根据审查意见修改代码。]\n\n热茶的审查意见：${reviewReply.slice(0, 500)}`,
               config: {
                 mode: codingCfg.mode,
                 isGroupChat: true,
-                personaId: 'recha',
+                personaId: 'yak',
                 model: effectiveLlmConfig.model,
                 baseUrl: effectiveLlmConfig.baseUrl,
                 apiKey: effectiveLlmConfig.apiKey,
                 temperature: 0.15,
-                maxTokens: 262144,
+                maxTokens: OUT_BUDGET,
                 maxToolCalls: 8,
                 skipApproval: true,
-                contextWindow: 262144,
+                contextWindow: CTX_WIN,
                 systemPrompt: coderPrompt,
                 socialMode: true,
               },
-              conversationHistory: buildHistoryForAgent(messages, 'recha', codingCfg.contextWindow, runningHistory),
+              conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
             })
 
             const fixReply = (phase3Result.content || '修复完成').trimStart()
             // 🆕 团队阶段错误检测
             if (phase3Result.error || /模型响应较慢|模型响应超时|回复生成失败或耗时过长|已自动中断|请稍后(重试|再试)|出了点问题|LLM 请求失败|连接断开/i.test(fixReply)) {
-              console.log('[GroupChat] ⛔ 热茶修复阶段出错或超时，中断协作链')
+              console.log('[GroupChat] ⛔ Yak 修复阶段出错或超时，中断协作链')
               setMessages(prev => prev.map(m => m.id === fixMsgId
-                ? { ...m, content: '（热茶修复失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
+                ? { ...m, content: '（Yak 修复失败，请说"继续"重试）', _animDone: true } as GCMsg : m))
               runningHistoryRef.current = runningHistory
               setSending(false); setReplyingAgent(null); setLastAgent(null)
               return
@@ -2717,7 +2766,7 @@ export default function GroupChatView() {
               ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
             animateTyping(fixMsgId, fixReply)
             runningHistory.push(
-              { role: 'assistant' as const, content: `[热茶 修复] ${fixReply.slice(0, 3000)}` },
+              { role: 'assistant' as const, content: `[Yak 修复] ${fixReply.slice(0, 3000)}` },
             )
             runningHistoryRef.current = runningHistory
 
@@ -2740,7 +2789,7 @@ export default function GroupChatView() {
           setMessages(prev => [...prev, {
             id: `sys-${Date.now()}`,
             from: 'system', fromIcon: '⚠️', fromName: '系统',
-            content: `⚠️ 已尝试 ${MAX_CODING_ITERATIONS} 轮，审查仍有问题。建议手动查看代码或@Yak 进行详细审查。`,
+            content: `⚠️ 已尝试 ${MAX_CODING_ITERATIONS} 轮，审查仍有问题。建议手动查看代码或@热茶进行详细审查。`,
             time: formatDateLabel(Date.now()),
           }])
         }
@@ -2780,6 +2829,10 @@ export default function GroupChatView() {
     // 🔧 2026-08-11: @ 显式指定最高优先（持续话题下用户仍可 @ 指定某人）
     if (mentioned) {
       responder = AGENTS.find(a => a.id === mentioned)!
+      // 🆕 2026-10-07 能力守卫：@ 了只读成员却要它写代码 → 改派给能写的人。
+      //   否则用户会收到一句「我不会写代码」的死胡同（见 upgradeReadOnlyTarget 注释）。
+      const upgraded = upgradeReadOnlyTarget(responder.id, userText, taskIntent)
+      if (upgraded) {responder = AGENTS.find(a => a.id === upgraded)!}
     } else if (overrideResponder) {
       // 用户通过任务卡片/派发中心指定了 agent → 直接使用，跳过自动匹配
       responder = overrideResponder
@@ -3531,7 +3584,8 @@ export default function GroupChatView() {
             const historyForLLM = buildHistoryForAgent(
               updated,
               agentId,
-              262144,
+              // 🔧 2026-10-07: 取用户实际配置，不再硬编码 262144（对本地小模型过大）
+              llmConfig.contextWindow || 0,
               [],
               { skipSystem: true },
             )
@@ -3548,7 +3602,7 @@ export default function GroupChatView() {
                 systemPrompt: getAgentSystemPromptLite(agentId, undefined, undefined, intentToolsPrompt)
                   + getTaskTypeInstruction(selectedRoleRef.current)
                   + (thinkingMode ? '\n\n## 🧠 思考与回复格式\n先用 <thinking> 标签在心里简要梳理思路（这部分用户看不到），\n然后在 </thinking> 之后输出给用户的**完整自然回复**：针对用户的问题或话题作答，至少一句，语气符合你的角色。\n⚠️ 规则：\n- 推理过程放在 <thinking> 内\n- </thinking> 之后必须是给用户的真实回复，禁止留空、禁止只回"收到/好的/明白"、禁止复述这条格式指令\n\n📌 特别说明：本对话已开启「思考模式」，允许且必须使用 <thinking> 标签包裹推理过程；角色设定中「禁止输出 XML/HTML 标签」的条款，在本思考模式下对 <thinking> 标签不生效。' : ''),
-                contextWindow: 262144,
+                contextWindow: effectiveLlmConfig.contextWindow || 0,
                 trackReasoning: thinkingMode,  // 🧠 v10.6: 思考过程开关
               },
               conversationHistory: historyForLLM,
