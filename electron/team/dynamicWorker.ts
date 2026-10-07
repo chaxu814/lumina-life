@@ -49,8 +49,13 @@ export interface RoleSpec {
 }
 
 // 所有后台 worker 共通的工具黑名单（与 main.ts WORKER_BLOCKED_TOOLS 对齐）
+// 🔧 2026-10-07：移除 serpapi_search / tavily_search / tavily_extract ——
+//   这三个「反幻觉占位工具」已从注册表删除（它们什么都不做、还占 schema 体积）。
+//   留下的 web_search 仍是本名单的第一条，因此模型若幻觉出这些名字，
+//   registry 的别名重定向会把它改成 web_search，随后在这里被拦下
+//   （执行层的 deniedTools 检查，见 registry.executeToolWithRetry）。
 const BASE_BLOCKED = [
-  'browser', 'web_fetch', 'web_search', 'web_search_multi', 'serpapi_search', 'tavily_search', 'tavily_extract',
+  'browser', 'web_fetch', 'web_search', 'web_search_multi',
   'screenshot', 'ocr',
   'desktop_see', 'desktop_act', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_screen_size', 'desktop_scan',
   'hearing_start', 'hearing_stop', 'hearing_status', 'hearing_transcript',
@@ -141,7 +146,7 @@ const WEB_ROLES = ['research', 'search']
 function buildDisabledTools(role: string, spec: RoleSpec): string[] {
   const blocked = [...BASE_BLOCKED, ...spec.extraBlocked]
   if (WEB_ROLES.includes(role)) {
-    const allow = new Set(['web_search', 'web_search_multi', 'web_fetch', 'tavily_search', 'tavily_extract', 'serpapi_search'])
+    const allow = new Set(['web_search', 'web_search_multi', 'web_fetch'])
     return blocked.filter(t => !allow.has(t))
   }
   return blocked

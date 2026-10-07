@@ -1,0 +1,315 @@
+// ============================================================
+// toolRouter.ts — 工具按需筛选（2026-10-07）
+//
+// 【它解决什么问题】
+// 修复前，`getToolsForMode()` 每轮把整档工具**全量**塞进 function list：
+//   agent 档 67 个工具 ≈ 9,700 tokens
+//   developer 档 93 个 ≈ 12,400 tokens
+// 而这笔开销**每一次模型调用都要重发一遍** —— 包括「现在几点」这种一句话问题。
+//
+// 【实测依据】本机 601 次真实工具调用里：
+//   · 只有 22 个工具被调用过（142 个中占 15%）
+//   · 前 7 个工具（web_search / browser / web_fetch / file_read /
+//     shell_exec / file_list / file_write）占了 **95%** 的调用量
+//   · 团队协作 25 个工具占 agent 档 44% 的开销，实际只用到 3 个
+// 也就是说：大部分 schema 是「每轮重发、从未使用」。
+//
+// 【设计原则】
+//   1. **核心常驻 + 能力按需**：高频工具永远在；低频/重工具等关键词命中才加。
+//   2. **粘性**：一旦某个能力组被激活，本会话内一直保留。
+//      否则「上一轮能用、下一轮不见了」——这比不筛还糟。
+//   3. **失败开放**：拿不到用户输入、或筛选后工具过少时，**退回全量**。
+//      宁可多花 token，也不能让模型「没有工具可用」。
+//   4. **可关闭**：feature flag `tools.onDemand`（缺省开）。
+//   5. **不碰提示词教过的工具**：`agentTeamPersonas` 明确教模型调用
+//      delegate_to / team_message / team_tasks / hire_worker / workflow /
+//      adversarial_review / git_worktree / save_context / load_context /
+//      write_notice / read_notices / delegate_chain。
+//      这些留在核心层，避免「提示词让模型调一个不在列表里的工具」。
+//      只有**提示词没教过**的团队工具（phase_gate_delegate / run_subagents /
+//      worker_control / team_autonomy / team_roles / team_checkpoint /
+//      team_stats / team_log / teach）才进按需组。
+//
+// 【与其它过滤层的关系】
+//   本模块只做「从该模式本可用的工具里挑子集」，是**减法**。
+//   调用方（getToolsForMode）在本模块之后仍会依次执行
+//   disabledTools → rolePolicy → 情绪门控，那三层语义完全不变。
+// ============================================================
+
+/** 一个能力组：命中任一关键词 → 整组工具加入本轮 function list */
+export interface CapabilityGroup {
+  /** 给日志看的中文名 */
+  label: string
+  /** 触发关键词（大小写不敏感，中英混合） */
+  keywords: string[]
+  /** 该组包含的工具名 */
+  tools: string[]
+}
+
+/**
+ * 常驻核心 —— 无论用户问什么都在。
+ *
+ * 选取标准：**实测调用量最高的那批** + 「没有它就没法干活」的基础能力
+ *           + **提示词明确教过的那批**（见文件头「设计原则 5」）。
+ *
+ * 刻意保持精简：每多一个常驻工具，每次调用都要多付一次 schema 开销。
+ * 但精简的边界是「不能和提示词打架」—— 提示词教了却不在列表里，
+ * 模型只会去调一个不存在的工具，那比多花 token 糟得多。
+ */
+export const CORE_TOOLS: readonly string[] = [
+  // 文件（实测 file_read/file_write/file_list/file_search 全在前 11）
+  'file_read', 'file_write', 'file_edit', 'file_list', 'file_search',
+  // 终端（shell_exec 实测 27 次）
+  'shell_exec',
+  // 搜索（实测 web_search 346 次 = 全部调用的 69%）
+  'web_search', 'web_fetch', 'browser',
+  // 记忆（实测 memory_search 12 / memory_get 10 / memory_save 5）
+  'memory_save', 'memory_search', 'memory_get',
+  // 时间与交互
+  'datetime', 'todo', 'ask_decision',
+  // 技能（「怎么做到某件事」的逃生阀，让模型不必硬编码流程）
+  'skill_search', 'skill_run',
+  // ── 团队基础 + 提示词教过的团队工具 ──
+  //   ⚠️ 这一整段是「不能动」的：electron/agentTeamPersonas.ts 的
+  //   TEAM_LUMINA.systemPrompt 逐条点名教模型使用它们
+  //   （delegate_to / team_message / team_tasks / hire_worker / workflow /
+  //     adversarial_review / git_worktree / save_context / load_context /
+  //     write_notice / read_notices / delegate_chain / team_mailbox）。
+  //   把它们挪进按需组会让提示词和 function list 打架。
+  //   由 tests/toolRouting.test.ts 的「设计不变量」用例守着。
+  'delegate_to', 'delegate_chain', 'team_context', 'team_message', 'team_mailbox',
+  'team_tasks', 'hire_worker', 'workflow', 'adversarial_review', 'git_worktree',
+  'write_notice', 'read_notices', 'save_context', 'load_context',
+]
+
+/** developer 档额外常驻：写代码真正天天用的那批 */
+export const DEVELOPER_CORE_TOOLS: readonly string[] = [
+  'git_status', 'git_commit', 'git_log', 'git_diff',
+  'ast_search', 'lsp_symbols', 'lsp_references',
+  'developer_companion_check',
+  // 浏览器精细操作 —— 写前端/调试网页时是刚需，放 developer 常驻
+  'browser_open', 'browser_click', 'browser_type', 'browser_read',
+  'browser_list', 'browser_screenshot', 'browser_close',
+]
+
+/**
+ * 按需能力组。key 会作为粘性标记与日志名。
+ */
+export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
+  // ── 团队进阶 ──
+  //   ⚠️ 这里**只能**放提示词没有教过的团队工具。
+  //   实测：TEAM_LUMINA.systemPrompt 教过 delegate_to / delegate_chain /
+  //   team_message / team_mailbox / team_tasks / hire_worker / workflow /
+  //   adversarial_review / git_worktree / write_notice / read_notices /
+  //   save_context / load_context —— 那 13 个已全部放进 CORE_TOOLS。
+  //   剩下这 9 个（任务板检查点/绩效统计/五阶段门控/并行派生/worker 控制/
+  //   自治/日志/角色/教学）提示词里没提，模型不会主动去调，因此可以按需。
+  team_advanced: {
+    label: '团队进阶',
+    keywords: [
+      '团队', '协作', '分工', '同事', '队友', '员工', '人手', '多个人', '一起做',
+      '并行', '雇佣', '招聘', '实习生', '评审', '审查', '对抗', '验收', '复核',
+      '流程', '工作流', '里程碑', '绩效', '统计', '日志', '角色', 'worktree',
+      '独立分支', '任务板', '泳道', '项目', '完整', '重构', '发布', '自动化',
+      'team', 'worker', 'workflow', 'review', 'delegate', 'subagent',
+    ],
+    tools: [
+      'teach', 'team_checkpoint', 'team_stats', 'phase_gate_delegate',
+      'run_subagents', 'worker_control', 'team_autonomy', 'team_log', 'team_roles',
+    ],
+  },
+  lumina_mode: {
+    label: '模式切换',
+    keywords: [
+      '模式', '工作模式', '学习模式', '娱乐模式', '休息模式', '切换模式',
+      '工作状态', '现在是', 'mode',
+    ],
+    tools: ['mode_switch', 'mode_status'],
+  },
+
+  // ── 日程与效率 ──
+  calendar: {
+    label: '日历日程',
+    keywords: [
+      '日历', '日程', '会议', '安排', '约会', '排期', '时间表', '空闲',
+      '什么时候', '有没有空', '提醒我开会', 'calendar', 'meeting', 'schedule',
+    ],
+    tools: ['calendar_list', 'calendar_add', 'calendar_remove', 'calendar_free'],
+  },
+  tasks_schedule: {
+    label: '定时任务',
+    keywords: [
+      '定时', '每天', '每周', '每月', '提醒', '循环', '稍后', '闹钟',
+      '时间胶囊', '定期', 'cron', 'remind', 'timer', 'daily', 'weekly',
+    ],
+    tools: ['cron_schedule', 'cron_list', 'cron_cancel', 'time_capsule'],
+  },
+  desktop_tidy: {
+    label: '桌面整理',
+    keywords: [
+      '整理', '收拾', '归类', '归档', '桌面太乱', '清理桌面', '文件太多',
+      '乱七八糟', 'tidy', 'organize',
+    ],
+    tools: ['desktop_tidy_scan', 'desktop_tidy_plan', 'desktop_tidy'],
+  },
+
+  // ── 系统与记忆深化 ──
+  system_extra: {
+    label: '系统操作',
+    keywords: [
+      // ⚠️ 中文口语里「截个图 / 截一下图 / 截屏」比「截图」更常见，
+      //   只写「截图」会漏掉最典型的说法（这是实测踩到的坑）。
+      '截图', '截个图', '截一下图', '截屏', '截张图',
+      '剪贴板', '复制', '粘贴', '打开文件', '打开软件', '进程',
+      '系统信息', '内存', 'cpu', '磁盘', '通知', '弹窗', 'screenshot', 'clipboard',
+    ],
+    tools: ['open_file', 'screenshot', 'clipboard_get', 'clipboard_set', 'process_list', 'system_info', 'notification'],
+  },
+  memory_deep: {
+    label: '记忆深化',
+    keywords: [
+      '回忆', '记得', '记忆', '以前', '之前说过', '忘了', '翻翻',
+      '总结一下我们', '聊过什么', 'remember', 'recall', 'memory',
+    ],
+    tools: ['memory_all', 'memory_summarize', 'memory_chat_search'],
+  },
+  skills_extra: {
+    label: '技能管理',
+    keywords: ['技能', 'skill', '安装技能', '装个技能', '插件'],
+    tools: ['skill_install', 'use_skill'],
+  },
+
+  // ── 电脑操控（重工具，实测 0 次调用）──
+  computer_use: {
+    label: '电脑操控',
+    keywords: [
+      '操作电脑', '帮我点', '鼠标', '键盘', '窗口', '软件界面', '屏幕',
+      '识别图', '图片识别', 'ocr', '桌面程序', '自动化操作', '帮我操作',
+      '点到', '输入框', '按钮',
+    ],
+    tools: [
+      'desktop_act', 'desktop_element_act', 'desktop_scan', 'desktop_click',
+      'desktop_elements', 'desktop_see', 'desktop_type', 'desktop_key',
+      'desktop_screen_size', 'ocr',
+    ],
+  },
+  browser_actions: {
+    label: '浏览器精细操作',
+    keywords: [
+      '登录', '填表', '表单', '点按钮', '网页操作', '自动填', '抓取网页',
+      '打开网站', '浏览器', '网站', '页面上', 'browser', 'login', 'form',
+    ],
+    tools: [
+      'browser_open', 'browser_click', 'browser_type', 'browser_read',
+      'browser_list', 'browser_screenshot', 'browser_close', 'browser_cdp',
+    ],
+  },
+}
+
+/** 会话级粘性：已激活的能力组（避免「上一轮能用下一轮没了」） */
+const sessionActiveGroups = new Map<string, Set<string>>()
+
+/** 清空某会话的粘性（新建会话 / 清空历史时调用） */
+export function resetToolRouting(sessionId: string): void {
+  sessionActiveGroups.delete(sessionId)
+}
+
+/** 仅供测试：清空全部粘性 */
+export function _resetAllToolRouting(): void {
+  sessionActiveGroups.clear()
+}
+
+/** 读取某会话当前已激活的组（诊断用） */
+export function getActiveGroups(sessionId: string): string[] {
+  return [...(sessionActiveGroups.get(sessionId) || [])]
+}
+
+/**
+ * 判断文本命中了哪些能力组。大小写不敏感。
+ * 导出以便单测（关键词表是「配置」，必须有测试守着它别写错）。
+ */
+export function matchGroups(text: string): string[] {
+  const t = String(text || '').toLowerCase()
+  if (!t) {return []}
+  const hit: string[] = []
+  for (const [name, g] of Object.entries(CAPABILITY_GROUPS)) {
+    if (g.keywords.some(k => t.includes(k.toLowerCase()))) {hit.push(name)}
+  }
+  return hit
+}
+
+export interface RouteResult {
+  tools: string[]
+  /** 本轮生效的能力组（含粘性继承来的） */
+  groups: string[]
+  /** 本轮新命中的组（用于日志） */
+  newlyMatched: string[]
+  /** 是否真的做了裁剪（false = 退回全量，如拿不到输入 / 工具过少） */
+  narrowed: boolean
+  /** 未裁剪的原因（诊断用） */
+  reason?: string
+}
+
+/**
+ * 从「该模式本可用的工具」里挑出本轮要暴露给模型的子集。
+ *
+ * @param candidateTools 该模式的全量候选（已过 blockedInChild）
+ * @param mode           'chat' | 'agent' | 'developer'
+ * @param userInput      本轮用户输入（拿不到就退回全量）
+ * @param sessionId      会话 ID，用于粘性；缺失则不使用粘性
+ * @param enabled        总开关，false 时直接返回全量
+ */
+export function routeTools(
+  candidateTools: string[],
+  mode: string,
+  userInput: string | undefined,
+  sessionId: string | undefined,
+  enabled = true,
+): RouteResult {
+  const passthrough = (reason: string): RouteResult => ({
+    tools: candidateTools, groups: [], newlyMatched: [], narrowed: false, reason,
+  })
+
+  if (!enabled) {return passthrough('按需筛选已关闭')}
+  // chat 档本来就是 0 工具，没有可裁的
+  if (mode === 'chat') {return passthrough('chat 档已是最小集')}
+  // 🔓 失败开放：拿不到用户输入就不裁 —— 宁可多花 token，也不能让模型没工具用
+  const input = String(userInput || '').trim()
+  if (!input) {return passthrough('本轮无用户输入，退回全量')}
+
+  // ── 计算生效的组：粘性 ∪ 本轮命中 ──
+  const sticky = sessionId ? (sessionActiveGroups.get(sessionId) || new Set<string>()) : new Set<string>()
+  const newlyMatched = matchGroups(input)
+  const groups = new Set<string>([...sticky, ...newlyMatched])
+
+  // ── 组装允许集 ──
+  const allowed = new Set<string>(CORE_TOOLS)
+  if (mode === 'developer') {
+    for (const t of DEVELOPER_CORE_TOOLS) {allowed.add(t)}
+  }
+  for (const g of groups) {
+    for (const t of (CAPABILITY_GROUPS[g]?.tools || [])) {allowed.add(t)}
+  }
+
+  const tools = candidateTools.filter(t => allowed.has(t))
+
+  // 🔓 失败开放：裁完太少说明判断有问题，退回全量
+  //   阈值取 8：低于这个数连「读文件 → 改 → 验证」都跑不起来。
+  if (tools.length < 8) {
+    return passthrough(`裁剪后仅 ${tools.length} 个工具（过少），退回全量`)
+  }
+
+  // ── 写入粘性（只对本轮新命中的做增量，避免每次全量重写）──
+  if (sessionId && newlyMatched.length > 0) {
+    const set = sessionActiveGroups.get(sessionId) || new Set<string>()
+    for (const g of newlyMatched) {set.add(g)}
+    sessionActiveGroups.set(sessionId, set)
+  }
+
+  return {
+    tools,
+    groups: [...groups],
+    newlyMatched,
+    narrowed: true,
+  }
+}

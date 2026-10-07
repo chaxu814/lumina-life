@@ -18,6 +18,7 @@ import {
   groupParallelBatches,
   getToolNames,
 } from './tools/registry'
+import { routeTools, resetToolRouting } from './tools/toolRouter'
 import { registerAllTools } from './tools/index'
 import { isToolAllowedForRole } from './rolePolicy'
 import { parseXmlToolCalls as parseXmlToolCallsShared } from './llm/xmlToolCall'
@@ -943,6 +944,9 @@ private summarizer: ConversationSummarizer | null = null
     this.initSystemPrompt()
     this.turnCount = 0
     this.totalTokens = 0
+    // 🎯 清空历史 = 开新话题，按需筛选的粘性也要跟着清
+    //   （否则上一个话题激活的「电脑操控」「桌面整理」会一直挂在后面每一轮）
+    try { resetToolRouting(this.sessionId) } catch { /* 粘性清理失败不影响主流程 */ }
     this._healthChecked = false   // 🔧 v3.0: 清除后重新检查健康状态
     this._firstCallDone = false   // 🔧 v3.0: 首次调用标记重置
     this._modelPinged = false     // 🔧 v3.7: 重置 Ping 标记
@@ -2109,7 +2113,7 @@ private summarizer: ConversationSummarizer | null = null
               result = { callId: tc.id, ok: !error, content, error, durationMs: 0 }
               console.log(`[AgentRunner] ⚡ 使用增量预执行结果: ${fn.name} (${tc.id}) — ${content.length} 字符`)
             } else {
-              result = await executeToolWithRetry(fn.name, args)
+              result = await executeToolWithRetry(fn.name, args, this.toolRetryConfig())
             }
             const toolDuration = Date.now() - toolStartTime
 
@@ -2185,7 +2189,7 @@ private summarizer: ConversationSummarizer | null = null
 
             const batches = groupParallelBatches(allowedCalls)
             for (const batch of batches) {
-              const batchResults = await executeToolsParallel(batch)
+              const batchResults = await executeToolsParallel(batch, this.toolRetryConfig())
               for (const item of batchResults) {
                 // 🔧 模型偶尔会吐出畸形 JSON 参数。这里原来直接 JSON.parse，
                 //   一次解析失败就会把整个 ReAct 轮抛出去 → 整轮回答直接崩掉，
@@ -3569,6 +3573,19 @@ private summarizer: ConversationSummarizer | null = null
   // 模式与工具
   // ═════════════════════════════════════════════════════════
 
+  /**
+   * 🔒 工具执行参数：把本轮的 `disabledTools` 下沉到执行层。
+   *
+   * 【为什么需要】`disabledTools` 原先只在 `getToolsForMode()` 里过滤
+   *   **暴露给模型的工具列表**。「没暴露」≠「执行不了」——模型仍可能凭幻觉
+   *   直接调用一个名字，而 registry 的别名重定向（bing_search → web_search）
+   *   更会让这种幻觉真的执行下去，从而绕过 worker 的工具黑名单。
+   *   暴露层是白名单、执行层是黑名单，两层都必须成立。
+   */
+  private toolRetryConfig(): { deniedTools: string[] } {
+    return { deniedTools: this.config.disabledTools || [] }
+  }
+
   private getToolsForMode(): { tools: string[]; toolsetName: string } {
     let tools: string[]
     let toolsetName: string
@@ -3582,6 +3599,48 @@ private summarizer: ConversationSummarizer | null = null
       case 'agent':
       default:
         tools = resolveToolset('agent', new Set(), isChild); toolsetName = 'Agent'; break
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 🎯 工具按需筛选（2026-10-07）
+    //
+    // 【为什么加】修复前这里把整档工具全量发给模型 —— agent 档 67 个
+    //   ≈ 9,700 tokens，**每一次模型调用都要重发一遍**（包括「现在几点」）。
+    //   实测 601 次真实工具调用里只有 22 个工具被用过，前 7 个占 95%。
+    //
+    // 【放在这一步的原因】必须在 disabledTools / rolePolicy / 情绪门控
+    //   **之前**：本模块只做减法（从本档可用工具里挑子集），后面三层
+    //   语义完全不变，仍然是「disabled → 角色 → 情绪」依次收紧。
+    //
+    // 【失败开放】拿不到用户输入、或裁完少于 8 个工具时，routeTools 会
+    //   主动退回全量。宁可多花 token，也不能让模型手里没有工具。
+    // ═══════════════════════════════════════════════════════════
+    const fullCount = tools.length
+    let routed: ReturnType<typeof routeTools>
+    try {
+      routed = routeTools(
+        tools,
+        this.config.mode || 'agent',
+        this._pendingUserText,
+        this.sessionId,
+        readFeatureFlag('tools.onDemand', true),
+      )
+    } catch (e) {
+      // 路由自身出错绝不能连累整轮对话 —— 退回全量即可
+      console.warn('[getToolsForMode] 🎯 按需筛选异常，本轮退回全量:', e)
+      routed = { tools, groups: [], newlyMatched: [], narrowed: false, reason: '筛选异常' }
+    }
+    tools = routed.tools
+    if (routed.narrowed) {
+      const saved = Math.round((1 - tools.length / Math.max(1, fullCount)) * 100)
+      toolsetName += `+按需`
+      console.log(
+        `[getToolsForMode] 🎯 按需筛选: ${fullCount} → ${tools.length} 个工具（省 ${saved}%）` +
+        ` | 生效组: ${routed.groups.join(', ') || '仅核心'}` +
+        (routed.newlyMatched.length ? ` | 本轮新命中: ${routed.newlyMatched.join(', ')}` : ''),
+      )
+    } else if (routed.reason) {
+      console.log(`[getToolsForMode] 🎯 未裁剪（${routed.reason}），全量 ${fullCount} 个工具`)
     }
 
     const disabled = this.config.disabledTools

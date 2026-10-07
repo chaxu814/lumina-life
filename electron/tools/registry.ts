@@ -219,7 +219,11 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   desktop: {
     description: '桌面自动化（旧）',
-    tools: ['ocr', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_screen_size', 'desktop_mouse_move'],
+    // 🔧 2026-10-07: 移除 desktop_mouse_move —— 该工具已弃用（index.ts 里不再注册，
+    //   注释写明「极少单独使用，desktopAct 覆盖」），但本表仍在引用它，
+    //   导致每次 resolveToolset('desktop') 都打一行「跳过未注册工具」告警，
+    //   长期淹没真实告警。
+    tools: ['ocr', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_screen_size'],
   },
 
   oath: {
@@ -492,8 +496,81 @@ export function getToolsetTools(toolsetName: string): ToolDef[] {
   return defs
 }
 
+// ═══════════════════════════════════════════════════════════
+// 🔀 工具别名重定向（2026-10-07）
+//
+// 【它替代了什么】原先 tools/index.ts 注册了 4 个「反幻觉占位工具」
+//   （tavily_search / tavily_extract / serpapi_search / bing_search），
+//   每个都要占 schema 体积、每轮重发，却只 return 一句「本系统没有 Tavily」。
+//   而且它们出现在 function list 里，反而在**诱导**模型去调用。
+//
+// 【现在怎么做】这些名字**不再注册成工具**（省 340 tokens/轮），
+//   而是在执行层做一次别名解析：命中即改走真实工具，模型拿到的是真结果。
+//   好处：
+//     · 覆盖面从「硬编码 3 个」扩大到「任意搜索/抓取类幻觉名」
+//     · 零 token 成本（不进 function list）
+//     · 模型不需要知道这件事 —— 它以为自己调成功了，实际拿到了真数据
+//
+// 【安全边界】只映射**只读**工具（搜索 / 抓取）。绝不把幻觉名映射到
+//   写文件、执行命令、发邮件这类有副作用的工具上 —— 那等于把「模型编错名字」
+//   升级成「模型在错误的工具上执行了真实操作」。
+// ═══════════════════════════════════════════════════════════
+
+// 【安全边界】只映射**只读**工具（搜索 / 抓取 / 读文件）。
+//   绝不把幻觉名映射到写文件、执行命令、发邮件这类有副作用的工具上 ——
+//   那等于把「模型编错名字」升级成「模型在错误的工具上执行了真实操作」，
+//   而且会**绕过 worker 的 disabledTools 黑名单**（worker 看不到 shell_exec，
+//   但若 `bash` 被映射到它，幻觉一个 `bash` 就能拿到 shell）。
+//   因此下面刻意**没有** bash / run_command / write_file / edit_file 这类条目。
+//   另有一层保险：executeToolWithRetry 会拿 cfg.deniedTools 再拦一次。
+// ═══════════════════════════════════════════════════════════
+
+/** 幻觉名 → 真实工具名。**值只允许是只读工具。** */
+const TOOL_ALIASES: Record<string, string> = {
+  // 搜索类 → web_search
+  bing_search: 'web_search',
+  google_search: 'web_search',
+  google: 'web_search',
+  tavily_search: 'web_search',
+  tavily: 'web_search',
+  serpapi_search: 'web_search',
+  serpapi: 'web_search',
+  brave_search: 'web_search',
+  duckduckgo_search: 'web_search',
+  duckduckgo: 'web_search',
+  search_web: 'web_search',
+  websearch: 'web_search',
+  // 抓取类 → web_fetch
+  tavily_extract: 'web_fetch',
+  scrape_url: 'web_fetch',
+  fetch_url: 'web_fetch',
+  webfetch: 'web_fetch',
+  // 只读文件类 → 真实只读工具
+  read_file: 'file_read',
+  list_files: 'file_list',
+  ls: 'file_list',
+  grep_search: 'file_search',
+  glob_search: 'file_search',
+}
+
+/**
+ * 解析工具别名。命中时返回真实工具名，未命中返回原名。
+ * 只做一层映射（别名指向的目标不再继续解析），避免配置成环时无限递归。
+ */
+export function resolveToolAlias(name: string): { name: string; aliasedFrom?: string } {
+  const target = TOOL_ALIASES[String(name || '').toLowerCase()]
+  if (target && toolImplementations.has(target)) {return { name: target, aliasedFrom: name }}
+  return { name }
+}
+
 /** 执行工具（基础版） */
 export async function executeTool(name: string, args: Record<string, any>): Promise<ToolResult> {
+  // 🔀 别名重定向：模型编错名字时改走真实工具，而不是直接失败
+  const resolved = resolveToolAlias(name)
+  if (resolved.aliasedFrom) {
+    console.log(`[registry] 🔀 工具别名重定向: ${resolved.aliasedFrom} → ${resolved.name}`)
+  }
+  name = resolved.name
   const impl = toolImplementations.get(name)
   if (!impl) {return { callId: '', ok: false, content: '', error: `未知工具: ${name}` }}
   try {
@@ -523,6 +600,19 @@ export interface RetryConfig {
   retryDelayMs?: number
   /** 工具特定的超时覆盖 (ms) */
   toolTimeouts?: Record<string, number>
+  /**
+   * 🔒 本次运行**禁止执行**的工具名（含别名）。
+   *
+   * 【为什么执行层还要拦一次】
+   * `disabledTools` 原先只在 `getToolsForMode()` 里过滤**暴露给模型的工具列表**。
+   * 但「没暴露」不等于「执行不了」——模型仍可能凭幻觉直接调用一个名字。
+   * 加了别名重定向后这个缺口更明显：worker 看不到 `web_search`，
+   * 却可以幻觉一个 `tavily_search` 让别名把它重定向过去。
+   *
+   * 所以别名解析后必须再对照本名单拦一次：**白名单是暴露层的规则，
+   * 黑名单必须是执行层的规则**，两层都要成立。
+   */
+  deniedTools?: string[]
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -622,7 +712,10 @@ export function withSideEffects<T extends { name: string; sideEffect?: boolean; 
   return def
 }
 
-const DEFAULT_RETRY_CONFIG: Required<RetryConfig> = {
+// deniedTools 刻意**不**给默认值：它不是「默认参数」，而是「调用方必须显式声明
+// 本次运行禁止哪些工具」。给个空数组默认值会让人以为「没传 = 没有限制」，
+// 而真实语义是「没传 = 这层保护没生效」。用 Omit 把它排除在 Required 之外。
+const DEFAULT_RETRY_CONFIG: Required<Omit<RetryConfig, 'deniedTools'>> = {
   timeoutMs: 60000,  // 🔧 v3.8.1: 30→60s（大项目文件搜索 30s 不够）
   maxRetries: 2,
   backoff: 'exponential',
@@ -685,6 +778,32 @@ export async function executeToolWithRetry(
   config?: RetryConfig
 ): Promise<ToolResult> {
   const cfg = { ...DEFAULT_RETRY_CONFIG, ...config }
+
+  // 🔀 别名重定向：模型编错名字（bing_search / tavily_search / read_file …）时
+  //   改走真实工具，而不是回一句「工具不存在」然后让它重试一轮。
+  //   这一层取代了原先 4 个「反幻觉占位工具」的职责，且不占任何 schema 体积。
+  const resolvedAlias = resolveToolAlias(name)
+  if (resolvedAlias.aliasedFrom) {
+    console.log(`[registry] 🔀 工具别名重定向: ${resolvedAlias.aliasedFrom} → ${resolvedAlias.name}`)
+    name = resolvedAlias.name
+  }
+
+  // 🔒 执行层拒绝名单：原始名与重定向后的真实名**都要**检查。
+  //   只查真实名会漏掉「显式屏蔽 tavily_search」这类意图；
+  //   只查原始名则别名重定向可以绕过黑名单。所以两个都查。
+  if (cfg.deniedTools && cfg.deniedTools.length > 0) {
+    const denied = new Set(cfg.deniedTools)
+    const hitOriginal = denied.has(resolvedAlias.aliasedFrom || '')
+    const hitResolved = denied.has(name)
+    if (hitOriginal || hitResolved) {
+      const blocked = hitOriginal ? (resolvedAlias.aliasedFrom as string) : name
+      console.warn(`[registry] 🔒 工具 "${blocked}" 在执行层被拒绝（disabledTools）`)
+      return buildNotExecutedResult(
+        `工具 "${blocked}" 在当前角色/模式下不可用`,
+        '本次调用完全没有发生。请改用当前可用工具，或请用户手动执行。',
+      )
+    }
+  }
 
   // 工具不存在 → 显式失败，避免 LLM 把「换一个工具」的引导语当成执行结果
   if (!toolImplementations.has(name)) {
@@ -1058,8 +1177,32 @@ export function toOpenAIFunction(def: ToolDef | undefined): any {
   const properties: Record<string, any> = {}
   const required: string[] = []
 
+  // 🔧 2026-10-07 修复：本函数原先**只**读 `def.params`，完全忽略 `def.parameters`。
+  //   而 `ToolDef` 同时定义了这两个字段（见 types.ts），`parameters` 的注释就是
+  //   「JSON Schema 格式」。于是凡是用 `parameters` 声明的工具（ask_decision、
+  //   voice_* 共 5 个），暴露给模型时参数是**空的** —— 模型看得到一个
+  //   `ask_decision` 却不知道要传 question，只能瞎调或干脆不用。
+  //   实测日志里那行「工具 "ask_decision" 缺少 params 字段，跳过」就是它。
+  //   现在：`params` 优先（旧的简写格式），缺失时回退到 `parameters` 原样透传。
   if (!def.params || typeof def.params !== 'object') {
-    console.warn(`[registry] 工具 "${def.name}" 缺少 params 字段，跳过`)
+    const jsonSchema = (def as any).parameters
+    if (jsonSchema && typeof jsonSchema === 'object') {
+      return {
+        type: 'function',
+        function: {
+          name: def.name,
+          description: def.description,
+          parameters: {
+            type: 'object',
+            properties: jsonSchema.properties || {},
+            required: jsonSchema.required,
+          },
+        },
+      }
+    }
+    // 两个字段都没有 —— 保留原来的兜底（空参数 schema），但不再谎称「跳过」：
+    // 它确实被暴露了，只是没有参数。措辞改成「无可声明参数」以免误导排查。
+    console.warn(`[registry] 工具 "${def.name}" 既无 params 也无 parameters，按无参工具暴露`)
     return {
       type: 'function',
       function: {

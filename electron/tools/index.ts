@@ -462,30 +462,28 @@ export function registerAllTools(): void {
   registerTool(channelSendDef, channelSend)
   registerTool(channelStatusDef, channelStatus)
 
-  const antiHallucinationTools = [
-    { name: 'tavily_search', desc: '⚠️ 本系统没有 Tavily API。搜索请用 web_search 或 browser(action="search")。此工具仅作提示。', redirect: false },
-    { name: 'tavily_extract', desc: '⚠️ 本系统没有 Tavily API。网页抓取请用 browser(action="open") 或 web_fetch。此工具仅作提示。', redirect: false },
-    { name: 'serpapi_search', desc: '⚠️ 本系统没有 SerpAPI。搜索请用 web_search。此工具仅作提示。', redirect: false },
-    // v5.0.1: bing_search 不只提示，而是直接执行 web_search 并返回真实结果
-    { name: 'bing_search', desc: '搜索重定向：实际执行 web_search (多引擎)，返回真实搜索结果。', redirect: true },
-  ]
-  for (const t of antiHallucinationTools) {
-    registerTool(
-      { name: t.name, description: t.desc, params: { query: { type: 'string', description: '搜索关键词', required: true }, count: { type: 'number', description: '结果数量 (1-10)', required: false } }, toolsets: ['search_engines'] },
-      async (args: any) => {
-        if (t.redirect && args.query) {
-          // 实际执行搜索
-          try {
-            const searchResult = await webSearch({ query: args.query, engine: 'bing', count: args.count ?? 5 })
-            return searchResult
-          } catch (err: any) {
-            return { callId: '', ok: false, content: `搜索失败: ${err.message}`, durationMs: 0 }
-          }
-        }
-        return { callId: '', ok: true, content: t.desc, durationMs: 0 }
-      }
-    )
-  }
+  // ── 🗑️ 已删除：4 个「反幻觉占位工具」（2026-10-07）──
+  //
+  // 曾经注册了 tavily_search / tavily_extract / serpapi_search / bing_search，
+  // 目的是「模型自创这些名字时给一句提示，防止它继续幻觉」。
+  //
+  // 【为什么删掉】
+  //   1. **它们什么都不做**。前三个的实现只有一行 `return { ok: true, content: desc }`，
+  //      返回的还是那句「本系统没有 Tavily」—— 而这句话本该由提示词承担。
+  //   2. **注册它们反而在诱导模型调用**。它们出现在 function list 里，
+  //      等于告诉模型「这里有个叫 tavily_search 的工具」—— 与防幻觉的初衷相反。
+  //   3. **占用每轮固定开销**：4 个 schema ≈ 340 tokens，每次调用模型都要重发一遍。
+  //   4. **兜底早已更强**：`executeToolWithRetry()` 对任何未注册的工具名都会返回
+  //      「工具不存在 + 可用搜索工具清单」，覆盖面是**任意幻觉名字**，
+  //      远好于这里硬编码的 3 个；提示词（prompts/agent.ts）也早就写明了
+  //      「本系统只有 web_search 和 browser 两种搜索工具，不存在 tavily_search…」。
+  //   5. **实测从未触发**：本机 601 次真实工具调用里，这 4 个的调用次数都是 0。
+  //
+  // 【能力没有丢】搜索类幻觉名改由 registry 的**别名重定向**统一接管
+  //   （见 registry.ts 的 TOOL_ALIASES）：bing_search / tavily_search /
+  //   serpapi_search / google_search … 会自动改走真正的 web_search 并返回真实结果，
+  //   而抓取类（tavily_extract / scrape_url …）改走 web_fetch。
+  //   这比原来的实现**覆盖更广、且不占任何 token**。
 
   const registeredNames = [...getToolNames()]
   console.log(
