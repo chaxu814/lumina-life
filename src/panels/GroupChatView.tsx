@@ -11,25 +11,22 @@ import { isAgentVisible } from '../services/teamVisibility'
 import { isLocalInferenceRuntime } from '../services/isLocalEndpoint'
 import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
 // 📋 任务工作区的开合状态来自同一个 store，所以「任务派发中心」旁边
-import { IconPlus, IconSend } from '../components/Icons'
+import { IconSend } from '../components/Icons'
 import AgentTaskBoard from '../components/AgentTaskBoard'
 import ThinkingStepList from '../components/ThinkingStepList'
 import AgentMoments from '../components/AgentMoments'
-import NoteCycle, { LuminaDailyReport, TeamMilestones, YakTechNotes } from '../components/NoteCycle'
-import CharacterCustomization from '../components/CharacterCustomization'
+import { LuminaDailyReport, TeamMilestones, YakTechNotes } from '../components/NoteCycle'
 import MemoryTheater from '../components/MemoryTheater'
-import { DEFAULT_PERSONAS, getPersona, getPersonaPrompt } from '../data/personas'
 import { sttService, type STTStatus } from '../services/sttService'
 import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
-import { updateEmotion, emotionContext } from '../services/agentEmotion'
+import { updateEmotion } from '../services/agentEmotion'
 import { injectEmotionStyles } from '../components/AgentEmotionBar'
 import { addBookmark } from '../services/messageBookmarks'
 import { showToast } from '../components/Toast'
 import LinkifiedText from '../components/LinkifiedText'
 import PermissionSelector, { usePermission } from '../components/PermissionSelector'
 import TeamPanel from './TeamPanel'  // 🆕 团队面板整合
-import { buildAgentPromptLite } from '../data/agentSouls'
 import {
   calculateSpark,
   calculateChainSpark,
@@ -46,21 +43,19 @@ import {
   getGCToolsPrompt,
   getGCToolsPromptForIntent,
   getDisabledTools,
-  getToolsForIntent,
   detectToolIntent,
-  type ToolIntent,
   DEFAULT_TEAM_SECURITY,
   type TeamSecurityConfig,
 } from '../services/gcSafeTools'
 import {
   TTS_VOICES, AGENT_VOICES, AUTONOMY_INTERVAL,
-  AGENTS, TEAM_CONV_ID, EMOJI_GROUPS,
-  type GCMsg, type GCSession, type AgentTask, type AgentPost, type LLMPanelState, type ThinkingStep,
+  AGENTS, EMOJI_GROUPS,
+  type GCMsg, type GCSession, type AgentTask, type ThinkingStep,
   loadGCSessions, saveGCSessions, loadGCMessages, saveGCMessages, newGCSessionId, buildSessionsOnPersist,
-  loadLLMData, saveLLMData, loadAgentVoices, saveAgentVoices,
+  loadLLMData, loadAgentVoices, saveAgentVoices,
   setLLMRefreshFn, _llmState, _llmNotify, _startAutonomyTimer, _stopAutonomyTimer, _startAutonomyWithRemaining, _autonomyTimer,
   useLLMPanels,
-  cleanTtsText, formatDateLabel, insertAtCursor, getAgentSystemPrompt, getAgentSystemPromptLite,
+  cleanTtsText, formatDateLabel, getAgentSystemPromptLite,
 } from '../chat/chatShared'
 import { useLoopStore } from '../stores/loopStore'
 import { detectLoopIntent } from '../services/loopEngine'
@@ -913,24 +908,20 @@ export default function GroupChatView() {
   // ════════════════════════════════
 
   // 监听会话切换事件，重置回复状态防止混淆
+  //
+  // 🔧 2026-10-07：这里原先**也**会 setMessages(...)（handleLoad 设 loadGCMessages，
+  //   handleNew 设 []），与下方 onLoad/onNew 那对监听器重复。两个监听器都在
+  //   gc:new-session / gc:load-session 上，靠「注册顺序 + React 批处理里后者覆盖前者」
+  //   才碰巧得到正确结果 —— 典型的顺序依赖隐患（换顺序或换 React 版本就会翻车）。
+  //   下方那对是这里的**超集**（还会存当前会话、置基线、设 lastAgent、定落地页），
+  //   所以这里只保留「重置回复状态」这一件它不管的事。
   useEffect(() => {
-    const handleLoad = (e: Event) => {
-      const sessionId = (e as CustomEvent).detail as string
-      setActiveSessionId(sessionId)
-      setReplyingAgent(null)
-      setMessages(loadGCMessages(sessionId))
-    }
-    const handleNew = (e: Event) => {
-      const sessionId = (e as CustomEvent).detail as string
-      setActiveSessionId(sessionId)
-      setReplyingAgent(null)
-      setMessages([])
-    }
-    window.addEventListener('gc:load-session', handleLoad)
-    window.addEventListener('gc:new-session', handleNew)
+    const resetReplying = () => {setReplyingAgent(null)}
+    window.addEventListener('gc:load-session', resetReplying)
+    window.addEventListener('gc:new-session', resetReplying)
     return () => {
-      window.removeEventListener('gc:load-session', handleLoad)
-      window.removeEventListener('gc:new-session', handleNew)
+      window.removeEventListener('gc:load-session', resetReplying)
+      window.removeEventListener('gc:new-session', resetReplying)
     }
   }, [])
 
@@ -1096,11 +1087,17 @@ export default function GroupChatView() {
       sessionBaselineRef.current[newSessionId] = Math.max(msgs.length, 1)
       if (msgs.length > 0) {
         setMessages(msgs)
+        // 🆕 2026-10-07：按会话内容决定落在哪一屏 ——
+        //   只有系统欢迎语（≤1 条）= 空会话 → 回到任务类型选择页；
+        //   有真实历史 → 直接看聊天，不要让用户再点一次。
+        setShowRoleSelector(msgs.length <= 1)
         const lastAgentMsg = [...msgs].reverse().find(m => AGENTS.some(a => a.id === m.from))
         if (lastAgentMsg) {setLastAgent(lastAgentMsg.from)}
         else {setLastAgent(null)}
       } else {
         // 空会话也显示欢迎消息，防止旧消息残留
+        setShowRoleSelector(true)
+        setSelectedRole(null)
         setMessages([{
           id: '0', from: 'system', fromIcon: '🤖', fromName: '系统',
           content: llmReady
@@ -1122,6 +1119,12 @@ export default function GroupChatView() {
       }
       setActiveSessionId(newSessionId)
       sessionBaselineRef.current[newSessionId] = 1
+      // 🆕 2026-10-07（用户反馈）：新建会话时回到**任务类型选择页**。
+      //   此前 onNew 只重置了消息，没重置 showRoleSelector —— 于是「刚聊完点 + 新建」
+      //   会停在空白聊天页，而不是那个更好用的角色卡片落地页。
+      //   一并清掉 selectedRole，避免新会话残留上一个任务类型的氛围屏。
+      setShowRoleSelector(true)
+      setSelectedRole(null)
       setMessages([{
         id: '0', from: 'system', fromIcon: '🤖', fromName: '系统',
         content: llmReady
