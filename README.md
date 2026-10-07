@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion-3%20continuous%20values%20%C2%B7%205%20expressions-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-132%20registered%20%2F%2048%20in%20agent%20mode-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="132 tools registered, 48 exposed in agent mode">
+  <img src="https://img.shields.io/badge/Tools-138%20registered%20%2F%2031--45%20per%20turn-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="138 tools registered, 31-45 exposed per turn">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -283,19 +283,32 @@ Live2D / VRM 需要会 Blender、会绑 3D 模型 —— 这把绝大多数想�
 
 ---
 
-### 🔧 132 Built-in Tools · 三档模式按需加载（另可经 MCP / 技能市场扩展）
+### 🔧 138 Built-in Tools · 按需筛选（另可经 MCP / 技能市场扩展）
 
-<sub>**两个口径都给你，不合并**：注册表实际注册并通过校验 **132** 个；模型在
-`agent` 模式实际可见 **48** 个，`developer` 模式 **69** 个，`chat` 模式 0 个，
-另有 `full` 全量集 132 个。启动日志会打印这几个数字，并对「任何 toolset 都够不到
-的工具」告警（当前 **0** 个）。</sub>
+<sub>**三个口径都给你，不合并**：注册表实际注册并通过校验 **138** 个；
+`agent`（日常）档候选 **132** 个、`developer` 档候选 **136** 个、`chat` 档 0 个。
+
+但**每一轮真正发给模型的只有 31–45 个** —— `electron/tools/toolRouter.ts` 会按
+你这一句在说什么，从候选集里挑出相关的子集：核心 31 个常驻（文件 / 终端 / 搜索 /
+记忆 / 时间 / 待办 / 技能 / 团队），其余按 22 个能力组的关键词按需附加
+（电脑操控 / 浏览器 / 日程 / 定时 / 桌面整理 / 系统 / 记忆深化 / 团队进阶 /
+MCP / 语音 / 天气 / 邮件 / 社交 / 创作 / 资讯 / 游戏 / 番茄钟 / 深研 / 版本控制 …）。
+
+**为什么这么做**：修复前每轮把整档工具**全量**塞进 function list ——
+agent 档 9,710 tokens、developer 档 12,075 tokens，**每一次模型调用都重发一遍**
+（包括「现在几点」）。实测 601 次真实工具调用里，只有 22 个工具被用过，
+前 7 个占 95%。现在每轮 **5,495 tokens 起**，且工具能力一个没少。
+
+启动日志会打印实际注册数与各档可达数，并对「任何 toolset 都够不到的工具」告警
+（当前 **0** 个）。
+</sub>
 
 <details>
 <summary>为什么报两个数字？</summary>
 
-因为「132 个工具」曾经是个误导性数字。v3.34 之前，`registry.ts:resolveToolset()`
+因为「工具数量」曾经是个误导性数字。v3.34 之前，`registry.ts:resolveToolset()`
 只读静态 `TOOLSETS` 常量表，**完全不读 `ToolDef.toolsets`**（尽管后者是必填字段、
-58 个文件都在声明）。结果是 132 个已注册工具里有 **47 个**对模型彻底不可达 ——
+58 个文件都在声明）。结果是当时 132 个已注册工具里有 **47 个**对模型彻底不可达 ——
 包括 `hire_worker` / `adversarial_review` / `desktop_act` / `creator_*` / `lsp_*`，
 而 `agentTeamPersonas.ts` 还在花 20 行教模型去调其中 5 个。
 
@@ -653,7 +666,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  132 tools · MCP          │  Plugin SDK · Skill Store      │ │
+│  │  138 tools · MCP          │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -709,7 +722,7 @@ lumina-life/
 完整版见 **[docs/ROADMAP.md](docs/ROADMAP.md)**（含已知缺口表与认领指引）。
 
 **✅ 当前开发版（v0.1.0-preview）**
-三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 维 + 亲密度 + 昼夜节律）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 132 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
+三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 维 + 亲密度 + 昼夜节律）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 138 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
 
 **✅ 已完成的发布加固**
 - [x] 原生模块 ABI 与 Electron 对齐（CI 有门禁，不再出现「测试绿、真机炸」）

@@ -25,6 +25,7 @@ import {
   resolveToolset, toOpenAIFunctions,
 } from '../electron/tools/index'
 import { resolveToolAlias, executeToolWithRetry } from '../electron/tools/registry'
+import { routeTools, _resetAllToolRouting } from '../electron/tools/toolRouter'
 
 /** 允许作为别名目标的工具 —— 只能是只读工具。新增别名前必须先想清楚这一点。 */
 const READ_ONLY_ALIAS_TARGETS = new Set([
@@ -57,12 +58,18 @@ describe('① 占位工具已删除', () => {
     }
   })
 
-  it('agent 档的 schema 体积确实变小了（不是"删了名字但没省 token"）', () => {
-    const defs = resolveToolset('agent').map(t => getToolDef(t)).filter(Boolean)
-    const chars = JSON.stringify(toOpenAIFunctions(defs as any[])).length
-    // 删除前实测 33,925 字符。留 1% 余量防止正常波动误报。
-    expect(chars, `agent 档 schema 仍有 ${chars} 字符，删掉 4 个工具却没变小？`)
-      .toBeLessThan(33925 * 0.99)
+  it('每轮实际暴露的 schema 比修复前小（不是"删了名字但没省 token"）', () => {
+    // ⚠️ 注意口径：2026-10-07 起 agent 档的**候选集**扩大了（补回 64 个此前
+    //   拿不到的日常能力），所以不能拿 resolveToolset('agent') 的原始体积做比较 ——
+    //   那个数字现在反而更大，但它不是发给模型的量。
+    //   真正该测的是 **routeTools 之后、每轮实际进 function list 的体积**。
+    const base = resolveToolset('agent')
+    const r = routeTools(base, 'agent', '你好，今天过得怎么样', 'size-check')
+    const exposed = r.tools.map(t => getToolDef(t)).filter(Boolean)
+    const chars = JSON.stringify(toOpenAIFunctions(exposed as any[])).length
+    // 修复前 agent 档每轮固定发 33,925 字符（67 个工具全量）。
+    expect(chars, `每轮实际暴露仍有 ${chars} 字符，删掉占位工具 + 按需筛选却没变小？`)
+      .toBeLessThan(33925 * 0.6)
   })
 })
 

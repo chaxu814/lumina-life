@@ -76,8 +76,45 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
 
   /*** 🟡 L2 — Agent 日常模式：文件+搜索+记忆+团队 */
   agent: {
-    description: 'Agent 模式 — 日常使用工具（约 32 个）',
-    includes: ['files_core', 'shell', 'web_search', 'memory', 'tasks_core', 'system_core', 'team', 'productivity', 'skills'],
+    description: 'Agent 模式 — 日常使用工具（能力全集，由 toolRouter 按需暴露）',
+    // ═══════════════════════════════════════════════════════════
+    // 🔧 2026-10-07 重大修正：补回被静态表漏掉的日常能力
+    //
+    // 【原来的问题】本表只列了 9 个子集，于是**64 个工具**虽然自己声明了
+    //   `toolsets: ['agent']`，却因为「模式层静态表独占」而**声明被忽略** ——
+    //   日常模式下完全拿不到。其中包括 README 明确宣传的核心能力：
+    //     · 🖥️ Computer Use（README 核心亮点，承诺「你说帮我保存这个文件她就照做」）
+    //     · 💬 团队社交生活（README 核心亮点）
+    //     · ⏰ 天气 / 邮件（README 内置工具清单里点名）
+    //     · 🔌 MCP、🎙️ 语音输入/TTS、✍️ 创作者、🎮 游戏、🍅 番茄钟、📰 资讯
+    //   后果：这些工具在 601 次真实调用里全是 0 次 —— **不是不想用，是拿不到**。
+    //   而工具作者写 `toolsets: ['agent']` 时，显然以为自己是接好的。
+    //
+    // 【现在】模式层不再承担「能力多少」的决策，只保留「哪些能力属于这一档」：
+    //   · agent = 用户日常可能用到的**全部能力**
+    //   · developer = agent + 代码智能（lsp / code / dev_tools）
+    //   真正的「这一轮给多少」交给 toolRouter 按意图决定（每轮 31~45 个）。
+    //   于是「能力可达」和「每轮开销」不再互相牺牲。
+    // ═══════════════════════════════════════════════════════════
+    includes: [
+      // 原有基础
+      'files_core', 'shell', 'web_search', 'memory', 'tasks_core', 'system_core',
+      'team', 'productivity', 'skills',
+      // 🆕 补回的日常能力（此前被静态表漏掉）
+      'computer_use', 'desktop', 'browser',      // 🖥️ 桌面操控 / 浏览器精细操作
+      'mcp',                                      // 🔌 扩展协议
+      'media', 'hearing', 'voice',                // 🎙️ TTS / 语音输入 / 朗读
+      'weather_tool', 'weather_brief',            // ⏰ 天气
+      'mail',                                     // 📧 邮件
+      'social',                                   // 💬 团队社交生活
+      'proactive',                                // 💡 主动关心
+      'creator', 'research',                      // ✍️ 创作 / 深度研究
+      'pomodoro', 'gaming',                       // 🍅 番茄钟 / 🎮 游戏
+      'news', 'bilibili_hot', 'code_daily',       // 📰 资讯
+      'files', 'skill_system',                    // 磁盘列表 / 复合技能
+      'system',                                   // 剪贴板等（system_extra 组依赖它）
+      'git',                                      // 版本控制（「帮我提交一下」是日常请求）
+    ],
     tools: [],
   },
 

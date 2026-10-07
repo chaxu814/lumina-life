@@ -204,7 +204,93 @@ describe('⑤ 🔴 设计不变量：提示词教过的工具必须常驻', () =
   })
 })
 
-describe('⑥ 真的省了 token', () => {
+describe('⑦ 🔴 能力组的工具必须真的在 agent 档（否则组会静默失效）', () => {
+  beforeAll(() => { registerAllTools() })
+
+  // 【这个用例为什么必须存在】
+  // 2026-10-07 实测踩到：agent 档的 includes 是一张**静态表**，而工具自己
+  // 写的 `toolsets: ['agent']` 会被模式层**忽略**。于是有 64 个工具
+  // （含 Computer Use、MCP、语音、天气、邮件）声明了 agent 却根本拿不到。
+  //
+  // 加路由组时如果忘了同步 agent.includes，就会出现最坏的情况：
+  // 关键词命中了、日志说「已激活 computer_use」、但候选集里没有那个工具 ——
+  // **组看起来在工作，实际什么都没加**，而且没有任何报错。
+  // 这个用例就是拦这种「看起来接好了」。
+  it('CAPABILITY_GROUPS 里每个工具都能在 agent 或 developer 档拿到', () => {
+    const agent = new Set(resolveToolset('agent'))
+    const dev = new Set(resolveToolset('developer'))
+    const unreachable: string[] = []
+    for (const [name, g] of Object.entries(CAPABILITY_GROUPS)) {
+      for (const t of g.tools) {
+        if (!agent.has(t) && !dev.has(t)) {unreachable.push(`${name}.${t}`)}
+      }
+    }
+    expect(
+      unreachable,
+      `这些工具在能力组里，但 agent / developer 档都拿不到 ——\n` +
+      `后果是「组激活了却没带来任何工具」，且完全静默。\n` +
+      `修法：把对应能力层加进 registry.ts 的 agent.includes：\n  ${unreachable.join('\n  ')}`,
+    ).toEqual([])
+  })
+
+  it('每个能力组在 agent 档至少有一个可用工具（不能是空组）', () => {
+    const agent = new Set(resolveToolset('agent'))
+    const dev = new Set(resolveToolset('developer'))
+    const emptyGroups: string[] = []
+    for (const [name, g] of Object.entries(CAPABILITY_GROUPS)) {
+      const usable = g.tools.filter(t => agent.has(t) || dev.has(t))
+      if (usable.length === 0) {emptyGroups.push(name)}
+    }
+    expect(emptyGroups, `这些组在 agent/developer 档一个工具都没有，等于空转：${emptyGroups.join(', ')}`)
+      .toEqual([])
+  })
+})
+
+describe('⑧ 招牌场景必须能触发对应能力（README 承诺的口语说法）', () => {
+  beforeAll(() => { registerAllTools() })
+  beforeEach(() => { _resetAllToolRouting() })
+
+  // 用**用户真的会说的口语**验证，不是用工具名或书面语。
+  // 依据：README「她跟别的 AI 不一样」里逐条列出的招牌场景。
+  const SIGNATURE_SCENES: Array<[string, string, string]> = [
+    // README: "你说'帮我保存这个文件'她就照做" → 电脑操控
+    ['帮我打开那个软件点一下确定', 'agent', 'computer_use'],
+    ['帮我操作一下这个软件界面', 'agent', 'computer_use'],
+    ['鼠标移到那个按钮上点它', 'agent', 'computer_use'],
+    // README: 三 Agent 团队
+    ['让团队一起帮我写个完整项目', 'agent', 'team_advanced'],
+    ['帮我看看团队最近表现怎么样', 'agent', 'team_advanced'],
+    // README: 真正的记忆
+    ['你还记得我之前说过什么吗', 'agent', 'memory_deep'],
+    // README 内置工具清单：天气 / 邮件 / 语音
+    ['今天天气怎么样', 'agent', 'weather'],
+    ['帮我看看有没有新邮件', 'agent', 'mail'],
+    ['朗读一下这段文字', 'agent', 'voice'],
+    // README: 团队社交生活
+    ['帮我发条朋友圈', 'agent', 'social'],
+    // README: MCP 扩展
+    ['接一个 MCP 服务', 'agent', 'mcp'],
+    // 日常效率
+    ['明天有什么日程安排', 'agent', 'calendar'],
+    ['每天下午三点提醒我喝水', 'agent', 'tasks_schedule'],
+    ['桌面太乱了帮我整理', 'agent', 'desktop_tidy'],
+    ['帮我截个图', 'agent', 'system_extra'],
+    ['写一篇关于 AI 的文章', 'agent', 'creator'],
+    ['帮我提交一下代码', 'agent', 'git_ops'],
+  ]
+
+  it.each(SIGNATURE_SCENES)('「%s」→ 激活 %s', (input, mode, expectedGroup) => {
+    const base = resolveToolset(mode)
+    const r = routeTools(base, mode, input, 'sig')
+    expect(
+      r.groups,
+      `招牌场景「${input}」没能激活 ${expectedGroup} 组。\n` +
+      `这会让 README 承诺的能力在真实对话里拿不到 —— 请补关键词。`,
+    ).toContain(expectedGroup)
+  })
+})
+
+describe('⑨ 真的省了 token', () => {
   beforeAll(() => { registerAllTools() })
   beforeEach(() => { _resetAllToolRouting() })
 

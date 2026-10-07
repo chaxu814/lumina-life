@@ -183,9 +183,15 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
   computer_use: {
     label: '电脑操控',
     keywords: [
-      '操作电脑', '帮我点', '鼠标', '键盘', '窗口', '软件界面', '屏幕',
-      '识别图', '图片识别', 'ocr', '桌面程序', '自动化操作', '帮我操作',
-      '点到', '输入框', '按钮',
+      // ⚠️ 这组的关键词必须覆盖**口语化的桌宠请求**。
+      //   实测踩到：「帮我打开那个软件点一下确定」——这是 README 承诺的
+      //   招牌场景，但原关键词（'帮我点'/'软件界面'）一个都没命中，
+      //   导致工具没进列表。中文口语的动词会被拆开（点一下 / 点确定 / 点它），
+      //   所以不能只写完整短语。
+      '操作电脑', '帮我点', '点一下', '点确定', '点这个', '点它', '点到',
+      '鼠标', '键盘', '窗口', '软件界面', '屏幕', '识别图', '图片识别',
+      'ocr', '桌面程序', '自动化操作', '帮我操作', '输入框', '按钮',
+      '打开那个软件', '打开软件', '打开应用', '帮我打开', '软件里',
     ],
     tools: [
       'desktop_act', 'desktop_element_act', 'desktop_scan', 'desktop_click',
@@ -203,6 +209,84 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
       'browser_open', 'browser_click', 'browser_type', 'browser_read',
       'browser_list', 'browser_screenshot', 'browser_close', 'browser_cdp',
     ],
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // 以下能力组是 2026-10-07 补的。它们对应的工具**此前根本不在 agent 档**
+  // （见 registry.ts 里 agent.includes 的说明），所以这里补组的同时，
+  // agent.includes 也必须把对应能力层加进去 —— 两处要一起改，否则
+  // 「激活了组但候选集里没有该工具」，组会静默失效。
+  // tests/toolRouting.test.ts 的「按需组引用真实工具」用例守着这点。
+  // ═══════════════════════════════════════════════════════════
+
+  mcp: {
+    label: 'MCP 扩展',
+    keywords: ['mcp', '外部服务', '外部工具', '协议服务', '接个服务'],
+    tools: ['mcp_connect', 'mcp_list_servers', 'mcp_list_tools', 'mcp_call_tool'],
+  },
+  voice: {
+    label: '语音与听觉',
+    keywords: [
+      '语音', '朗读', '念给我', '读出来', '听写', '录音', '转录', '播报',
+      'tts', '语音输入', '说话给我听',
+    ],
+    tools: [
+      'voice_speak', 'hearing_start', 'hearing_stop', 'hearing_status',
+      'hearing_transcript',
+    ],
+  },
+  weather: {
+    label: '天气',
+    keywords: ['天气', '气温', '下雨', '会不会冷', '温度', '穿什么', '紫外线', 'weather'],
+    tools: ['weather', 'weather_get', 'weather_brief'],
+  },
+  mail: {
+    label: '邮件',
+    keywords: ['邮件', '邮箱', '发信', '收信', '来信', 'email', 'mail'],
+    tools: ['mail_send', 'mail_list', 'mail_mark_read'],
+  },
+  social: {
+    label: '社交动态',
+    keywords: ['朋友圈', '社交', '动态', '发帖', '渠道', '公众号', '微博', 'team social'],
+    tools: ['social_engine', 'channel_send', 'channel_status'],
+  },
+  proactive: {
+    label: '主动关心',
+    keywords: ['主动关心', '主动推送', '主动找我', '推送状态', '别打扰', '免打扰'],
+    tools: ['proactive_trigger', 'proactive_status'],
+  },
+  creator: {
+    label: '创作',
+    keywords: [
+      '写文章', '文章', '大纲', '文案', '创作', '博客', '公众号文章',
+      '生成图', '画一张', '配图', '写篇',
+    ],
+    tools: ['creator_outline', 'creator_generate', 'creator_export', 'creator_enrich', 'image_generate'],
+  },
+  news: {
+    label: '资讯日报',
+    keywords: ['新闻', '资讯', '日报', '热点', 'b站', 'bilibili', '今日要闻', 'arxiv', 'paper'],
+    tools: ['daily_paper', 'bilibili_hot_search', 'bilibili_hot_push', 'code_daily_generate', 'code_daily_weekly'],
+  },
+  gaming: {
+    label: '游戏',
+    keywords: ['游戏', '玩一局', '我的世界', '打游戏', 'minecraft'],
+    tools: ['game_action', 'game_status', 'game_look', 'game_auto', 'game_chat'],
+  },
+  pomodoro: {
+    label: '番茄钟',
+    keywords: ['番茄钟', '番茄', '专注', '计时器', '倒计时', 'pomodoro'],
+    tools: ['pomodoro_start', 'pomodoro_status', 'pomodoro_stop'],
+  },
+  research: {
+    label: '深度研究',
+    keywords: ['深度研究', '调研', '研究报告', '深挖', '深入调查', 'deep research'],
+    tools: ['deep_research'],
+  },
+  git_ops: {
+    label: '版本控制',
+    keywords: ['提交', 'commit', 'git', '分支', '仓库', '版本', '回滚', '改动', 'diff', '推送代码'],
+    tools: ['git_status', 'git_commit', 'git_log', 'git_diff'],
   },
 }
 
