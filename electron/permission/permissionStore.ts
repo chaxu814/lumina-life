@@ -22,6 +22,13 @@ export interface PermissionState {
   /** 工作区根目录；null 表示未设置 */
   workspaceRoot: string | null
   /**
+   * 可信目录白名单（额外自动放行写操作的目录）。
+   * 落在这些目录内的 file_write / file_edit 等写操作免逐次审批，
+   * 用于降低「我说了写文件却每次都要确认」的摩擦；凭证/外发/命令仍走硬拦截。
+   * 默认运行时由 effectiveTrustedDirs() 合并 工作区 + 沙箱 + 本项。
+   */
+  trustedDirs: string[]
+  /**
    * 用户是否已就「完全权限」做过风险确认。
    * false = 选到 FULL 时必须弹图 2 那个确认框。
    */
@@ -34,8 +41,14 @@ const DEFAULT_STATE: PermissionState = {
   // 完全权限必须用户主动切 + 勾选风险确认框，不会默认给。
   tier: PermissionTier.WORKSPACE_WRITE,
   workspaceRoot: null,
+  trustedDirs: [],
   fullAcknowledged: false,
   updatedAt: 0,
+}
+
+/** 沙箱根目录（写入重定向发生处），作为默认可信目录之一 */
+function sandboxRoot(): string | null {
+  try { return path.join(app.getPath('userData'), 'sandbox') } catch { return null }
 }
 
 class PermissionStore extends EventEmitter {
@@ -60,6 +73,7 @@ class PermissionStore extends EventEmitter {
         this.state = {
           tier: parseTier(raw.tier),
           workspaceRoot: typeof raw.workspaceRoot === 'string' && raw.workspaceRoot ? raw.workspaceRoot : null,
+          trustedDirs: Array.isArray(raw.trustedDirs) ? raw.trustedDirs.filter(d => typeof d === 'string') : [],
           fullAcknowledged: raw.fullAcknowledged === true,
           updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
         }
@@ -94,6 +108,40 @@ class PermissionStore extends EventEmitter {
   /** 当前档位的**有效工作区**（未配置时返回默认目录而不是 null，简化调用方） */
   effectiveWorkspaceRoot(): string {
     return this.state.workspaceRoot || defaultWorkspaceRoot()
+  }
+
+  /**
+   * 合并后的可信目录列表：工作区 + 沙箱 + 用户配置项（去重）。
+   * 落在其中任一目录内的写操作在「工作区内修改」档下免逐次审批。
+   */
+  effectiveTrustedDirs(): string[] {
+    const set = new Set<string>()
+    const ws = this.effectiveWorkspaceRoot()
+    if (ws) { set.add(ws) }
+    const sb = sandboxRoot()
+    if (sb) { set.add(sb) }
+    for (const d of this.state.trustedDirs || []) {
+      if (d && typeof d === 'string') { set.add(d) }
+    }
+    return [...set]
+  }
+
+  /** 设置可信目录白名单（覆盖） */
+  setTrustedDirs(dirs: string[]): PermissionState {
+    this.state = {
+      ...this.state,
+      trustedDirs: [...new Set(dirs.filter(d => typeof d === 'string' && d.trim()))],
+      updatedAt: Date.now(),
+    }
+    this.save()
+    this.emit('changed', this.snapshot())
+    return this.snapshot()
+  }
+
+  /** 追加一个可信目录 */
+  addTrustedDir(dir: string): PermissionState {
+    if (!dir || typeof dir !== 'string' || !dir.trim()) { return this.snapshot() }
+    return this.setTrustedDirs([...this.state.trustedDirs, dir.trim()])
   }
 
   /**

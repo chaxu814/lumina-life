@@ -16,6 +16,7 @@ import { getStructuredMemory } from '../../memoryStructured'
 import { MODE_CONFIGS } from '../../agentTeamPersonas'
 import type { AgentMode, TeamMemberId } from '../../agentTeamTypes'
 import { getDelegationManager } from '../../delegationManager'
+import { AgentRunner } from '../../agentRunner'
 
 // ═══════════════════════════════════════════════════════════
 // 「没做成」的统一口径（与 tools/registry.ts 的 buildNotExecutedResult 对齐）
@@ -264,6 +265,66 @@ export const delegateToDef: ToolDef = {
   toolsets: ['team', 'agent', 'developer'],
 }
 
+// ── P5：delegate_to 优雅降级 ─────────────────────────────
+// 目标 worker（yak/recha）未配置 LLM 时，不再直接报错「不可用」，
+// 而是尝试用 Lumina（主 Agent）已配置的 LLM，以「影子 worker」方式
+// 直接完成任务。这样既不会让委托链路整体失败，也保留了角色分工的语义。
+// 仅当 Lumina 自身也未配置 LLM 时，才给出明确的配置提示。
+async function runDelegateFallback(
+  callId: string,
+  to: TeamMemberId,
+  task: string,
+  taskType: string,
+): Promise<ToolResult> {
+  const dm = getDelegationManager()
+  const luminaRunner = dm.getRunner('lumina')
+  const cfg = (luminaRunner as any)?.config
+  const hasLumina = !!(cfg && cfg.baseUrl && cfg.model)
+
+  if (!hasLumina) {
+    const who = to === 'recha' ? '热茶 🍵' : 'Yak 📊'
+    return notExecuted(
+      callId,
+      'delegate_to',
+      `${who} 未配置 LLM`,
+      `${who} 与 Lumina 都未配置可用的 LLM 端点，委托链路无法运行。请先在设置中为 Lumina 或该 worker 配置 LLM（baseUrl + model）。`,
+    )
+  }
+
+  const rolePrompt =
+    to === 'recha'
+      ? '你是 热茶 🍵，Lumina 团队的资深数据分析师兼审查员。擅长数据核查、风险研判、逻辑找茬与对抗性评审。请用严谨、可证伪的方式给出结论，明确列出证据与依据。'
+      : '你是 Yak 📊，Lumina 团队的代码工程师。擅长写代码、调试、解释代码与代码审查。请给出可运行、结构清晰、带必要说明的方案与代码。'
+
+  console.log(`[delegate_to] ⚠️ ${to} 未配置 LLM，降级为 Lumina 影子 ${to} 直接执行`)
+
+  try {
+    const result: string = await AgentRunner.createWorker(
+      {
+        ...cfg,
+        personaId: (cfg.personaId as string) || 'lumina',
+        systemPrompt:
+          `${rolePrompt}\n\n【本次任务类型】${taskType}\n只输出结果，不闲聊；若信息不足请明确说明缺口。`,
+      },
+      task,
+    )
+    const who = to === 'recha' ? '热茶 🍵' : 'Yak 📊'
+    return {
+      callId,
+      ok: true,
+      content:
+        `⚠️ ${who} 未单独配置 LLM，已由 Lumina 以「${who}」角色代执行完成任务（降级模式）：\n\n${result}`,
+    }
+  } catch (err: any) {
+    return notExecuted(
+      callId,
+      'delegate_to',
+      '降级执行失败',
+      `Lumina 影子 ${to} 执行也出错: ${err?.message || String(err)}`,
+    )
+  }
+}
+
 export async function delegateTo(args: Record<string, any>): Promise<ToolResult> {
   const callId = `delegate-${Date.now()}`
   const to = (args.to as string)?.toLowerCase()
@@ -295,10 +356,10 @@ export async function delegateTo(args: Record<string, any>): Promise<ToolResult>
     const dm = getDelegationManager()
 
     if (!dm.isConfigured(to as TeamMemberId)) {
-      return {
-        callId, ok: false, content: '',
-        error: `${to === 'recha' ? '热茶 🍵' : 'Yak 📊'} 未配置 LLM，暂时不可用。请先在设置中为该 Agent 配置 LLM。`,
-      }
+      // P5 修复：目标 worker 未配置 LLM 时，不再直接报错「不可用」，
+      // 而是降级为「Lumina 以该 worker 角色直接执行」；
+      // 仅当 Lumina 自身也未配置时，才给出明确的配置提示。
+      return runDelegateFallback(callId, to as TeamMemberId, task, taskType)
     }
 
     // 记录开始

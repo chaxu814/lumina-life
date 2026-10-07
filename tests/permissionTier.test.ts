@@ -73,6 +73,47 @@ describe('档位元数据', () => {
 })
 
 // ═══════════════════════════════════════════════════════════
+describe('P4: 可信目录白名单（降低工作区外写文件的审批摩擦）', () => {
+  const TRUSTED = path.resolve('C:\\Users\\tester\\TrustedProjects')
+  const inTrusted = path.join(TRUSTED, 'note.txt')
+  const outside = path.resolve('C:\\Users\\tester\\Elsewhere\\note.txt')
+
+  it('工作区内修改档：工作区外的写操作默认需确认（回归基线）', () => {
+    const d = decide(withArgs({ tier: PermissionTier.WORKSPACE_WRITE, toolName: 'file_write' }, { path: outside }))
+    expect(d.action).toBe('ask')
+  })
+
+  it('工作区外的路径若落在 trustedDirs 内 → 免审批直接放行', () => {
+    const d = decide(withArgs(
+      { tier: PermissionTier.WORKSPACE_WRITE, toolName: 'file_write', trustedDirs: [TRUSTED] },
+      { path: inTrusted },
+    ))
+    expect(d.action).toBe('allow')
+  })
+
+  it('P4 不放大边界：exec / secret 仍按原规则确认或拦截', () => {
+    const exec = decide(withArgs(
+      { tier: PermissionTier.WORKSPACE_WRITE, toolName: 'shell_exec', trustedDirs: [TRUSTED] },
+      { command: 'echo hi' },
+    ))
+    expect(exec.action).toBe('ask')
+    const secret = decide(withArgs(
+      { tier: PermissionTier.WORKSPACE_WRITE, toolName: 'read_env', trustedDirs: [TRUSTED] },
+      {},
+    ))
+    expect(secret.action).toBe('deny')
+  })
+
+  it('trustedDirs 与工作区合并判定：工作区内写操作本就放行，加白名单不受影响', () => {
+    const d = decide(withArgs(
+      { tier: PermissionTier.WORKSPACE_WRITE, toolName: 'file_write', trustedDirs: [TRUSTED] },
+      { path: inside('output.md') },
+    ))
+    expect(d.action).toBe('allow')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════
 describe('仅可查看 —— 该挡的一定要挡住', () => {
   const t = PermissionTier.READ_ONLY
 

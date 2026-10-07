@@ -180,6 +180,8 @@ export interface PermissionContext {
   tier: PermissionTier
   /** 「工作区」根目录。null = 未配置 → 工作区档退化为「所有写操作都需审批」 */
   workspaceRoot: string | null
+  /** 可信目录白名单（额外免审批的写目标目录）。与工作区合并判定边界。 */
+  trustedDirs?: string[]
   /** 工具参数 —— 工作区边界判定靠它。漏传会让边界检查完全失效。 */
   args?: Record<string, unknown>
   /** 命令文本（exec 类工具用） */
@@ -275,25 +277,27 @@ export function decide(ctx: PermissionContext): PermissionDecision {
   }
 
   if (effect === 'write') {
-    const root = ctx.workspaceRoot
-    if (!root) {
-      return { action: 'ask', reason: `未设置工作区${agent}，写操作需确认`, risk: 'medium', category: 'PATH_TRAVERSAL' }
-    }
+    // 可信根 = 工作区 + 用户配置的可信目录（合并去重）。落在其中任一目录内的
+    // 写操作免逐次审批，降低「说了写文件却每次都要确认」的摩擦。
+    const roots = [ctx.workspaceRoot, ...(ctx.trustedDirs || [])].filter(Boolean) as string[]
     const paths = extractPaths(ctx.args ?? {})
     if (paths.length === 0) {
-      // 工具没暴露路径参数（少数情况）——按工作区内处理，但记一笔
+      // 工具没暴露路径参数：仅当完全无可信根时才确认，避免无谓打扰
+      if (roots.length === 0) {
+        return { action: 'ask', reason: `未设置工作区且无可信目录${agent}，写操作需确认`, risk: 'medium', category: 'PATH_TRAVERSAL' }
+      }
       return { action: 'allow', reason: `工作区内修改${agent}：${toolName} 无路径参数，按工作区内放行` }
     }
-    const outside = paths.filter(p => !isInside(root, p))
+    const outside = paths.filter(p => !roots.some(r => isInside(r, p)))
     if (outside.length > 0) {
       return {
         action: 'ask',
-        reason: `目标在工作区外（${outside[0]}）${agent}，需你确认`,
+        reason: `目标在工作区/可信目录外（${outside[0]}）${agent}，需你确认`,
         risk: 'high',
         category: 'PATH_TRAVERSAL',
       }
     }
-    return { action: 'allow', reason: `工作区内修改${agent}：目标在 ${root} 内，放行` }
+    return { action: 'allow', reason: `工作区内修改${agent}：目标在可信目录内，放行` }
   }
 
   // exec / gui / net —— 这一档一律要确认

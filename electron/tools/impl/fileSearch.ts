@@ -42,6 +42,12 @@ export const fileSearchDef: ToolDef = {
       description: '最大返回结果数（默认 50，最大 200）',
       required: false,
     },
+    count: {
+      type: 'boolean',
+      description: '只统计匹配总数（不返回路径列表）。适合"有多少个 .ts 文件"这类计数问题，' +
+        '返回**精确数量、不截断**，避免把多次搜索结果相加导致虚高。',
+      required: false,
+    },
     includeHidden: {
       type: 'boolean',
       description: '是否包含隐藏文件和目录（默认 false）',
@@ -283,6 +289,63 @@ async function searchWithNodeJs(
   return results
 }
 
+/**
+ * 精确计数匹配项（不返回路径列表）。用于 `count:true` 模式，给"有多少个"类
+ * 问题一个不受 maxResults 截断的准确数字，避免模型把多次搜索结果相加虚高。
+ * 以 cap 为上限保护性能；达到 cap 则返回 capped=true（"超过 N 个"）。
+ */
+async function countMatches(
+  rootDir: string,
+  filePattern: string,
+  maxDepth: number,
+  includeHidden: boolean,
+  searchType: string,
+  cap: number,
+): Promise<{ count: number; capped: boolean }> {
+  let count = 0
+  let capped = false
+
+  const regex = new RegExp(
+    '^' + filePattern.replace(/\./g, '\\.').replace(/\*/g, '.*').replace(/\?/g, '.') + '$',
+    'i'
+  )
+  const matchesPattern = (name: string) => regex.test(name)
+
+  async function walk(dir: string, depth: number) {
+    if (capped || depth > maxDepth) {return}
+    if (isSkippableDir(dir)) {return}
+    let entries: fs.Dirent[]
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true })
+    } catch { return }
+    for (const entry of entries) {
+      if (capped) {break}
+      if (!includeHidden && entry.name.startsWith('.')) {continue}
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (!includeHidden && isNodeInternal(fullPath)) {continue}
+        if (searchType === 'all' || searchType === 'dir') {
+          if (matchesPattern(entry.name)) {
+            count++
+            if (count >= cap) {capped = true; break}
+          }
+        }
+        if (depth < maxDepth && !isSkippableDir(fullPath)) {await walk(fullPath, depth + 1)}
+      } else if (entry.isFile()) {
+        if (searchType === 'all' || searchType === 'file') {
+          if (matchesPattern(entry.name)) {
+            count++
+            if (count >= cap) {capped = true; break}
+          }
+        }
+      }
+    }
+  }
+
+  await walk(rootDir, 0)
+  return { count, capped }
+}
+
 // ═══════════════════════════════════════════════════════════
 // 获取所有本地硬盘根目录
 // ═══════════════════════════════════════════════════════════
@@ -327,6 +390,7 @@ export async function fileSearch(args: Record<string, any>): Promise<ToolResult>
   const maxResults: number = Math.min(args.maxResults || 50, 200)
   const includeHidden: boolean = args.includeHidden === true
   const searchType: string = args.type || 'file'
+  const countOnly: boolean = args.count === true
   const start = Date.now()
 
   try {
@@ -360,6 +424,23 @@ export async function fileSearch(args: Record<string, any>): Promise<ToolResult>
         if (cand && fs.existsSync(cand) && !searchRoots.includes(cand)) searchRoots.push(cand)
       }
       if (searchRoots.length === 0) searchRoots = [process.cwd()]
+    }
+
+    // 🔢 计数模式：返回精确匹配总数（不截断），适合"有多少个"类问题
+    if (countOnly) {
+      const CAP = 200000
+      let total = 0
+      let capped = false
+      for (const root of searchRoots) {
+        const c = await countMatches(root, pattern, maxDepth, includeHidden, searchType, CAP - total)
+        total += c.count
+        if (c.capped) { capped = true; break }
+      }
+      const scope = rootDir ? `"${rootDir}"` : '项目目录 + 沙箱'
+      const content = capped
+        ? `🔢 匹配 "${pattern}" 的文件超过 ${CAP} 个（已停止统计）。请缩小搜索范围获得精确数字。`
+        : `🔢 匹配 "${pattern}" 的文件共 ${total} 个（已完整统计，未截断）。\n范围: ${scope}\n用时: ${((Date.now() - start) / 1000).toFixed(1)}s`
+      return { callId: '', ok: true, content, durationMs: Date.now() - start }
     }
 
     // 逐个盘搜索

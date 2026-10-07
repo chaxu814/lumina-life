@@ -1496,7 +1496,33 @@ export function getMemoryVectorStore(): MemoryVectorStore {
 }
 
 let _store: MemoryStore | null = null
+/**
+ * 获取记忆存储单例。
+ *
+ * 🔒 韧性设计：better-sqlite3 是原生模块，须与目标运行时 ABI 严格匹配。
+ * 一旦 Electron/Node 升级导致 ABI 漂移，原生模块加载会抛错。此时不再让
+ * 记忆系统整体崩溃，而是**自动降级到 JsonMemoryStore**（纯文件持久化），
+ * 保证 Lumina 在任何环境下都能记住用户，绝不静默丢记忆。
+ * 生产环境（ABI 匹配）仍走 SQLite 主存储，行为不受影响。
+ */
 export function getMemoryStore(dbPath?: string): MemoryStore {
-  if (!_store) {_store = new MemoryStore(dbPath)}
+  if (!_store) {
+    try {
+      _store = new MemoryStore(dbPath)
+    } catch (err) {
+      console.error(
+        '[MemoryStore] 原生 SQLite 存储不可用（ABI 不匹配？），降级到 JSON 文件兜底存储：',
+        (err as Error)?.message || err,
+      )
+      try {
+        // 延迟引入，避免原生模块加载失败时连 JSON 兜底都 import 不到
+        const { JsonMemoryStore } = require('./jsonMemoryStore') as typeof import('./jsonMemoryStore')
+        _store = new JsonMemoryStore(dbPath) as unknown as MemoryStore
+      } catch (fallbackErr) {
+        console.error('[MemoryStore] JSON 兜底存储也初始化失败，记忆将不可用：', fallbackErr)
+        throw fallbackErr
+      }
+    }
+  }
   return _store
 }

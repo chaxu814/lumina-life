@@ -718,6 +718,7 @@ export class ReActEngine {
     const decision = decidePermission({
       tier: st.tier,
       workspaceRoot: store.effectiveWorkspaceRoot(),
+      trustedDirs: store.effectiveTrustedDirs(),
       args,
       command: typeof args.command === 'string' ? args.command : undefined,
       toolName,
@@ -766,11 +767,32 @@ export class ReActEngine {
   // 工具执行
   // ═══════════════════════════════════════════════════════
 
+  /**
+   * 同回合工具调用去重键：工具名 + 规范化后的参数。
+   * 规范化规则：丢弃空字符串 / null / undefined / 空数组（如 calendar_list
+   * 的 `query:""` 与缺省视为同一调用），键内字段按字典序排序，保证
+   * `{days:2}` 与 `{days:2,query:""}` 归为同一键。用于在单次 LLM 响应内
+   * 拦截"参数几乎一致"的重复工具调用，省 token、省时间。
+   */
+  private toolDedupKey(name: string, args: Record<string, any>): string {
+    const cleaned: Record<string, any> = {}
+    for (const [k, v] of Object.entries(args || {})) {
+      if (v === '' || v === null || v === undefined) { continue }
+      if (Array.isArray(v) && v.length === 0) { continue }
+      cleaned[k] = v
+    }
+    const sorted = Object.keys(cleaned).sort().reduce((o, k) => { o[k] = cleaned[k]; return o }, {} as Record<string, any>)
+    return `${name}::${JSON.stringify(sorted)}`
+  }
+
   private async executeToolCalls(
     toolCalls: LLMResponse['toolCalls'],
     messages: ReactMessage[],
   ): Promise<void> {
     if (!toolCalls) {return}
+
+    // 🔁 同回合去重：记录本 LLM 响应内已执行的「工具名+参数」，重复调用跳过
+    const seenThisTurn = new Set<string>()
 
     if (toolCalls.length === 1) {
       const tc = toolCalls[0]
@@ -940,6 +962,17 @@ export class ReActEngine {
           })
           continue
         }
+        // 🔁 同回合去重：同一响应内参数一致的重复调用只执行一次
+        const dupKey = this.toolDedupKey(tc.function.name, pArgs)
+        if (seenThisTurn.has(dupKey)) {
+          messages.push({
+            role: 'tool',
+            content: `♻️ 本回合已执行过相同的 ${tc.function.name} 调用（参数一致），跳过重复执行以省时省 token。`,
+            tool_call_id: tc.id,
+          })
+          continue
+        }
+        seenThisTurn.add(dupKey)
         allowedCalls.push(tc)
       }
       if (allowedCalls.length === 0) {return}

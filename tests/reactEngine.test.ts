@@ -33,7 +33,7 @@ vi.mock('../electron/injectionGuard', () => ({
 }))
 
 import { ReActEngine, type LLMResponse, type LLMCaller } from '../electron/core/reactEngine'
-import { executeToolWithRetry } from '../electron/tools/registry'
+import { executeToolWithRetry, executeToolsParallel } from '../electron/tools/registry'
 
 function makeConfig(overrides: any = {}) {
   return {
@@ -143,5 +143,32 @@ describe('ReActEngine 核心循环', () => {
     const res = await engine.run(messages, [], { value: 0 })
     expect(messages.some(m => m.role === 'tool' && m.content.includes('网络不可用'))).toBe(true)
     expect(res.text).toContain('连不上网')
+  })
+
+  it('P2: 同一响应内参数一致的重复工具调用只执行一次（同回合去重）', async () => {
+    // 并行分支走 executeToolsParallel（被 mock）；给它一个把 call 原样包成结果的实现
+    vi.mocked(executeToolsParallel).mockImplementation(async (calls: any[]) =>
+      calls.map((c) => ({ call: c, result: { ok: true, content: '并行结果', error: '' } })),
+    )
+    const callLLM: LLMCaller = vi.fn()
+      .mockResolvedValueOnce({
+        text: '',
+        toolCalls: [
+          { id: 'a', type: 'function', function: { name: 'web_search', arguments: '{"query":"海边天气"}' } },
+          { id: 'b', type: 'function', function: { name: 'web_search', arguments: '{"query":"海边天气"}' } },
+          { id: 'c', type: 'function', function: { name: 'web_fetch', arguments: '{"url":"https://example.com"}' } },
+        ],
+      } as LLMResponse)
+      .mockResolvedValue({ text: '完成。' } as LLMResponse)
+    const engine = new ReActEngine(makeConfig(), callLLM)
+    const messages = [{ role: 'user', content: '查天气并抓页面' }]
+    await engine.run(messages, [], { value: 0 })
+    // groupParallelBatches 被 mock 成 [(全部调用)]，故 executeToolsParallel 调用一次
+    expect(vi.mocked(executeToolsParallel).mock.calls.length).toBeGreaterThanOrEqual(1)
+    const firstBatch = vi.mocked(executeToolsParallel).mock.calls[0][0] as any[]
+    // 两个参数完全一致的 web_search 被去重为一个；web_fetch 不同，保留 → 共 2
+    expect(firstBatch.length).toBe(2)
+    const searchCount = firstBatch.filter((c) => c.function.name === 'web_search').length
+    expect(searchCount).toBe(1)
   })
 })
