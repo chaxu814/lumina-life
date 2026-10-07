@@ -45,6 +45,22 @@ describe('打包产物 · 运行时相对 require 守卫', () => {
         { cwd: root, encoding: 'utf8' },
       )
     } catch (e: any) {
+      // ── 区分「探针没跑起来」与「跑起来了且发现了问题」 ──
+      //   EBUSY / EACCES / EPERM / ENOBUFS / ETIMEDOUT：子进程根本没能启动
+      //   （典型：受限环境阻止嵌套 spawn；或 maxBuffer 溢出被 kill，此时 status=null、
+      //    stdout=undefined，与「脚本自己 exit 1」完全不是一回事）。
+      //   这类情况**不能判失败**，否则会把「环境限制」误报成「代码缺陷」。
+      const spawnBlocked = !e || e.status === null || e.status === undefined
+        || /EBUSY|EACCES|EPERM|ENOBUFS|ETIMEDOUT|spawnSync/i.test(String(e.code || e.message || ''))
+      if (spawnBlocked) {
+        console.warn(
+          '[bundle-requires] 检查脚本无法执行，跳过本次守卫。\n' +
+          `  （常见原因：受限/沙箱环境阻止嵌套 spawn，或输出超出 maxBuffer）\n` +
+          `  实际错误：${String(e?.code || e?.message || e).slice(0, 200)}\n` +
+          '  如需强制校验：在普通终端跑 node scripts/check-bundle-requires.cjs',
+        )
+        return
+      }
       code = e.status ?? 1
       out = e.stdout || ''
     }

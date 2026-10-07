@@ -20,6 +20,15 @@ export function injectThemeVars(vars: Record<string, string>, isDark: boolean): 
     try { el.style.setProperty(k, v) } catch { /* 非法值忽略 */ }
   }
   el.style.colorScheme = isDark ? 'dark' : 'light'
+
+  // 🐛 同步 data-theme：命名主题是唯一色源，但它只注入 inline 变量，
+  // 而 global.css 里 `[data-theme="dark"]` 那一大段（--surface-0 等的暗色值、
+  // 表单控件暗色覆盖、面板内联样式兜底）全靠这个属性选择器触发。
+  // 两边不同步就会出现「变量是暗的、组件走浅色分支」或反过来的割裂。
+  const next = isDark ? 'dark' : 'light'
+  if (el.getAttribute('data-theme') !== next) {
+    el.setAttribute('data-theme', next)
+  }
 }
 
 /** 订阅主题变化 */

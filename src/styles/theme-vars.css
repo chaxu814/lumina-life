@@ -48,6 +48,43 @@
   color-scheme: light;
 }
 
+/* 🌙 暗色基准值
+ *
+ * 目的有两个：
+ *   1. 主进程注入 inline 变量之前（首帧 / 主题包加载失败）不让页面先闪一下白底；
+ *   2. 让 [data-theme="dark"] 下的原生控件（滚动条、下拉、日期选择器）跟着变深。
+ *
+ * 注意：这里只是「基准」。真正的色值以 themeClient 注入的命名主题为准 ——
+ * App.tsx 与 AppearancePanel 现在都会把命名主题和 data-theme 同步，
+ * 两边不会再互相覆盖（那是深色模式“看着还是浅色”的根因）。
+ */
+[data-theme="dark"] {
+  --bg-primary:   #1a1b1e;
+  --bg-secondary: #1e1f23;
+  --bg-tertiary:  #25262b;
+  --bg-hover:     #2c2e33;
+
+  --text-primary:   #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #71717a;
+
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #a78bfa;
+  --accent-hover:   #7c3aed;
+
+  --border-color: #27272a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.05);
+
+  --bubble-bg:    rgba(39, 39, 42, 0.9);
+  --bubble-text:  #e4e4e7;
+  --bubble-border: #3f3f46;
+
+  color-scheme: dark;
+}
+
 /* 主题切换时让颜色平滑过渡（仅对背景/文字/边框生效，避免动画成本） */
 html {
   transition: background-color 0.2s ease, color 0.2s ease;

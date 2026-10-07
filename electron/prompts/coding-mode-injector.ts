@@ -256,3 +256,39 @@ export class CodingModeInjector {
     this.injected = false
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+// 无状态便捷入口（v1.1 接线）
+//
+// 【为什么要这个函数】
+//   本模块此前是**死代码** —— CodingModeInjector 类、8 套场景纪律提示
+//   （三步闭环 / 先复现再修复 / 跑测试验证）全部写好了，却从未被实例化或调用。
+//   于是模型写代码时缺少强制流程，容易产出「没读原文就改、没验证就说好了」的代码。
+//
+//   而 buildSystemPrompt 是**同步**函数、且每轮都要重建 prompt，
+//   不适合持有 injector 实例状态。所以这里提供一个纯函数入口：
+//   传入用户输入 → 直接返回该场景的纪律提示（无匹配返回 null）。
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 无状态：根据用户输入返回对应的 Coding 纪律提示。
+ *
+ * @param userInput      用户本轮原话
+ * @param forceScenario  可选，强制指定场景（当上游已判定为编程任务时使用）
+ * @returns 场景纪律提示；无匹配返回 null
+ */
+export function buildCodingDisciplinePrompt(
+  userInput: string,
+  forceScenario?: CodingScenario,
+): string | null {
+  if (!userInput || !userInput.trim()) {return null}
+  const scenario = forceScenario ?? new CodingModeInjector().detectScenario(userInput)
+  if (!scenario) {return null}
+  return SCENARIO_PROMPTS[scenario] ?? null
+}
+
+/** 判断输入是否命中编程场景（供上游决定要不要注入纪律） */
+export function detectCodingScenario(userInput: string): CodingScenario | null {
+  if (!userInput || !userInput.trim()) {return null}
+  return new CodingModeInjector().detectScenario(userInput)
+}

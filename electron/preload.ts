@@ -30,6 +30,27 @@ export interface TTSSpeakResult {
   error?: string
 }
 
+/**
+ * 🔍 情绪收紧审计记录（渲染层 DTO）
+ *
+ * 与主进程 `EmotionGateRecord` 同构，但**故意不共享类型**：
+ * 渲染层不应该直接 import 主进程模块（会拖进 Electron 依赖）。
+ * 字段若有变动，preload 这里的形状会先断，由编译器而不是运行时发现。
+ */
+export interface EmotionAuditRecordDto {
+  id: string
+  ts: number
+  emotion: { mood: number; energy: number; anxiety: number; fatigue: number; valence: number }
+  rules: string[]
+  suppressed: Array<{ tool: string; riskClass: string }>
+  notice: string
+  status: 'active' | 'recovered' | 'overridden'
+  recoveredAt?: number
+  overriddenAt?: number
+  overrideReason?: string
+  turnId?: string
+}
+
 export interface AgentRunConfig {
   mode: 'chat' | 'agent' | 'developer'
   model: string
@@ -1100,6 +1121,44 @@ const api = {
     get: () => ipcRenderer.invoke('swimlane:get') as Promise<any>,
   },
   /**
+   * 🩺 系统诊断 / 模型体检。
+   *
+   * 🔧 2026-10-07：DiagnosticsPanel 此前调用 `window.electronAPI.ipcInvoke(...)`，
+   *   而 preload 里**从不存在**这个通用通道 → 面板静默退回 mockData（假数据），
+   *   且它根本没在 App.tsx 注册（孤儿面板）。同时主进程的 diagnostics:* 通道
+   *   （含 2026-10-05 新增的模型体检）**一个都没暴露**。
+   *   现在按 luminaAPI 约定正式暴露，面板接上真实数据。
+   */
+  diagnostics: {
+    summary: () => ipcRenderer.invoke('diagnostics:summary') as Promise<any>,
+    quickCheck: () => ipcRenderer.invoke('diagnostics:quick-check') as Promise<any>,
+    timeline: (limit?: number) => ipcRenderer.invoke('diagnostics:timeline', limit) as Promise<any>,
+    latency: (windowMinutes?: number) =>
+      ipcRenderer.invoke('diagnostics:latency', windowMinutes) as Promise<any>,
+    toolCalls: (limit?: number) => ipcRenderer.invoke('diagnostics:tool-calls', limit) as Promise<any>,
+    clear: () => ipcRenderer.invoke('diagnostics:clear') as Promise<any>,
+    exportReport: () => ipcRenderer.invoke('diagnostics:export-report') as Promise<any>,
+    /** 🩺 模型体检报告（结构化）—— 参数缺省时主进程会要求先配置模型 */
+    modelHealth: (params: { modelName?: string; baseUrl?: string; userContextWindow?: number | null }) =>
+      ipcRenderer.invoke('diagnostics:modelHealth', params) as Promise<any>,
+    /** 🩺 模型体检报告（纯文本）—— 供「复制报告」按钮 */
+    modelHealthText: (params: { modelName?: string; baseUrl?: string; userContextWindow?: number | null }) =>
+      ipcRenderer.invoke('diagnostics:modelHealthText', params) as Promise<string>,
+  },
+  /**
+   * 🎨 桌宠 UGC 精灵表。
+   * 【为什么需要】spriteSheet.ts 里有完整规格与 AI 提示词生成器，
+   *   但它经 modelImporter 拉进了 adm-zip / node:fs，渲染进程不能直接 import。
+   *   这里把「规格 + 提示词」暴露给 gallery 面板。
+   */
+  sprite: {
+    spec: () => ipcRenderer.invoke('sprite:spec') as Promise<any>,
+    prompt: (opts?: { subject?: string; style?: string; frameW?: number; frameH?: number }) =>
+      ipcRenderer.invoke('sprite:prompt', opts) as Promise<{ ok: boolean; prompt?: string; error?: string }>,
+    quickPrompt: (subject?: string) =>
+      ipcRenderer.invoke('sprite:quickPrompt', subject) as Promise<{ ok: boolean; prompt?: string; error?: string }>,
+  },
+  /**
    * 团队情绪（情绪仪表盘）。
    * 🔧 2026-10-04：EmotionDashboardPanel 此前调用 `teamEmotions()` 但 preload 里
    *   **从来不存在**（且用 `?.` 所以静默 no-op），面板永远空白。
@@ -1414,6 +1473,102 @@ const api = {
     ipcRenderer.invoke('webdav-sync:run') as Promise<{ ok: boolean; report?: any; error?: string }>,
   webdavResolveConflict: (relPath: string, choice: 'local' | 'remote' | 'merge') =>
     ipcRenderer.invoke('webdav-sync:resolve-conflict', relPath, choice) as Promise<{ ok: boolean; error?: string }>,
+
+  // ── 🔒 三档权限（仅可查看 / 工作区内修改 / 完全权限）──
+  // 后端在 reactEngine 里强制执行；这里只负责读写档位与广播变更。
+  // ── 🔍 可见性分档（陪伴 / 协作 / 审计）──
+  // 详见 orchestration/visibility.ts 顶部。切档是运行时行为，不需重启会话。
+  visibilityGet: () => ipcRenderer.invoke('visibility:get') as Promise<{
+    ok: boolean
+    tier?: string
+    tiers?: Array<{ tier: string; label: string; summary: string; audience: string; showsEventTypes: string[] }>
+    error?: string
+  }>,
+  visibilitySet: (tier: string) => ipcRenderer.invoke('visibility:set', tier) as Promise<{
+    ok: boolean
+    tier?: string
+    error?: string
+  }>,
+  onVisibilityChanged: (cb: (payload: { tier: string }) => void) => {
+    const h = (_e: unknown, p: { tier: string }): void => cb(p)
+    ipcRenderer.on('visibility:changed', h)
+    return () => { ipcRenderer.removeListener('visibility:changed', h) }
+  },
+
+  // ── 🔍 情绪收紧审计 ──────────────────────────────────────────
+  // 「她为什么不帮我」必须能解释。详见 orchestration/emotionAudit.ts 顶部三条约束。
+  // ⚠️ override 的语义是「只放行**这一轮**」，不是永久解锁，也不是权限授权。
+  emotionAuditList: () =>
+    ipcRenderer.invoke('emotionAudit:list') as Promise<{
+      ok: boolean
+      records?: EmotionAuditRecordDto[]
+      error?: string
+    }>,
+  emotionAuditActive: () =>
+    ipcRenderer.invoke('emotionAudit:active') as Promise<{
+      ok: boolean
+      records?: EmotionAuditRecordDto[]
+      error?: string
+    }>,
+  emotionAuditExplain: (id: string) =>
+    ipcRenderer.invoke('emotionAudit:explain', id) as Promise<{
+      ok: boolean
+      summary?: { id: string; ts: number; status: string; headline: string; detail: string[] }
+      record?: EmotionAuditRecordDto
+      error?: string
+    }>,
+  emotionAuditOverride: (id: string, reason?: string) =>
+    ipcRenderer.invoke('emotionAudit:override', id, reason) as Promise<{
+      ok: boolean
+      record?: EmotionAuditRecordDto
+      notice?: string
+      stillGatedNextTurn?: boolean
+      permissionUnchanged?: boolean
+      error?: string
+    }>,
+  emotionAuditRules: () =>
+    ipcRenderer.invoke('emotionAudit:rules') as Promise<{
+      ok: boolean
+      rules?: Record<string, { label: string; condition: string; riskClass: string; recovery: string; source: string }>
+      error?: string
+    }>,
+  onEmotionAuditChanged: (cb: (payload: { id: string; status: string }) => void) => {
+    const h = (_e: unknown, p: { id: string; status: string }): void => cb(p)
+    ipcRenderer.on('emotionAudit:changed', h)
+    return () => { ipcRenderer.removeListener('emotionAudit:changed', h) }
+  },
+
+  permGet: () =>
+    ipcRenderer.invoke('perm:get') as Promise<{
+      ok: boolean
+      tier?: string
+      workspaceRoot?: string | null
+      effectiveWorkspaceRoot?: string
+      fullAcknowledged?: boolean
+      needsAcknowledgement?: boolean
+      meta?: Record<string, { label: string; short: string; desc: string; color: string }>
+      tiers?: string[]
+      error?: string
+    }>,
+  permSetTier: (tier: string, acknowledged?: boolean) =>
+    ipcRenderer.invoke('perm:setTier', tier, acknowledged) as Promise<{
+      ok: boolean
+      tier?: string
+      fullAcknowledged?: boolean
+      needsAcknowledgement?: boolean
+      error?: string
+    }>,
+  permSetRoot: (root: string | null) =>
+    ipcRenderer.invoke('perm:setRoot', root) as Promise<{
+      ok: boolean
+      workspaceRoot?: string | null
+      effectiveWorkspaceRoot?: string
+    }>,
+  permOnChanged: (cb: (payload: { tier: string; fullAcknowledged: boolean; needsAcknowledgement: boolean }) => void) => {
+    const listener = (_e: unknown, payload: unknown) => cb(payload as { tier: string; fullAcknowledged: boolean; needsAcknowledgement: boolean })
+    ipcRenderer.on('perm:changed', listener)
+    return () => { ipcRenderer.removeListener('perm:changed', listener) }
+  },
 
   // ── 🎨 主题皮肤生态 ─────────────────────────────────────
   themeList: () =>

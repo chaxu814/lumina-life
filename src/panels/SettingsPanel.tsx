@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
-import { IconCheck, IconRefresh, IconPlay, IconWifi, IconWifiOff } from '../components/Icons'
+
 import ModeSettings from '../components/ModeSettings'
 import WorkflowPanel from '../components/WorkflowPanel'
 import SettingsLLM from './settings/SettingsLLM'
@@ -14,19 +14,10 @@ import TasksPanel from './TasksPanel'
 import ModelPickerModal from './settings/ModelPickerModal'
 import SettingsPrivacyFlags from './settings/SettingsPrivacyFlags'
 
-const LLM_PROVIDERS = [
-  // 🆕 免费 API（无需 API Key，开箱即用）
-  { id: 'opencode-zen', name: '🎯 OpenCode Zen (免费)', url: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free', free: true },
-  // 本地部署
-  { id: 'lmstudio', name: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '' },
-  // 云端服务
-  { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { id: 'qwen', name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-  { id: 'zhipu', name: '智谱 GLM', url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4' },
-  { id: 'siliconflow', name: '硅基流动', url: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-7B-Instruct' },
-  { id: 'custom', name: '自定义', url: '', model: '' },
-]
+// ⚠️ 这里曾经还有一份 LLM_PROVIDERS + ProviderBtn（已删）。
+// 真正在用的是 ./settings/SettingsLLM.tsx 里那一份。两份列表曾经并存漂移过
+// —— 旧副本还留着已下线的「OpenCode Zen 免费入口」，很容易让人以为功能还在。
+// 厂商清单要改，只改 settings/SettingsLLM.tsx。
 
 const EDGE_VOICES = [
   { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓 — 活泼女声' },
@@ -648,36 +639,6 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
       </div>
     );
   };
-
-  // ── Provider Button ──────────────────────────────;
-
-  // ── Provider Button ──────────────────────────────
-  // ── Provider Button ──────────────────────────────
-  const ProviderBtn = ({ p, active, onClick }: {
-    p: { id: string; name: string; url: string; model: string; free?: boolean };
-    active: boolean;
-    onClick: () => void;
-  }) => (
-    <button onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: active ? 600 : 400,
-      border: `1.5px solid ${active ? '#3b82f6' : 'var(--border-light)'}`,
-      background: active ? 'var(--accent-50)' : 'var(--surface-0)',
-      color: active ? '#2563eb' : 'var(--text-secondary)',
-      cursor: 'pointer', transition: 'all 0.15s',
-    }}>
-      {active
-        ? <span style={{ color: '#3b82f6', fontSize: 11 }}>●</span>
-        : <span style={{ color: '#d1d5db', fontSize: 11 }}>○</span>}
-      {p.name}
-      {p.free && (
-        <span style={{
-          fontSize: 9, fontWeight: 700, background: '#22c55e', color: '#fff',
-          borderRadius: 4, padding: '0 5px', lineHeight: '16px', marginLeft: 2,
-        }}>免费</span>
-      )}
-    </button>
-  )
 
   // ── LLM 连接测试 ─────────────────────────────────
   const testLLM = async () => {

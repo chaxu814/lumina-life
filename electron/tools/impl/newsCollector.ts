@@ -7,7 +7,7 @@
 //   3. arXiv 论文 RSS (Daily Paper)
 // ============================================================
 
-import { fetchFeeds, type RSSItem, type RSSFeed } from './rssParser'
+import { fetchFeeds, type RSSItem, type RSSFeed, cleanFeedText } from './rssParser'
 import { httpGet, stripHtml } from '../utils/httpClient'
 
 // ═══════════════════════════════════════════════════════════
@@ -137,17 +137,22 @@ function rssItemToNewsItem(item: RSSItem, sourceName: string, category: NewsCate
     trending: 55,
     general: 50,
   }
+  // 🐛 收口：不管标题是从哪条采集路径来的（RSS/Atom/arXiv/HN/百度），
+  // 都过一遍 cleanFeedText。解析器漏一层，这里再兜一层——
+  // 宁可标题短一点，也不要把 [[CDATA[…]]] 这种噪音送进邮件和指纹。
+  const title = cleanFeedText(item.title, 200)
+  const summary = cleanFeedText(item.description, 300)
   return {
-    id: makeId(item.title, item.link, sourceName),
-    title: item.title,
+    id: makeId(title, item.link, sourceName),
+    title,
     url: item.link,
     source: sourceName,
     category,
     pubDate: item.pubDate,
-    summary: stripHtml(item.description).slice(0, 300),
-    content: stripHtml(item.description),
+    summary,
+    content: summary,
     hotScore: baseScore[category] ?? 50,
-    fingerprint: makeFingerprint(item.title, item.link),
+    fingerprint: makeFingerprint(title, item.link),
   }
 }
 
@@ -199,10 +204,11 @@ async function collectArxivPapers(): Promise<NewsItem[]> {
         
         for (const rssItem of feed.items) {
           // arXiv RSS 条目通常包含 <arxiv:summary> 标签，摘要放在 description 中
-          const summary = stripHtml(rssItem.description).slice(0, 500)
+          const title = cleanFeedText(rssItem.title, 200)
+          const summary = cleanFeedText(stripHtml(rssItem.description), 500)
           items.push({
-            id: makeId(rssItem.title, rssItem.link, sourceName),
-            title: rssItem.title,
+            id: makeId(title, rssItem.link, sourceName),
+            title,
             url: rssItem.link,
             source: sourceName,
             category: 'paper',
@@ -210,7 +216,7 @@ async function collectArxivPapers(): Promise<NewsItem[]> {
             summary: summary,
             content: summary,
             hotScore: 70, // 论文默认热度较高
-            fingerprint: makeFingerprint(rssItem.title, rssItem.link),
+            fingerprint: makeFingerprint(title, rssItem.link),
           })
         }
       }

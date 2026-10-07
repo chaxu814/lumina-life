@@ -8,9 +8,12 @@
 import type { ToolResult } from '../tools/types'
 import { executeToolWithRetry, executeToolsParallel, groupParallelBatches, buildNotExecutedResult } from '../tools/registry'
 import { isToolAllowedForRole, type PermissionVerdict } from '../rolePolicy'
-import { getInjectionGuard } from '../injectionGuard'
+
 import { getSecurityGuard, GuardSeverity } from '../securityGuard'
+import { parseXmlToolCalls } from '../llm/xmlToolCall'
 import { getApprovalService } from '../approvalService'
+import { getPermissionStore } from '../permission/permissionStore'
+import { decide as decidePermission, type PermissionDecision } from '../permission/permissionTier'
 import { getHookManager } from '../hooks/hookManager'
 import { getDiagnosticsStore } from '../ipc/diagnosticsIpc'
 
@@ -76,6 +79,12 @@ export type LLMCaller = (
 export interface ReactResult {
   text: string
   error?: string
+  /**
+   * 空回复时给出**可读的原因**（哪个工具名未注册 / 参数解析失败 / 连续空内容）。
+   * 以前这个信息在链路上被完全丢弃，导致用户只能看到一句
+   * 「这轮我没能给出有效回复」而无法反馈任何有用信息。
+   */
+  reason?: string
 }
 
 // ── v12.1-fix: XML 工具调用检测与清理 ──
@@ -306,6 +315,8 @@ export class ReActEngine {
   private toolsUsedThisRun = false
   /** 自动继续计数 */
   private autoContinueCount = 0
+  /** 最近一次失败的诊断原因（跨 run 保留，便于上层取用） */
+  public lastFailureReason = ''
 
   constructor(config: ReactConfig, callLLM: LLMCaller, emit?: ReactEmitCallbacks) {
     this.config = config
@@ -352,6 +363,8 @@ export class ReActEngine {
     let slowThinkingRetries = 0
     let notFinalRetries = 0
     let slowSummarizeInjected = false
+    /** 本轮会话里最后一次「XML 工具调用解析失败」的原因，供兜底文案自证清白 */
+    let lastXmlDiagnostic = ''
 
     for (let round = 0; round < maxRounds; round++) {
       if (this.abortController?.signal.aborted) {break}
@@ -472,12 +485,36 @@ export class ReActEngine {
         //     4. 如果工具执行失败，只保留清理后的文本
         if (replyText && hasXmlToolCall(replyText)) {
           this.emit?.onThinking?.('🔄 检测到 XML 工具调用标记，尝试执行...')
+
+          // 🩺 先用「唯一事实源」探一次，拿到解析诊断。
+          //   tryExecuteXmlToolCall 是手写的老解析器，失败时只返回 false，
+          //   不告诉你为什么。parseXmlToolCalls 会说明是哪个工具名没注册。
+          //   不传白名单（宽容模式）—— 这里只用于诊断，执行路径另有白名单校验。
+          const probe = parseXmlToolCalls(replyText)
+          if (probe.hadToolCallIntent && probe.calls.length === 0 && !lastXmlDiagnostic) {
+            lastXmlDiagnostic = probe.diagnostic || '工具调用格式无法识别'
+          }
+
           const executed = await tryExecuteXmlToolCall(replyText, messages, this.emit, this.config.personaId)
+
+          // 🐛 P0 修复：先把模型写的「人话」留底，再决定下一步。
+          //
+          // 旧实现在这里无条件 continue，而 finalText 只在下面的普通分支里赋值。
+          // 于是出现这条链路：
+          //   模型最后一轮只输出工具标签 + 几乎没有正文
+          //   → executed=true → continue → finalText 从头到尾是 ''
+          //   → 循环耗尽 → agentRunner 的兜底文案接管
+          //   → 用户看到「这轮我没能给出有效回复（模型返回了无法识别的内容）」
+          //
+          // 而实际上模型**确实给了内容**（哪怕只有一句“我先查一下”），
+          // 只是在清理工具标签时跟着被扔了。把清理后的正文写进 finalText，
+          // 至少让用户看到「它想干什么”，而不是一句完全无法排查的道歉。
+          const prose = cleanXmlToolCalls(replyText)
+
           if (executed) {
-            // 执行成功 → 清理标记后继续下一轮
-            replyText = cleanXmlToolCalls(replyText)
-            if (replyText) {
-              messages.push({ role: 'assistant', content: replyText })
+            if (prose) {
+              finalText = prose
+              messages.push({ role: 'assistant', content: prose })
             }
             // fix: XML 工具执行成功后，强制注入“请根据结果直接回答”指令
             messages.push({
@@ -487,7 +524,7 @@ export class ReActEngine {
             continue
           }
           // 执行失败 → 至少清理标记
-          replyText = cleanXmlToolCalls(replyText)
+          replyText = prose
           if (!replyText) {continue} // 清空后跳到空回复处理
         }
 
@@ -636,8 +673,16 @@ export class ReActEngine {
             ` persona=${this.config.personaId || 'default'}` +
             ` socialMode=${this.config.socialMode}` +
             ` messages总数=${messages.length}` +
+            ` xml诊断=${lastXmlDiagnostic || '无'}` +
             ` 最后user消息="${(messages.filter(m=>m.role==='user').pop()?.content||'').slice(0,80)}"`)
+
+          // 🩺 把「为什么空」带上去，而不是只丢一个空串。
+          //   上层（agentRunner）的兜底文案会原样展示这段 reason ——
+          //   用户下次截图反馈时就能直接看出是工具名不认识、参数解析不了、
+          //   还是模型压根没吐正文，再也不用翻 DevTools。
           finalText = ''
+          this.lastFailureReason = lastXmlDiagnostic
+            || (this.config.model ? `模型 ${this.config.model} 连续 ${consecutiveEmptyCount} 次返回空内容` : `连续 ${consecutiveEmptyCount} 次返回空内容`)
           break
         }
       } catch (err: any) {
@@ -648,7 +693,73 @@ export class ReActEngine {
       }
     }
 
-    return { text: finalText }
+    return { text: finalText, reason: this.lastFailureReason }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 🔒 权限档位裁决
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * 三档权限的唯一执行点。单发与并行两条路径都走这里 —— 只要有一处漏掉，
+   * 「仅可查看」就能被多工具并行绕过。
+   *
+   * 返回 null = 放行；否则返回一段给 LLM 看的中文说明（让它知道为什么被拒，
+   * 而不是默默失败 —— 模型需要这个信息才能换条路走）。
+   */
+  private checkPermission(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): { decision: PermissionDecision; message: string; approvalId?: string } | null {
+    const store = getPermissionStore()
+    const st = store.get()
+
+    // 安全兜底：档位数据被写坏时，绝不能默默退到「完全权限」
+    const decision = decidePermission({
+      tier: st.tier,
+      workspaceRoot: store.effectiveWorkspaceRoot(),
+      args,
+      command: typeof args.command === 'string' ? args.command : undefined,
+      toolName,
+      agentId: this.config.personaId,
+    })
+
+    if (decision.action === 'allow') {return null}
+
+    if (decision.action === 'deny') {
+      return { decision, message: `🔒 权限拦截（${decision.category}）: ${decision.reason}` }
+    }
+
+    // ask：走既有审批流，行为与安全审查保持一致（/approve <id>）
+    if (this.config.skipApproval) {
+      // CLI / headless 场景没有人类审批者：默认放行中风险，
+      // 高风险仍然拒 —— 不能因为「没人点确认」就等于「全放行」
+      if (decision.risk === 'high') {
+        return { decision, message: `🔒 无人审批环境，已拒绝高风险操作: ${decision.reason}` }
+      }
+      return null
+    }
+    const req = getApprovalService().requestApproval({
+      sessionId: this.config.sessionId,
+      agentId: this.config.personaId || 'default',
+      toolName,
+      toolArgs: args as Record<string, never>,
+      description: `${toolName}: ${JSON.stringify(args).slice(0, 100)}`,
+      riskLevel: decision.risk as 'medium' | 'high' | 'critical',
+      threatCategories: [decision.category],
+      securityFindings: [decision.reason],
+    })
+    if (req) {
+      return {
+        decision,
+        approvalId: req.id,
+        message:
+          `🔐 权限档位要求确认（${decision.reason}）\n` +
+          `请回复 /approve ${req.id} 批准，或 /deny ${req.id} 拒绝。\n` +
+          `不想每次确认？到发送栏右侧的权限选择器切成「完全权限」。`,
+      }
+    }
+    return null
   }
 
   // ═══════════════════════════════════════════════════════
@@ -703,6 +814,15 @@ export class ReActEngine {
           })
           return
         }
+      }
+
+      // 🔒 权限档位（安全审查之后、角色闸门之前）
+      const perm = this.checkPermission(fn.name, args)
+      if (perm) {
+        this.emit?.onToolStart?.(fn.name, args)
+        this.emit?.onToolEnd?.(fn.name, { ok: false, content: '', error: perm.message })
+        messages.push({ role: 'tool', content: perm.message, tool_call_id: tc.id })
+        return
       }
 
       // 角色硬闸门（执行层）：无权工具不调用 registry，直接回 ok:false 失败信号
@@ -798,6 +918,16 @@ export class ReActEngine {
             content: `🔐 ${tc.function.name} 需要审批: ${guardResult.summary}`,
             tool_call_id: tc.id,
           })
+          continue
+        }
+        // 🔒 权限档位（并行路径同样必须走，单发路径的绕过不算数）
+        let pArgs: Record<string, unknown> = {}
+        try { pArgs = JSON.parse(tc.function.arguments || '{}') } catch { pArgs = {} }
+        const perm = this.checkPermission(tc.function.name, pArgs)
+        if (perm) {
+          this.emit?.onToolStart?.(tc.function.name, pArgs)
+          this.emit?.onToolEnd?.(tc.function.name, { ok: false, content: '', error: perm.message })
+          messages.push({ role: 'tool', content: perm.message, tool_call_id: tc.id })
           continue
         }
         // 角色硬闸门（并行路径）：无权工具直接回 ok:false，不进执行批次

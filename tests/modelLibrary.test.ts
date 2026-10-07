@@ -1,12 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { ModelLibrary, BUILTIN_MODELS, isValidEntryForKind, isValidAvatarKind } from '../electron/pet/modelLibrary'
+import {
+  ModelLibrary, BUILTIN_MODELS, FALLBACK_MODEL_ID, FALLBACK_ENTRY_REL, fallbackModel,
+  isValidEntryForKind, isValidAvatarKind,
+} from '../electron/pet/modelLibrary'
 
 describe('modelLibrary 模型库', () => {
-  it('默认内置 Mao 且为当前模型', () => {
+  // 【保底形象契约】
+  // 仓库不携带任何 Live2D 模型资产（Mao 等受 Cubism SDK 再分发条款约束）。
+  // 内置列表因此只剩一个**零外部素材**的程序化小猫，它是所有异常回退路径的终点。
+  // 下列用例锁死这个契约：任何改回“内置一个需要资产文件的表情”的修改都会在这里失败。
+  it('内置保底形象是程序化小猫，且零外部素材依赖', () => {
     const lib = new ModelLibrary()
-    expect(lib.list().some(m => m.id === 'Mao')).toBe(true)
+    expect(BUILTIN_MODELS).toHaveLength(1)
+    expect(FALLBACK_MODEL_ID).toBe('Cat')
+    expect(FALLBACK_ENTRY_REL).toBe('__cat__')
+    expect(fallbackModel()).toEqual({ id: 'Cat', name: '小猫', entryRel: '__cat__', kind: 'cat', builtin: true, addedAt: 0 })
+    expect(lib.current().id).toBe('Cat')
     expect(lib.current().builtin).toBe(true)
-    expect(BUILTIN_MODELS[0].id).toBe('Mao')
+  })
+
+  it('保底形象不依赖任何文件后缀（cat 是程序化特殊入口）', () => {
+    // 如果将来把保底形象换成 live2d/vrm，entryRel 就会带上 .model3.json / .vrm，
+    // 也就意味着“任何情况下都能加载”的保证破灭。用这条用例把它钉死。
+    expect(FALLBACK_ENTRY_REL).not.toMatch(/\.[a-z0-9]+$/i)
+    expect(BUILTIN_MODELS[0].kind).toBe('cat')
   })
 
   it('注册合法 UGC 模型并切换', () => {
@@ -21,18 +38,27 @@ describe('modelLibrary 模型库', () => {
   it('拒绝路径穿越与非 model3 入口、内置 id 冲突', () => {
     const lib = new ModelLibrary()
     expect(lib.register({ name: 'x', entryRel: '../evil/x.model3.json' }).ok).toBe(false)
-    expect(lib.register({ name: 'x', entryRel: 'Mao/readme.txt' }).ok).toBe(false)
-    expect(lib.register({ id: 'Mao', name: 'x', entryRel: 'M/x.model3.json' }).ok).toBe(false)
+    expect(lib.register({ name: 'x', entryRel: 'Cat/readme.txt' }).ok).toBe(false)
+    expect(lib.register({ id: 'Cat', name: 'x', entryRel: 'M/x.model3.json' }).ok).toBe(false)
   })
 
-  it('内置不可删；删除当前自定义回退内置', () => {
+  it('内置不可删；删除当前自定义回退保底形象', () => {
     const lib = new ModelLibrary()
-    expect(lib.remove('Mao')).toBe(false)
+    expect(lib.remove('Cat')).toBe(false)
     const r = lib.register({ name: '小白', entryRel: 'Shiro/shiro.model3.json' })
     lib.select(r.id!)
     expect(lib.remove(r.id!)).toBe(true)
-    expect(lib.current().id).toBe('Mao')
+    expect(lib.current().id).toBe('Cat')
     expect(lib.select('not-exist')).toBe(false)
+  })
+
+  it('已退役的内置模型（Mao / Hiyori）不再出现在库中', () => {
+    // 这两个模型曾内置，现在都从仓库移除了。旧版库文件里可能还留着它们的 id，
+    // 升级后必须查不到，否则会指向不存在的资产路径。
+    const lib = new ModelLibrary({ currentId: 'Mao', custom: [] })
+    expect(lib.get('Mao')).toBeUndefined()
+    expect(lib.get('Hiyori')).toBeUndefined()
+    expect(lib.current().id).toBe('Cat')  // 悬空 currentId 回退到保底形象
   })
 
   it('序列化/反序列化往返保留自定义与选择，内置恒定', () => {
@@ -44,7 +70,7 @@ describe('modelLibrary 模型库', () => {
     const restored = ModelLibrary.deserialize(data)
     expect(restored.get(r.id!)?.channels).toBe(30)
     expect(restored.current().id).toBe(r.id)
-    expect(restored.get('Mao')?.builtin).toBe(true)
+    expect(restored.get('Cat')?.builtin).toBe(true)
   })
 
   it('恶意模型名被消毒', () => {
@@ -55,9 +81,9 @@ describe('modelLibrary 模型库', () => {
     expect(r.id).not.toContain('/')
   })
 
-  it('缺省 kind 向后兼容为 live2d（Mao 也是 live2d）', () => {
+  it('缺省 kind 向后兼容为 live2d（保底小猫显式声明为 cat）', () => {
     const lib = new ModelLibrary()
-    expect(lib.current().kind).toBe('live2d')
+    expect(lib.current().kind).toBe('cat')
     const r = lib.register({ name: '老模型', entryRel: 'Old/old.model3.json' })
     expect(r.ok).toBe(true)
     expect(lib.get(r.id!)?.kind).toBe('live2d')

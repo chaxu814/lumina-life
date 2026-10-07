@@ -24,8 +24,8 @@ export default function SettingsAppearance() {
             <button key={opt.id} onClick={() => setTheme(opt.id)}
               style={{
                 flex: 1, padding: '16px 12px', borderRadius: 10, cursor: 'pointer',
-                border: `2px solid ${active ? '#a78bfa' : 'var(--border-light)'}`,
-                background: active ? '#f5f3ff' : 'var(--surface-0)',
+                border: `2px solid ${active ? 'var(--accent-500)' : 'var(--border-light)'}`,
+                background: active ? 'var(--accent-50)' : 'var(--surface-0)',
                 transition: 'all 0.2s', textAlign: 'center',
               }}>
               <div style={{ fontSize: 28, marginBottom: 4 }}>{opt.emoji}</div>
@@ -33,7 +33,7 @@ export default function SettingsAppearance() {
               <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{opt.desc}</div>
               {active && (
                 <div style={{
-                  marginTop: 8, fontSize: 10, fontWeight: 600, color: '#7c3aed',
+                  marginTop: 8, fontSize: 10, fontWeight: 600, color: 'var(--accent-600)',
                 }}>
                   使用中 ✓
                 </div>
@@ -44,8 +44,8 @@ export default function SettingsAppearance() {
       </div>
       <div style={{
         marginTop: 14, padding: 10, borderRadius: 8,
-        background: 'linear-gradient(135deg, #ede9fe, #f5f3ff)',
-        border: '1px solid #ddd6fe', fontSize: 11, color: '#6d28d9', lineHeight: 1.5,
+        background: 'var(--accent-50)',
+        border: '1px solid var(--accent-100)', fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.5,
       }}>
         💡 当前主题已自动保存，下次启动自动恢复。
       </div>
@@ -69,12 +69,12 @@ export default function SettingsAppearance() {
             onClick={() => setCompactMode(!compactMode)}
             style={{
               width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-              background: compactMode ? '#7c3aed' : '#d1d5db',
+              background: compactMode ? 'var(--accent-600)' : 'var(--surface-300)',
               position: 'relative', transition: 'background 0.2s', flexShrink: 0,
             }}
           >
             <div style={{
-              width: 18, height: 18, borderRadius: '50%', background: 'white',
+              width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-primary)',
               position: 'absolute', top: 3,
               left: compactMode ? 23 : 3,
               transition: 'left 0.2s',
@@ -85,8 +85,8 @@ export default function SettingsAppearance() {
         {compactMode && (
           <div style={{
             marginTop: 8, padding: '6px 10px', borderRadius: 6,
-            background: '#f5f3ff', border: '1px solid #ddd6fe',
-            fontSize: 11, color: '#6d28d9',
+            background: 'var(--accent-50)', border: '1px solid var(--accent-100)',
+            fontSize: 11, color: 'var(--text-primary)',
           }}>
             ✓ 简约模式已开启 — 效果等同于打开开发者工具时的紧凑布局
           </div>

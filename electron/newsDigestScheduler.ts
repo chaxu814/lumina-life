@@ -26,6 +26,7 @@ import { filterWithLLM, type FilteredItem, type LLMCallFn } from './tools/impl/n
 import { enrichItemsBackground } from './tools/impl/newsEnricher'
 import { deduplicate, assembleDigestBody, assembleDigestHTML } from './tools/impl/newsDigest'
 import { organizeNewsWithAgent } from './tools/impl/newsOrganizer'
+import { narrateDigest, type DigestNarrative } from './tools/impl/newsNarrator'
 import { sendMail } from './mailStore'
 import { globalEventBus } from './eventBus'
 import { getProviderManager } from './core/providerManager'
@@ -542,6 +543,8 @@ export class NewsDigestScheduler {
 
       // 3. LLM 筛选
       let filtered: FilteredItem[]
+      /** 本轮能不能调 LLM —— 决定邮件是「人话导读」还是「只有标题+网址」 */
+      let llmCall: LLMCallFn | null = null
       try {
         const pm = getProviderManager()
         const activeConfig = pm?.getActiveConfig?.()
@@ -552,7 +555,7 @@ export class NewsDigestScheduler {
             model: activeConfig.config.model,
             maxContextTokens: activeConfig.config.maxContextTokens || 256000,
           })
-          const llmCall: LLMCallFn = async (systemPrompt, userContent) => {
+          llmCall = async (systemPrompt, userContent) => {
             const res = await provider.call({
               messages: [
                 { role: 'system', content: systemPrompt },
@@ -572,6 +575,7 @@ export class NewsDigestScheduler {
           filtered = buildHotnessFallback(newItems, this.config.maxItems, '热度排序')
         }
       } catch (e) {
+        llmCall = null
         console.warn('[NewsDigestScheduler] LLM 筛选失败，使用热度降级:', e)
         filtered = buildHotnessFallback(newItems, this.config.maxItems, '热度排序（LLM 降级）')
       }
@@ -622,22 +626,42 @@ export class NewsDigestScheduler {
         return
       }
 
+      // 3d. 🆕 人性化叙述（仅在已接入 LLM 时跑；失败/没配 LLM → 退回极简）
+      let narrative: DigestNarrative | null = null
+      if (llmCall) {
+        try {
+          narrative = await narrateDigest(filtered, llmCall, {
+            interests: this.config.interests,
+            maxItems: this.config.maxItems,
+          })
+        } catch (e) {
+          console.warn('[NewsDigestScheduler] 叙述异常，按简报发送:', e)
+        }
+      }
+      console.log(
+        narrative
+          ? `[NewsDigestScheduler] ✍️ 叙述完成：导读 ${narrative.lead.length} 字 / 点评 ${narrative.items.length} 条`
+          : '[NewsDigestScheduler] 本次按「标题+网址」简报发送（未接入 LLM 或叙述不可用）',
+      )
+
       // 4. 组装邮件正文
       const dateStr = new Date().toLocaleDateString('zh-CN', {
         year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
       })
       const title = `📡 Lumina ${slotName}新闻 — ${dateStr}`
 
-      const body = assembleDigestBody(filtered, { title, maxItems: this.config.maxItems })
+      const body = assembleDigestBody(filtered, {
+        title, maxItems: this.config.maxItems, narrative,
+      })
       const htmlBody = assembleDigestHTML(filtered, {
         title,
         maxItems: this.config.maxItems,
         bilingual: this.config.bilingual,
+        narrative,
       })
-      void htmlBody // 保留给 SMTP 链路（与 v1.0 一致）
 
       // 5. 发送到本地邮箱（自动触发 SMTP 外发）
-      sendMail(title, body, 'normal')
+      sendMail(title, body, 'normal', htmlBody)
 
       globalEventBus.emit('news:digest-pushed', {
         slot,

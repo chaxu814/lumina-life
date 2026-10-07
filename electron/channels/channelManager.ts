@@ -11,6 +11,12 @@ import type {
   ChannelType, ChannelConfig, ChannelMessage, ChannelSendRequest,
   ChannelAdapter, ChannelManagerConfig,
 } from './types'
+import {
+  channelMaturity, isChannelVerified, CHANNEL_CAPABILITIES, verifiedChannelTypes,
+} from './types'
+import type { ChannelMaturity } from './types'
+
+export { CHANNEL_CAPABILITIES, channelMaturity, isChannelVerified, verifiedChannelTypes }
 
 type MessageHandler = (msg: ChannelMessage) => Promise<string | void>
 
@@ -101,15 +107,25 @@ export class ChannelManager {
   }
 
   /** 获取渠道状态 */
-  getStatus(): Array<{ key: string; type: ChannelType; name: string; online: boolean }> {
-    const result: Array<{ key: string; type: ChannelType; name: string; online: boolean }> = []
+  getStatus(): Array<{
+    key: string; type: ChannelType; name: string; online: boolean
+    maturity: ChannelMaturity; note: string
+  }> {
+    const result: Array<{
+      key: string; type: ChannelType; name: string; online: boolean
+      maturity: ChannelMaturity; note: string
+    }> = []
     for (const [key, cfg] of this.configs) {
       const adapter = this.adapters.get(key)
+      const cap = cfg.type !== 'custom' ? CHANNEL_CAPABILITIES[cfg.type] : undefined
       result.push({
         key,
         type: cfg.type,
         name: cfg.name,
         online: !!adapter,
+        // 界面直接用这个字段渲染“已验证 / 未验证”角标，不要在 UI 里重写一遍判定逻辑
+        maturity: channelMaturity(cfg.type),
+        note: cap?.notes ?? '自定义渠道，未登记在能力表中',
       })
     }
     return result
@@ -168,6 +184,19 @@ export class ChannelManager {
   // ── 内部方法 ──────────────────────────────────────
 
   private async startAdapter(key: string, cfg: ChannelConfig): Promise<boolean> {
+    // 【诚实度闸门】experimental 渠道默认拒绝启动，除非配置里显式 allowExperimental。
+    // 我们有 7 个适配器但只有 telegram 过端到端真机验证；让用户自己决定要不要
+    // 拉一个未验证渠道去跑真实消息，比我们默认打开然后默默出问题要好。
+    if (!isChannelVerified(cfg.type) && cfg.allowExperimental !== true) {
+      const cap = cfg.type !== 'custom' ? CHANNEL_CAPABILITIES[cfg.type] : undefined
+      console.warn(
+        `[ChannelManager] 渠道 ${key} (${cfg.type}) 未通过端到端真机验证，已保持离线。\n`
+        + `  理由：${cap?.notes ?? '未知渠道类型'}\n`
+        + `  如需自行试用，请在配置里设 "allowExperimental": true。`,
+      )
+      return false
+    }
+
     // 找对应的适配器实现（构造阶段失败不影响其它渠道）
     let adapter: ChannelAdapter | undefined
     try {
@@ -308,8 +337,19 @@ export class ChannelManager {
   private async loadConfigs(): Promise<void> {
     const configFile = path.join(this.configDir, 'channels.json')
     if (!fs.existsSync(configFile)) {
-      // 创建默认配置
-      const defaults: Record<string, ChannelConfig> = {}
+      // 首次运行：只预置唯一已验证的渠道模板，且**不启用**。
+      //
+      // 【为什么不预置全部 7 个】头部项目全部已跑通真机，我们只有 telegram 验证过。
+      // 把 7 个全预置成“已支持”是一种很容易被社区拆穿的虚报；
+      // 预置一个已验证的模板、其余让用户自己按需加，是「少而真 > 多而虚」。
+      const defaults: Record<string, ChannelConfig> = {
+        telegram: {
+          enabled: false,
+          type: 'telegram',
+          name: 'Telegram',
+          credentials: { botToken: '' },
+        },
+      }
       this.configs = new Map(Object.entries(defaults))
       this.saveConfigs()
       return

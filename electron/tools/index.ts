@@ -27,6 +27,12 @@ import { fileSearchDef, fileSearch } from './impl/fileSearch'
 import { diskListDef, diskList } from './impl/diskList'
 // 桌面程序扫描
 import { desktopScanDef, desktopScan } from './impl/desktopScan'
+// 桌面整理三件套（扫描/方案/执行）—— 导出名与 desktopScan.ts 撞车，故用别名
+import {
+  desktopScanDef as desktopTidyScanDef, desktopScan as desktopTidyScan,
+  desktopPlanDef, desktopPlan,
+  desktopTidyDef, desktopTidy,
+} from './impl/desktopTidy'
 // Search
 import { webSearchDef, webSearch } from './impl/search'
 // Time
@@ -41,6 +47,17 @@ import {
 } from './impl/memory_v2'
 // Todo
 import { todoDef, todo } from './impl/todo'
+// 本地日历（ICS 文件，不动系统日历）
+import {
+  calendarListDef, calendarList,
+  calendarAddDef, calendarAdd,
+  calendarRemoveDef, calendarRemove,
+  calendarFreeDef, calendarFree,
+} from './impl/calendar'
+import {
+  skillSearchDef, skillSearch,
+  skillInstallDef, skillInstall,
+} from './impl/skillInstall'
 // Cron
 import { cronDef, cronSchedule, cronListDef, cronList, cronCancelDef, cronCancel } from './impl/cron'
 // Browser
@@ -214,6 +231,10 @@ export function registerAllTools(): void {
   registerTool(fileSearchDef, fileSearch)
   registerTool(diskListDef, diskList)
   registerTool(desktopScanDef, desktopScan)
+  // 桌面整理：desktop_tidy_scan / desktop_tidy_plan / desktop_tidy
+  registerTool(desktopTidyScanDef, desktopTidyScan)
+  registerTool(desktopPlanDef, desktopPlan)
+  registerTool(desktopTidyDef, desktopTidy)
 
   // Search
   registerTool(webSearchDef, webSearch)
@@ -230,6 +251,14 @@ export function registerAllTools(): void {
 
   // Task
   registerTool(todoDef, todo)
+
+  // 本地日历（v1.0）
+  registerTool(calendarListDef, calendarList)
+  registerTool(calendarAddDef, calendarAdd)
+  registerTool(calendarRemoveDef, calendarRemove)
+  registerTool(calendarFreeDef, calendarFree)
+  registerTool(skillSearchDef, skillSearch)
+  registerTool(skillInstallDef, skillInstall)
 
   // Cron
   registerTool(cronDef, cronSchedule)

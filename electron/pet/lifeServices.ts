@@ -201,8 +201,8 @@ export function registerLifeServicesIpc(): void {
 
   ipcMain.handle('pet:models:current', () => {
     try { return modelDto(loadLibrary().current()) }
-    catch (e: any) { // 任何异常都回退内置 Mao，保证桌宠永远能加载
-      return { id: 'Mao', name: 'Mao（魔法使）', builtin: true, hasFiveVowel: true, url: 'assets/Mao/mao_pro.model3.json' }
+    catch (e: any) { // 任何异常都回退保底形象（程序化小猫），保证桌宠永远能加载
+      return { id: 'Cat', name: '小猫', kind: 'cat', entryRel: '__cat__', builtin: true, url: '__cat__' }
     }
   })
 

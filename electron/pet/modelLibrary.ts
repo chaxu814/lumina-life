@@ -3,7 +3,13 @@
 //
 // modelImporter 负责「把一个模型安全拷进来」，本模块负责「库里有哪些模型、
 // 当前用哪个、如何持久化清单」。纯逻辑、不碰文件系统（扫描/读写 JSON 在接线层），
-// 内置 Mao 恒定存在且不可删；UGC 模型条目复用导入器的路径安全校验。
+// 内置 Cat（程序化 Canvas 2D 小猫，零外部素材）恒定存在且不可删；UGC 模型条目
+// 复用导入器的路径安全校验。
+//
+// 【为什么内置形象是程序化小猫而不是 Live2D 模型】
+// Live2D Cubism 示例模型（如 Mao）受 SDK 再分发条款约束，公开仓库属于「再分发」，
+// 因此不随本项目分发。程序化小猫不依赖任何第三方美术素材，是唯一能保证
+// 「任何情况下桌宠都能加载」的零授权选项。Live2D 形象请在应用内自行导入。
 // ============================================================
 
 import { sanitizeModelName, isSafeRelativePath } from './modelImporter'
@@ -66,11 +72,24 @@ export interface ModelLibraryData {
   custom: ModelEntry[]
 }
 
-/** 内置模型（恒定，不参与持久化；Mao 为 Live2D，Cat 为程序化 Canvas 2D 猫） */
+/** 内置模型（恒定，不参与持久化）。
+ *  ⚠️ 数组顺序即优先级，index 0 是**保底形象**：任何异常路径都回退到它。
+ *  Cat 是程序化 Canvas 2D 小猫，不依赖任何外部素材，零授权风险、永远可加载。
+ *  ⚠️ 改动此数组前请先跑 `tests/modelLibrary.test.ts`，它锁死了这个回退契约。 */
 export const BUILTIN_MODELS: ModelEntry[] = [
-  { id: 'Mao', name: 'Mao（魔法使）', entryRel: 'Mao/mao_pro.model3.json', kind: 'live2d', builtin: true, addedAt: 0, hasFiveVowel: true },
   { id: 'Cat', name: '小猫', entryRel: '__cat__', kind: 'cat', builtin: true, addedAt: 0 },
 ]
+
+/** 保底形象 id —— 删改内置模型时必须同步更新的唯一真源 */
+export const FALLBACK_MODEL_ID = BUILTIN_MODELS[0].id
+
+/** 保底形象入口路径（渲染层拼 URL 用；Cat 为程序化特殊入口 '__cat__'） */
+export const FALLBACK_ENTRY_REL = BUILTIN_MODELS[0].entryRel
+
+/** 取保底形象条目（永远存在，用于所有异常回退路径） */
+export function fallbackModel(): ModelEntry {
+  return { ...BUILTIN_MODELS[0] }
+}
 
 export class ModelLibrary {
   private map = new Map<string, ModelEntry>()
@@ -247,7 +266,7 @@ export function parseModelManifest(raw: string): ModelManifest | null {
 }
 
 /**
- * 扫描用户数据目录，返回全部已安装模型（内置 Mao 在前）。
+ * 扫描用户数据目录，返回全部已安装模型（内置保底形象在前）。
  * 优先以 pet-model-library.json 中的注册条目为准；磁盘上多出的孤儿目录
  * （库无记录）也会列出并标记 builtin=false、onDisk=true，便于清理。
  */
@@ -303,20 +322,31 @@ function existsDir(p: string): boolean {
   } catch { return false }
 }
 
-/** 当前激活模型 id（读 pet-model-library.json 的 currentId；无库时回退内置 Mao） */
+/**
+ * 当前激活模型 id（读 pet-model-library.json 的 currentId）。
+ *
+ * 【为什么必须校验存在性】库文件可能来自旧版本：例如用户此前选中过一个
+ * 已被移出仓库的 Live2D 模型，或手动删过模型目录。若只读不校验，会拿到
+ * 一个库里不存在的 id，一路传到渲染层才炸成「模型加载失败」。这里直接
+ * 判定为无效并回退保底形象，让失败发生在最靠近数据源的地方。
+ */
 export function getActiveModel(userDataDir: string): string {
   try {
-    const raw = fssync.readFileSync(libJsonPath(userDataDir), 'utf8')
-    const id = (JSON.parse(raw) as { currentId?: unknown }).currentId
-    return typeof id === 'string' && id ? id : BUILTIN_MODELS[0].id
+    const text = fssync.readFileSync(libJsonPath(userDataDir), 'utf8')
+    const raw: unknown = JSON.parse(text)
+    const id = (raw as { currentId?: unknown }).currentId
+    if (typeof id !== 'string' || !id) {return FALLBACK_MODEL_ID}
+    // 注意：deserialize 要的是**已解析的对象**，传字符串会被当成空库。
+    const lib = ModelLibrary.deserialize(raw as ModelLibraryData)
+    return lib.get(id) ? id : FALLBACK_MODEL_ID
   } catch {
-    return BUILTIN_MODELS[0].id
+    return FALLBACK_MODEL_ID
   }
 }
 
 /**
  * 切换激活模型：写回 pet-model-library.json 的 currentId。
- * 注意只改库记录，不触碰磁盘文件；内置 Mao 恒定可选。
+ * 注意只改库记录，不触碰磁盘文件；内置保底形象恒定可选。
  * 返回 false 表示目标模型不存在于库中。
  */
 export function setActiveModel(userDataDir: string, modelId: string): boolean {
@@ -338,7 +368,7 @@ export function setActiveModel(userDataDir: string, modelId: string): boolean {
 
 /**
  * 卸载模型：从库中移除 + 删除磁盘模型目录。
- * 内置 Mao 拒绝删除。当前激活模型被删时，库会自动回退到 Mao。
+ * 内置保底形象拒绝删除。当前激活模型被删时，库会自动回退到保底形象。
  */
 export async function uninstallModel(userDataDir: string, modelId: string): Promise<{ ok: boolean; error?: string }> {
   const cleanId = sanitizeModelName(modelId)

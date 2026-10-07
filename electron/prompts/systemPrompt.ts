@@ -23,6 +23,9 @@ import { peekRouteHint, classifyByRules } from '../orchestration/routingDecider'
 // 工具是给模型「可以调」的；而模糊判定必须在**首字响应之前**发生——
 // 模型一旦开始输出，就已经在猜了。写进 prompt 才能拦住「先想再答」的那个瞬间。
 import { assessVagueness, renderClarificationRule, hasSpecificTarget } from '../orchestration/vagueTaskGuard'
+// 💻 Coding 纪律注入（v1.1 接线）—— 原 coding-mode-injector.ts 是死代码，
+//   8 套场景纪律（三步闭环 / 先复现再修复 / 跑测试验证）从未进入模型。
+import { buildCodingDisciplinePrompt, detectCodingScenario } from './coding-mode-injector'
 import type { AgentRunConfig } from '../tools/types'
 import type { AgentMode, TeamMemberId } from '../agentTeamTypes'
 
@@ -542,6 +545,40 @@ export function buildSystemPrompt(
       }
     }
   } catch { /* 路由提示失败绝不能影响主流程 */ }
+
+  // 💻 Coding 纪律注入（v1.1 接线）
+  //
+  // 【要解决的问题】用户反馈「agent 不会写代码」。根因不是缺工具 ——
+  //   agent 模式本就含 file_read / file_write / file_edit / shell_exec；
+  //   而是两条纪律都没接上：
+  //     ① 路由提示（「这活该派给 Yak」）没传到模型（见 agentRunner 漏传 userInput）；
+  //     ② coding-mode-injector.ts 的 8 套执行纪律是**死代码** —— 模型写代码时
+  //        缺少「先读→再改→再验证」的强制流程，容易产出未经验证的代码。
+  //
+  // 【这里的闸门】仅当 classifyByRules 高置信判为编程/审查任务时才注入，
+  //   避免「如何实现财务自由」这类普通对话被误注入编程纪律。
+  try {
+    const userText = options?.userInput
+    if (options?.codingMode !== false && userText && userText.trim()) {
+      const verdict = classifyByRules({ text: userText })
+      const isCodingTask = verdict.confidence === 'high'
+        && (verdict.target === 'yak' || verdict.target === 'recha')
+      if (isCodingTask) {
+        // 先按场景精确匹配；匹配不到再退回「通用编程」纪律
+        const scenario = detectCodingScenario(userText)
+        const discipline = buildCodingDisciplinePrompt(userText, scenario ?? 'general')
+        if (discipline) {
+          parts.push(`\n${discipline}`)
+          parts.push(
+            '\n> ⚠️ 本轮是编程任务：**必须真的动手改文件**' +
+            '（file_read → file_edit → shell_exec 验证），不要只给建议或代码片段。' +
+            '若后台成员未配置，你**自己**用文件与终端工具完成，' +
+            '不要因为「某个功能不可用」就拒绝执行。',
+          )
+        }
+      }
+    }
+  } catch { /* Coding 纪律注入失败绝不能影响主流程 */ }
 
   // 情绪状态注入
   // 增强 — 不再是静态标注，而是带风格指引的情绪指令

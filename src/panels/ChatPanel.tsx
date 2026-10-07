@@ -55,6 +55,7 @@ import SubagentCards from '../components/SubagentCards'
 import TheaterMount from '../components/TheaterMount'
 import { TASK_TYPE_CARDS, TEAM_MEMBERS, type TaskType } from '../data/agentRoles'
 import ContextUsageIndicator from '../components/ContextUsageIndicator'
+import PermissionSelector, { usePermission } from '../components/PermissionSelector'
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
 import type { LuckySettingsConfig } from '../components/LuckyModeSettings'
@@ -92,6 +93,8 @@ async function maybeAutoOpenBrowserOnReply(text: string): Promise<void> {
 }
 
 export default function ChatPanel() {
+  // 🔒 三档权限：主进程持久化的全局档位（Lumina / 团队 / 子代理共用）
+  const { perm, setTier: setPermTier } = usePermission()
   const conversations = useStore(s => s.conversations)
   const activeConversationId = useStore(s => s.activeConversationId)
     const createConversation = useStore(s => s.createConversation)
@@ -2683,8 +2686,10 @@ export default function ChatPanel() {
             marginTop: 4, fontSize: 10, color: 'var(--text-secondary)',
             display: 'flex', justifyContent: 'space-between',
           }}>
-            <span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {sttListening ? '🎤 语音输入中...' : 'Shift+Enter 换行 · /help 查看命令'}
+              {/* 🔒 三档权限：与群聊共用同一个主进程档位 */}
+              <PermissionSelector perm={perm} onChange={setPermTier} />
             </span>
             <span style={{ cursor: 'default', color: 'var(--text-secondary)' }}>
               {getAgentRole(selectedRole).name}</span>

@@ -9,6 +9,7 @@
 
 import type { NewsItem } from './newsCollector'
 import type { FilteredItem } from './newsFilter'
+import type { DigestNarrative } from './newsNarrator'
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
@@ -164,24 +165,13 @@ export function groupByCategory(items: FilteredItem[]): Record<string, FilteredI
 // 邮件正文组装
 // ═══════════════════════════════════════════════════════════
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  tech: '💻',
-  finance: '💰',
-  trending: '🔥',
-  oss: '🔧',
-  general: '📰',
-}
-
-const CATEGORY_LABEL: Record<string, string> = {
-  tech: '科技前沿',
-  finance: '财经资讯',
-  trending: '热门话题',
-  oss: '开源项目',
-  general: '综合',
-}
-
 /**
  * 组装邮件正文（Markdown 格式）
+ *
+ * v1.1 两种形态：
+ *   - `narrated`（传了 narrative）：LLM 已接入 → 导读 + 逐条人话点评 + 链接
+ *   - `plain`（默认，narrative 为空）：**只给标题和网址**，不编不装。
+ *     用户没配 LLM 时，这是唯一诚实的输出——没有摘要就别假装有。
  */
 export function assembleDigestBody(
   filtered: FilteredItem[],
@@ -189,9 +179,11 @@ export function assembleDigestBody(
     title?: string
     showSource?: boolean
     maxItems?: number
+    /** LLM 叙述结果；给了就走叙述形态 */
+    narrative?: DigestNarrative | null
   },
 ): string {
-  const { title, showSource = true, maxItems = 20 } = options || {}
+  const { title, showSource = true, maxItems = 20, narrative = null } = options || {}
   const dateStr = new Date().toLocaleDateString('zh-CN', {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
   })
@@ -202,33 +194,45 @@ export function assembleDigestBody(
   }
 
   const sliced = filtered.slice(0, maxItems)
-  const groups = groupByCategory(sliced)
   const lines: string[] = [displayTitle, '']
 
-  // 分类输出
-  for (const [cat, items] of Object.entries(groups)) {
-    const emoji = CATEGORY_EMOJI[cat] || '📌'
-    const label = CATEGORY_LABEL[cat] || cat
-    lines.push(`### ${emoji} ${label}（${items.length} 条）`)
-    lines.push('')
-
-    for (let i = 0; i < items.length; i++) {
-      const f = items[i]
-      const scoreBar = '⭐'.repeat(Math.max(1, Math.round(f.relevanceScore / 20)))
-      const sourceTag = showSource ? `  _${f.item.source}_` : ''
-
-      lines.push(`**${i + 1}. ${f.item.title}**${sourceTag}`)
-      if (f.oneLiner) {lines.push(`   ${f.oneLiner}`)}
-      if (f.tags.length > 0) {lines.push(`   🏷️ ${f.tags.slice(0, 3).join(', ')} ${scoreBar}`)}
-      lines.push(`   📎 ${f.item.url}`)
-      lines.push('')
+  if (narrative) {
+    lines.push('## 📝 今日导读', '')
+    if (narrative.lead) { lines.push(narrative.lead, '') }
+    if (narrative.takeaway) {
+      lines.push(`> 💡 **${narrative.takeaway}**`, '')
     }
+    lines.push('---', '')
   }
 
-  // 脚注
+  // 逐条：叙述形态带点评，plain 形态只有标题 + 网址
+  const commentByIndex = new Map<number, string>()
+  if (narrative) {
+    for (const it of narrative.items) { commentByIndex.set(it.index, it.comment) }
+  }
+
+  sliced.forEach((f, i) => {
+    const sourceTag = showSource ? `  _${f.item.source}_` : ''
+    if (narrative) {
+      lines.push(`**${i + 1}. ${f.item.title}**${sourceTag}`)
+      const c = commentByIndex.get(i)
+      if (c) { lines.push(`   ${c}`) }
+      lines.push(`   📎 ${f.item.url}`)
+    } else {
+      // 极简：一行标题、一行网址，不堆分类、不打星、不编标签
+      lines.push(`**${i + 1}. ${f.item.title}**`)
+      lines.push(`${f.item.url}`)
+    }
+    lines.push('')
+  })
+
   lines.push('---')
   lines.push(`📬 Lumina 智能推送 · ${new Date().toLocaleTimeString('zh-CN')}`)
-  lines.push('💡 前往设置 → 新闻订阅 调整兴趣偏好')
+  if (narrative) {
+    lines.push('💡 前往设置 → 新闻订阅 调整兴趣偏好')
+  } else {
+    lines.push('💡 接入 LLM 后 Lumina 会为你写导读（设置 → LLM 模型）')
+  }
 
   return lines.join('\n')
 }
@@ -238,7 +242,7 @@ export function assembleDigestBody(
  */
 export function assembleDigestHTML(
   filtered: FilteredItem[],
-  options?: { title?: string; maxItems?: number; bilingual?: boolean },
+  options?: { title?: string; maxItems?: number; bilingual?: boolean; narrative?: DigestNarrative | null },
 ): string {
   const { bilingual = false } = options || {}
   const md = assembleDigestBody(filtered, options)
@@ -269,17 +273,21 @@ export function assembleDigestHTML(
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/^---$/gm, '<hr>')
+    // 引用块（叙述形态的「值得关注」）
+    .replace(/^&gt;\s*(.+)$/gm, '<blockquote style="margin:8px 0;padding:8px 12px;border-left:3px solid #8b5cf6;background:#f5f3ff;border-radius:4px;color:#6d28d9;">$1</blockquote>')
     .replace(/^📎 (.+)$/gm, '📎 <a href="$1">$1</a>')
+    // 极简形态：裸 URL 单独一行 → 也变成可点链接
+    .replace(/^(https?:\/\/\S+)$/gm, '<a href="$1">$1</a>')
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
 
-  return `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #333;">
+  return `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.7;">
 <p>${html}</p>
 </div>`
 }

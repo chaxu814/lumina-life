@@ -231,7 +231,13 @@ async function trySendSmtpMail(subject: string, body: string, htmlBody?: string)
   }
 }
 
-export function sendMail(subject: string, body: string, priority: 'normal' | 'important' = 'normal'): AgentMail {
+export function sendMail(
+  subject: string,
+  body: string,
+  priority: 'normal' | 'important' = 'normal',
+  /** 可选的富文本版（新闻简报等会传 Markdown→HTML 的产物）；SMTP 优先用它 */
+  htmlBody?: string,
+): AgentMail {
   const mail: AgentMail = {
     id: 'mail-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
     subject,
@@ -260,11 +266,13 @@ export function sendMail(subject: string, body: string, priority: 'normal' | 'im
     }
   }
 
+  // 调用方（如新闻简报）已经准备了富文本版就用它；否则把 Markdown 原文
+  // 包一层 <pre>，保证换行不丢——不要拿它做正文渲染，那是渲染进程的事。
   const htmlFrom = body || ''
-  const htmlBody = `<!doctype html><html><body><pre style="font:14px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space:pre-wrap;">${htmlFrom.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`
+  const fallbackHtml = `<!doctype html><html><body><pre style="font:14px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space:pre-wrap;">${htmlFrom.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`
 
   // v2.7: 可选 SMTP 外发，不阻塞本地存储/通知
-  trySendSmtpMail(subject, body, htmlBody).catch((err) => {
+  trySendSmtpMail(subject, body, htmlBody || fallbackHtml).catch((err) => {
     console.warn('[MailStore] sendSmtpMail 调用异常:', err)
   })
 

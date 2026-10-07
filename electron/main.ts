@@ -153,6 +153,8 @@ import { registerDeepResearchIpc } from './ipc/deepResearchIpc'  // 🔬 v3.11
 import { registerCodingModeIpc } from './ipc/codingModeIpc'
 import { registerDiagnosticsIpc } from './ipc/diagnosticsIpc'
 import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'
+import { registerPermissionIpc } from './ipc/permissionIpc'
+import { registerEmotionAuditIpc, registerVisibilityIpc } from './ipc/emotionAuditIpc'
 import { registerPlatformIpc } from './ipc/platformIpc'
 import { registerPushIpc } from './ipc/pushIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
 import { allFlags, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
@@ -161,6 +163,7 @@ import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系
 import { registerLuckyModeIpc } from './ipc/luckyModeIpc'
 import { registerArtifactIpc } from './ipc/artifactIpc'  // task workspace artifact file ops
 import { registerModelStoreIpc } from './ipc/modelStoreIpc'  // v0.2 Live2D model store (local mode)
+import { registerSpriteIpc } from './ipc/spriteIpc'  // 🎨 桌宠 UGC 精灵表规格与 AI 提示词
 import { registerSkillRuntimeIpc } from './ipc/skillRuntimeIpc'  // v0.2 third-party skill runtime
 import { registerMemoryFederationIpc } from './ipc/memoryFederationIpc'  // proposal3: memory federation
 import { registerWebdavSyncIpc } from './ipc/webdavSyncIpc'  // proposal4: webdav sync
@@ -707,10 +710,14 @@ for (const { id } of orch.listRunners()) {
 
   registerThemeIpc()                                   // 🎨 theme skin ecosystem
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
+  registerPermissionIpc()                              // 🔒 三档权限（仅可查看/工作区内修改/完全权限）
+  registerEmotionAuditIpc()                            // 🔍 情绪收紧审计（「她为什么不帮我」的可解释层）
+  registerVisibilityIpc()                              // 👁 可见性分档（陪伴 / 协作 / 审计）
   registerPlatformIpc()
   registerPushIpc()
   registerArtifactIpc(() => mainWindow)
   registerModelStoreIpc()                            // v0.2 Live2D model store (local/offline)
+  registerSpriteIpc()                                // 🎨 桌宠 UGC 精灵表规格与 AI 提示词
   registerSkillRuntimeIpc()                          // v0.2 third-party skill runtime (sandbox+approval+scan)            // task workspace artifact file ops
   registerMemoryFederationIpc()                       // proposal3: memory federation
   registerWebdavSyncIpc()                            // proposal4: webdav sync                                 // cross-platform feature matrix IPC

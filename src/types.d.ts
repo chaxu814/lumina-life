@@ -58,6 +58,23 @@ declare global {
       /** 嵌套形状：SwimlaneCanvas 按 `window.luminaAPI.swimlane.get()` 取 */
       swimlane: { get: () => Promise<any> }
       /**
+       * 🩺 系统诊断 / 模型体检。
+       * 【为什么之前是坏的】DiagnosticsPanel 调的是 `window.electronAPI.ipcInvoke`，
+       *   而这个通用通道 preload 里从不存在 —— 面板静默退回 mockData（假数据）。
+       *   主进程的 diagnostics:* 通道也一个都没暴露。2026-10-07 补上。
+       */
+      diagnostics: {
+        summary: () => Promise<any>
+        quickCheck: () => Promise<any>
+        timeline: (limit?: number) => Promise<any>
+        latency: (windowMinutes?: number) => Promise<any>
+        toolCalls: (limit?: number) => Promise<any>
+        clear: () => Promise<any>
+        exportReport: () => Promise<any>
+        modelHealth: (params: { modelName?: string; baseUrl?: string; userContextWindow?: number | null }) => Promise<any>
+        modelHealthText: (params: { modelName?: string; baseUrl?: string; userContextWindow?: number | null }) => Promise<string>
+      }
+      /**
        * 团队情绪。
        * 【为什么之前声明了却没实现】EmotionDashboardPanel 用 `?.` 调它，
        *   而 preload 从来没有这个方法 —— 所以它永远静默 no-op，面板空白。

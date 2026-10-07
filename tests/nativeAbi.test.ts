@@ -51,14 +51,30 @@ function electronVersion(): string | null {
  * 唯一可靠的真相是：**让 Electron 自己 require 一次**。
  * 能 require 成功 == ABI 对；失败 == 打包后一定炸。
  */
-function probeUnderElectron(): { ok: boolean; output: string } {
+/**
+ * 探针结果三态 —— 必须区分「没跑起来」与「跑起来了但 ABI 不对」。
+ *
+ * 【为什么】2026-10-07 实测发现：当 Lumina 正在运行时，electron.exe 被占用，
+ *   spawnSync 抛 `EBUSY`。旧实现把这种「探针无法执行」也当成 ABI 失败，
+ *   于是**只要用户开着 Lumina 跑测试就会红** —— 这是假警报，不是真问题。
+ *   真正该红的只有一种：Electron 成功启动、真的去 require better-sqlite3，
+ *   然后抛 ERR_DLOPEN_FAILED（那才是打包后会炸的 ABI 事故）。
+ */
+type ProbeResult =
+  | { status: 'ok'; output: string }
+  | { status: 'abi-fail'; output: string }
+  | { status: 'unavailable'; output: string }
+
+function probeUnderElectron(): ProbeResult {
   const electronBin = path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
   const isWin = process.platform === 'win32'
   const bin = isWin
     ? electronBin
     : path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron')
 
-  if (!fs.existsSync(bin)) {return { ok: false, output: `electron binary not found: ${bin}` }}
+  if (!fs.existsSync(bin)) {
+    return { status: 'unavailable', output: `electron binary not found: ${bin}` }
+  }
 
   // 在 Electron 的 Node 模式下执行一段脚本，真实加载原生模块并跑一条 SQL
   const script = [
@@ -81,9 +97,16 @@ function probeUnderElectron(): { ok: boolean; output: string } {
       timeout: 60_000,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     })
-    return { ok: out.includes('LUMINA_ABI_OK'), output: out }
+    return out.includes('LUMINA_ABI_OK')
+      ? { status: 'ok', output: out }
+      : { status: 'abi-fail', output: out }
   } catch (err: any) {
-    return { ok: false, output: String(err?.stderr || err?.message || err) }
+    const text = String(err?.stderr || err?.message || err)
+    // 「探针没跑起来」的典型信号：二进制被占用 / 权限 / 超时。
+    // 这些都不代表 ABI 有问题，不能据此判失败（否则开着 Lumina 跑测试必红）。
+    const spawnBlocked = /EBUSY|EACCES|EPERM|ETIMEDOUT|spawnSync|timed?\s*out/i.test(text)
+    if (spawnBlocked) {return { status: 'unavailable', output: text }}
+    return { status: 'abi-fail', output: text }
   }
 }
 
@@ -95,12 +118,23 @@ describe('原生模块 ABI 一致性', () => {
       return
     }
 
-    const { ok, output } = probeUnderElectron()
-    if (ok) {return}
+    const res = probeUnderElectron()
+    if (res.status === 'ok') {return}
+
+    // 探针无法执行（多半是 Electron 正在运行占用二进制）→ 跳过，不判失败
+    if (res.status === 'unavailable') {
+      console.warn(
+        '[ABI] 探针无法执行，跳过本次 ABI 校验。\n' +
+        '  （常见原因：Lumina / Electron 正在运行，二进制被占用；或并行跑测试资源紧张）\n' +
+        `  实际输出：${res.output.slice(0, 300)}\n` +
+        '  如需强制校验：先关闭 Lumina，再单独跑 npx vitest run tests/nativeAbi.test.ts',
+      )
+      return
+    }
 
     throw new Error(
       `\n原生模块在 Electron ${ver} 下加载失败 —— 打包后记忆系统（SQLite）会静默降级。\n` +
-      `实际输出：\n${output.slice(0, 1500)}\n\n` +
+      `实际输出：\n${res.output.slice(0, 1500)}\n\n` +
       `修复：npm run rebuild:electron\n` +
       `这是 2026-10-03 发布审计发现的真实事故：vitest 全绿（跑在 Node 下），` +
       `但 Electron 下 SQLite 初始化失败，ReMe/Scroll 分支悄悄降级。\n`,

@@ -14,6 +14,116 @@ interface Mail {
 
 type FilterMode = 'all' | 'unread' | 'important' | 'archive'
 
+/* ── 邮件正文渲染 ──
+ *
+ * 之前直接 `{mail.body}` 填进 pre-wrap 容器，于是 `**加粗**`、`## 标题`、
+ * `📎 https://...` 这些标记原封不动糊在屏幕上（用户报的“只发网站”的一半原因）。
+ *
+ * 这里只渲染一小撮安全的 Markdown 子集，输出 React 元素而不是 HTML 字符串：
+ * 正文可能来自 LLM（新闻简报），用 dangerouslySetInnerHTML 等于把注入面打开。
+ */
+const BOLD_RE = /\*\*([^*]+)\*\*|__([^_]+)__/g
+const EM_RE = /(^|[\s(])_([^_]+)_/g
+
+function renderInline(text: string, keyBase: string): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+
+  // 1) 先切加粗（两个分支组：**[x]** / __[x]__）
+  const segments: Array<{ text: string; strong: boolean }> = []
+  let rest = text
+  let guard = 0
+  while (rest && guard++ < 200) {
+    BOLD_RE.lastIndex = 0
+    const m = BOLD_RE.exec(rest)
+    if (!m) { segments.push({ text: rest, strong: false }); break }
+    if (m.index > 0) { segments.push({ text: rest.slice(0, m.index), strong: false }) }
+    segments.push({ text: m[1] ?? m[2] ?? '', strong: true })
+    rest = rest.slice(m.index + m[0].length)
+  }
+
+  // 2) 再在非加粗片段里处理 _斜体_ / *斜体*
+  segments.forEach((seg, si) => {
+    if (seg.strong) {
+      if (seg.text) { out.push(<strong key={`${keyBase}-b${si}`}>{seg.text}</strong>) }
+      return
+    }
+    seg.text.split(EM_RE).forEach((p, pi) => {
+      if (pi % 3 === 2) { out.push(<em key={`${keyBase}-i${si}-${pi}`}>{p}</em>) }
+      else if (p) { out.push(p) }
+    })
+  })
+
+  return out
+}
+
+function MailBody({ body }: { body: string }) {
+  const lines = (body || '').split('\n')
+
+  return (
+    <div>
+      {lines.map((raw, i) => {
+        const line = raw.replace(/\s+$/, '')
+        if (!line.trim()) { return <div key={i} style={{ height: 8 }} /> }
+
+        // 分隔线
+        if (/^---+$/.test(line.trim())) {
+          return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border-light)', margin: '12px 0' }} />
+        }
+        // 标题
+        const h = /^(#{1,3})\s+(.*)$/.exec(line)
+        if (h) {
+          const size = [16, 14.5, 13.5][h[1].length - 1]
+          return (
+            <div key={i} style={{
+              fontSize: size, fontWeight: 700, color: 'var(--text-primary)',
+              margin: i === 0 ? '0 0 8px' : '12px 0 6px', lineHeight: 1.4,
+            }}>
+              {renderInline(h[2], `h${i}`)}
+            </div>
+          )
+        }
+        // 引用块（LLM 叙述里的「值得关注」）
+        if (/^>\s?/.test(line)) {
+          return (
+            <div key={i} style={{
+              margin: '8px 0', padding: '8px 12px', borderRadius: 6,
+              borderLeft: '3px solid var(--accent-500)',
+              background: 'var(--accent-50)', color: 'var(--text-primary)',
+            }}>
+              {renderInline(line.replace(/^>\s?/, ''), `q${i}`)}
+            </div>
+          )
+        }
+        // 链接：📎 https://… 或整行裸 URL
+        const urlLine = /^(?:📎\s*)?(https?:\/\/\S+)$/.exec(line.trim())
+        if (urlLine) {
+          return (
+            <div key={i} style={{ margin: '2px 0 8px' }}>
+              <a href={urlLine[1]} target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--accent-primary)', fontSize: 12, wordBreak: 'break-all' }}>
+                {line.trim().replace(/^📎\s*/, '')}
+              </a>
+            </div>
+          )
+        }
+        // 页脚（📬 / 💡）——压暗压小，不跟正文抢注意力
+        if (/^(📬|💡|📭)/.test(line.trim())) {
+          return (
+            <div key={i} style={{ fontSize: 11, color: 'var(--text-tertiary, var(--text-muted))', margin: '2px 0' }}>
+              {renderInline(line, `f${i}`)}
+            </div>
+          )
+        }
+        return (
+          <div key={i} style={{ margin: '2px 0', whiteSpace: 'pre-wrap' }}>
+            {renderInline(line, `p${i}`)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function MailPanel() {
   const [mails, setMails] = useState<Mail[]>([])
   const [archived, setArchived] = useState<Mail[]>([])
@@ -390,10 +500,9 @@ export default function MailPanel() {
                       fontSize: 13,
                       lineHeight: 1.75,
                       color: 'var(--text-secondary)',
-                      whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                     }}>
-                      {mail.body}
+                      <MailBody body={mail.body} />
                       {/* 邮件底部操作 */}
                       <div style={{
                         marginTop: 12, display: 'flex', gap: 8,

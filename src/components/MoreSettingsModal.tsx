@@ -12,6 +12,7 @@ import CustomAgentPanel from '../panels/CustomAgentPanel'
 import SkillsPanel from '../panels/SkillsPanel'
 import UsagePanel from '../panels/UsagePanel'
 import DiagnosticsPanel from '../panels/DiagnosticsPanel'
+import SpriteGalleryPanel from '../panels/SpriteGalleryPanel'  // 🎨 桌宠工坊 · UGC 精灵表
 import TestCoveragePanel from '../panels/TestCoveragePanel'
 import SkillDevPanel from '../panels/SkillDevPanel'
 // 🔬 2026-10-04：两个新面板写完时既没进 panelMap 也没进这里，
@@ -43,6 +44,7 @@ const SIDEBAR_ITEMS = [
   { id: 'modelStore',  icon: '🪆', label: 'Live2D 模型' },
   { id: 'skills',      icon: '⚡',  label: '技能管理' },
   { id: 'swimlane',    icon: '🛳️', label: '团队泳道' },
+  { id: 'spritegallery', icon: '🎨', label: '桌宠工坊' },
   { id: 'memorytrial', icon: '⚖️', label: '记忆审判台' },
   { id: 'emotionsdash', icon: '🎭', label: '情绪仪表盘' },
   { id: 'proactive', icon: '🔔', label: '主动推送' },
@@ -301,6 +303,7 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
             {activeSection === 'test'        && <TestCoveragePanel />}
             {activeSection === 'skilldev'    && <SkillDevPanel />}
   {activeSection === 'swimlane'    && <SwimlaneCanvas />}
+  {activeSection === 'spritegallery' && <SpriteGalleryPanel />}
   {activeSection === 'memorytrial' && <MemoryTrialBenchPanel />}
   {activeSection === 'emotionsdash' && <EmotionDashboardPanel />}
   {activeSection === 'proactive' && <ProactiveSettingsPanel />}

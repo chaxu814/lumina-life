@@ -24,7 +24,7 @@ import { getProviderManager } from '../core/providerManager'
 import { currentPlatformCaps } from './platformCaps'
 import { isEnabled as isFlagEnabled, allFlags as allPetFlags } from '../core/featureFlags'
 import type { AvatarKind } from './modelLibrary'
-import { BUILTIN_MODELS, getActiveModel, setActiveModel } from './modelLibrary'
+import { BUILTIN_MODELS, FALLBACK_ENTRY_REL, FALLBACK_MODEL_ID, getActiveModel, setActiveModel } from './modelLibrary'
 import { getRendererForKind, fallbackToBuiltin, guessKindFromEntry } from './avatarRenderer'
 import { detectEdge, calcPeekPosition, calcDockPosition, shouldSlideOut, resetPosition, DEFAULT_EDGE_SNAP, type EdgeSnapConfig, type EdgeSide } from './edgeSnap'
 import { getComputerUse } from '../computerUse'  // 已在主 bundle，静态引用消除 vite 重复 import 告警
@@ -253,10 +253,21 @@ function persistPetConfig(): void {
   s.config = config
   writePersistedPetState(s)
 }
-function loadPersistedPetModel(): 'Mao' | null {
+/**
+ * 读回上次选中的模型 id。
+ *
+ * 【历史迁移】曾内置过一个 Live2D 示例模型（Mao），因其受 Cubism SDK
+ * 再分发条款约束、不能随仓库分发，已从内置列表移除。这里把历史选择
+ * 迁移到零素材的程序化小猫，确保升级用户不会卡在「指向不存在模型」上。
+ */
+function loadPersistedPetModel(): string | null {
   const s = readPersistedPetState()
-  if (s.model === 'Hiyori') { s.model = 'Mao'; writePersistedPetState(s) }  // Hiyori（桃濑日和）已移除，历史选择自动迁移到 Mao
-  return s.model === 'Mao' ? s.model : null
+  const RETIRED = new Set(['Mao', 'Hiyori'])
+  if (typeof s.model === 'string' && RETIRED.has(s.model)) {
+    s.model = FALLBACK_MODEL_ID
+    writePersistedPetState(s)
+  }
+  return typeof s.model === 'string' && s.model ? s.model : null
 }
 function persistPetModel(model: string): void {
   const s = readPersistedPetState()
@@ -938,12 +949,12 @@ function currentModelEntryRel(): string {
     const builtin = BUILTIN_MODELS.find(b => b.id === id)
     if (builtin) {return builtin.entryRel}
     const libPath = path.join(app.getPath('userData'), 'pet-model-library.json')
-    if (!fs.existsSync(libPath)) {return 'Mao/mao_pro.model3.json'}
+    if (!fs.existsSync(libPath)) {return FALLBACK_ENTRY_REL}
     const data = JSON.parse(fs.readFileSync(libPath, 'utf8'))
     const entry = Array.isArray(data?.custom) ? data.custom.find((c: any) => c.id === id) : null
-    return entry?.entryRel || 'Mao/mao_pro.model3.json'
+    return entry?.entryRel || FALLBACK_ENTRY_REL
   } catch {
-    return 'Mao/mao_pro.model3.json'
+    return FALLBACK_ENTRY_REL
   }
 }
 
@@ -1880,12 +1891,12 @@ export function registerPetIpc(): void {
     }
   })
 
-  // 渲染页上报模型加载失败：主进程安全回退到内置 Mao
+  // 渲染页上报模型加载失败：主进程安全回退到保底形象
   ipcMain.on('pet:model-load-failed', (_e, info: { modelId?: string; error?: string }) => {
     try {
-      console.warn('[PetWindow] 模型加载失败，回退 Mao:', info?.modelId, info?.error)
-      setActiveModel(app.getPath('userData'), 'Mao')
-      persistPetModel('Mao')
+      console.warn('[PetWindow] 模型加载失败，回退保底形象:', info?.modelId, info?.error)
+      setActiveModel(app.getPath('userData'), FALLBACK_MODEL_ID)
+      persistPetModel(FALLBACK_MODEL_ID)
       if (petWindow && !petWindow.isDestroyed()) {
         loadPetHtml().then(() => setWindowClickThrough(config.clickThrough)).catch(() => {})
       }

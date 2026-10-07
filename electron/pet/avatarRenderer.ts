@@ -133,10 +133,11 @@ export function readyKinds(): AvatarKind[] {
 
 // ── 模型路径解析纯函数 ────────────────────────────────────────
 
-/** 回退到内置 Mao（任何异常路径下的安全默认值） */
+/** 回退到内置保底形象（任何异常路径下的安全默认值）。
+ *  保底形象是程序化小猫（Cat），不依赖任何外部素材，零授权风险。 */
 export function fallbackToBuiltin(): { modelId: string; kind: AvatarKind; entryRel: string } {
-  const mao = BUILTIN_MODELS.find(b => b.id === 'Mao') || BUILTIN_MODELS[0]
-  return { modelId: mao.id, kind: (mao.kind as AvatarKind) || 'live2d', entryRel: mao.entryRel }
+  const m = BUILTIN_MODELS[0]
+  return { modelId: m.id, kind: (m.kind as AvatarKind) || 'cat', entryRel: m.entryRel }
 }
 
 /**

@@ -34,6 +34,8 @@ import MemoryTrialBenchPanel from './panels/MemoryTrialBenchPanel'  // 记忆审
 //   ProactiveSettingsPanel 的后端 pushIpc 一直都在，只是没入口。
 //   现在补齐后端 + 挂载。
 import EmotionDashboardPanel from './panels/EmotionDashboardPanel'  // 情绪仪表盘
+import DiagnosticsPanel from './panels/DiagnosticsPanel'  // 🩺 系统诊断 + 模型体检（2026-10-07 接上）
+import SpriteGalleryPanel from './panels/SpriteGalleryPanel'  // 🎨 桌宠工坊 · UGC 精灵表（2026-10-07）
 import ProactiveSettingsPanel from './panels/ProactiveSettingsPanel'  // 主动推送设置
 import Toast from './components/Toast'
 import { showToast } from './components/Toast'
@@ -125,6 +127,8 @@ const panelMap: Record<string, React.FC> = {
   memorytrial: MemoryTrialBenchPanel, // ⚖️ 记忆审判台（2026-10-04 接上）
   emotionsdash: EmotionDashboardPanel, // 🎭 情绪仪表盘（2026-10-04 补后端后接上）
   proactive: ProactiveSettingsPanel,  // 🔔 主动推送设置（2026-10-04 接上）
+  diagnostics: DiagnosticsPanel,      // 🩺 系统诊断 + 模型体检（2026-10-07 接上，此前是孤儿面板）
+  spritegallery: SpriteGalleryPanel,  // 🎨 桌宠工坊 · UGC 精灵表（2026-10-07）
 }
 
 export default function App() {
@@ -325,6 +329,29 @@ export default function App() {
         resolved = theme
       }
       document.documentElement.setAttribute('data-theme', resolved)
+
+      // 🐛 关键：data-theme 只是「选择器」，真正把颜色打到 <html> 上的是
+      // themeClient 注入的 **inline custom property**，而 inline 的优先级
+      // 高于 global.css 的 [data-theme="dark"] 块。
+      // 也就是说：只设 data-theme 是不够的 —— 只要命名主题还停在「默认浅色」，
+      // 它注入的 --surface-0:#ffffff / --text-primary:#172b4d 会把深色模式
+      // 整个盖回浅色（用户报的「深色主题下大部分还是浅色」就是这个）。
+      // 所以这里必须同时把命名主题切到对应的内置深/浅色，两套系统才不打架。
+      const api = (window as any).luminaAPI
+      if (api?.themeApply && api?.themeGetCurrent) {
+        // 但别把用户选的命名主题（如「暗夜紫」）盖回「默认深色」——
+        // 启动时 store.theme 也会跑这个 effect，无脑 apply 会丢用户选择。
+        // 规则：当前命名主题已经是同明暗的**非默认**主题，就尊重它。
+        api.themeGetCurrent()
+          .then((res: any) => {
+            const cur = res?.theme
+            if (cur && cur.isDark === (resolved === 'dark') && cur.name !== '默认浅色' && cur.name !== '默认深色') {
+              return // 用户的主题与当前明暗一致，不动它
+            }
+            return api.themeApply(resolved === 'dark' ? '默认深色' : '默认浅色')
+          })
+          .catch(() => { /* 主进程未就绪 */ })
+      }
     }
     applyTheme()
     // 跟随系统变化

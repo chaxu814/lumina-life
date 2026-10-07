@@ -27,6 +27,7 @@
 // ============================================================
 
 import type { TeamMemberId } from '../agentTeamTypes'
+import { analyzeClarity } from './clarifyScope'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -74,8 +75,7 @@ export function peekRouteHint(userText: string): string {
 }
 
 /** 测试辅助：清空缓存 */
-export function __clearRouteHintCache(): void {
-  _routeHintCache.clear()
+export function __clearRouteHintCache(): void {  _routeHintCache.clear()
 }
 
 function setRouteHint(userText: string, hint: string): void {
@@ -113,6 +113,16 @@ export function warmRouteHint(
 ): void {
   const text = (userText || '').trim()
   if (!text) {return}
+
+  // 🆕 先判「这句话是不是没头没尾」。这一步**优先于路由**：
+  // 模糊任务就算路由判得再准，派人过去也只是让 Yak 猜一个方向闷头做。
+  // 所以先把澄清提示写进同一个缓存槽 —— buildSystemPrompt 只需要读 peekRouteHint，
+  // 不用再改签名。
+  const clarity = analyzeClarity(text)
+  if (clarity.kind === 'vague') {
+    setRouteHint(text, `${clarity.hint}\n\n可以这样问：\n${clarity.questions.map(q => `- ${q}`).join('\n')}`)
+    return
+  }
 
   // 纯规则已经能定的，直接写缓存，不做 LLM 调用
   try {

@@ -13,19 +13,25 @@ import ModelPickerModal from './ModelPickerModal'
  */
 interface LLMProviderDef {
   id: string; name: string; url: string; model: string; free?: boolean
+  /** 厂商缩略图（本地打包，离线可用；见 public/providers/LICENSE-NOTICE.md） */
+  logo?: string
+  /** 无图时的字标兜底：取 name 首字符 */
+  mark?: string
+  /** 兜底字标底色 */
+  markBg?: string
 }
 const LLM_PROVIDERS: LLMProviderDef[] = [
-  { id: 'lmstudio', name: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '' },
-  { id: 'ollama', name: 'Ollama (本地)', url: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' },
-  { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  { id: 'claude', name: 'Anthropic Claude', url: 'https://api.anthropic.com', model: 'claude-sonnet-4-5-20250929' },
-  { id: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash' },
-  { id: 'azure', name: 'Azure OpenAI', url: 'https://YOUR_RESOURCE.openai.azure.com', model: 'gpt-4o' },
-  { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { id: 'qwen', name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-  { id: 'zhipu', name: '智谱 GLM', url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4' },
-  { id: 'siliconflow', name: '硅基流动', url: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-7B-Instruct' },
-  { id: 'custom', name: '自定义', url: '', model: '' },
+  { id: 'lmstudio', name: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '', logo: 'providers/lmstudio.ico' },
+  { id: 'ollama', name: 'Ollama (本地)', url: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b', logo: 'providers/ollama.svg' },
+  { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o', logo: 'providers/openai.svg' },
+  { id: 'claude', name: 'Anthropic Claude', url: 'https://api.anthropic.com', model: 'claude-sonnet-4-5-20250929', logo: 'providers/claude.svg' },
+  { id: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash', logo: 'providers/gemini.svg' },
+  { id: 'azure', name: 'Azure OpenAI', url: 'https://YOUR_RESOURCE.openai.azure.com', model: 'gpt-4o', logo: 'providers/azure.svg' },
+  { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', logo: 'providers/deepseek.svg' },
+  { id: 'qwen', name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', logo: 'providers/qwen.svg' },
+  { id: 'zhipu', name: '智谱 GLM', url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4', logo: 'providers/zhipu.ico' },
+  { id: 'siliconflow', name: '硅基流动', url: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-7B-Instruct', logo: 'providers/siliconflow.ico' },
+  { id: 'custom', name: '自定义', url: '', model: '', mark: '✎', markBg: '#64748b' },
 ]
 
 const AGENT_META = [
@@ -34,23 +40,58 @@ const AGENT_META = [
   { id: 'recha', name: '热茶', icon: '🫖', desc: '审查员 · 挑错/反面论证' },
 ]
 
+/* ── 厂商缩略图 ──
+ * 图形放白底小方块里：厂商 logo 多为黑色单色（simple-icons），
+ * 白底在浅色/深色两套主题下都清晰，不用为每个厂商维护两套图。
+ * 图裂了（文件缺失/格式不支持）自动退到字标，不留破图。
+ */
+function ProviderLogo({ p, size = 15 }: { p: LLMProviderDef; size?: number }) {
+  const [broken, setBroken] = useState(false)
+  if (p.logo && !broken) {
+    return (
+      <img
+        src={p.logo}
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+        onError={() => setBroken(true)}
+        style={{
+          width: size, height: size, objectFit: 'contain', flexShrink: 0,
+          background: '#fff', borderRadius: 4, padding: 1,
+          border: '1px solid var(--border-light)',
+        }}
+      />
+    )
+  }
+  return (
+    <span style={{
+      width: size, height: size, flexShrink: 0, borderRadius: 4,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.68), lineHeight: 1, color: '#fff',
+      background: p.markBg || '#94a3b8', fontWeight: 700,
+    }} aria-hidden>
+      {p.mark || p.name.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
 /* ── Provider 按钮 ── */
 function ProviderBtn({ p, active, onClick }: {
-  p: { id: string; name: string; free?: boolean }
+  p: LLMProviderDef
   active: boolean; onClick: () => void
 }) {
   const { t } = useTranslation()
   return (
-    <button onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: active ? 600 : 400,
+    <button onClick={onClick} title={p.name} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '4px 12px 4px 6px', borderRadius: 8, fontSize: 11, fontWeight: active ? 600 : 400,
       border: `1.5px solid ${active ? '#3b82f6' : 'var(--border-light)'}`,
       background: active ? 'var(--accent-50)' : 'var(--surface-0)',
       color: active ? '#2563eb' : 'var(--text-secondary)',
       cursor: 'pointer', transition: 'all 0.15s',
     }}>
-      {active ? <span style={{ color: '#3b82f6', fontSize: 11 }}>●</span>
-              : <span style={{ color: '#d1d5db', fontSize: 11 }}>○</span>}
+      <ProviderLogo p={p} />
       {p.name}
       {p.free && (
         <span style={{ fontSize: 9, fontWeight: 700, background: '#22c55e', color: '#fff', borderRadius: 4, padding: '0 5px', lineHeight: '16px', marginLeft: 2 }}>

@@ -117,8 +117,20 @@ describe('providerPersistence · 启动自愈', () => {
   })
 })
 
-describe('providerPersistence · 当前机器配置一致性', () => {
-  it('两个配置文件不再漂移（若都在本机）', () => {
+describe('providerPersistence · 当前机器配置一致性（本机诊断，默认跳过）', () => {
+  // 【为什么默认跳过】
+  //   这条断言读的是 APPDATA 下的**真实运行时配置文件**，属于「本机环境状态」，
+  //   不是「代码正确性」：
+  //     · 裸机（无配置文件）→ 本来就 return，不会红；
+  //     · 但作者本机 / 任何配过 Lumina 的机器，一旦两源漂移就会红 ——
+  //       而 CI 和他人 clone 无法复现，等于把「你的本地状态」当成「代码缺陷」。
+  //   代码层面的自愈逻辑由上方 '启动自愈' 区块守护（那才是 CI 该守的）。
+  //
+  //   需要人工体检本机是否漂移时：
+  //     LUMINA_CHECK_LOCAL_CONFIG=1 npx vitest run tests/providerPersistence.test.ts
+  const enabled = process.env.LUMINA_CHECK_LOCAL_CONFIG === '1'
+
+  it.skipIf(!enabled)('两个配置文件不再漂移（本机诊断）', () => {
     const base = process.env.APPDATA
     if (!base) { return }   // 非 Windows 跳过
     const p1 = path.join(base, 'lumina-life', 'lumina-providers.json')
@@ -132,8 +144,14 @@ describe('providerPersistence · 当前机器配置一致性', () => {
     const a = agents.lumina
     if (!p || !a?.endpoint) { return }
 
-    // 设置面板显示的，必须就是 Agent 实际会用的
-    expect(p.baseUrl, 'provider 与 agent 的 endpoint 漂移了').toBe(a.endpoint)
-    expect(p.model, 'provider 与 agent 的 model 漂移了').toBe(a.model)
+    // 设置面板显示的，必须就是 Agent 实际会用的。
+    // 漂移时给出可操作的修复提示（而不是一句干巴巴的 toBe 失败）。
+    expect(
+      { baseUrl: p.baseUrl, model: p.model },
+      `provider（设置面板）与 agent（实际调用）漂移了 —— 面板显示的模型不是真正在跑的模型。\n` +
+      `  设置面板: baseUrl=${p.baseUrl} model=${p.model}\n` +
+      `  实际调用: endpoint=${a.endpoint} model=${a.model}\n` +
+      `  修复：重启 Lumina（启动自愈会以 agent 为准修正 provider），或手动把 provider 的 model 改成 agent 的值。`,
+    ).toEqual({ baseUrl: a.endpoint, model: a.model })
   })
 })

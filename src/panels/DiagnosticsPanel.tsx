@@ -1,17 +1,33 @@
 import React, { useEffect, useState, useCallback } from 'react'
 
 // ── IPC 调用 ──────────────────────────────────────────
+//
+// 🔧 2026-10-07：原先走 `window.electronAPI.ipcInvoke` —— 这个通用通道
+//   preload 里**从不存在**，于是面板一直静默退回 mockData（假数据），
+//   用户看到的"诊断"全是编的。现在改为调用正式暴露的
+//   `window.luminaAPI.diagnostics.*`（见 preload.ts 的 diagnostics 命名空间）。
+
+const CHANNEL_TO_METHOD: Record<string, string> = {
+  'diagnostics:summary': 'summary',
+  'diagnostics:quick-check': 'quickCheck',
+  'diagnostics:timeline': 'timeline',
+  'diagnostics:latency': 'latency',
+  'diagnostics:tool-calls': 'toolCalls',
+  'diagnostics:clear': 'clear',
+  'diagnostics:export-report': 'exportReport',
+}
 
 async function ipcInvoke<T>(channel: string, ...args: any[]): Promise<T> {
-  // @ts-ignore — window.electronAPI 由 preload.js 注入
-  const api = (window as any).electronAPI || (window as any).ipcInvoke
-  if (api?.ipcInvoke) {
-    return api.ipcInvoke(channel, ...args)
+  const api = (window as any).luminaAPI?.diagnostics
+  const method = CHANNEL_TO_METHOD[channel]
+  if (api && method && typeof api[method] === 'function') {
+    return api[method](...args) as Promise<T>
   }
-  if (typeof api === 'function') {
-    return api(channel, ...args)
-  }
-  console.warn('[DiagnosticsPanel] IPC 不可用，使用模拟数据')
+  // 兜底：某些环境可能仍暴露通用通道
+  const generic = (window as any).electronAPI || (window as any).ipcInvoke
+  if (generic?.ipcInvoke) {return generic.ipcInvoke(channel, ...args)}
+  if (typeof generic === 'function') {return generic(channel, ...args)}
+  console.warn('[DiagnosticsPanel] diagnostics IPC 不可用，使用模拟数据')
   return mockData(channel, ...args) as T
 }
 
@@ -64,6 +80,51 @@ interface LatencyBucket {
   count: number
 }
 
+// ── 🩺 模型体检报告（对应 electron/core/modelHealthReport.ts）──
+//   「本地 LLM 自适应容错」的对外窗口：把 modelServerFacts / modelCompat /
+//   xmlToolCall 已经做到的兼容能力，翻译成用户能看懂的一句话结论。
+
+type HealthLevel = 'ok' | 'notice' | 'warn' | 'blocker'
+
+interface HealthCheck {
+  id: string
+  label: string
+  level: HealthLevel
+  summary: string
+  advice?: string
+  /** 结论来源（服务端报告 / 运行时实测 / 按模型名推测…）——决定可信度 */
+  source: string
+}
+
+interface ModelHealthReport {
+  modelName: string
+  baseUrl: string
+  isLocal: boolean
+  level: HealthLevel
+  headline: string
+  capabilities: {
+    contextWindow: number
+    outputBudget: number
+    supportsTools: boolean
+    supportsVision: boolean
+    isReasoning: boolean
+    tier: string
+    paramSizeB: number | null
+  }
+  userConfiguredContext: number | null
+  checks: HealthCheck[]
+  actions: string[]
+  generatedAt: string
+  error?: string
+}
+
+const LEVEL_META: Record<HealthLevel, { icon: string; label: string; color: string; bg: string }> = {
+  blocker: { icon: '⛔', label: '阻断', color: '#e74c3c', bg: 'rgba(231,76,60,0.12)' },
+  warn: { icon: '⚠️', label: '注意', color: '#e67e22', bg: 'rgba(230,126,34,0.12)' },
+  notice: { icon: '💡', label: '提示', color: '#3498db', bg: 'rgba(52,152,219,0.12)' },
+  ok: { icon: '✅', label: '正常', color: '#27ae60', bg: 'rgba(39,174,96,0.12)' },
+}
+
 // ═══════════════════════════════════════════════════════════
 
 export default function DiagnosticsPanel() {
@@ -71,8 +132,63 @@ export default function DiagnosticsPanel() {
   const [checks, setChecks] = useState<DiagCheck[]>([])
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
   const [latency, setLatency] = useState<LatencyBucket[]>([])
-  const [tab, setTab] = useState<'overview' | 'latency' | 'timeline'>('overview')
+  const [tab, setTab] = useState<'overview' | 'latency' | 'timeline' | 'health'>('health')
   const [autoRefresh, setAutoRefresh] = useState(true)
+
+  // 🩺 模型体检
+  const [health, setHealth] = useState<ModelHealthReport | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+  const [healthCopied, setHealthCopied] = useState(false)
+
+  /**
+   * 加载模型体检报告。
+   * 模型与端点取 **agent 配置**（lumina 那一份），因为它才是真正发请求的配置 ——
+   * 设置面板的 provider 配置可能与之漂移（这正是 providerPersistence 测试守的点）。
+   */
+  const loadHealth = useCallback(async () => {
+    setHealthLoading(true)
+    try {
+      const api = (window as any).luminaAPI
+      let modelName = ''
+      let baseUrl = ''
+      let userContextWindow: number | null = null
+      try {
+        const all = await api?.agentLlmGetAllConfigs?.()
+        const lumina = all?.lumina || all?.lumina?.config || null
+        if (lumina) {
+          modelName = lumina.model || ''
+          baseUrl = lumina.endpoint || lumina.baseUrl || ''
+          const ctx = Number(lumina.maxContextTokens ?? lumina.contextWindow ?? 0)
+          userContextWindow = Number.isFinite(ctx) && ctx > 0 ? ctx : null
+        }
+      } catch { /* 读配置失败 → 让主进程给出「请先配置模型」 */ }
+
+      const report = await api?.diagnostics?.modelHealth?.({ modelName, baseUrl, userContextWindow })
+      setHealth(report || { error: '体检接口不可用' } as ModelHealthReport)
+    } catch (e: any) {
+      setHealth({ error: e?.message || String(e) } as ModelHealthReport)
+    } finally {
+      setHealthLoading(false)
+    }
+  }, [])
+
+  const copyHealthText = useCallback(async () => {
+    try {
+      const api = (window as any).luminaAPI
+      const all = await api?.agentLlmGetAllConfigs?.()
+      const lumina = all?.lumina || null
+      const text = await api?.diagnostics?.modelHealthText?.({
+        modelName: lumina?.model || '',
+        baseUrl: lumina?.endpoint || '',
+        userContextWindow: Number(lumina?.maxContextTokens) > 0 ? Number(lumina.maxContextTokens) : null,
+      })
+      if (typeof text === 'string' && text) {
+        await navigator.clipboard.writeText(text)
+        setHealthCopied(true)
+        setTimeout(() => setHealthCopied(false), 2000)
+      }
+    } catch (e) { console.warn('[DiagnosticsPanel] 复制体检报告失败', e) }
+  }, [])
 
   // ── 加载数据 ──────────────────────────────────────
 
@@ -95,6 +211,11 @@ export default function DiagnosticsPanel() {
     const interval = setInterval(loadAll, 3000)
     return () => clearInterval(interval)
   }, [loadAll, autoRefresh])
+
+  // 🩺 体检报告按需加载：切到该 tab 时拉一次（不参与 3s 轮询 —— 它不随时间变）
+  useEffect(() => {
+    if (tab === 'health') {loadHealth()}
+  }, [tab, loadHealth])
 
   // ── 导出报告 ──────────────────────────────────────
 
@@ -184,7 +305,7 @@ export default function DiagnosticsPanel() {
             <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
             自动刷新
           </label>
-          <button style={styles.btn} onClick={loadAll}>🔄 刷新</button>
+          <button style={styles.btn} onClick={() => { loadAll(); if (tab === 'health') {loadHealth()} }}>🔄 刷新</button>
           <button style={styles.btn} onClick={clearData}>🗑️ 清除</button>
           <button style={styles.btn} onClick={exportReport}>📥 导出</button>
         </div>
@@ -192,12 +313,131 @@ export default function DiagnosticsPanel() {
 
       {/* ── Tab 切换 ── */}
       <div style={styles.tabs}>
-        {(['overview', 'latency', 'timeline'] as const).map(t => (
+        {(['health', 'overview', 'latency', 'timeline'] as const).map(t => (
           <button key={t} style={tabStyle(tab === t)} onClick={() => setTab(t)}>
-            {t === 'overview' ? '概览' : t === 'latency' ? '耗时' : '时间线'}
+            {t === 'health' ? '🩺 模型体检' : t === 'overview' ? '概览' : t === 'latency' ? '耗时' : '时间线'}
           </button>
         ))}
       </div>
+
+      {/* ═══════ 🩺 模型体检 ═══════ */}
+      {tab === 'health' && (
+        <>
+          {healthLoading && (
+            <div style={{ padding: 16, fontSize: 12, color: 'var(--text-tertiary)' }}>正在生成体检报告…</div>
+          )}
+
+          {!healthLoading && health?.error && (
+            <div style={styles.card}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                {health.error}
+              </div>
+            </div>
+          )}
+
+          {!healthLoading && health && !health.error && (
+            <>
+              {/* 结论卡 */}
+              <div style={{
+                ...styles.card,
+                borderLeft: `3px solid ${LEVEL_META[health.level].color}`,
+                background: LEVEL_META[health.level].bg,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 16 }}>{LEVEL_META[health.level].icon}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{health.headline}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  {health.modelName} · {health.baseUrl}{health.isLocal ? '（本地）' : ''}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button style={styles.btn} onClick={loadHealth}>重新体检</button>
+                  <button style={styles.btn} onClick={copyHealthText}>
+                    {healthCopied ? '✅ 已复制' : '📋 复制报告'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 能力快照 */}
+              <div style={styles.card}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>🧬 能力画像</div>
+                <div style={styles.row}>
+                  <span style={styles.label}>上下文窗口</span>
+                  <span style={styles.value}>{health.capabilities.contextWindow.toLocaleString()} tokens</span>
+                </div>
+                <div style={styles.row}>
+                  <span style={styles.label}>单次输出上限</span>
+                  <span style={styles.value}>{health.capabilities.outputBudget.toLocaleString()} tokens</span>
+                </div>
+                <div style={styles.row}>
+                  <span style={styles.label}>原生工具调用</span>
+                  <span style={{ ...styles.value, color: health.capabilities.supportsTools ? '#27ae60' : '#e67e22' }}>
+                    {health.capabilities.supportsTools ? '支持' : '不支持（已自动切 XML 兼容）'}
+                  </span>
+                </div>
+                <div style={styles.row}>
+                  <span style={styles.label}>图片理解</span>
+                  <span style={{ ...styles.value, color: health.capabilities.supportsVision ? '#27ae60' : 'var(--text-secondary)' }}>
+                    {health.capabilities.supportsVision ? '支持' : '不支持'}
+                  </span>
+                </div>
+                <div style={styles.row}>
+                  <span style={styles.label}>模型档位</span>
+                  <span style={styles.value}>
+                    {health.capabilities.tier}
+                    {health.capabilities.paramSizeB ? ` · ${health.capabilities.paramSizeB}B` : ''}
+                    {health.capabilities.isReasoning ? ' · 推理模型' : ''}
+                  </span>
+                </div>
+              </div>
+
+              {/* 体检项 */}
+              <div style={styles.card}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>📋 逐项体检</div>
+                {health.checks.map(c => (
+                  <div key={c.id} style={{ padding: '7px 0', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{LEVEL_META[c.level].icon}</span>
+                      <span style={{ fontWeight: 600, fontSize: 12 }}>{c.label}</span>
+                      <span style={{
+                        fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                        color: LEVEL_META[c.level].color, background: LEVEL_META[c.level].bg,
+                      }}>{LEVEL_META[c.level].label}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 3, lineHeight: 1.6 }}>
+                      {c.summary}
+                    </div>
+                    {c.advice && (
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.6 }}>
+                        → {c.advice}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      依据：{c.source}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 行动建议 */}
+              {health.actions.length > 0 && (
+                <div style={styles.card}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>🎯 建议行动</div>
+                  {health.actions.map((a, i) => (
+                    <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', padding: '3px 0', lineHeight: 1.6 }}>
+                      · {a}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center', padding: '4px 0' }}>
+                生成于 {new Date(health.generatedAt).toLocaleString()}
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       {/* ═══════ 概览 ═══════ */}
       {tab === 'overview' && (

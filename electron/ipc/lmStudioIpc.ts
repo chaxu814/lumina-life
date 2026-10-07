@@ -4,6 +4,8 @@
  */
 
 import { ipcMain } from 'electron';
+import { parseServerFactsFor, rememberServerFacts } from '../core/modelServerFacts';
+import { looksVision } from '../core/modelCapabilities';
 
 /** 增强的LM Studio模型获取 */
 export function registerLMStudioIpc(): void {
@@ -128,20 +130,11 @@ async function fetchStandardModels(params: { baseUrl: string; apiKey: string }):
       let models: Array<{ id: string; multimodal?: boolean; vision?: boolean }> = []
       
       if (Array.isArray(data)) {
-        models = data.map((m: any) => {
-          const id = m.id || m.model || m.name || ''
-          return extractModelCapabilities(id)
-        })
+        models = data.map((m: any) => extractModelCapabilities(m as Record<string, unknown>))
       } else if (data.data && Array.isArray(data.data)) {
-        models = data.data.map((m: any) => {
-          const id = m.id || m.model || m.name || ''
-          return extractModelCapabilities(id)
-        })
+        models = data.data.map((m: any) => extractModelCapabilities(m as Record<string, unknown>))
       } else if (data.models && Array.isArray(data.models)) {
-        models = data.models.map((m: any) => {
-          const id = m.id || m.model || m.name || ''
-          return extractModelCapabilities(id)
-        })
+        models = data.models.map((m: any) => extractModelCapabilities(m as Record<string, unknown>))
       }
       
       const validModels = models
@@ -200,20 +193,11 @@ async function handleLMStudioEnhanced(params: { baseUrl: string; apiKey: string 
         let models: Array<{ id: string; multimodal?: boolean; vision?: boolean }> = []
         
         if (Array.isArray(data)) {
-          models = data.map((m: any) => {
-            const id = m.id || m.model || m.name || ''
-            return extractModelCapabilities(id)
-          })
+          models = data.map((m: any) => extractModelCapabilities(m as Record<string, unknown>))
         } else if (data.data && Array.isArray(data.data)) {
-          models = data.data.map((m: any) => {
-            const id = m.id || m.model || m.name || ''
-            return extractModelCapabilities(id)
-          })
+          models = data.data.map((m: any) => extractModelCapabilities(m as Record<string, unknown>))
         } else if (data.models && Array.isArray(data.models)) {
-          models = data.models.map((m: any) => {
-            const id = m.id || m.model || m.name || ''
-            return extractModelCapabilities(id)
-          })
+          models = data.models.map((m: any) => extractModelCapabilities(m as Record<string, unknown>))
         }
         
         const validModels = models.filter((m: any) => !!m.id && m.id.trim())
@@ -262,76 +246,57 @@ async function handleLMStudioEnhanced(params: { baseUrl: string; apiKey: string 
 }
 
 /** 从模型ID提取能力信息 */
-function extractModelCapabilities(modelId: string): { 
-  id: string; 
-  multimodal: boolean; 
-  vision: boolean 
+/** 从模型条目提取能力信息。
+ *
+ * 🐛 这段以前是一张**按模型 ID 硬编码的能力表**（qwen2.5-7b-instruct: {…}），
+ *    后面又叠了一层正则兜底，共 72 行。问题很严重：
+ *      · 表按小写全名匹配 → 'Qwen2.5-7B-Instruct' 这种常见写法直接匹配不上
+ *      · 每出一个新模型就要加一行 —— 典型的「特立独行」
+ *      · 就算加进去，也只回答了「是不是视觉模型」，
+ *        **服务端明明已经报了 max_context_length，却被整包丢掉**
+ *
+ * 现在改成三级降级，每一级都比上一级更权威：
+ *   ① 服务端自己报告的（parseServerFactsFor 遍历各家字段名）
+ *   ② 命名家族规则（core/modelCapabilities 的统一规则，新模型自动覆盖）
+ *   ③ 都没命中 → 保守假定「非视觉」，宁可少用功能也不谎报能力
+ *
+ * @param entry 服务端返回的**完整条目**（不是只有 id —— 之前的 bug 就在这）
+ */
+function extractModelCapabilities(entry: Record<string, unknown>): {
+  id: string
+  multimodal: boolean
+  vision: boolean
+  /** 服务端报告的上下文窗口；拿不到为 null，由上层按参数量估算 */
+  contextWindow: number | null
+  /** 能力来源：server=服务端说的 / family=命名规则推的 / unknown=没依据 */
+  source: 'server' | 'family' | 'unknown'
 } {
-  const id = modelId.trim()
-  
-  // 常见本地模型的多模态能力映射
-  const localModelCapabilities: Record<string, { multimodal: boolean; vision: boolean }> = {
-    // Llama系列
-    'llama-3.1-70b-instruct': { multimodal: false, vision: false },
-    'llama-3.1-8b-instruct': { multimodal: false, vision: false },
-    'llama-3.2': { multimodal: false, vision: false },
-    
-    // Qwen系列
-    'qwen2.5-7b-instruct': { multimodal: false, vision: false },
-    'qwen2.5-14b-instruct': { multimodal: false, vision: false },
-    'qwen2.5-vl-7b-instruct': { multimodal: true, vision: true },
-    
-    // Mixtral系列
-    'mixtral-8x7b-instruct': { multimodal: false, vision: false },
-    'mixtral-8x22b-instruct': { multimodal: false, vision: false },
-    
-    // 通义千问VL系列
-    'qwen-vl': { multimodal: true, vision: true },
-    'qwen-vl-chat': { multimodal: true, vision: true },
-    
-    // 智谱GLM系列
-    'glm-4': { multimodal: false, vision: false },
-    'glm-4v': { multimodal: true, vision: true },
-    
-    // DeepSeek系列
-    'deepseek-v2': { multimodal: false, vision: false },
-    'deepseek-vl': { multimodal: true, vision: true },
-    
-    // LLaVA系列
-    'llava': { multimodal: true, vision: true },
-    'llava-1.5': { multimodal: true, vision: true },
-    'llava-1.6': { multimodal: true, vision: true },
-  }
-  
-  // 首先检查本地模型映射
-  const lowerId = id.toLowerCase()
-  for (const [key, capabilities] of Object.entries(localModelCapabilities)) {
-    if (lowerId.includes(key.toLowerCase())) {
-      console.log('[extractModelCapabilities] 识别到本地模型: ' + key)
-      return { id, ...capabilities }
+  const id = String(entry.id || entry.name || entry.model || '').trim()
+
+  // ① 服务端权威
+  const facts = parseServerFactsFor({ data: [entry] }, id)
+  // 存进记忆层，让 agentRunner 启动时能同步读到真实的上下文窗口。
+  // 这一步是本轮改动的关键：以前服务端报了 max_context_length 也只是看一眼就扔。
+  rememberServerFacts(id, facts)
+  if (facts) {
+    const vision = facts.supportsVision
+    if (typeof vision === 'boolean') {
+      return { id, multimodal: vision, vision, contextWindow: facts.contextWindow, source: 'server' }
+    }
+    if (facts.contextWindow !== null) {
+      // 上下文拿到了，视觉没明说 —— 继续往下走家族规则补视觉
+      const familyVision = looksVision(id)
+      return { id, multimodal: familyVision, vision: familyVision, contextWindow: facts.contextWindow, source: 'family' }
     }
   }
-  
-  // 多模态模型标识
-  const multimodalPatterns = [
-    /vision/i, /gpt-4o/i, /claude/i, /gemini/i, /glm-4v/i,
-    /qwen-vl/i, /vl/i, /deepseek-vl/i, /llava/i,
-    /phi.*vision/i, /video/i, /image/i, /visual/i, /multimodal/i
-  ]
-  
-  // 视觉专用模型标识
-  const visionPatterns = [
-    /vision/i, /gpt-4o/i, /claude-3/i, /gemini.*vision/i, /glm-4v/i,
-    /qwen-vl/i, /deepseek-vl/i, /llava/i,
-    /phi.*vision/i, /video/i, /image/i, /visual/i
-  ]
-  
-  const isMultimodal = multimodalPatterns.some(pattern => pattern.test(id))
-  const isVision = visionPatterns.some(pattern => pattern.test(id))
-  
+
+  // ② 命名家族规则
+  const vision = looksVision(id)
   return {
     id,
-    multimodal: isMultimodal || isVision,
-    vision: isVision
+    multimodal: vision,
+    vision,
+    contextWindow: facts?.contextWindow ?? null,
+    source: id ? 'family' : 'unknown',
   }
 }

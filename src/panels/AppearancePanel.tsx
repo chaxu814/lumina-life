@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState } from 'react'
 import ThemeEditorPanel from './ThemeEditorPanel'
+import { useStore } from '../stores/appStore'
 
 interface ThemeItem {
   name: string
@@ -36,8 +37,14 @@ export default function AppearancePanel() {
   useEffect(() => { load() }, [])
 
   const apply = async (name: string) => {
+    const target = themes.find(t => t.name === name)
     const res = await api.themeApply(name)
-    if (res?.ok) { setCurrent(name); setMsg(`已切换到「${name}」`) }
+    if (res?.ok) {
+      setCurrent(name); setMsg(`已切换到「${name}」`)
+      // 同步基础外观开关：命名主题变了，store.theme 必须跟着变，
+      // 否则重启时 App.tsx 会拿旧的 light/dark 把刚选的主题盖回去。
+      if (target) { useStore.getState().setTheme(target.isDark ? 'dark' : 'light') }
+    }
     else {setMsg('切换失败：' + (res?.error || ''))}
   }
 

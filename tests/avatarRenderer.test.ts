@@ -54,11 +54,13 @@ describe('avatarRenderer 渲染器选择', () => {
 })
 
 describe('fallbackToBuiltin 回退', () => {
-  it('返回内置 Mao', () => {
+  // 保底形象是程序化小猫（Cat）：零外部素材、零授权风险、任何情况下都能加载。
+  // 曾内置的 Live2D 示例模型 Mao 因再分发条款已从仓库移除，见 THIRD_PARTY_NOTICES.md。
+  it('返回内置保底形象（程序化小猫）', () => {
     const fb = fallbackToBuiltin()
-    expect(fb.modelId).toBe('Mao')
-    expect(fb.kind).toBe('live2d')
-    expect(fb.entryRel).toBe('Mao/mao_pro.model3.json')
+    expect(fb.modelId).toBe('Cat')
+    expect(fb.kind).toBe('cat')
+    expect(fb.entryRel).toBe('__cat__')
   })
 })
 
@@ -71,11 +73,10 @@ describe('resolveModelEntry 模型解析', () => {
     ],
   }
 
-  it('解析内置 Mao', () => {
-    const r = resolveModelEntry(libData, 'Mao')
-    expect(r).not.toBeNull()
-    expect(r!.kind).toBe('live2d')
-    expect(r!.entryRel).toBe('Mao/mao_pro.model3.json')
+  it('已退役的内置 Live2D 模型（Mao）不再可解析', () => {
+    // 仓库不再携带 Live2D 资产。旧库文件里残留的 'Mao' 必须解析失败，
+    // 好让调用方走 fallbackToBuiltin，而不是去 load 一个不存在的文件。
+    expect(resolveModelEntry(libData, 'Mao')).toBeNull()
   })
 
   it('解析内置 Cat', () => {
@@ -103,13 +104,13 @@ describe('resolveModelEntry 模型解析', () => {
   })
 
   it('空库数据返回 null', () => {
-    expect(resolveModelEntry(null, 'Mao')).toBeNull()
+    expect(resolveModelEntry(null, 'Cat')).toBeNull()
   })
 })
 
 describe('guessKindFromEntry 入口推断', () => {
   it('.model3.json → live2d', () => {
-    expect(guessKindFromEntry('Mao/mao.model3.json')).toBe('live2d')
+    expect(guessKindFromEntry('Hiyori/hiyori.model3.json')).toBe('live2d')
   })
   it('.vrm → vrm', () => {
     expect(guessKindFromEntry('char/char.vrm')).toBe('vrm')
@@ -137,8 +138,8 @@ describe('isModelValid 入口校验', () => {
     expect(isModelValid('anything', 'cat')).toBe(false)
   })
   it('live2d 要求 .model3.json', () => {
-    expect(isModelValid('Mao/mao.model3.json', 'live2d')).toBe(true)
-    expect(isModelValid('Mao/mao.moc3', 'live2d')).toBe(false)
+    expect(isModelValid('Hiyori/hiyori.model3.json', 'live2d')).toBe(true)
+    expect(isModelValid('Hiyori/hiyori.moc3', 'live2d')).toBe(false)
   })
   it('vrm 要求 .vrm', () => {
     expect(isModelValid('char.vrm', 'vrm')).toBe(true)

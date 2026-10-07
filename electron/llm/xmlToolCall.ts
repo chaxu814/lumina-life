@@ -166,7 +166,11 @@ function parseArgsLoose(raw: string): Record<string, any> {
 
 const INTENT_PATTERNS: RegExp[] = [
   /<tool_call>/i,
-  /<tool_call>/i,
+  // ⚠️ 下面这条原先与上一行**字节级完全相同**（复制粘贴遗留）。
+  //   它本该是复数 <tool_calls> —— 那是格式 D 的内层标签，
+  //   漏掉它意味着「只输出 <tool_calls> 却没有外层 <tool_call> 包裹」
+  //   的输出不会被识别为工具调用意图，���直接当成普通文本。
+  /<tool_calls>/i,
   /<function_calls>/i,
   /<invoke>/i,
   /<tool_name>/i,
@@ -184,8 +188,11 @@ export function hasToolCallIntent(text: string): boolean {
 /** 把纯标签包裹的正文剥出来；剥不干净就返回空串（交给上层保留原文） */
 function stripTags(text: string): string {
   return text
+    // ⚠️ 原先这两行字节级完全相同（复制粘贴遗留，等于白写一遍）。
+    //   第二行本该是复数 <tool_calls>…</tool_calls>（格式 D 的内层），
+    //   漏掉它会让嵌套 JSON 格式的残留标签漏到用户眼前。
     .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    .replace(/<tool_calls>[\s\S]*?<\/tool_calls>/gi, '')
     .replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '')
     .replace(/<invoke>[\s\S]*?<\/invoke>/gi, '')
     .replace(/```tool_code[\s\S]*?```/gi, '')

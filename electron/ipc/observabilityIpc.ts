@@ -30,7 +30,7 @@ import { getSharedBoard } from '../team/teamSharedBoard'
 import { getTaskTrace } from '../team/llmTrace'
 // 情绪数据源：per-agent 失败连击 + 全局因果状态。两者都是**真实驱动**的
 // （worker 真的失败过 / 真的重试过），不是新造一个没人写的假 store。
-import { getWorkerFailureStreak, snapshotEmotionCausality, getCausalFrontendThree } from '../pet/emotionCausalityBridge'
+import { getWorkerFailureStreak, snapshotEmotionCausality, getCausalFrontendThree, getCausalGatingHints } from '../pet/emotionCausalityBridge'
 
 /** 审判台单例：裁决历史必须跨会话留存，否则「记错了」这个反馈等于没给 */
 let _bench: MemoryTrialBench | null = null
@@ -158,7 +158,20 @@ export function registerObservabilityIpc(): void {
           history: [],
         }
       }
-      return { ok: true, emotions, hasLiveData: Boolean(snap) }
+      return {
+        ok: true,
+        emotions,
+        hasLiveData: Boolean(snap),
+        // 🫀 情绪因果链：把「她今天为什么这样」翻译成人能读的一句话。
+        //   来源是真实的因果引擎（worker 失败 / 验证重试 / 用户否定驱动），
+        //   不是模板文案。为空数组时面板不渲染该区块。
+        causalReasons: (() => {
+          try {
+            const hints = getCausalGatingHints()
+            return Array.isArray(hints?.reasons) ? hints.reasons.slice(0, 6) : []
+          } catch { return [] }
+        })(),
+      }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err), emotions: {} }
     }

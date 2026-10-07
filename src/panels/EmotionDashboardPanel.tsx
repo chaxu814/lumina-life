@@ -25,6 +25,9 @@ const AGENT_META: Record<string, { name: string; icon: string; color: string }> 
 export default function EmotionDashboardPanel() {
   const [emotions, setEmotions] = useState<Record<string, EmotionData>>({})
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
+  // 🫀 情绪因果链：把「她今天为什么这样」用人话列出来。
+  //   来源是真实的因果引擎（worker 失败 / 验证重试 / 用户否定），不是模板。
+  const [causalReasons, setCausalReasons] = useState<string[]>([])
 
   // 加载情绪数据
   useEffect(() => {
@@ -33,6 +36,7 @@ export default function EmotionDashboardPanel() {
         const api = (window as any).luminaAPI
         if (!api?.teamEmotions) {return}
         const data = await api.teamEmotions()
+        if (Array.isArray(data?.causalReasons)) {setCausalReasons(data.causalReasons)}
         if (data?.emotions) {
           const mapped: Record<string, EmotionData> = {}
           for (const [id, emo] of Object.entries(data.emotions)) {
@@ -119,6 +123,30 @@ export default function EmotionDashboardPanel() {
       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>
         实时追踪 Agent 们的心情、精力和亲密度
       </p>
+
+      {/* 🫀 情绪因果链 —— 「她今天为什么这样」 */}
+      {causalReasons.length > 0 && (
+        <div style={{
+          padding: 14, borderRadius: 12, marginBottom: 20,
+          background: 'var(--surface-0)', border: '1px solid var(--border-light)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+            🫀 情绪因果链
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.6 }}>
+            下面这些是**真实发生的事**在影响她的状态（不是随机波动）：
+          </div>
+          {causalReasons.map((r, i) => (
+            <div key={i} style={{
+              fontSize: 12, color: 'var(--text-primary)', padding: '4px 0',
+              lineHeight: 1.6, display: 'flex', gap: 6,
+            }}>
+              <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+              <span>{r}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Agent 卡片 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>

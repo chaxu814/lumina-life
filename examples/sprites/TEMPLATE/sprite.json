@@ -1,0 +1,22 @@
+{
+  "_comment": "Lumina Life 精灵表清单。把 sheet-template.png 换成你自己的图，帧宽高改成实际值即可。完整说明见 examples/sprites/README.md",
+  "name": "my-sprite",
+  "author": "",
+  "license": "",
+  "cols": 8,
+  "rows": 9,
+  "frameWidth": 256,
+  "frameHeight": 256,
+  "image": "sheet.png",
+  "actions": [
+    { "id": "idle",      "row": 1, "frames": 6, "mirroredForLeft": false, "description": "轻微呼吸起伏，偶眨眼，身体几乎不动" },
+    { "id": "run-right", "row": 2, "frames": 8, "mirroredForLeft": true,  "description": "向右奔跑循环，8 帧连贯，手脚交替" },
+    { "id": "wave",      "row": 3, "frames": 4, "mirroredForLeft": false, "description": "抬手挥手致意，4 帧循环" },
+    { "id": "jump",      "row": 4, "frames": 5, "mirroredForLeft": false, "description": "原地起跳-滞空-落地，5 帧" },
+    { "id": "fail",      "row": 5, "frames": 8, "mirroredForLeft": false, "description": "报错/受挫：捂脸、垂头、叹气，8 帧" },
+    { "id": "wait",      "row": 6, "frames": 6, "mirroredForLeft": false, "description": "踱步等待、左右张望，6 帧" },
+    { "id": "work",      "row": 7, "frames": 8, "mirroredForLeft": false, "description": "专注敲键盘/敲代码，8 帧循环" },
+    { "id": "look-up",   "row": 8, "frames": 8, "mirroredForLeft": false, "description": "抬头/视线随鼠标向上移动" },
+    { "id": "look-down", "row": 9, "frames": 8, "mirroredForLeft": false, "description": "低头/视线随鼠标向下移动" }
+  ]
+}
