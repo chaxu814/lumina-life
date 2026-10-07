@@ -576,7 +576,13 @@ const orch = getOrchestrator()
   //   recha = 审查员     -> 只读（不写文件 / 不执行命令 / 不 git 提交）
   // 最终行为与旧硬编码一致：yak 可写可执行、recha 只读。
   const { getDisabledToolsForRole } = await import('./rolePolicy')
+  const { registerAllTools } = await import('./tools')
   const { getToolNames } = await import('./tools/registry')
+  // 🔒 根因修复：registerAllTools() 原本只在 AgentRunner 构造函数里触发，
+  // 而此处（构造 worker Runner 之前）就调 getToolNames() 算角色 disabledTools，
+  // 注册前注册表为空 → disabledTools 恒为 [] → recha/yak 被静默全放行。
+  // 这里先显式注册一次（registerAllTools 幂等，AgentRunner 构造时不会再重复注册）。
+  registerAllTools()
   const allRegisteredTools = [...getToolNames()]
 
   for (const id of workerIds) {

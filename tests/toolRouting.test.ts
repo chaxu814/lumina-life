@@ -22,6 +22,7 @@ import { registerAllTools, getToolDef, resolveToolset, toOpenAIFunctions } from 
 import {
   routeTools, matchGroups, resetToolRouting, _resetAllToolRouting,
   CORE_TOOLS, DEVELOPER_CORE_TOOLS, CAPABILITY_GROUPS,
+  looksLikeActionRequest, buildGroupSelectorPrompt, parseGroupAnswer,
 } from '../electron/tools/toolRouter'
 
 const agentTools = () => resolveToolset('agent')
@@ -360,6 +361,80 @@ describe('⑩ 🔴 自然口语命中率（防关键词退化）', () => {
     }
     expect(triggered, `闲聊不该激活能力组（每激活一组就多花 token）：\n  ${triggered.join('\n  ')}`)
       .toEqual([])
+  })
+})
+
+describe('⑪ 🧠 语义兜底（方案 C）：只在「关键词没命中 + 确实是行动请求」时才问 LLM', () => {
+  beforeAll(() => { registerAllTools() })
+  beforeEach(() => { _resetAllToolRouting() })
+
+  // 【方案 C 的核心约束】
+  // 每句话都问 LLM（方案 B）会让首字延迟 +0.5~2s，对桌宠是体感上的损失。
+  // 所以只在**最可能判断错**的情况下才问：关键词一个都没命中、且像在要求做事。
+  // 这两条守卫就是「零延迟保证」的边界。
+  it('闲聊一律不触发语义兜底（一次 LLM 都不调）', () => {
+    const chitChat = [
+      '早上好呀', '今天好累啊', '你在干嘛呢', '哈哈哈哈哈', '嗯嗯好的', '谢谢你',
+      '你好', '晚安', '讲个笑话', '你在吗', '无聊死了', '哦', '好的',
+    ]
+    const leaked = chitChat.filter(t => looksLikeActionRequest(t))
+    expect(
+      leaked,
+      `这些闲聊被判成了「行动请求」，会白白多调一次 LLM、拖慢首字：\n  ${leaked.join('\n  ')}`,
+    ).toEqual([])
+  })
+
+  it('明显的行动请求要能被识别出来', () => {
+    const actions = [
+      '帮我整理一下桌面', '把那个文件删了吧', '查一下这个报错', '帮我发封邮件',
+      '写个总结', '搜索一下量子计算', '帮我订个闹钟', '这个数据帮我统计一下',
+      '麻烦帮我把这段翻译了', '打开那个软件',
+    ]
+    const missed = actions.filter(t => !looksLikeActionRequest(t))
+    expect(missed, `这些明显是请求却没被识别：\n  ${missed.join('\n  ')}`).toEqual([])
+  })
+
+  it('过短的输入不触发（不值得为「继续」调一次 LLM）', () => {
+    for (const t of ['继续', '嗯', '好', '?', '再来']) {
+      expect(looksLikeActionRequest(t), `「${t}」太短，不该触发语义兜底`).toBe(false)
+    }
+  })
+
+  it('分类提示词里包含所有能力组名（加组时自动同步，不会漏）', () => {
+    const names = Object.keys(CAPABILITY_GROUPS)
+    const prompt = buildGroupSelectorPrompt('帮我做点什么', names)
+    const missing = names.filter(n => !prompt.includes(n))
+    expect(missing, `提示词里少了这些组，模型不可能选到它们：${missing.join(', ')}`).toEqual([])
+  })
+
+  it('解析器只接受合法组名，模型自创的一律丢弃', () => {
+    const names = Object.keys(CAPABILITY_GROUPS)
+    // 模型可能输出中文逗号、空格、甚至自创组名
+    expect(parseGroupAnswer('calendar, mail', names)).toEqual(['calendar', 'mail'])
+    expect(parseGroupAnswer('calendar，mail', names)).toEqual(['calendar', 'mail'])
+    expect(parseGroupAnswer('  calendar  mail ', names)).toEqual(['calendar', 'mail'])
+    expect(parseGroupAnswer('NONE', names)).toEqual([])
+    expect(parseGroupAnswer('none', names)).toEqual([])
+    expect(parseGroupAnswer('', names)).toEqual([])
+    expect(
+      parseGroupAnswer('calendar, totally_made_up_group', names),
+      '模型自创的组名不该被接受 —— 它会被当成「组激活了但没工具」',
+    ).toEqual(['calendar'])
+  })
+
+  it('reasoning 模型的输出也能解析（答案可能在 reasoning 字段里）', () => {
+    const names = Object.keys(CAPABILITY_GROUPS)
+    // Qwen3.6 这类 reasoning 模型会把内容放进 reasoning_content，text 为空
+    expect(parseGroupAnswer('NONE\ncalendar, mail', names)).toEqual(['calendar', 'mail'])
+  })
+
+  it('extraGroups 能把语义选出的组带进来（且只接受真实存在的组）', () => {
+    const base = resolveToolset('agent')
+    _resetAllToolRouting()
+    const withExtra = routeTools(base, 'agent', '随便一句话', 'sem', true, ['calendar', '不存在的组'])
+    expect(withExtra.groups).toContain('calendar')
+    expect(withExtra.groups, '不存在的组不该出现在结果里').not.toContain('不存在的组')
+    expect(withExtra.tools).toContain('calendar_add')
   })
 })
 

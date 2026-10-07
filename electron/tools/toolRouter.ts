@@ -362,6 +362,114 @@ export function matchGroups(text: string): string[] {
   return hit
 }
 
+// ═══════════════════════════════════════════════════════════
+// 🧠 语义兜底路由（2026-10-07「方案 C」）
+//
+// 【它解决什么】关键词匹配是**长尾**：能覆盖 100% 的测试集，但用户下一句可能是
+//   一种从没见过的说法。方案 A（纯关键词）会漏，方案 B（每句话都问 LLM）太慢贵。
+//
+// 【方案 C 的取舍】只在**最可能判断错**的情况下才调 LLM：
+//   ① 关键词一个都没命中（说明规则确实不知道该给什么）
+//   ② 且这句话看起来是「要求做事」（不是闲聊）
+//   ③ 且开了开关
+//   闲聊、以及关键词已命中的请求 —— **一次 LLM 都不调**，零延迟零成本。
+//
+// 【代价要讲清楚】命中的请求会多一次 LLM 分类调用，约 0.5–2s 首字延迟。
+//   这是产品取舍，所以总开关 `tools.semanticRouting` 默认开、可关。
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 语义分类器：给定用户原话 + 候选能力组名，返回相关组名（空数组 = 不需要额外能力）。
+ * 返回 null / 抛错 = 分类失败，调用方静默退回关键词结果。
+ */
+export type SemanticClassifier = (userText: string, groupNames: string[]) => Promise<string[] | null>
+
+/** 「要求做事」的信号词 —— 出现即说明用户在提需求，不是在闲聊 */
+const ACTION_SIGNALS = [
+  '帮我', '帮忙', '帮个忙', '帮下', '帮一', '替我', '给我', '请你', '请帮',
+  '麻烦你', '麻烦帮', '能不能帮', '可以帮', '协助我', '拜托', '劳驾',
+]
+
+/** 动作动词 —— 用户可能在用祈使句提需求 */
+const ACTION_VERBS = [
+  '查', '查一下', '查看', '看看', '看', '搜', '搜索', '找', '找找', '翻', '翻翻',
+  '写', '写个', '写一下', '写一篇', '生成', '生成个', '画', '读', '读取', '打开',
+  '改', '修改', '改一下', '删', '删除', '建', '创建', '新建', '整理', '收拾',
+  '发', '发送', '提交', '总结', '概括', '统计', '分析', '比较', '对比',
+  '下载', '安装', '运行', '执行', '跑', '测试', '翻译', '处理', '抓取', '爬',
+  '提醒', '记录', '保存', '记住', '回顾', '取消', '关闭', '清理', '复制', '粘贴',
+]
+
+/** 明确是闲聊/寒暄的开始 —— 命中则**绝不**调 LLM */
+const CHIT_CHAT_HINTS = [
+  '你好', 'hi', 'hello', '嗨', '早上好', '中午好', '晚上好', '早安', '晚安',
+  '谢谢', '感谢', '嗯嗯', '哈哈', '哈哈哈', '哦', '好的', '知道了', '拜拜', '再见',
+  '你在吗', '你在干嘛', '你是谁', '你叫什么', '讲个笑话', '无聊',
+]
+
+/**
+ * 判断这句话**是否像在要求做事**。
+ * 语义兜底只在返回 true 时才触发 —— 闲聊一句 LLM 都不调。
+ */
+export function looksLikeActionRequest(text: string): boolean {
+  const t = String(text || '').trim().toLowerCase()
+  if (!t) {return false}
+  // 太短的（如「继续」「嗯」）不值得调 LLM，关键词没命中就按核心集处理
+  if (t.length < 4) {return false}
+  // 明确的寒暄 → 不是请求
+  if (CHIT_CHAT_HINTS.some(h => t.includes(h))) {return false}
+  if (ACTION_SIGNALS.some(s => t.includes(s))) {return true}
+  if (ACTION_VERBS.some(v => t.includes(v))) {return true}
+  return false
+}
+
+/**
+ * 构造「能力组选择」的分类提示词。
+ * 能力清单直接从 CAPABILITY_GROUPS 生成 —— 加组/改组时提示词自动同步，
+ * 不会出现「代码里有这个组、提示词里没有」的静默不一致。
+ */
+export function buildGroupSelectorPrompt(userText: string, groupNames: string[]): string {
+  const lines = groupNames
+    .map(n => {
+      const g = CAPABILITY_GROUPS[n]
+      return g ? `- ${n}：${g.label}（${g.keywords.slice(0, 4).join('、')}）` : `- ${n}`
+    })
+    .join('\n')
+
+  return [
+    '你是工具能力分类器。判断完成用户的请求需要用到下列哪些能力组。',
+    '',
+    '规则：',
+    '1. 只输出最相关的 0-3 个组名，用英文逗号分隔，不要任何解释。',
+    '2. 如果不需要任何额外能力（纯聊天、或只用文件/终端/搜索/记忆这些基础能力），输出 NONE。',
+    '3. 必须只从下面的组名里选，不要自创组名。',
+    '',
+    '可用能力组：',
+    lines,
+    '',
+    `用户请求：${userText}`,
+    '',
+    '输出：',
+  ].join('\n')
+}
+
+/**
+ * 解析分类器的输出。非法组名一律丢弃（模型自创的名字不能拿来加载工具）。
+ */
+export function parseGroupAnswer(raw: string, validNames: string[]): string[] {
+  const s = String(raw || '').trim()
+  if (!s) {return []}
+  if (/^none$/i.test(s)) {return []}
+  const valid = new Set(validNames)
+  const hit: string[] = []
+  for (const part of s.split(/[,，\s;；]+/)) {
+    const n = part.trim().toLowerCase()
+    if (!n) {continue}
+    if (valid.has(n) && !hit.includes(n)) {hit.push(n)}
+  }
+  return hit
+}
+
 export interface RouteResult {
   tools: string[]
   /** 本轮生效的能力组（含粘性继承来的） */
@@ -389,6 +497,8 @@ export function routeTools(
   userInput: string | undefined,
   sessionId: string | undefined,
   enabled = true,
+  /** 🧠 语义兜底选出的组（方案 C）。与关键词命中的组**合并**，不是替换。 */
+  extraGroups: string[] = [],
 ): RouteResult {
   const passthrough = (reason: string): RouteResult => ({
     tools: candidateTools, groups: [], newlyMatched: [], narrowed: false, reason,
@@ -404,7 +514,9 @@ export function routeTools(
   // ── 计算生效的组：粘性 ∪ 本轮命中 ──
   const sticky = sessionId ? (sessionActiveGroups.get(sessionId) || new Set<string>()) : new Set<string>()
   const newlyMatched = matchGroups(input)
-  const groups = new Set<string>([...sticky, ...newlyMatched])
+  // 🧠 语义兜底选出的组合并进来（只接受 CAPABILITY_GROUPS 里存在的名字）
+  const semantic = extraGroups.filter(g => g in CAPABILITY_GROUPS)
+  const groups = new Set<string>([...sticky, ...newlyMatched, ...semantic])
 
   // ── 组装允许集 ──
   const allowed = new Set<string>(CORE_TOOLS)
@@ -423,17 +535,18 @@ export function routeTools(
     return passthrough(`裁剪后仅 ${tools.length} 个工具（过少），退回全量`)
   }
 
-  // ── 写入粘性（只对本轮新命中的做增量，避免每次全量重写）──
-  if (sessionId && newlyMatched.length > 0) {
+  // ── 写入粘性（命中 + 语义都要记住，否则下一轮会掉）──
+  const toStick = [...newlyMatched, ...semantic]
+  if (sessionId && toStick.length > 0) {
     const set = sessionActiveGroups.get(sessionId) || new Set<string>()
-    for (const g of newlyMatched) {set.add(g)}
+    for (const g of toStick) {set.add(g)}
     sessionActiveGroups.set(sessionId, set)
   }
 
   return {
     tools,
     groups: [...groups],
-    newlyMatched,
+    newlyMatched: [...new Set(toStick)],
     narrowed: true,
   }
 }

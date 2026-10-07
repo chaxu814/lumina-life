@@ -195,6 +195,14 @@ export function getAllowedToolsForRole(role: string | undefined | null, allToolN
  * 把该角色无权使用的工具一并剔除。
  */
 export function getDisabledToolsForRole(role: string | undefined | null, allToolNames: string[]): string[] {
+  // 🔒 防御性兜底（fail-closed）：
+  // 若传入的全量清单为空（极少见——例如主进程在 registerAllTools() 之前就
+  // 来取角色清单），绝不能直接返回 [] 把受限角色悄悄全放行。退化策略：
+  // 至少套用该角色的静态 denylist（不依赖注册表），保证 recha/yak 的
+  // 写/执行/委托类工具仍被禁用。正常路径（allToolNames 非空）走下面全量过滤。
+  if (!allToolNames || allToolNames.length === 0) {
+    return getExplicitDeniedTools(role)
+  }
   return allToolNames.filter(t => !isToolAllowedForRole(role, t).allowed)
 }
 

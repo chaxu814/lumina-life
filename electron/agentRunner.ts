@@ -18,7 +18,11 @@ import {
   groupParallelBatches,
   getToolNames,
 } from './tools/registry'
-import { routeTools, resetToolRouting } from './tools/toolRouter'
+import {
+  routeTools, resetToolRouting,
+  looksLikeActionRequest, buildGroupSelectorPrompt, parseGroupAnswer,
+} from './tools/toolRouter'
+import { CAPABILITY_GROUPS } from './tools/toolRouter'
 import { registerAllTools } from './tools/index'
 import { isToolAllowedForRole } from './rolePolicy'
 import { parseXmlToolCalls as parseXmlToolCallsShared } from './llm/xmlToolCall'
@@ -212,6 +216,12 @@ export type RunFailureKind =
   | 'context_length' // 上下文超长
   | 'content_filter' // 被内容安全拦截
   | 'cancelled'      // 用户主动中止
+  /** 🔧 2026-10-07 新增：团队成员没配 LLM —— 委托在第一步就失败 */
+  | 'teammate_unconfigured'
+  /** 🔧 2026-10-07 新增：工具被权限档位拦下（不是模型的问题，是等你批准） */
+  | 'tool_permission'
+  /** 🔧 2026-10-07 新增：工具执行失败（参数非法 / 目标不可用等） */
+  | 'tool_failed'
   | 'unknown'
 
 const FAILURE_PATTERNS: Array<[RunFailureKind, RegExp, string]> = [
@@ -227,6 +237,20 @@ const FAILURE_PATTERNS: Array<[RunFailureKind, RegExp, string]> = [
     '请求被模型服务的内容安全策略拦截了，换一种问法通常就能通过。'],
   ['network', /econnrefused|enotfound|econnreset|network|fetch failed|getaddrinfo|网络|连接/i,
     '连不上模型服务，请检查网络或代理设置。'],
+
+  // 🔧 2026-10-07 新增：工具层的失败。
+  // 【为什么要单列】实测 T3（「帮我写个爬虫，然后让团队审一下」）时，
+  //   真实原因是 delegate_to 报「Yak 未配置 LLM」+ file_write 参数非法，
+  //   但兜底文案说的是「模型服务返回了一个无法识别的错误」——
+  //   **把「团队没配好」和「工具被拦」伪装成了「模型出问题」**，
+  //   用户照着提示换一种问法、重试一百次也没用。
+  //   这些失败**根本不在模型侧**，必须单列并给出能行动的建议。
+  ['teammate_unconfigured', /未配置\s*LLM|not configured|未配置大模型|尚未配置/i,
+    '团队里有成员还没配置大模型，这次没能派活出去。到「设置 → LLM 模型」给 Yak / 热茶各配一个模型就好了。'],
+  ['tool_permission', /权限档位要求确认|需要用户批准|未获批准|requiresApproval|需要审批/i,
+    '这次的操作被权限档位拦下了，需要你批准才能执行。回复 /approve 批准，或到发送栏右侧的权限选择器调高档位。'],
+  ['tool_failed', /未执行成功|参数不是合法\s*JSON|不是合法\s*JSON|不在本轮可用|本轮未加载|工具\s*".*?"\s*不存在/i,
+    '这次是工具没能执行成功（比如参数格式不对、或该能力本轮没加载），不是模型出错。换个更明确的说法通常就能走通。'],
 ]
 
 /**
@@ -304,7 +328,13 @@ export function describeRunFailure(raw?: string): string {
   for (const [kind, re, text] of FAILURE_PATTERNS) {
     if (re.test(s)) {return text}
   }
-  return '这次没能完成，是模型服务返回了一个无法识别的错误。换个说法或稍后重试通常能解决。'
+  // 🔧 2026-10-07：原文案一口咬定「是模型服务返回的错误」。
+  //   实测证明这个断言不成立 —— 工具被权限拦下、队友没配 LLM、参数非法，
+  //   都会走到这个兜底。谎报成因会让用户朝错误方向排查（反复重装模型服务），
+  //   而不去检查真正的问题。现在如实说「原因未归类」并列出几种可能。
+  return '这次没能完成，原因没能自动归类 —— 可能是模型服务返回了异常，也可能是某个工具没执行成功' +
+    '（权限拦截、参数异常、或依赖的成员没配置好）。换一种说法、或把任务拆小一点通常能解决；' +
+    '如果反复出现，到「更多设置 → 诊断工具」看一眼具体报错。'
 }
 // 工具调用噪声过滤器已抽取到 ./agent/toolNoise（cleanToolNoiseText，行为保持不变）
 
@@ -1560,7 +1590,9 @@ private summarizer: ConversationSummarizer | null = null
     //     c) 搜索结果 system 消息注入在 reactEngine 内无法正确处理
     //   统一后：只走 agentRunner.runReActLoop()，所有修复逻辑集中维护
     {
-      const { tools, toolsetName } = this.getToolsForMode()
+      // 🧠 改为 async：方案 C 的语义兜底可能要在这一步问一次 LLM。
+      //   只在「关键词没命中 + 是行动请求」时才问，闲聊不会触发（零额外延迟）。
+      const { tools, toolsetName } = await this.getToolsForMode()
 
       // 🆕 情绪门控说明注入（创新功能 1）
       //   时序很关键：getToolsForMode() 刚跑完，_emotionGateNotice 才有值；
@@ -3592,7 +3624,69 @@ private summarizer: ConversationSummarizer | null = null
     }
   }
 
-  private getToolsForMode(): { tools: string[]; toolsetName: string } {
+  // ═══════════════════════════════════════════════════════════
+  // 🧠 语义兜底路由（方案 C）
+  //
+  // 只在「关键词一个都没命中 + 这句话确实像在要求做事」时才调一次 LLM。
+  // 闲聊、以及关键词已命中的请求 —— 一次都不调，零延迟零成本。
+  // ═══════════════════════════════════════════════════════════
+
+  /** 分类结果缓存（同一句话不重复调 LLM；30s TTL） */
+  private static _semanticCache = new Map<string, { groups: string[]; at: number }>()
+  private static readonly SEMANTIC_TTL = 30_000
+  private static readonly SEMANTIC_CACHE_MAX = 100
+
+  /**
+   * 用一次小 LLM 调用判断该加载哪些能力组。
+   * 超时 / 出错 / 返回垃圾 → 返回 null，调用方静默退回关键词结果。
+   */
+  private async semanticGroups(userText: string): Promise<string[] | null> {
+    const key = (userText || '').trim().slice(0, 200)
+    if (!key) {return null}
+
+    const cached = AgentRunner._semanticCache.get(key)
+    if (cached && Date.now() - cached.at < AgentRunner.SEMANTIC_TTL) {return cached.groups}
+
+    const names = Object.keys(CAPABILITY_GROUPS)
+    let groups: string[] = []
+    try {
+      const { LLMProvider } = await import('./core/llmProvider')
+      const p = new LLMProvider({
+        baseUrl: this.config.baseUrl,
+        apiKey: this.config.apiKey || '',
+        model: this.config.model,
+        temperature: 0,
+        maxTokens: 48,
+      } as any)
+      const r: any = await p.call({
+        messages: [
+          { role: 'system', content: buildGroupSelectorPrompt(key, names) },
+          { role: 'user', content: key },
+        ],
+        maxTokens: 48,
+        temperature: 0,
+      })
+      const raw = String(r?.text || r?.content || '')
+      // 🔧 关键：模型可能开启 reasoning，把答案放进 reasoning_content（已实测到）。
+      //   只取 text 会拿到空串，分类恒失败 —— 所以两个字段都要看。
+      const withReasoning = raw || String((r as any)?.reasoning || '')
+      groups = parseGroupAnswer(withReasoning, names)
+      console.log(`[getToolsForMode] 🧠 语义兜底: "${key.slice(0, 30)}" → [${groups.join(', ') || 'NONE'}]`)
+    } catch (e) {
+      // 分类失败绝不影响主流程 —— 退回关键词结果
+      console.warn('[getToolsForMode] 🧠 语义兜底失败，退回关键词结果:', e)
+      return null
+    }
+
+    if (AgentRunner._semanticCache.size >= AgentRunner.SEMANTIC_CACHE_MAX) {
+      const oldest = AgentRunner._semanticCache.keys().next().value
+      if (oldest) {AgentRunner._semanticCache.delete(oldest)}
+    }
+    AgentRunner._semanticCache.set(key, { groups, at: Date.now() })
+    return groups
+  }
+
+  private async getToolsForMode(): Promise<{ tools: string[]; toolsetName: string }> {
     let tools: string[]
     let toolsetName: string
     // 子 Agent 过滤 blockedInChild 工具
@@ -3621,6 +3715,9 @@ private summarizer: ConversationSummarizer | null = null
     // 【失败开放】拿不到用户输入、或裁完少于 8 个工具时，routeTools 会
     //   主动退回全量。宁可多花 token，也不能让模型手里没有工具。
     // ═══════════════════════════════════════════════════════════
+    // 📌 记下候选集：语义兜底必须在**同一份**候选上重跑路由。
+    //   重新 resolveToolset() 会丢掉 isChild / disabledTools 的过滤，那就危险了。
+    const candidateTools = tools
     const fullCount = tools.length
     let routed: ReturnType<typeof routeTools>
     try {
@@ -3636,6 +3733,33 @@ private summarizer: ConversationSummarizer | null = null
       console.warn('[getToolsForMode] 🎯 按需筛选异常，本轮退回全量:', e)
       routed = { tools, groups: [], newlyMatched: [], narrowed: false, reason: '筛选异常' }
     }
+    // 🧠 方案 C 语义兜底：关键词一个都没命中 + 这句话确实像在要求做事 → 问一次 LLM。
+    //   闲聊不会走到这里（looksLikeActionRequest 已过滤），所以日常对话零额外调用。
+    if (routed.narrowed && routed.groups.length === 0) {
+      const input = (this._pendingUserText || '').trim()
+      let semanticOn = true
+      try { semanticOn = readFeatureFlag('tools.semanticRouting', true) } catch { /* 默认开 */ }
+      if (semanticOn && looksLikeActionRequest(input)) {
+        const groups = await this.semanticGroups(input)
+        if (groups && groups.length > 0) {
+          const withSemantic = routeTools(
+            candidateTools,
+            this.config.mode || 'agent',
+            input,
+            this.sessionId,
+            true,
+            groups,
+          )
+          if (withSemantic.tools.length >= 8) {
+            tools = withSemantic.tools
+            routed = withSemantic
+            toolsetName += '+语义'
+            console.log(`[getToolsForMode] 🧠 语义兜底生效: 补上 [${groups.join(', ')}] → ${tools.length} 个工具`)
+          }
+        }
+      }
+    }
+
     tools = routed.tools
     if (routed.narrowed) {
       const saved = Math.round((1 - tools.length / Math.max(1, fullCount)) * 100)

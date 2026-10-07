@@ -14,6 +14,7 @@ import {
   getAllowedToolsForRole,
   getDisabledToolsForRole,
 } from '../electron/rolePolicy'
+import { registerAllTools, getToolNames } from '../electron/tools/index'
 
 describe('resolveToolName — 历史别名解析', () => {
   it('write_code → file_write', () => {
@@ -128,5 +129,65 @@ describe('getAllowedToolsForRole / getDisabledToolsForRole', () => {
 
   it('lumina 的 disabled 集为空', () => {
     expect(getDisabledToolsForRole('lumina', ALL)).toEqual([])
+  })
+})
+
+describe('🔒 防御性兜底（fail-closed）— 空清单绝不静默全放行', () => {
+  it('recha 传入空清单时，退回静态 denylist（不返回 []）', () => {
+    const disabled = getDisabledToolsForRole('recha', [])
+    expect(disabled).not.toEqual([])
+    // 至少包含写/执行/提交四类（recha 的静态 denylist）
+    expect(disabled).toContain('file_write')
+    expect(disabled).toContain('file_edit')
+    expect(disabled).toContain('shell_exec')
+    expect(disabled).toContain('git_commit')
+  })
+
+  it('yak 传入空清单时，退回静态 denylist（delegate 类）', () => {
+    const disabled = getDisabledToolsForRole('yak', [])
+    expect(disabled).not.toEqual([])
+    expect(disabled).toContain('delegate_to')
+    expect(disabled).toContain('delegate_chain')
+    expect(disabled).toContain('hire_worker')
+    expect(disabled).toContain('adversarial_review')
+  })
+
+  it('lumina 传入空清单时仍为空（全量调度，无静态 deny）', () => {
+    expect(getDisabledToolsForRole('lumina', [])).toEqual([])
+  })
+})
+
+describe('🔒 真实注册表下的角色 disabledTools（main.ts 根因修复后验收）', () => {
+  it('registerAllTools 后，recha 应被禁用大量工具（含写/执行/委托/邮件/桌面操控）', () => {
+    registerAllTools()
+    const all = [...getToolNames()]
+    expect(all.length).toBeGreaterThan(100) // 注册表已填充，非退化空 []
+
+    const rechaDisabled = getDisabledToolsForRole('recha', all)
+    // 写/执行/提交类必在禁用集（即便注册表顺序变化也不退化）
+    for (const t of ['file_write', 'file_edit', 'shell_exec', 'git_commit']) {
+      expect(rechaDisabled).toContain(t)
+    }
+    // recha 是审查员，绝大多数工具都不在其白名单 → 禁用数应远大于放行数
+    expect(rechaDisabled.length).toBeGreaterThan(all.length / 2)
+    // 关键断言：修复前这里恒为 0（注册表未填充）→ recha 被悄悄全放行
+    expect(rechaDisabled.length).toBeGreaterThan(100)
+  })
+
+  it('yak 禁用集不为 0（根因修复前恒为 []），且写/执行被放行、delegate 类被禁', () => {
+    registerAllTools()
+    const all = [...getToolNames()]
+    const yakDisabled = getDisabledToolsForRole('yak', all)
+    // 🔒 关键回归断言：修复前 main.ts 在注册前取清单 → yakDisabled 恒为 []
+    // （静默全放行）。修复后必须 > 0。
+    expect(yakDisabled.length).toBeGreaterThan(0)
+    // 代码工程师：白名单内写/执行/提交必须放行（不在禁用集）
+    for (const t of ['file_write', 'file_edit', 'shell_exec', 'git_commit']) {
+      expect(yakDisabled).not.toContain(t)
+    }
+    // 但 worker 不二次委托 / 不跑流水线（静态 denylist 必在禁用集）
+    for (const t of ['delegate_to', 'delegate_chain', 'hire_worker', 'adversarial_review']) {
+      expect(yakDisabled).toContain(t)
+    }
   })
 })
