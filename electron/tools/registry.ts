@@ -650,6 +650,15 @@ export interface RetryConfig {
    * 黑名单必须是执行层的规则**，两层都要成立。
    */
   deniedTools?: string[]
+  /**
+   * 📋 本轮**实际暴露**给模型的工具名。
+   *
+   * 【为什么要传下来】加了按需筛选后，「工具不存在」和「工具本轮没加载」
+   * 是两件完全不同的事：前者是模型在幻觉，后者是筛选判断失误。
+   * 执行层需要知道本轮到底给了哪些工具，才能在失败时给模型一条**能立刻走通**的
+   * 出路（列出可用工具），而不是笼统地说「不存在」。
+   */
+  availableTools?: string[]
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -749,10 +758,11 @@ export function withSideEffects<T extends { name: string; sideEffect?: boolean; 
   return def
 }
 
-// deniedTools 刻意**不**给默认值：它不是「默认参数」，而是「调用方必须显式声明
-// 本次运行禁止哪些工具」。给个空数组默认值会让人以为「没传 = 没有限制」，
-// 而真实语义是「没传 = 这层保护没生效」。用 Omit 把它排除在 Required 之外。
-const DEFAULT_RETRY_CONFIG: Required<Omit<RetryConfig, 'deniedTools'>> = {
+// deniedTools / availableTools 刻意**不**给默认值：它们不是「默认参数」，
+// 而是「调用方必须显式声明本次运行的限制与暴露面」。给空数组默认值会让人以为
+// 「没传 = 没有限制」，而真实语义是「没传 = 这层保护/提示没生效」。
+// 用 Omit 把它们排除在 Required 之外。
+const DEFAULT_RETRY_CONFIG: Required<Omit<RetryConfig, 'deniedTools' | 'availableTools'>> = {
   timeoutMs: 60000,  // 🔧 v3.8.1: 30→60s（大项目文件搜索 30s 不够）
   maxRetries: 2,
   backoff: 'exponential',
@@ -842,11 +852,46 @@ export async function executeToolWithRetry(
     }
   }
 
+  // 🚧 本轮未暴露的工具 → 拒绝，并如实说明（区别于「不存在」）
+  //
+  // 【为什么拦】暴露列表由 toolRouter 按用户这句话决定（核心 31 个常驻 + 关键词
+  //   命中的能力组）。模型调了一个**没暴露**的工具，说明筛选判断失误。
+  //   这里刻意**不**放行：
+  //     · 暴露边界在这个产品里一直是「能力边界」，静默绕过会与设计矛盾
+  //     · 更重要的是，这是一条**该被看见的信号** —— 放行等于把「路由判断错了」
+  //       悄悄吸收掉，我们永远不知道关键词该补什么。所以拒绝 + 大声记日志。
+  if (cfg.availableTools && cfg.availableTools.length > 0
+      && !cfg.availableTools.includes(name)) {
+    const isRegistered = toolDefinitions.has(name)
+    console.warn(
+      `[registry] 🚧 模型调用了本轮未暴露的工具 "${name}"` +
+      `（已注册=${isRegistered}）—— 路由可能判断失误，请检查 toolRouter 关键词`,
+    )
+    return buildNotExecutedResult(
+      isRegistered
+        ? `工具 "${name}" 本轮未加载（该能力存在，但你这句请求里没有触发它的信号）`
+        : `工具 "${name}" 不存在`,
+      `本次调用完全没有发生。` +
+      (isRegistered
+        ? `\n如果确实需要这个能力，请先说明你要做什么（例如「帮我看看明天的日程」），` +
+          `或改用下面已提供的工具完成。`
+        : `\n请只使用下面列出的工具名，不要自创工具名。`) +
+      `\n\n本轮实际可用的工具（共 ${cfg.availableTools.length} 个）：\n${cfg.availableTools.join(', ')}`,
+    )
+  }
+
   // 工具不存在 → 显式失败，避免 LLM 把「换一个工具」的引导语当成执行结果
   if (!toolImplementations.has(name)) {
+    // 🔧 2026-10-07：原来的提示只列了 3 个搜索工具，无论模型调的是什么都是这一句，
+    //   对「模型想要一个日历工具」这种请求毫无帮助。现在如实说明 + 列出可用工具。
+    //   （「已注册但本轮未暴露」的情况在上面的 🚧 分支已处理，这里只剩真·不存在。）
+    const avail = cfg.availableTools
+    const availHint = avail && avail.length > 0
+      ? `\n\n本轮实际可用的工具（共 ${avail.length} 个）：\n${avail.join(', ')}`
+      : '\n\n请只使用已提供的工具名，不要自创工具名。'
     return buildNotExecutedResult(
       `工具 "${name}" 不存在`,
-      `本次调用完全没有发生。可改用以下搜索工具之一:\n- web_search(query="...") — Bing 搜索\n- browser(action="search", query="...") — 浏览器搜索\n- web_fetch(url="...") — 抓取网页内容`,
+      `本次调用完全没有发生。请只使用已提供的工具，不要自创工具名。${availHint}`,
     )
   }
 

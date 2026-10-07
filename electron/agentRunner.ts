@@ -3582,8 +3582,14 @@ private summarizer: ConversationSummarizer | null = null
    *   更会让这种幻觉真的执行下去，从而绕过 worker 的工具黑名单。
    *   暴露层是白名单、执行层是黑名单，两层都必须成立。
    */
-  private toolRetryConfig(): { deniedTools: string[] } {
-    return { deniedTools: this.config.disabledTools || [] }
+  private toolRetryConfig(): { deniedTools: string[]; availableTools: string[] } {
+    return {
+      deniedTools: this.config.disabledTools || [],
+      // 📋 把本轮真正暴露的工具名带下去：模型调了一个「存在但本轮未加载」的工具时，
+      //   执行层才能给出「本轮可用工具清单」这条能立刻走通的出路，
+      //   而不是笼统回一句「工具不存在」（那会把筛选判断失误伪装成模型幻觉）。
+      availableTools: this._exposedTools,
+    }
   }
 
   private getToolsForMode(): { tools: string[]; toolsetName: string } {
@@ -3742,6 +3748,10 @@ private summarizer: ConversationSummarizer | null = null
       console.log(`[getToolsForMode] 🧩 情绪因果链：${causalNote}`)
     }
 
+    // 📋 记下本轮真正暴露的工具名 —— 供执行层在「模型调了未加载的工具」时
+    //   给出可用清单（否则会把它误报成「工具不存在」）。
+    this._exposedTools = tools
+
     return { tools, toolsetName }
   }
 
@@ -3760,6 +3770,11 @@ private summarizer: ConversationSummarizer | null = null
    *   这是「agent 不会写代码」的直接根因：模型既不知道要委托、也没有编程纪律。
    */
   private _pendingUserText = ''
+  /**
+   * 📋 本轮按需筛选后**真正暴露**给模型的工具名（由 getToolsForMode 写入）。
+   * 供执行层在「模型调了未加载的工具」时给出可用清单 —— 见 toolRetryConfig()。
+   */
+  private _exposedTools: string[] = []
 
   /** 🔍 最近一次情绪收紧的审计 id（空串 = 本轮未收紧）；供 UI 跳转审计详情 */
   private _lastGateAuditId = ''

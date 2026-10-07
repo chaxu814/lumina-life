@@ -290,6 +290,79 @@ describe('⑧ 招牌场景必须能触发对应能力（README 承诺的口语�
   })
 })
 
+describe('⑩ 🔴 自然口语命中率（防关键词退化）', () => {
+  beforeAll(() => { registerAllTools() })
+  beforeEach(() => { _resetAllToolRouting() })
+
+  // 【这个用例的来历】
+  // 2026-10-07 用 67 条**自然口语**压测，命中率只有 **60%** ——
+  // 因为关键词当初是照着「工具名 / 书面语」写的，而用户说的是口语：
+  //   「我桌面文件太乱了」  ← 关键词只写了「桌面太乱」（顺序不同就漏）
+  //   「帮我截个屏」        ← 只写了「截图」
+  //   「这个网页打不开」    ← 只写了「网站」
+  //   「帮我写个方案」      ← creator 组 4 条全漏
+  // 补完关键词后升到 100%。本用例把这些说法固化下来，防止以后改关键词时退化。
+  //
+  // ⚠️ 注意它**不是**「语义理解」的证明 —— 它只证明这批说法覆盖到了。
+  //   关键词永远是长尾，真正的语义路由见 toolRouter.ts 顶部的说明。
+  const NATURAL_PHRASINGS: Array<[string, string[]]> = [
+    ['computer_use', ['帮我点一下那个按钮', '帮我在那个窗口里输入文字', '打开记事本打几个字', '把鼠标移到右上角', '帮我关了那个弹窗', '这个软件怎么操作', '帮我自动填一下', '屏幕上看不到按钮，帮我找找']],
+    ['calendar', ['我下午有什么安排', '帮我看看明天几点开会', '三点要见客户，帮我记一下', '这周有什么日程', '帮我排个时间', '我什么时候有空']],
+    ['tasks_schedule', ['半小时后提醒我', '每天早上叫我起床', '到点了提醒我一下', '帮我定个闹钟', '每周一提醒我交周报']],
+    ['desktop_tidy', ['我桌面文件太乱了', '帮我收拾一下桌面', '桌面一堆文件帮我归归类', '把桌面清理一下']],
+    ['system_extra', ['帮我截个屏', '复制一下这段', '帮我打开这个文件夹', '看看哪个进程占内存', '把这个存到剪贴板']],
+    ['memory_deep', ['我们之前聊过什么', '你还记得我上次说的吗', '帮我回忆一下', '把我们聊的总结一下']],
+    ['team_advanced', ['让队友帮我一起弄', '这个活太多了，找人分担一下', '帮我做个完整的项目', '让 Yak 看看这段代码']],
+    ['mcp', ['接入一个外部工具', '配置一下 MCP']],
+    ['voice', ['帮我念出来', '把这段读给我听', '开启语音输入']],
+    ['weather', ['今天冷吗', '外面下雨没', '明天要带伞吗']],
+    ['mail', ['有没有人给我发邮件', '帮我发封邮件', '回一下这封邮件']],
+    ['social', ['帮我发个动态', '在朋友圈发一条']],
+    ['creator', ['帮我写个方案', '写一篇公众号', '帮我起个标题', '生成一张图']],
+    ['news', ['今天有什么大事', '看看科技圈发生了什么', '给我念念今天的资讯']],
+    ['gaming', ['陪我玩会游戏', '帮我看看游戏状态']],
+    ['pomodoro', ['我要开始专注了', '帮我计时 25 分钟']],
+    ['research', ['帮我深入调研一下这个行业']],
+    ['git_ops', ['把改动存一下', '看一下我改了什么', '这个仓库的历史']],
+    ['browser_actions', ['这个网页打不开', '帮我登录那个网站', '在页面上填一下表单']],
+  ]
+
+  const agent = () => resolveToolset('agent')
+
+  it('每条自然口语都能激活对应能力组（不允许退化）', () => {
+    const failures: string[] = []
+    let total = 0
+    for (const [group, phrases] of NATURAL_PHRASINGS) {
+      for (const p of phrases) {
+        total++
+        _resetAllToolRouting()
+        const r = routeTools(agent(), 'agent', p, 'natural')
+        if (!r.groups.includes(group)) {failures.push(`「${p}」→ 期望 ${group}，实际 [${r.groups.join(',') || '无'}]`)}
+      }
+    }
+    expect(
+      failures,
+      `这些自然口语没能激活对应能力组 —— 用户这么说时，那类工具就不会进 function list：\n  ` +
+      failures.join('\n  ') +
+      `\n\n修法：往 toolRouter 的 CAPABILITY_GROUPS 里补口语化关键词。` +
+      `中文口语会把动词拆开（点一下 / 截个屏 / 念出来），只写书面语会漏。`,
+    ).toEqual([])
+    expect(total).toBeGreaterThanOrEqual(60)
+  })
+
+  it('闲聊不应该误触发任何能力组（避免白花 token）', () => {
+    const chitChat = ['早上好呀', '今天好累啊', '你在干嘛呢', '哈哈哈哈哈', '嗯嗯好的', '谢谢你']
+    const triggered: string[] = []
+    for (const c of chitChat) {
+      _resetAllToolRouting()
+      const r = routeTools(agent(), 'agent', c, 'chat-probe')
+      if (r.groups.length > 0) {triggered.push(`「${c}」→ ${r.groups.join(',')}`)}
+    }
+    expect(triggered, `闲聊不该激活能力组（每激活一组就多花 token）：\n  ${triggered.join('\n  ')}`)
+      .toEqual([])
+  })
+})
+
 describe('⑨ 真的省了 token', () => {
   beforeAll(() => { registerAllTools() })
   beforeEach(() => { _resetAllToolRouting() })

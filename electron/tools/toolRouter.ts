@@ -111,6 +111,9 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
       '并行', '雇佣', '招聘', '实习生', '评审', '审查', '对抗', '验收', '复核',
       '流程', '工作流', '里程碑', '绩效', '统计', '日志', '角色', 'worktree',
       '独立分支', '任务板', '泳道', '项目', '完整', '重构', '发布', '自动化',
+      // 🆕 口语化说法（实测漏掉）：「这个活太多了，找人分担一下」「让 Yak 看看」
+      '找人', '分担', '活太多', '忙不过来', '让 yak', '让yak', '@yak',
+      '让热茶', '@热茶', '找 yak', '找热茶', '叫 yak', '叫热茶',
       'team', 'worker', 'workflow', 'review', 'delegate', 'subagent',
     ],
     tools: [
@@ -133,6 +136,9 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '日历', '日程', '会议', '安排', '约会', '排期', '时间表', '空闲',
       '什么时候', '有没有空', '提醒我开会', 'calendar', 'meeting', 'schedule',
+      // 🆕 口语化（实测漏掉）：「明天几点开会」「三点要见客户，帮我记一下」「帮我排个时间」
+      '几点开', '开会', '见客户', '排个时间', '排时间', '记一下', '订个',
+      '行程', '安排一下',
     ],
     tools: ['calendar_list', 'calendar_add', 'calendar_remove', 'calendar_free'],
   },
@@ -141,6 +147,8 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '定时', '每天', '每周', '每月', '提醒', '循环', '稍后', '闹钟',
       '时间胶囊', '定期', 'cron', 'remind', 'timer', 'daily', 'weekly',
+      // 🆕 「半小时后提醒我」「每天早上叫我起床」「到点了提醒我一下」
+      '叫醒', '叫我起床', '到点', '半小时后', '一小时后', '多久后',
     ],
     tools: ['cron_schedule', 'cron_list', 'cron_cancel', 'time_capsule'],
   },
@@ -149,6 +157,9 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '整理', '收拾', '归类', '归档', '桌面太乱', '清理桌面', '文件太多',
       '乱七八糟', 'tidy', 'organize',
+      // 🆕 实测漏掉：「我桌面文件太乱了」「把桌面清理一下」
+      '桌面文件', '太乱', '桌面乱', '清理一下桌面', '收拾桌面', '桌面一堆',
+      '归归类', '清理一下',
     ],
     tools: ['desktop_tidy_scan', 'desktop_tidy_plan', 'desktop_tidy'],
   },
@@ -157,11 +168,14 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
   system_extra: {
     label: '系统操作',
     keywords: [
-      // ⚠️ 中文口语里「截个图 / 截一下图 / 截屏」比「截图」更常见，
+      // ⚠️ 中文口语里「截个图 / 截一下图 / 截屏 / 截个屏」比「截图」更常见，
       //   只写「截图」会漏掉最典型的说法（这是实测踩到的坑）。
-      '截图', '截个图', '截一下图', '截屏', '截张图',
+      '截图', '截个图', '截一下图', '截屏', '截张图', '截个屏', '截一下屏',
       '剪贴板', '复制', '粘贴', '打开文件', '打开软件', '进程',
       '系统信息', '内存', 'cpu', '磁盘', '通知', '弹窗', 'screenshot', 'clipboard',
+      // 🆕 实测漏掉：「帮我打开这个文件夹」「看看哪个进程占内存」
+      '打开文件夹', '打开目录', '打开这个文件夹', '文件夹', '目录',
+      '占内存', '占 cpu', '多少内存',
     ],
     tools: ['open_file', 'screenshot', 'clipboard_get', 'clipboard_set', 'process_list', 'system_info', 'notification'],
   },
@@ -170,6 +184,8 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '回忆', '记得', '记忆', '以前', '之前说过', '忘了', '翻翻',
       '总结一下我们', '聊过什么', 'remember', 'recall', 'memory',
+      // 🆕 实测漏掉：「把我们聊的总结一下」
+      '我们聊的', '我们聊过', '聊过的', '回顾一下我们', '我们之前', '之前聊',
     ],
     tools: ['memory_all', 'memory_summarize', 'memory_chat_search'],
   },
@@ -192,6 +208,10 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
       '鼠标', '键盘', '窗口', '软件界面', '屏幕', '识别图', '图片识别',
       'ocr', '桌面程序', '自动化操作', '帮我操作', '输入框', '按钮',
       '打开那个软件', '打开软件', '打开应用', '帮我打开', '软件里',
+      // 🆕 实测漏掉：「打开记事本打几个字」「帮我关了那个弹窗」
+      //   「这个软件怎么操作」「帮我自动填一下」
+      '记事本', '打几个字', '输入文字', '打字', '关了那个', '关闭窗口',
+      '关掉', '怎么操作', '自动填', '自动操作', '填一下', '输入到',
     ],
     tools: [
       'desktop_act', 'desktop_element_act', 'desktop_scan', 'desktop_click',
@@ -204,6 +224,8 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '登录', '填表', '表单', '点按钮', '网页操作', '自动填', '抓取网页',
       '打开网站', '浏览器', '网站', '页面上', 'browser', 'login', 'form',
+      // 🆕 实测漏掉：「这个网页打不开」——只写了「网站」漏了「网页」
+      '网页', '页面', '站点', '打不开', '加载不出',
     ],
     tools: [
       'browser_open', 'browser_click', 'browser_type', 'browser_read',
@@ -229,6 +251,8 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '语音', '朗读', '念给我', '读出来', '听写', '录音', '转录', '播报',
       'tts', '语音输入', '说话给我听',
+      // 🆕 实测漏掉：「帮我念出来」「把这段读给我听」
+      '念出来', '读给我听', '读一遍', '念一下', '读一下', '念给我听', '语音朗读',
     ],
     tools: [
       'voice_speak', 'hearing_start', 'hearing_stop', 'hearing_status',
@@ -237,17 +261,21 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
   },
   weather: {
     label: '天气',
-    keywords: ['天气', '气温', '下雨', '会不会冷', '温度', '穿什么', '紫外线', 'weather'],
+    keywords: [
+      '天气', '气温', '下雨', '会不会冷', '温度', '穿什么', '紫外线', 'weather',
+      // 🆕 实测漏掉：「今天冷吗」「明天要带伞吗」
+      '冷吗', '热吗', '带伞', '要穿', '下雪', '晴天', '阴天', '多少度', '下雨没',
+    ],
     tools: ['weather', 'weather_get', 'weather_brief'],
   },
   mail: {
     label: '邮件',
-    keywords: ['邮件', '邮箱', '发信', '收信', '来信', 'email', 'mail'],
+    keywords: ['邮件', '邮箱', '发信', '收信', '来信', 'email', 'mail', '回一封', '发封'],
     tools: ['mail_send', 'mail_list', 'mail_mark_read'],
   },
   social: {
     label: '社交动态',
-    keywords: ['朋友圈', '社交', '动态', '发帖', '渠道', '公众号', '微博', 'team social'],
+    keywords: ['朋友圈', '社交', '动态', '发帖', '渠道', '公众号', '微博', 'team social', '发条动态'],
     tools: ['social_engine', 'channel_send', 'channel_status'],
   },
   proactive: {
@@ -260,32 +288,44 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
     keywords: [
       '写文章', '文章', '大纲', '文案', '创作', '博客', '公众号文章',
       '生成图', '画一张', '配图', '写篇',
+      // 🆕 实测**全漏**：「帮我写个方案」「写一篇公众号」「帮我起个标题」「生成一张图」
+      '写个方案', '方案', '写一篇', '公众号', '标题', '起个标题', '起个名',
+      '生成一张', '生成图', '做个图', '写个文案', '写一段', '写一首', '写首诗',
+      '写个报告', '帮我写',
     ],
     tools: ['creator_outline', 'creator_generate', 'creator_export', 'creator_enrich', 'image_generate'],
   },
   news: {
     label: '资讯日报',
-    keywords: ['新闻', '资讯', '日报', '热点', 'b站', 'bilibili', '今日要闻', 'arxiv', 'paper'],
+    keywords: [
+      '新闻', '资讯', '日报', '热点', 'b站', 'bilibili', '今日要闻', 'arxiv', 'paper',
+      // 🆕 实测漏掉：「今天有什么大事」「看看科技圈发生了什么」
+      '大事', '科技圈', '发生了什么', '有什么新鲜事', '热搜', '有什么新闻',
+    ],
     tools: ['daily_paper', 'bilibili_hot_search', 'bilibili_hot_push', 'code_daily_generate', 'code_daily_weekly'],
   },
   gaming: {
     label: '游戏',
-    keywords: ['游戏', '玩一局', '我的世界', '打游戏', 'minecraft'],
+    keywords: ['游戏', '玩一局', '我的世界', '打游戏', 'minecraft', '陪我玩'],
     tools: ['game_action', 'game_status', 'game_look', 'game_auto', 'game_chat'],
   },
   pomodoro: {
     label: '番茄钟',
-    keywords: ['番茄钟', '番茄', '专注', '计时器', '倒计时', 'pomodoro'],
+    keywords: ['番茄钟', '番茄', '专注', '计时器', '倒计时', 'pomodoro', '计时', '开始专注'],
     tools: ['pomodoro_start', 'pomodoro_status', 'pomodoro_stop'],
   },
   research: {
     label: '深度研究',
-    keywords: ['深度研究', '调研', '研究报告', '深挖', '深入调查', 'deep research'],
+    keywords: ['深度研究', '调研', '研究报告', '深挖', '深入调查', 'deep research', '深入调研'],
     tools: ['deep_research'],
   },
   git_ops: {
     label: '版本控制',
-    keywords: ['提交', 'commit', 'git', '分支', '仓库', '版本', '回滚', '改动', 'diff', '推送代码'],
+    keywords: [
+      '提交', 'commit', 'git', '分支', '仓库', '版本', '回滚', '改动', 'diff', '推送代码',
+      // 🆕 实测漏掉：「看一下我改了什么」「把改动存一下」
+      '改了什么', '我改的', '变更', '存一下', '存档', '代码存', '提交代码',
+    ],
     tools: ['git_status', 'git_commit', 'git_log', 'git_diff'],
   },
 }

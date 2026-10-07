@@ -182,3 +182,49 @@ describe('④ 执行层拒绝名单（防别名绕过黑名单）', () => {
     expect(r.ok).toBe(true)
   })
 })
+
+describe('⑤ 报错要如实区分「不存在」与「本轮未加载」', () => {
+  beforeAll(() => { registerAllTools() })
+
+  // 【为什么需要】
+  // 加了按需筛选后，「工具不存在」和「工具本轮没加载」是两件完全不同的事：
+  //   · 不存在 = 模型在幻觉（比如编了个 `send_tweet`）
+  //   · 未加载 = 筛选判断失误（工具真实存在，只是这句请求没触发它）
+  // 旧实现无论哪种都回一句「工具不存在」—— 把**筛选失误伪装成模型幻觉**，
+  // 模型于是永远不知道自己其实可以请求那个能力。
+  it('调一个真实存在但未暴露的工具 → 说「本轮未加载」，不说「不存在」', async () => {
+    // calendar_add 是真实注册的工具；这里刻意只暴露 file_read
+    const r = await executeToolWithRetry(
+      'calendar_add', { title: 'x' },
+      { availableTools: ['file_read', 'web_search'] },
+    )
+    expect(r.ok).toBe(false)
+    expect(r.content, '真实存在的工具被误报成「不存在」').not.toContain('不存在')
+    expect(r.content).toContain('本轮未加载')
+  })
+
+  it('调一个真正不存在的工具 → 说「不存在」', async () => {
+    const r = await executeToolWithRetry(
+      'send_tweet_to_elon', {},
+      { availableTools: ['file_read'] },
+    )
+    expect(r.ok).toBe(false)
+    expect(r.content).toContain('不存在')
+  })
+
+  it('失败信息里带上「本轮可用工具清单」，让模型能立刻改道', async () => {
+    const avail = ['file_read', 'web_search', 'datetime']
+    const r = await executeToolWithRetry('calendar_add', {}, { availableTools: avail })
+    expect(r.content).toContain('本轮实际可用的工具')
+    for (const t of avail) {
+      expect(r.content, `可用清单里少了 ${t}`).toContain(t)
+    }
+  })
+
+  it('不传 availableTools 时不拦（向后兼容：无暴露信息就不做这层判断）', async () => {
+    // 没有暴露信息时无法区分「未加载」与「正常调用」，所以这层检查整体跳过，
+    // 已注册的工具照常执行 —— 保证老调用点行为不变。
+    const r = await executeToolWithRetry('datetime', {})
+    expect(r.ok, `不传 availableTools 时不该被拦：${r.error || ''}`).toBe(true)
+  })
+})
