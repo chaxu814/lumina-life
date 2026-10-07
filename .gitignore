@@ -196,6 +196,8 @@ docs/_ref/
 /docs/Lumina-*.md
 /docs/competitor-research-*.md
 /docs/发布修复交付报告-*.md
+# 本地归档（评测报告 / 内部交付说明 / 测试备份等已忽略文件的归集地；整目录不进仓库）
+/archive/
 
 # ── 测试运行时产生的临时备份 ─────────────────────────────────
 # memoryEvidence 相关用例会往仓库根目录写
