@@ -36,11 +36,11 @@ features:
     title: 真实记忆
     details: 三层记忆（事实/反思/人格）+ BM25 与 TF-IDF 经 RRF 融合的零依赖混合召回，含**防幻觉固化**的来源置信度机制。
   - icon: 🛠️
-    title: 132 个工具
+    title: 139 个工具
     details: 三档模式按需加载，支持 MCP 扩展与技能商店。
   - icon: 🛡️
     title: 智能沙箱
-    details: 双层安全审查（消息/参数级 + 命令级 26 条规则）、审批流、权限白名单、隐私遮罩。
+    details: 双层安全审查（消息/参数级 + 命令级 32 条规则）、审批流、权限白名单、隐私遮罩。
   - icon: 🎤
     title: 语音交互
     details: 麦克风录音 + Whisper ONNX 本地识别 + 多 provider TTS 输出。

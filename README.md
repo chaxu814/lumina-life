@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4040%20passing%20%2F%20281%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4040 tests passing across 281 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4235%20passing%20%2F%20292%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4235 tests passing across 292 test files"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
-  <img src="https://img.shields.io/badge/code-236k%20lines-4c1?style=flat-square&labelColor=1a1a2e" alt="236k lines of code">
+  <img src="https://img.shields.io/badge/code-251k%20lines-4c1?style=flat-square&labelColor=1a1a2e" alt="251k lines of code">
 </p>
 
 <h1 align="center">
@@ -54,8 +54,8 @@
 | 🟡 | **测试套件对负载敏感（flaky）** | 已修复一批「源码重构后测试未同步」的确定性失败（5 条，见下方 Quality Gates）；剩余个别时序测试在**慢机/并发下**仍可能间歇失败——套件不再声称「永远全绿」 | 持续收敛 |
 | 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
 | 🟡 | **无第三方技能生态** | 技能市场通道已通；`electron/skills/` 有 **13 个示例技能**、根 `skills/` 有 **7 个智能技能**，但**没有第三方技能可装** | 待社区 |
-| 🟡 | **`agentRunner.ts` 单文件 4135 行** | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
-| 🔵 | **5351 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
+| 🟡 | **`agentRunner.ts` 单文件 4149 行** | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
+| 🔵 | **5542 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
 | 🔵 | **Chromium sandbox 为 `false`** | 渲染进程安全由**应用层**承担（rolePolicy + securityGuard + sandboxRules + 审批流），**不是**浏览器沙箱；文档已按此更正 | 已澄清 |
 
 > 💡 **在 Windows + LM Studio 上遇到「很卡 / 首 token 很慢」？先跑 `lumina health`（或界面「更多设置 → 诊断工具 → 🩺 模型体检」）。**
@@ -392,27 +392,27 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 | 闸门 | 命令 | 实测结果 |
 |---|---|---|
-| 测试套件 | `npm test` | **281 个测试文件 · 4040 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
+| 测试套件 | `npm test` | **292 个测试文件 · 4235 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
 | 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
-| 代码规范 | `npm run lint` | **0 error / 5351 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
+| 代码规范 | `npm run lint` | **0 error / 5542 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
 | CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
 | 打包 | `.github/workflows/release.yml` | Windows / macOS / Linux 三平台；**无签名证书时降级出包而不失败** |
 
 > ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
 > 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
-> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 281 文件 / 4040 通过 / 0 失败。
+> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 292 文件 / 4235 通过 / 0 失败。
 > 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
 > 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
 
-**代码规模**（不含依赖与构建产物，2026-10-11 实测）：
+**代码规模**（不含依赖与构建产物，2026-10-14 实测）：
 
 | 模块 | 行数 | 占比 |
 |---|---:|---:|
-| `electron/` 主进程 | 141,985 | 60% |
-| `src/` 渲染进程 | 53,747 | 23% |
-| `tests/` | 40,128 | **17%** |
-| 其余（python / scripts / agents / skills） | ~2,900 | 1% |
-| **合计** | **~236,000** | 100% |
+| `electron/` 主进程 | 148,434 | 59% |
+| `src/` 渲染进程 | 55,402 | 22% |
+| `tests/` | 43,268 | **17%** |
+| 其余（python / scripts / agents / skills） | ~3,700 | 2% |
+| **合计** | **~251,000** | 100% |
 
 > 📌 **测试代码占全仓约 17%**。同赛道的头部项目靠社区规模或基金会输血，
 > Lumina 在发布时什么都没有，只能靠自己写的测试。
@@ -423,7 +423,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 因为他们搜不到任何 issue、discussion 或第三方评测。如果你正在考虑用 Lumina
 跑真任务，这张表应该比功能列表更能帮你做决定。
 
-**我们也如实说明短板**：`tsc --strict` 是绿的，但 `eslint` 仍有 5351 条
+**我们也如实说明短板**：`tsc --strict` 是绿的，但 `eslint` 仍有 5542 条
 `no-explicit-any` warning（集中在测试与 LLM 消息边界）。它不阻塞发布——
 因为有棘轮机制管着只会减少；但我们不假装它是零。
 
@@ -451,7 +451,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：281 文件 · 4040 用例通过 / 1 skipped / 0 失败**（本机实测；
+Linux 为 roadmap。**测试规模：292 文件 · 4235 用例通过 / 1 skipped / 0 失败**（本机实测；
 ⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
 `tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
@@ -460,7 +460,7 @@ Linux 为 roadmap。**测试规模：281 文件 · 4040 用例通过 / 1 skipped
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：281 文件 / 4040 passed / 1 skipped
+npx vitest run             # 预期：292 文件 / 4235 passed / 1 skipped
 node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
 ```</sub>
 
@@ -566,6 +566,10 @@ Lumina 不是「开了就不花钱」的工具：**主动搭话、桌宠情绪�
 
 > 也就是说：**就算把主动与社交全部开满，flash 档一天也不到 4 毛钱**；真正吃 token 的是你和她的对话本身。
 > 若用 `deepseek-v4-pro`，上表乘 12–24 倍（非高峰可压到 3–6 倍）。建议在 DeepSeek 后台设**余额告警 / 预算上限**，避免忘记关时账单失控。
+
+> 🛡️ **不想自己盯账单？** 内置的「预算守护者」（设置 → 实验功能，默认开启）可以在应用内设每日预算上限：
+> 用到 80% 温柔提醒，95% 自动降级到更便宜的模型并暂停非必要后台调用，100% 只保留你主动发起的对话——
+> 只收紧、不放宽，0 点自动重置。详见下文「实验功能」一节。
 
 **想把持续消耗降到 0？** 全部开关路径：
 
@@ -822,7 +826,7 @@ lumina-life/
 | 自动更新 Auto Update | electron-updater (GitHub Releases) |
 | 协议支持 Protocols | MCP (Model Context Protocol) |
 | 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **281 文件 / 4040 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| 测试规模 Tests | **292 文件 / 4235 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
 
 ---
 
@@ -846,11 +850,31 @@ lumina-life/
 **🔜 v0.4.0** — macOS 实机验证与签名公证 · Linux 键鼠方案
 **🔜 v1.0** — IM 渠道端到端真机验证（接线已完成，7 个适配器）· 技能市场生态 · 多端记忆同步
 
+> 💡 **未来创意（计划中 / 未实现，仅记录方向）**：
+> ① 成本可观测的演示录制——演示视频与新手引导里同步展示「这一步花了多少 token」，让成本从黑盒变成看得见的数字；
+> ② 技能 / 人格外观的市场生态——让创作者可以上架技能包与桌宠外观，形成社区供给。
+
 ### 🧪 实验性 / 彩蛋功能（非主线，请勿当真）
 
 - **梦境日记、Agent 真人秀**：已接 LLM 真实生成（在设置里配好 LLM 后即走真实模型）；未配置时回退到 **9 个情绪锚点模板 + 记忆片段关键词**，UI 用 `来源: llm / 来源: template` 诚实标注，绝不假装是大模型写的。
 - **记忆检索**：默认 BM25 + TF-IDF 双路 RRF 混合召回（已实现、零依赖；中文用 unigram+bigram 字符级分词，无词典）；dense 语义向量（Ollama nomic-embed-text 或外部 embedding 服务）可在记忆设置中开启，提供更强语义匹配。
 - **副人格觉醒（实验）**：最小真实机制已上线——基于长期记忆 + 情绪状态的人格漂移 / 副视角，触发条件为「高亲密度 + 累计约 200 轮对话」或「持续高焦虑」，置于 `personality.subPersona` 开关后**默认关闭**、可随时关；仍属实验性，不代表核心陪伴能力。
+
+### 🧪 实验功能（v0.1 新增 · 设置 → 实验功能）
+
+以下六项是随 v0.1 一起接线的新能力，除「预算守护者」外**默认全部关闭**，都可以在
+**设置 → 实验功能**里逐项打开/关闭。它们尚在观察期，所以默认不打扰你。
+
+| 功能 | 默认 | 做什么 |
+|------|------|--------|
+| 🛡️ **预算守护者** | **开** | 统一记录每一次 LLM 调用的真实花费（拿不到 usage 时显式标注「估算」），内置 DeepSeek/硅基/通义/OpenAI 单价表；可设每日预算。**只收紧、不放宽**：80% 提醒 + 桌宠进入「精打细算」态，95% 自动降级便宜模型并暂停非必要后台调用，100% 只保留你主动发起的对话；每天 0 点自动重置，全程留审计因果链。 |
+| 📼 **Day Replay** | 关 | 把当天的账本、命令审计、任务看板、雇工执行聚合成一条时间线——你做了什么、改了哪些文件、几轮对话、花了多少 token——面板里回看，也可导出 Markdown / 纯文本。 |
+| 📊 **情绪 × 效率看板** | 关 | 在委托和工具执行时快照当时的情绪三维与结果，分桶统计趋势，支持 CSV/JSON 导出。两个诚实设计：① A/B 对照开关一旦打开「对照组」，UI 会明示**对照组会关闭情绪门控这一收紧机制**；② 每桶样本不足 30 条时直接显示「数据不足，不构成结论」，不硬给趋势。 |
+| 🌙 **仪式感闭环** | 关 | 睡前复盘（默认 23:00：聚合 Day Replay → LLM 口播 → TTS + 桌宠动作）与晨间简报（默认 8:00：天气/日历/待办/未完成事项）。TTS 缺失时降级为文字气泡；没配 LLM 时走模板并标注「来源: llm / template」，绝不假装是模型写的；预算超限时自动暂停。 |
+| ⚖️ **决策三栏** | 关 | 输入 `/decide` 或「帮我决定…」触发：执行者视角列利弊、审查员视角挑风险、Lumina 给出最终建议，三栏卡片并排呈现。你永远只跟 Lumina 一个入口对话，后台分工不外露。 |
+| 🤝 **交班模式** | 关 | 生成交班卡片（当天摘要 + 待审批 + 待办 + 三个 Agent 状态，带时间戳与过期时间），本地加密导出（口令经 scrypt/pbkdf2 派生 + AES-256-GCM，`.lumina-handover` 文件），二维码走**局域网 URL**；手机打开 `/m` 交班视图后**在手机页面端输入口令解密**，批准/拒绝复用现有审批接口。快照过期自动失效，且明示仅局域网可用、勿暴露公网。 |
+
+> 另外：P2-8 命令护栏已接线——REJECT 层 6 条危险命令（递归删根/格式化/关机/删注册表/管道执行/fork 炸弹）**默认开、命中即拦**；APPROVAL 层 8 条（写注册表/关防火墙/写系统目录/提权/外发等）走 feature flag `security.commandApproval` **灰度默认关**，确认无误报后再转正。详见 [SECURITY.md](SECURITY.md)。
 
 ---
 
