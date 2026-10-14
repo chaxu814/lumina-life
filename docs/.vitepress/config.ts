@@ -26,6 +26,7 @@ export default defineConfig({
         items: [
           { text: '概述', link: '/' },
           { text: '架构设计', link: '/architecture' },
+          { text: '实验功能说明', link: '/features' },
         ],
       },
       {
