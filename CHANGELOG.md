@@ -79,8 +79,8 @@
 # 📝 Changelog — Lumina Life
 
 > **口径说明**：本文件记录**面向用户的真实变化**。发布前的审计过程、发现的问题与修复对照，
-> 见 [`docs/Lumina-发布前评测与复评-20261003.md`](docs/Lumina-发布前评测与复评-20261003.md)
-> 与 [`docs/Lumina-发布前深度评测-20261002.md`](docs/Lumina-发布前深度评测-20261002.md)。
+> 见 [`docs/archive/Lumina-发布前评测与复评-20261003.md`](docs/archive/Lumina-发布前评测与复评-20261003.md)
+> 与 [`docs/archive/Lumina-深度评测报告-20261002.md`](docs/archive/Lumina-深度评测报告-20261002.md)。
 > 质量基准与自测口径见 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)。
 
 ---

@@ -232,6 +232,11 @@
 2. 确认 Node 版本：仓库要求 Node.js 18+（CI 跑 Node 20/22）。
 3. 清干净重装：`rm -rf node_modules package-lock.json && npm install`。
 4. 若只在「打包后的 App」里报原生模块加载失败，确认 `package.json` 的 `build.asarUnpack` 已包含 better-sqlite3 / sharp / onnxruntime-node / @xenova / @img（仓库已配好，勿删）。
+5. **国内网络下 Electron 二进制下载失败**（TLS / `unable to verify the first certificate` / 超时）：先设 npmmirror 镜像再安装：
+   ```powershell
+   $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
+   npm install
+   ```
 
 ---
 

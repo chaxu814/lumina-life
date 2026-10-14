@@ -41,6 +41,13 @@ npm run dev        # 启动开发版
 ```
 > 若 `npm install` 在 better-sqlite3 处报 node-gyp 错误，见 docs/TROUBLESHOOTING.md §16。
 
+> 🇨🇳 **国内网络提示**：`npm install` 会从 GitHub 下载 Electron 二进制，网络受限时
+> 会报 TLS / 证书类错误。先设镜像再装：
+> ```powershell
+> $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
+> npm install
+> ```
+
 Windows 上 Computer Use（鼠标/键盘/截屏/UIA 元素树）开箱即用，无需额外授权。
 
 ---
@@ -104,4 +111,4 @@ npm run dev
 ## 常见问题
 
 - 原生模块编译失败 → 见 [TROUBLESHOOTING.md §16](TROUBLESHOOTING.md)。
-- 各平台 Computer Use 实际能力差异 → 见 [cross-platform-status.md](cross-platform-status.md)。
+- 各平台 Computer Use 实际能力差异 → 见 [internal/cross-platform-status.md](internal/cross-platform-status.md)。
