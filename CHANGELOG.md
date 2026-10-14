@@ -90,6 +90,45 @@
 > 这一版的核心不是「加功能」，是**把一批此前看起来能跑、实际跑不通的东西修好**。
 > 全部变更集中在发布前审计与真机验证，279 文件 / +23,021 行。
 
+---
+---
+
+## [Unreleased] — 发布就绪度复评（2026-10-08）
+
+> 对应 `docs/Lumina-深度测评报告-20261008.md` 的 P0/P1/P2 清单与"能力优化"两项。
+> 测试基线：3324 → **3514** 用例（+190），241 个测试文件（删 1 个空壳），`tsc --strict` 0 error，eslint 0 error。
+
+### 发布阻断项 P0
+
+- **补 `ws` 运行时依赖**（`package.json` dependencies）。`electron/realtimeClient.ts:11` 已 `import WebSocket from 'ws'`，但 `ws` 此前只在 `@types/ws` 类型上声明，**未声明包本身**。一旦启用实时语音链路会 `Module not found`。
+- **`/sessions/` 加入 `.gitignore`**。`git check-ignore` 实测该目录 `NOT IGNORED`，隐私兜底缺失——`git add -A` 可能误提交会话数据。
+
+### 发布前强烈建议 P1
+
+- **补 `@babel/parser` 到 dependencies**（`security/staticScanner.ts:16` 顶层 import，真实启动链路 `skillManager.ts:26` 加载）。此前靠传递依赖侥幸，换 pnpm 严格模式即崩。
+- **修 `7za-wrapper.cmd:3` 硬编码作者盘符**。原 `H:\LuminaLife2.0\...` 改为 `%~dp0node_modules\7zip-bin\win\x64\7za.exe`，跨贡献者机器可用。
+- **`stt-server/` 缺失时优雅降级**。`ipc/systemIpc.ts:841` 的 `hearing:start` 加 `fs.existsSync` 前置检测，缺失时返回 `{ ok: false, detail: '...' }` 与安装指引，不再静默 `ENOENT`。
+- **统一 README 三处测试数字**（3324/229、3071/212、2557 → 241 文件 / 3514 通过 / 1 skipped）。
+- **`package.json` 补 `engines` 与 `repository` 字段**。`engines.node >= 20`、`repository = chaxu814/lumina-life`，CI 矩阵本地有版本守卫。
+- **移动 `mineflayer` 从 devDependencies → dependencies**。Minecraft 集成是运行时能力，不是开发工具。
+
+### 工程底座收敛 P2
+
+- **删除 `tests/memoryStore.test.ts` 空壳**（唯一用例 `it.skip`，与 `electron/__tests__/memoryStore.test.ts` 重复）。测试文件数 242 → 241 但语义更诚实。
+- **修 `electron/tools/impl/fileRead.ts:74` 错误信息里的硬编码路径**（`J:\LuminaLife2.0\memory\MEMORY.md` → 「请检查路径拼写或使用绝对路径」），不再泄露作者旧工作目录。
+- **`electron/core/reactEngine.ts:359` 默认 `maxRounds` 从 `1_000_000` 改为 `30`**。此前任何绕过 `agentRunner` 直连 `ReActEngine` 的调用方会拿到无上限循环——把"防 ReAct 死循环"承诺落空。`agentRunner.ts:616` 仍固定传 30 保持优先。
+
+### README 措辞收敛（"不夸大"）
+
+- "昼夜节律" → "昼/夜两档"（实际是 `pet/life/drives.ts:75 isNight` 二值开关，**不是**连续正弦调制；同时澄清底层 9 个情绪标签 + 迟滞最近邻选 5 种主要表现）。
+- "CJK 友好" → "整段串+逐字字符级回退，无分词词典"（`hybridMemoryRetrieval.ts:44-61` 实测无 `Intl.Segmenter` 无 bigram）。
+- "四层 + 26 规则" → "双层审查 + 32 条命令规则"（`sandboxRules.ts` 实际 32 条，README 此前保守少报）。
+
+### 能力扩展：让两张表从 ❌/⚠️ 翻到 ✅
+
+- **"优化一下这个项目"（模糊任务）**：澄清机制已就位（`orchestration/vagueTaskGuard.ts` + `routingDecider.ts:121-125` 把它注入路由提示），模型会按 `renderClarificationRule` 先问再动，不再瞎猜或过度编排。
+- **"装个第三方技能"**：`skill_search`（搜社区 + 魔搭）+ `skill_install`（支持 `skillId` 与 `url` 直装）链路已完整；开箱预置 22 个技能（`browser_click_smart` / `code_review_smart` / `file_search_smart` / `install_skill` / `proactive_check` / `quick_setup` / `web_search_multi` / `bilibili_hot` / `code_daily` / `files_core` / `git` / `mcp` / `memory` / `pomodoro` / `shell` / `system` / `tasks` / `team` / `weather_brief` / `web_search` 等）。
+
 ### 🔴 致命：三 Agent 团队在**所有已发布的安装包里整个是坏的**
 
 首次**真机跑打包产物**（此前所有验证都是源码 + 单测）挖出：
@@ -335,6 +374,20 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 
 ### ⚠️ 未实机验证
 - Live2D 白屏、VLM 真实画面、焦点 AttachThreadInput、团队委托端到端、任务工作区 UI 滚动、mac/Linux 实机、dmg/AppImage 打包
+
+### 弱模型自动降级（轻量模式）+ 引导修正（2026-10-08 补充）
+
+> 对应深度测评报告"低配本地部署"讨论。小模型（≤7B）跑多 Agent 团队编排会频繁空回复，
+> 这是模型能力下限而非 Lumina bug。新增**全自动、零配置**的弱模型降级。
+
+- **新增 `electron/orchestration/weakModelMode.ts`**：`isLiteTier()`（仅 `nano`/<1.5B 与 `small`/<7B 为 true）、`LITE_TOOL_WHITELIST`（只留 `memory_search` / `web_search` / `file_read` 三类安全工具）、`LITE_SYSTEM_NOTE`（提示模型直接简洁回答、不要调团队工具）。
+- **`agentRunner.ts` 三处接线**：
+  - `loadAgentLLMConfig` 里 `resolveCapabilities(...).tier` 推导 `this._liteMode`（caps 块，仅 nano/small 打开）。
+  - `getToolsForMode()` 在全部硬性过滤之后，把工具裁到白名单；白名单被上游过滤全干掉时退回 `memory_search` 保底。
+  - `initSystemPrompt()` 在写入 `messages[0]` 前追加 `LITE_SYSTEM_NOTE`。
+- **README 引导修正**：删除过时的"默认指向 LM Studio 占位符"警告（代码 v14 实际默认云端 siliconflow/deepseek/zhipu），改为"默认云端优先 + 弱模型自动降级"说明，并写明低配机请用便宜云端 API、本地 Agent 至少 7B(Q4)/写码 14B+。
+- 验证：`tsc --strict` 0 error；新增 `tests/weakModelMode.test.ts`（3 用例）；`agentRunner.test.ts` 10 用例全绿。
+
 ## [Unreleased] — feature/crossplatform-gaming-onboarding 🚀 发布前大型改造（2026-09-23）
 
 > 本分支将 Roadmap v1.1.0/v1.3.0 的多个特性提前实现，目标是发布前大幅提升竞争力。

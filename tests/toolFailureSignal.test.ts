@@ -42,7 +42,11 @@ vi.mock('../electron/securityGuard', () => ({
 }))
 
 const registryPath = join(__dirname, '..', 'electron', 'tools', 'registry.ts')
+// ⚠️ 2026-10-11：toolResultText / notExecutedNote 已抽到 agentRunner.text.ts。
+//    合并两文件读取，断言不因文件拆分而失效。
 const runnerSrc = readFileSync(join(__dirname, '..', 'electron', 'agentRunner.ts'), 'utf-8')
+  + '\n'
+  + readFileSync(join(__dirname, '..', 'electron', 'agentRunner.text.ts'), 'utf-8')
 
 // 动态 import，确保 vi.mock 生效
 let registry: typeof import('../electron/tools/registry')

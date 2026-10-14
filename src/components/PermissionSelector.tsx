@@ -270,6 +270,9 @@ export default function PermissionSelector({
                   padding: '7px 9px', borderRadius: 6, border: 'none', cursor: 'pointer',
                   background: active ? 'var(--accent-50)' : 'transparent',
                   color: 'var(--text-primary)', textAlign: 'left', fontFamily: 'inherit',
+                  // 🆕 CSS 动画过渡：背景/左侧色条/文字色 平滑切换
+                  transition: 'background 0.22s ease, box-shadow 0.22s ease, color 0.18s ease',
+                  boxShadow: active ? `inset 3px 0 0 ${m.color}` : 'inset 3px 0 0 transparent',
                 }}
                 onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = 'var(--surface-100)' } }}
                 onMouseLeave={(e) => { if (!active) { e.currentTarget.style.background = 'transparent' } }}

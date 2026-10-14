@@ -287,7 +287,7 @@ export function assembleDigestHTML(
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
 
-  return `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.7;">
+  return `<div style="font-family: 'Microsoft YaHei', '微软雅黑', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.7;">
 <p>${html}</p>
 </div>`
 }

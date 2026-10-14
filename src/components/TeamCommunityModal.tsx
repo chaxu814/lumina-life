@@ -5,17 +5,25 @@
 // 类似 SettingsModal 的局内 UI 弹窗模式。
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import SocialPanel from '../panels/SocialPanel'
 import RealityShowPanel from '../panels/RealityShowPanel'
 import FamilyTreePanel from '../panels/FamilyTreePanel'
 import DreamPanel from '../panels/DreamPanel'
+import TeamCollabSection from '../panels/TeamCollabSection'  // 🆕 协作中心（从组群聊的 TeamPanel 迁入）
+import MemoryTheater from './MemoryTheater'                 // 🆕 剧场（从群聊 tab 迁入）
+import { LuminaDailyReport, TeamMilestones, YakTechNotes } from './NoteCycle'  // 🆕 日报/纪念日/Yak笔记
 import { useStore } from '../stores/appStore'
 import { isExperimental } from '../featureManifest'
 
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
   { id: 'social', icon: '🌐', label: '社区' },
+  { id: 'collab', icon: '🤝', label: '协作中心' },
+  { id: 'theater', icon: '🎭', label: '剧场' },
+  { id: 'daily', icon: '🌅', label: '日报' },
+  { id: 'milestone', icon: '💝', label: '纪念日' },
+  { id: 'yak', icon: '📘', label: 'Yak 笔记' },
   { id: 'reality', icon: '🎬', label: '真人秀🧪' },
   { id: 'familytree', icon: '🌳', label: '家谱' },
   { id: 'dream', icon: '🌙', label: '梦境🧪' },
@@ -30,6 +38,16 @@ interface TeamCommunityModalProps {
 
 export default function TeamCommunityModal({ open, onClose }: TeamCommunityModalProps) {
   const [activeSection, setActiveSection] = useState<SidebarId>('social')
+
+  // 🆕 外部（桌宠「生活」入口等）指定要打开的分区
+  useEffect(() => {
+    const onTab = (e: Event) => {
+      const s = (e as CustomEvent).detail?.section
+      if (s && SIDEBAR_ITEMS.some((it) => it.id === s)) {setActiveSection(s as SidebarId)}
+    }
+    window.addEventListener('lumina:team-community-tab', onTab as EventListener)
+    return () => window.removeEventListener('lumina:team-community-tab', onTab as EventListener)
+  }, [])
   const showExperimental = useStore((st) => st.showExperimental)
   const setShowExperimental = useStore((st) => st.setShowExperimental)
 
@@ -245,6 +263,11 @@ export default function TeamCommunityModal({ open, onClose }: TeamCommunityModal
           {/* 内容主体（可滚动） */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 20px' }}>
             {effectiveSection === 'social' && <SocialPanel />}
+            {effectiveSection === 'collab' && <TeamCollabSection />}
+            {effectiveSection === 'theater' && <MemoryTheater />}
+            {effectiveSection === 'daily' && <LuminaDailyReport />}
+            {effectiveSection === 'milestone' && <TeamMilestones />}
+            {effectiveSection === 'yak' && <YakTechNotes />}
             {effectiveSection === 'reality' && <RealityShowPanel />}
             {effectiveSection === 'familytree' && <FamilyTreePanel />}
             {effectiveSection === 'dream' && <DreamPanel />}

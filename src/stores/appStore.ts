@@ -565,7 +565,7 @@ export const useStore = create<AppStore>()(
           const { activeProviderId, configs } = result
           if (!configs || Object.keys(configs).length === 0) {return}
 
-          // 🩹 启动自愈：providers.json 与 agent-llm-configs.json 漂移时对齐
+          // 🩹 启动自愈：全局激活供应商**确实没配好**时，用 Lumina 的 Agent 配置补全
           //
           // 背景：历史上「一键检测本地模型」只改内存不落盘，
           // 导致两个配置源各说各话：
@@ -574,18 +574,22 @@ export const useStore = create<AppStore>()(
           // 用户看到「每次启动都固定显示第一次那个模型」，
           // 而实际跑的根本是另一个。
           //
-          // 判定：以 **agent-llm-configs.json 为准**——它才是真正发请求用的那份。
-          // 让 UI 显示的和实际跑的一致，比让 UI 显示它自己那份更重要。
-          // 仅在确实漂移时才修正，避免每次启动都写盘。
+          // 🔧 2026-10-10 收窄条件（用户报「每次重启 Team Agent 都要重配」）：
+          //   旧实现把「全局激活供应商与 Lumina 的 Agent 配置**不同**」当成漂移，
+          //   于是每次启动都触发。但「不同」是**合法**的 —— Team Agent 卡片
+          //   本来就允许每个 Agent 独立配置（全局 vs 团队是两套）。旧逻辑
+          //   叠加 setProviderConfig 里无条件的全局同步，会在启动时把用户
+          //   自己配好的 Team Agent 覆盖回全局供应商。
+          //   现在只在「全局激活项缺 model 或 baseUrl」（真的用不了）时才自愈，
+          //   这才是它本来要修的「UI 显示为空、Agent 却有配置」缺口。
           let activeId = activeProviderId
           try {
             const agentRes = await win.luminaAPI.agentLlmGetAllConfigs?.()
             const agentLumina = agentRes?.configs?.lumina
             const curActive = activeProviderId ? (configs as any)[activeProviderId] : null
             if (agentLumina?.endpoint && agentLumina?.model && curActive) {
-              const drifted = curActive.baseUrl !== agentLumina.endpoint
-                || curActive.model !== agentLumina.model
-              if (drifted) {
+              const globalBroken = !curActive.model || !curActive.baseUrl
+              if (globalBroken) {
                 const pid = agentLumina.provider || activeProviderId
                 await win.luminaAPI.providerSaveConfig?.(pid, {
                   baseUrl: agentLumina.endpoint,
@@ -594,12 +598,15 @@ export const useStore = create<AppStore>()(
                   enabled: true,
                   maxContextTokens: agentLumina.maxContextTokens || 256000,
                 })
+                // 同时激活它：否则 UI 显示「已配」，普通模式实际仍走空配置
+                try { await win.luminaAPI.providerSetActive?.(pid) } catch { /* 激活失败不阻塞 */ }
                 activeId = pid
                 const healed = await win.luminaAPI.providerGetAll?.()
                 if (healed?.configs) {Object.assign(configs, healed.configs)}
                 console.warn(
-                  `[appStore] 🩥 配置漂移已自愈：providers(${curActive.model}@${curActive.baseUrl})`
-                  + ` → agents(${agentLumina.model}@${agentLumina.endpoint})`,
+                  `[appStore] 🩥 全局激活供应商缺配置，已用 Agent 配置补全：`
+                  + `(${curActive.model || '∅'}@${curActive.baseUrl || '∅'})`
+                  + ` → (${agentLumina.model}@${agentLumina.endpoint})`,
                 )
               }
             }

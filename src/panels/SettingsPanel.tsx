@@ -16,7 +16,7 @@ import SettingsPrivacyFlags from './settings/SettingsPrivacyFlags'
 
 // ⚠️ 这里曾经还有一份 LLM_PROVIDERS + ProviderBtn（已删）。
 // 真正在用的是 ./settings/SettingsLLM.tsx 里那一份。两份列表曾经并存漂移过
-// —— 旧副本还留着已下线的「OpenCode Zen 免费入口」，很容易让人以为功能还在。
+// —— 旧副本长期不更新，很容易让人以为某些已下线的功能还在。
 // 厂商清单要改，只改 settings/SettingsLLM.tsx。
 
 const EDGE_VOICES = [

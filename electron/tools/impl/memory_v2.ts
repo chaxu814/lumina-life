@@ -11,6 +11,7 @@ import {
 } from '../../memory/memoryStore'
 // v3.34: 接上五维证据链（此前 memoryEvidence.ts 是 16KB 死代码）
 import { recordEvidence, contradictEvidence, rankByEvidence } from '../../memory/evidenceBridge'
+import { isEnabled } from '../../core/featureFlags'
 
 // ── 记忆保存 ────────────────────────────────────────────
 
@@ -41,6 +42,19 @@ export const memorySaveDef: ToolDef = {
 export async function memorySave(args: Record<string, any>): Promise<ToolResult> {
   const store = getMemoryStore()
   const { category, content } = args
+
+  // 🔗 记忆与进化开关（设置 → 记忆与进化）：
+  //   关掉后 memory_save 直接拒绝，并**如实告知**（绝不假装记下了）。
+  //   · 对话记忆      → fact / reflection / preference / habit
+  //   · 本地记忆与技能 → lesson / convention / system / persona
+  if (['fact', 'reflection', 'preference', 'habit'].includes(category)
+      && !isEnabled('memory.conversation')) {
+    return { callId: '', ok: false, content: '', error: '「对话记忆」已在 设置 → 记忆与进化 中关闭，本次未记录。' }
+  }
+  if (['lesson', 'convention', 'system', 'persona'].includes(category)
+      && !isEnabled('memory.localSkills')) {
+    return { callId: '', ok: false, content: '', error: '「本地记忆与技能」已在 设置 → 记忆与进化 中关闭，本次未记录。' }
+  }
 
   if (category === 'fact') {
     // 为什么不让调用方直接传 confidence:1.0 —— 模型幻觉一次就会被永久固化成「100% 确定的事实」，

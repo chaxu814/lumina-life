@@ -47,6 +47,11 @@ export function createLLMExecutor(
           temperature: config.temperature ?? 0.7,
           maxTokens: config.maxTokens ?? 2000,
           maxToolCalls: 5,
+          // 🆕 2026-10-10: 自驱循环是**后台**任务 —— 不得打断用户正在生成的回复。
+          //   主进程见 background:true 会在「用户对话进行中」让路（返回 skipped）。
+          //   子任务会被标为 failed 并在下一轮自动重试（loopEngine 的 maxRetries 机制），
+          //   所以让路是安全且可自愈的。
+          background: true,
           systemPrompt: [
             '你是一个高效的任务执行助手。',
             '根据任务描述完成工作，直接给出结果。',
@@ -59,6 +64,11 @@ export function createLLMExecutor(
 
       const content = result?.content || ''
       if (!content) {
+        // 后台任务在「用户正在对话」时会被主进程让路（返回 skipped）。
+        // 如实说明原因，便于下一轮重试，而不是误报成「模型返回空」。
+        if (result?.error === 'BACKGROUND_SKIPPED_FOREGROUND_RUNNING') {
+          return { ok: false, error: '用户正在对话，本轮后台任务已让路（下一轮自动重试）' }
+        }
         return { ok: false, error: 'LLM 返回空内容' }
       }
 

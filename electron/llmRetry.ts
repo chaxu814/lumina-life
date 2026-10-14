@@ -38,7 +38,6 @@ const SLOW_MODE_TIMEOUT = 600_000
 const SLOW_MODE_COOLDOWN = 3
 
 /** 流中心跳间隔：每 N ms 检查流是否还在传输数据 */
-const STREAM_HEARTBEAT_INTERVAL = 5_000
 
 /**
  * 全局慢速状态跟踪器
@@ -362,8 +361,11 @@ export async function fetchWithRetry(
           : controller.signal
         const timeoutId = setTimeout(() => controller.abort(), currentTimeout)
 
-        // v4.0: 流式心跳 — 每次触发时检查是否有数据到达
-        setupStreamHeartbeat(mergedSignal, timeoutId, currentTimeout)
+        // 🔧 2026-10-10：这里原来调用了 `setupStreamHeartbeat(...)`，
+        //   但它是个**空桩**（函数体只定义了从未被调用的 checkAndExtend，
+        //   末尾自述「这里提供接口框架」），实际不做任何事 —— 属于「看着有心跳、其实没有」。
+        //   已删除该调用与整套空桩实现（见文件顶部说明）。超时按上面的
+        //   `setTimeout(() => controller.abort(), currentTimeout)` 正常生效。
 
         const resp = await fetch(url, { ...fetchOptions, signal: mergedSignal })
         clearTimeout(timeoutId)
@@ -462,147 +464,26 @@ export async function fetchWithRetry(
 }
 
 // ═══════════════════════════════════════════════════════════
-// v4.0: 流式心跳 — 超时前检查是否有数据流动
+// ⚠️ 关于「流式心跳」的说明（2026-10-10 审计后清理）
+//
+// 这里原本有一组 v4.0 宣称的「流式心跳 / 空闲超时」实现
+// （setupStreamHeartbeat / fetchStreamingWithHeartbeat / fetchWithIdleTimeout），
+// 但审计发现：
+//   · `setupStreamHeartbeat` 的函数体自述「这里提供接口框架」—— 是个**空桩**，
+//     不会延长任何超时；
+//   · `fetchStreamingWithHeartbeat` / `fetchWithIdleTimeout` **全项目零调用**
+//     （只有本文件内部互相引用）。
+// 也就是说「聊天级流式心跳」从未生效，属于「文档宣称 > 实现」。
+//
+// 实际生效的超时机制在 electron/agentRunner.ts 的 callLLM：
+//   AbortSignal.any([用户中止信号, AbortSignal.timeout(总超时)])
+//   —— 总超时到点即取消（社交模式 12h / 普通 300–600s），不做空闲重置。
+//
+// 本文件保留真正被使用的部分：fetchWithRetry（IPC 连接测试用）、
+// 错误分类、速率限制与慢速模式状态。
+// 若将来要做「按空闲重置」的流式超时，请**新增实现并真正接进 callLLM**，
+// 而不是恢复这套空桩 —— 否则又会变成「有代码、没效果」。
 // ═══════════════════════════════════════════════════════════
-
-/**
- * 在超时即将触发前，给一次"心跳检查"窗口。
- * 如果流中有数据流动（signal 尚未 abort 且 fetch 在 pending），
- * 延长超时而不是直接 abort。
- *
- * 实现：在超时前 STREAM_HEARTBEAT_INTERVAL 毫秒，检查 signal。
- * 如果 signal 未被 abort，说明 fetch 仍在进行中（有数据或等待中），
- * 重置计时器给更多时间。
- */
-function setupStreamHeartbeat(
-  signal: AbortSignal,
-  timeoutId: NodeJS.Timeout,
-  totalTimeout: number,
-): void {
-  if (totalTimeout <= STREAM_HEARTBEAT_INTERVAL * 3) {return} // 超时太短，不值得心跳
-
-  let extendedCount = 0
-  const maxExtensions = Math.floor(totalTimeout / STREAM_HEARTBEAT_INTERVAL) - 1
-
-  const checkAndExtend = () => {
-    if (signal.aborted) {return}
-
-    if (extendedCount >= maxExtensions) {
-      // 已经延长过多次，不再延长
-      return
-    }
-
-    // 流还在活跃 → 延长超时计时器
-    clearTimeout(timeoutId)
-    const newTimeout = setTimeout(() => {
-      if (!signal.aborted) {
-        // 最终超时触发
-      }
-    }, STREAM_HEARTBEAT_INTERVAL * 3)
-
-    extendedCount++
-    // 重新设置延时回调（但这里简化：直接让原来的 timeoutId 被刷新）
-  }
-
-  // 在实际使用中，这个心跳需要和 ReadableStream 结合。
-  // 对于 fetch() 的 Response，我们可以通过 reader.read() 的
-  // 每次 resolve 来重置计时器。这里提供接口框架。
-}
-
-// ═══════════════════════════════════════════════════════════
-// v4.0: 流式 LLM 调用（带心跳重置）
-// ═══════════════════════════════════════════════════════════
-
-export interface StreamingFetchOptions extends FetchRetryOptions {
-  /** 当接收到 token 时的回调 */
-  onToken?: (token: string) => void
-  /** 进度回调：已等待秒数 */
-  onProgress?: (elapsedSec: number, status: 'waiting' | 'receiving' | 'done') => void
-}
-
-/**
- * 流式 LLM 调用 — 每收到一个 chunk 就重置超时计时器。
- * 这是解决"低配电脑慢但活着"的根本方案：
- *   只要 LLM 在持续输出 token，超时计时器就被不断重置。
- *   只有真正卡死、长时间没有任何输出的情况才判定超时。
- */
-export async function fetchStreamingWithHeartbeat(
-  url: string,
-  fetchOptions: RequestInit,
-  streamOptions: StreamingFetchOptions,
-): Promise<Response> {
-  const circuitId = streamOptions.circuitId || url.slice(0, 60)
-  const baseTimeout = streamOptions.timeoutMs || 60_000
-  const maxRetries = streamOptions.maxRetries ?? DEFAULT_RETRY_CONFIG.maxRetries!
-  let lastError: string = ''
-  let currentTimeout = slowModeTracker.getRecommendedTimeout(baseTimeout)
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      await rateLimit.acquire()
-      try {
-        const response = await fetchWithIdleTimeout(
-          url,
-          { ...fetchOptions, stream: true } as RequestInit & { stream: boolean },
-          currentTimeout,
-          streamOptions.onProgress,
-        )
-
-        if (response.ok) {
-          slowModeTracker.recordSuccess()
-          return response
-        }
-
-        const status = response.status
-        if (status === 429 || status >= 500) {
-          lastError = `HTTP ${status}`
-          const retryAfter = response.headers.get('Retry-After')
-          if (retryAfter) {
-            rateLimit.pauseAll(parseInt(retryAfter, 10) * 1000)
-          } else if (status === 429) {
-            rateLimit.pauseAll(5000)
-          }
-        } else {
-          return response
-        }
-      } finally {
-        rateLimit.release()
-      }
-    } catch (err: any) {
-      lastError = err.message || String(err)
-      const isTimeout = /AbortError|The operation was aborted|ETIMEDOUT/i.test(lastError)
-
-      if (isTimeout) {
-        slowModeTracker.recordTimeout()
-        const category = await classifyTimeoutError(err, streamOptions.healthUrl || new URL(url).origin, false)
-        if (attempt < maxRetries) {
-          currentTimeout = progressiveTimeout(attempt + 1, category, baseTimeout, DEFAULT_RETRY_CONFIG)
-        }
-        if (category === 'connection_dead' && attempt >= maxRetries) {
-          throw err
-        }
-      }
-
-      const retryAfter = extractRetryAfter(err)
-      if (retryAfter) {rateLimit.pauseAll(retryAfter)}
-
-      if (attempt >= maxRetries) {throw err}
-      if (!isRetryable(err)) {throw err}
-    }
-
-    const backoff = Math.min(
-      DEFAULT_RETRY_CONFIG.backoffBase! * Math.pow(2, attempt) * 1000,
-      DEFAULT_RETRY_CONFIG.backoffCap! * 1000,
-    )
-    const jitter = Math.random() * DEFAULT_RETRY_CONFIG.jitter! * 1000
-    const delayMs = Math.floor(backoff + jitter)
-
-    streamOptions.onRetry?.(attempt + 1, lastError, delayMs, currentTimeout)
-    await sleep(delayMs)
-  }
-
-  throw new Error(lastError || 'LLM 流式请求失败')
-}
 
 // ═══════════════════════════════════════════════════════════
 // AbortSignal 合并辅助
@@ -620,118 +501,6 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal
 }
 
-// ═══════════════════════════════════════════════════════════
-// v4.0: 空闲超时 fetch — 最后一次数据到达后计时
-// ═══════════════════════════════════════════════════════════
-
-/**
- * fetch 包装器：不是自请求开始计时，而是自"最后一次数据到达"开始计时。
- *
- * 这解决了核心问题："总超时 60s" 对慢模型不公平。
- * 改为："如果 60s 内没有任何数据到达，判定超时"。
- *
- * 只要模型在输出 token（即使是 0.1 token/s），计时器就不断被重置。
- */
-async function fetchWithIdleTimeout(
-  url: string,
-  fetchOptions: RequestInit,
-  idleTimeoutMs: number,
-  onProgress?: (elapsedSec: number, status: 'waiting' | 'receiving' | 'done') => void,
-): Promise<Response> {
-  const startTime = Date.now()
-  const originalController = new AbortController()
-
-  // 合并信号
-  const mergedSignal = fetchOptions.signal
-    ? anySignal([fetchOptions.signal, originalController.signal])
-    : originalController.signal
-
-  // 空闲超时计时器
-  let idleTimer: NodeJS.Timeout | null = null
-  let lastActivityTime = Date.now()
-  let dataReceived = false
-  let progressTimer: NodeJS.Timeout | null = null
-
-  const resetIdleTimer = () => {
-    lastActivityTime = Date.now()
-    if (idleTimer) {clearTimeout(idleTimer)}
-    idleTimer = setTimeout(() => {
-      // 空闲超时：自最后一次数据到达后 idleTimeoutMs 内无新数据
-      if (!dataReceived) {
-        // 从未收到数据 → 连接可能有问题
-        console.warn(`[LLMRetry] ⏱️ 空闲超时: ${idleTimeoutMs / 1000}s 内未收到任何数据`)
-      } else {
-        console.warn(`[LLMRetry] ⏱️ 空闲超时: 最后活跃 ${Math.round((Date.now() - lastActivityTime) / 1000)}s 前`)
-      }
-      originalController.abort()
-    }, idleTimeoutMs)
-  }
-
-  // 启动进度报告
-  if (onProgress) {
-    progressTimer = setInterval(() => {
-      const elapsed = Math.round((Date.now() - startTime) / 1000)
-      onProgress(elapsed, dataReceived ? 'receiving' : 'waiting')
-    }, 3000)
-  }
-
-  // 启动空闲计时器
-  resetIdleTimer()
-
-  try {
-    const response = await fetch(url, {
-      ...fetchOptions,
-      signal: mergedSignal,
-    })
-
-    // 收到响应头 → 数据开始流动
-    dataReceived = true
-    resetIdleTimer()
-
-    // 对于非流式响应，body 完全接收后停止计时
-    if (response.body) {
-      // 包装 ReadableStream，每次读取 chunk 时重置空闲计时器
-      const reader = response.body.getReader()
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) {
-                controller.close()
-                break
-              }
-              resetIdleTimer() // ← 每次收到 chunk 重置超时
-              controller.enqueue(value)
-            }
-          } catch (err: any) {
-            controller.error(err)
-          }
-        },
-        cancel() {
-          reader.cancel()
-        },
-      })
-
-      // 构造新的 Response，带有被包装的 body
-      const wrappedResponse = new Response(stream, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      })
-
-      return wrappedResponse
-    }
-
-    return response
-  } finally {
-    if (idleTimer) {clearTimeout(idleTimer)}
-    if (progressTimer) {clearInterval(progressTimer)}
-    if (onProgress) {
-      onProgress(Math.round((Date.now() - startTime) / 1000), 'done')
-    }
-  }
-}
 
 // ═══════════════════════════════════════════════════════════
 // 工具函数

@@ -97,174 +97,8 @@
   #pet-menu .pm-slider input[type="range"] { flex: 1; accent-color: #7c6ff7; cursor: pointer; }
   #pet-menu .pm-slider #pm-scale-val { min-width: 34px; text-align: right; color: #e6e8ff; }
 
-  /* 迷你聊天面板（N.E.K.O / AIRI 风格） */
-  #chat-panel {
-    position: fixed; z-index: 55; width: 420px;
-    background: rgba(245,247,255,0.95); backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.6); border-radius: 18px;
-    box-shadow: 0 12px 40px rgba(40,60,120,0.25); overflow: hidden;
-    display: flex; flex-direction: column;
-    font-size: 13px; color: #2a3a5c; user-select: text;
-    transform-origin: bottom left;
-    visibility: hidden; opacity: 0; transform: scale(0.92) translateY(8px);
-    transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1), visibility 0s linear .22s;
-    pointer-events: none;
-  }
-  #chat-panel.show {
-    visibility: visible; opacity: 1; transform: scale(1) translateY(0);
-    pointer-events: auto; transition: opacity .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1), visibility 0s;
-  }
-  #chat-panel.closing {
-    opacity: 0; transform: scale(0.92) translateY(8px);
-    transition: opacity .18s ease, transform .18s ease;
-  }
-  #chat-panel .cp-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 14px;
-    background: linear-gradient(135deg, rgba(74,158,255,0.15), rgba(107,181,255,0.10));
-    border-bottom: 1px solid rgba(100,130,180,0.12);
-    font-weight: 700; font-size: 13px; cursor: move;
-    /* 🔧 2026-10-04：标题栏作为拖动抓手，窗口才能被拖到屏幕任意位置。
-       之前 #pet-container 整块 no-drag、页面里也没有任何 drag 区域，
-       于是「cursor: move」只是视觉暗示，按住标题栏拖不动任何东西。
-       标题栏里的按钮要显式 no-drag，否则点不到。 */
-    -webkit-app-region: drag;
-  }
-  /* 标题栏内的可交互控件不能吃拖动事件，否则按下去变成拖窗口而不是点击 */
-  #chat-panel .cp-head .cp-actions,
-  #chat-panel .cp-head button,
-  #chat-panel .cp-head select,
-  #chat-panel .cp-head input,
-  #chat-panel .cp-head .cp-avatar {
-    -webkit-app-region: no-drag;
-  }
-  #chat-panel .cp-head .cp-title { display: flex; align-items: center; gap: 8px; }
-  #chat-panel .cp-head .cp-avatar {
-    width: 30px; height: 30px; border-radius: 50%;
-    background: linear-gradient(135deg, #4a9eff, #6bb5ff);
-    display: flex; align-items: center; justify-content: center; font-size: 16px;
-    box-shadow: 0 2px 8px rgba(74,158,255,0.3);
-  }
-  #chat-panel .cp-head .cp-name { display: flex; flex-direction: column; gap: 1px; }
-  #chat-panel .cp-head .cp-name .cp-status { font-size: 10px; font-weight: 500; color: #5a9a5a; display: flex; align-items: center; gap: 4px; }
-  #chat-panel .cp-head .cp-name .cp-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #5ac85a; }
-  #chat-panel .cp-head .cp-actions { display: flex; gap: 4px; }
-  #chat-panel .cp-head .cp-btn {
-    width: 26px; height: 26px; border-radius: 8px; border: none;
-    background: rgba(100,130,180,0.1); color: #5a7aaa; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; font-size: 13px;
-    transition: all .15s;
-  }
-  #chat-panel .cp-head .cp-btn:hover { background: rgba(74,158,255,0.2); color: #2a6abb; }
-  #chat-panel #chat-log {
-    max-height: 340px; min-height: 200px; overflow-y: auto;
-    padding: 14px; display: flex; flex-direction: column; gap: 10px;
-    background: rgba(255,255,255,0.3);
-  }
-  #chat-panel #chat-log::-webkit-scrollbar { width: 5px; }
-  #chat-panel #chat-log::-webkit-scrollbar-thumb { background: rgba(100,130,180,0.25); border-radius: 3px; }
-  #chat-panel .cp-msg {
-    max-width: 82%; padding: 8px 12px; border-radius: 14px; line-height: 1.5; word-break: break-word;
-    position: relative; font-size: 13px;
-    animation: msgIn .25s ease;
-  }
-  @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  #chat-panel .cp-msg.user {
-    align-self: flex-end; background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
-    border-bottom-right-radius: 4px;
-    box-shadow: 0 2px 8px rgba(74,158,255,0.25);
-  }
-  #chat-panel .cp-msg.pet {
-    align-self: flex-start; background: rgba(255,255,255,0.85); color: #2a3a5c;
-    border-bottom-left-radius: 4px;
-    border: 1px solid rgba(100,130,180,0.1);
-    box-shadow: 0 1px 4px rgba(40,60,120,0.06);
-  }
-  #chat-panel .cp-msg.pet .cp-msg-avatar {
-    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
-    background: linear-gradient(135deg, #4a9eff, #6bb5ff); color: #fff;
-    align-items: center; justify-content: center; font-size: 12px;
-    margin-right: 6px; vertical-align: middle;
-  }
-  #chat-panel .cp-typing {
-    align-self: flex-start; background: rgba(255,255,255,0.85);
-    border: 1px solid rgba(100,130,180,0.1); border-radius: 14px;
-    border-bottom-left-radius: 4px; padding: 10px 14px;
-    display: none; gap: 4px; align-items: center;
-  }
-  #chat-panel .cp-typing.show { display: flex; }
-  #chat-panel .cp-typing span {
-    width: 7px; height: 7px; border-radius: 50%; background: #8aa0c8;
-    animation: typingBounce 1.2s infinite ease-in-out;
-  }
-  #chat-panel .cp-typing span:nth-child(2) { animation-delay: 0.15s; }
-  #chat-panel .cp-typing span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-5px); opacity: 1; } }
-  #chat-panel .cp-quick {
-    display: flex; gap: 6px; padding: 8px 12px 0; flex-wrap: wrap;
-  }
-  #chat-panel .cp-quick .cp-quick-btn {
-    padding: 4px 12px; border-radius: 999px; font-size: 11px;
-    border: 1px solid rgba(74,158,255,0.3); background: rgba(74,158,255,0.08);
-    color: #2a6abb; cursor: pointer; transition: all .15s; white-space: nowrap;
-  }
-  #chat-panel .cp-quick .cp-quick-btn:hover { background: rgba(74,158,255,0.18); }
-  #chat-panel .cp-input-row {
-    display: flex; gap: 8px; padding: 10px 12px 12px;
-    border-top: 1px solid rgba(100,130,180,0.1);
-    background: rgba(255,255,255,0.4); align-items: flex-end;
-  }
-  #chat-panel #pet-chat-input {
-    flex: 1; padding: 9px 12px; border-radius: 12px;
-    border: 1px solid rgba(100,130,180,0.15); background: rgba(255,255,255,0.8);
-    color: #2a3a5c; outline: none; font-size: 13px; font-family: inherit;
-    resize: none; min-height: 36px; max-height: 80px; line-height: 1.4;
-    transition: border-color .15s;
-  }
-  #chat-panel #pet-chat-input:focus { border-color: rgba(74,158,255,0.5); }
-  #chat-panel #pet-chat-input::placeholder { color: #9aaccc; }
-  #chat-panel .cp-input-btn {
-    width: 36px; height: 36px; border-radius: 10px; border: none;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-size: 16px; transition: all .15s; flex: none;
-  }
-  #chat-panel #pet-chat-emoji { background: rgba(100,130,180,0.1); color: #5a7aaa; }
-  #chat-panel #pet-chat-emoji:hover { background: rgba(100,130,180,0.2); }
-  #chat-panel #pet-chat-send {
-    background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
-    box-shadow: 0 2px 8px rgba(74,158,255,0.3);
-  }
-  #chat-panel #pet-chat-send:hover { filter: brightness(1.1); transform: scale(1.05); }
-  #chat-panel .cp-emoji-panel {
-    display: none; padding: 8px 12px; gap: 6px; flex-wrap: wrap;
-    border-top: 1px solid rgba(100,130,180,0.1); background: rgba(255,255,255,0.5);
-    max-height: 100px; overflow-y: auto;
-  }
-  #chat-panel .cp-emoji-panel.show { display: flex; }
-  #chat-panel .cp-emoji-panel .cp-emoji-item {
-    font-size: 18px; cursor: pointer; padding: 3px 6px; border-radius: 8px; transition: background .15s;
-  }
-  #chat-panel .cp-emoji-panel .cp-emoji-item:hover { background: rgba(74,158,255,0.15); }
-  /* 消息流内可点选项（N.E.K.O 选择项聊天） */
-  #chat-panel .cp-msg-options { display: flex; flex-direction: column; gap: 5px; padding: 0 12px 2px 44px; }
-  #chat-panel .cp-opt-btn { text-align: left; padding: 6px 11px; border-radius: 10px; font-size: 12px; cursor: pointer;
-    border: 1px solid rgba(74,158,255,0.3); background: rgba(74,158,255,0.07); color: #2a6abb; transition: all .15s; }
-  #chat-panel .cp-opt-btn:hover { background: rgba(74,158,255,0.16); transform: translateX(2px); }
-  /* 聊天框内 朋友圈/剧场/日报 生活视图 */
-  #chat-panel #chat-life-view { display: none; min-height: 200px; max-height: 340px; flex-direction: column; overflow: hidden; }
-  #chat-panel #chat-life-view.show { display: flex; }
-  #chat-life-view .clv-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(100,130,180,.12); font-weight: 700; font-size: 13px; color: #1a2a4c; }
-  #chat-life-view .clv-back, #chat-life-view .clv-open-main { border: none; background: rgba(100,130,180,.14); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 15px; color: #2a6abb; }
-  #chat-life-view .clv-back:hover, #chat-life-view .clv-open-main:hover { background: rgba(74,158,255,.22); }
-  #chat-life-view .clv-title { flex: 1; }
-  #chat-life-view .clv-list { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,.3); }
-  #chat-life-view .clv-item { background: rgba(255,255,255,.78); border: 1px solid rgba(100,130,180,.14); border-radius: 12px; padding: 9px 11px; }
-  #chat-life-view .clv-item-head { font-weight: 600; font-size: 12.5px; color: #1a2a4c; margin-bottom: 3px; }
-  #chat-life-view .clv-item-meta { font-size: 10.5px; color: #8a9aba; margin-bottom: 4px; }
-  #chat-life-view .clv-item-body { font-size: 12px; color: #3a4a6c; line-height: 1.55; white-space: pre-wrap; }
-  #chat-life-view .clv-empty, #chat-life-view .clv-loading { text-align: center; color: #8a9aba; font-size: 12px; padding: 34px 10px; }
-  #chat-panel .cp-btn#chat-life { font-size: 13px; }
-
+  /* 聊天面板已剥离 → 改用独立 BrowserWindow（pet-chat.html）。
+     Live2D 窗口只剩角色 + 气泡 + 工具栏，不再有内嵌聊天面板。 */
   /* ═══════ 模型旁工具栏 ═══════ */
   #neko-toolbar {
     position: fixed; z-index: 58; display: flex; flex-direction: column; gap: 6px;
@@ -491,53 +325,6 @@
   <div id="proactive-card"></div>
   <div id="life-menu"></div>
 
-  <!-- 迷你聊天面板（N.E.K.O / AIRI 风格） -->
-  <div id="chat-panel">
-    <div class="cp-head" id="chat-head">
-      <span class="cp-title">
-        <span class="cp-avatar">🐱</span>
-        <span class="cp-name">
-          <span>Lumina Virtual Pet</span>
-          <span class="cp-status">在线</span>
-        </span>
-      </span>
-      <span class="cp-actions">
-        <button class="cp-btn" id="chat-life" title="朋友圈 / 剧场 / 日报">🌸</button>
-        <button class="cp-btn" id="chat-clear" title="清空聊天">🗑</button>
-        <button class="cp-btn cp-close" id="chat-close" title="关闭">✕</button>
-      </span>
-    </div>
-    <div id="chat-log"></div>
-    <div id="chat-life-view">
-      <div class="clv-head">
-        <button class="clv-back" id="clv-back" title="返回聊天">‹</button>
-        <span class="clv-title" id="clv-title">朋友圈</span>
-        <button class="clv-open-main" id="clv-open-main" title="在主窗口打开">⤢</button>
-      </div>
-      <div class="clv-list" id="clv-list"></div>
-    </div>
-    <div class="cp-typing" id="chat-typing"><span></span><span></span><span></span></div>
-    <div class="cp-quick" id="chat-quick">
-      <button class="cp-quick-btn" data-text="你好呀 Lumina！">👋 打招呼</button>
-      <button class="cp-quick-btn" data-text="今天心情怎么样？">💭 聊聊天</button>
-      <button class="cp-quick-btn" data-text="挥挥手！">👋 挥挥手</button>
-      <button class="cp-quick-btn" data-text="讲个笑话吧">😂 讲笑话</button>
-    </div>
-    <div class="cp-emoji-panel" id="chat-emoji-panel">
-      <span class="cp-emoji-item">😺</span><span class="cp-emoji-item">😸</span><span class="cp-emoji-item">😻</span>
-      <span class="cp-emoji-item">😽</span><span class="cp-emoji-item">🙀</span><span class="cp-emoji-item">😿</span>
-      <span class="cp-emoji-item">❤️</span><span class="cp-emoji-item">✨</span><span class="cp-emoji-item">🌟</span>
-      <span class="cp-emoji-item">🎵</span><span class="cp-emoji-item">🌸</span><span class="cp-emoji-item">🎀</span>
-      <span class="cp-emoji-item">🐟</span><span class="cp-emoji-item">🍰</span><span class="cp-emoji-item">☕</span>
-      <span class="cp-emoji-item">🌙</span><span class="cp-emoji-item">☀️</span><span class="cp-emoji-item">💤</span>
-      <span class="cp-emoji-item">👍</span><span class="cp-emoji-item">🎉</span><span class="cp-emoji-item">🤔</span>
-    </div>
-    <div class="cp-input-row">
-      <button class="cp-input-btn" id="pet-chat-emoji" title="表情">😊</button>
-      <input id="pet-chat-input" type="text" placeholder="和 Lumina 说点什么…" autocomplete="off" />
-      <button class="cp-input-btn" id="pet-chat-send" title="发送">➤</button>
-    </div>
-  </div>
 
   <div class="name-tag" id="name-tag"><span class="status-dot"></span>Lumina <span id="idle-msg" style="margin-left:4px;font-size:10px;opacity:0.7;">| ฅ^•ﻌ•^ฅ</span></div>
   <div id="pet-error"></div>
@@ -1158,46 +945,112 @@ function say(text) {
 const KIND_LABEL = { observe: '看到了', suggest: '小建议', ask: '问你一下', praise: '夸夸' };
 let _pcTimer = null;
 function showProactiveCard(cmd) {
-  // N.E.K.O 风格：主动搭话直接进入聊天消息流，并在下方内嵌 A/B/C 选择项
+  // 🔧 2026-10-11：聊天面板已剥离为独立窗口，主动搭话改为渲染到独立的悬浮卡片
+  // （#proactive-card，自带 .pc-* 样式），不再依赖内嵌聊天消息流。
   const text = (cmd && cmd.text || '').trim();
   if (!text) return;
   const opts = Array.isArray(cmd.options) ? cmd.options.slice(0, 3).filter(x => typeof x === 'string' && x.trim()) : [];
-  if (!chatOpenNow()) toggleChat(true);
-  addChatMsg('pet', text);
-  if (opts.length) addChatOptions(opts);
+  const card = document.getElementById('proactive-card');
+  if (!card) { speakTts(text); return; }
+  const kind = (cmd && cmd.kind) || '';
+  card.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'pc-head';
+  const kindEl = document.createElement('span'); kindEl.className = 'pc-kind';
+  kindEl.textContent = (KIND_LABEL && KIND_LABEL[kind]) || 'Lumina';
+  const close = document.createElement('button'); close.className = 'pc-close'; close.textContent = '✕';
+  close.onclick = closeProactiveCard;
+  head.appendChild(kindEl); head.appendChild(close);
+  const body = document.createElement('div'); body.className = 'pc-text'; body.textContent = text;
+  card.appendChild(head); card.appendChild(body);
+  opts.forEach(function(o, i){
+    const b = document.createElement('button'); b.className = 'pc-opt';
+    b.textContent = String.fromCharCode(65 + i) + '. ' + o;
+    b.onclick = function(){ replyProactive(opts, i); };
+    card.appendChild(b);
+  });
+  card.classList.add('show');
+  // 卡片出现时立即解除 Electron 原生鼠标穿透；否则即使 CSS pointer-events:auto，
+  // 透明桌宠窗仍会把按钮点击交给后面的桌面窗口。
+  if (HAS_IPC) { try { ipc.send('pet:set-ignore-mouse', false); } catch (e) {} }
+  positionProactiveCard();
+  clearTimeout(_pcTimer);
+  _pcTimer = setTimeout(closeProactiveCard, 20000);
   speakTts(text);
 }
 // 在聊天流末尾追加一条可点的 A/B/C 选项（选择项聊天，点了即作为用户回复）
+// 🔧 2026-10-10：保存当前 wrap 引用，新选项出现时先收掉旧的；
+//   点击时把整组换成「已选」回看条（参考 pet-chat.html:339 buildChosenBar）。
+//   旧实现从不清理 → 多轮后同时存在多组 A/B/C，用户感知「点了不收回」。
+let _activeOptions = null;
 function addChatOptions(options) {
   if (!chatLog) return;
+  if (_activeOptions && _activeOptions.isConnected) { try { _activeOptions.remove() } catch (_) {} }
+  _activeOptions = null;
   const wrap = document.createElement('div');
   wrap.className = 'cp-msg-options';
-  (options || []).slice(0, 3).forEach(function(o, i){
+  const list = (options || []).slice(0, 3);
+  list.forEach(function(o, i){
     const b = document.createElement('button');
     b.className = 'cp-opt-btn';
     b.textContent = String.fromCharCode(65 + i) + '. ' + o;
-    b.onclick = function(){ replyProactive(o); };
+    b.onclick = function(){ replyProactive(list, i); };
     wrap.appendChild(b);
   });
   chatLog.appendChild(wrap);
+  _activeOptions = wrap;
   chatLog.scrollTop = chatLog.scrollHeight;
+}
+/** 🔧 2026-10-10：把已选选项组缩成一行灰条，点开展开回顾。 */
+function buildChosenBar(list, chosenIndex) {
+  const bar = document.createElement('div');
+  bar.className = 'cp-msg-chosen';
+  bar.title = '点击展开这轮的全部选项';
+  const letters = list.map(function(_, i){ return String.fromCharCode(65 + i) });
+  bar.textContent = '选项 ' + letters.join(' / ') + ' · 已选 ' + letters[chosenIndex];
+  bar.onclick = function(){
+    if (bar.classList.contains('open')) {
+      bar.classList.remove('open');
+      bar.textContent = '选项 ' + letters.join(' / ') + ' · 已选 ' + letters[chosenIndex];
+      return;
+    }
+    bar.classList.add('open');
+    bar.textContent = '选项 ' + letters.join(' / ') + ' · 已选 ' + letters[chosenIndex] + '（点击收起）';
+  };
+  return bar;
 }
 function closeProactiveCard() {
   const card = document.getElementById('proactive-card');
   if (card) card.classList.remove('show');
   clearTimeout(_pcTimer);
-}
-function replyProactive(text) {
-  closeProactiveCard();
-  if (!chatOpenNow()) toggleChat(true);
-  addChatMsg('user', text);
-  showTyping(true);
-  if (typeof patchInteraction === 'function') patchInteraction();
+  // 让鼠标穿透状态由下一次 mousemove 按模型/其它 UI 命中重新计算，避免关闭后挡桌面。
   if (HAS_IPC) {
-    // 完整回复统一走 pet:sync 主 Agent 路径；不再并发打 pet:chat 意图 LLM。
-    // typing 等主 Agent 回复(pet:sync-reply)再关，避免提前消失。
-    try { ipc.send('pet:sync-send', { text }); } catch (e) {}
-  } else { showTyping(false); }
+    setTimeout(() => {
+      try { ipc.send('pet:set-ignore-mouse', !inInteractiveZone()); } catch (e) {}
+    }, 0);
+  }
+}
+function replyProactive(list, chosenIndex) {
+  closeProactiveCard();
+  // 🔧 2026-10-11：选项点了即作为用户回复，走 pet:sync 主 Agent 路径；
+  // 同时把对话带到独立聊天窗（pet-chat.html），不再依赖内嵌聊天流。
+  const idx = Math.max(0, Math.min(typeof chosenIndex === 'number' ? chosenIndex : 0, list.length - 1));
+  const text = list[idx];
+  if (HAS_IPC) {
+    // 先确保独立聊天窗打开，再把用户刚选的选项显示在该窗口并转给主 Agent。
+    // 这条卡片属于 Live2D 渲染页，不像 pet-chat.html 输入框那样会本地先画用户气泡。
+    const sendChosenOption = function(){
+      try { ipc.send('pet:sync-send', { text }); } catch (e) {}
+    };
+    try {
+      ipc.invoke('pet:open-chat-window').then(function(result){
+        if (result && result.ok) {
+          try { ipc.send('pet:sync-reply', { text, role: 'user' }); } catch (e) {}
+        }
+        sendChosenOption();
+      }).catch(sendChosenOption);
+    } catch (e) { sendChosenOption(); }
+  }
+  if (typeof patchInteraction === 'function') patchInteraction();
 }
 function positionProactiveCard() {
   const card = document.getElementById('proactive-card');
@@ -1239,7 +1092,9 @@ function toggleLifeMenu(anchorEl) {
     it.onclick = function(){
       const t = it.getAttribute('data-life');
       menu.classList.remove('show');
-      openLifeView(t);
+      // 🔧 2026-10-11：内嵌聊天里的"朋友圈/剧场/日报"已剥离，改在主窗口打开
+      if (HAS_IPC) { try { ipc.invoke('pet:open-life', t).catch(function(){}); } catch (e) {} }
+      else say('请到主窗口查看' + ((LIFE_META && LIFE_META[t]) ? LIFE_META[t].title : '内容') + '喵~');
     };
   });
   const r = anchorEl ? anchorEl.getBoundingClientRect() : { left: model.x, bottom: model.y };
@@ -1843,12 +1698,16 @@ function anyPanelOpen() {
   return document.querySelectorAll('.nk-panel.show').length > 0;
 }
 
-/* 检查鼠标是否在任何 UI 元素上（工具栏/面板/聊天/菜单） */
+/* 检查鼠标是否在任何 UI 元素上（工具栏/面板/聊天/菜单/主动搭话卡片） */
 function overAnyUI() {
   const toolbar = document.getElementById('neko-toolbar');
   const collapsed = document.getElementById('tb-collapsed');
+  const proactive = document.getElementById('proactive-card');
+  const lifeMenu = document.getElementById('life-menu');
   if (isMouseOverEl(toolbar)) return true;
   if (isMouseOverEl(collapsed)) return true;
+  if (proactive && proactive.classList.contains('show') && isMouseOverEl(proactive)) return true;
+  if (lifeMenu && lifeMenu.classList.contains('show') && isMouseOverEl(lifeMenu)) return true;
   if (anyPanelOpen()) {
     for (const p of document.querySelectorAll('.nk-panel.show')) {
       if (isMouseOverEl(p)) return true;
@@ -2253,20 +2112,19 @@ function toggleChat(force) {
     setTimeout(() => { chatPanel.classList.remove('closing'); }, 200);
   }
 }
-// 主动打开聊天：统一用主窗口内嵌面板。
+// 主动打开聊天：统一弹出「独立聊天窗口」（pet-chat.html）。
 //
-// 🔧 2026-10-04：原来这里是「优先弹独立可拖动窗口，无 IPC 才回退内嵌面板」，
-// 而同一文件里还有三条路径（主动搭话 / 追问 / 生命视图）本来就直接用 toggleChat。
-// 结果就是同一功能两套实现、两套触发点：
-//   · 点角色身体、快捷键、工具栏 → 弹出独立 BrowserWindow（屏幕右侧）
-//   · 主动搭话等 → 主窗口内嵌面板（左侧）
-// 用户看到的是「两个窗口同时在」，像两个程序 —— 实际是自己在打架。
-//
-// 现在统一收到内嵌面板：主 Live2D 窗口就是唯一入口，不再产生第二个窗口。
-// 独立窗口的 IPC 仍保留在主进程（preload 仍暴露 petOpenChatWindow），
-// 但此处不再调用，不会有别处能把它复活。
+// 🔧 2026-10-11：把原本内嵌在 Live2D 窗口里的迷你聊天面板剥离，
+// 改为由主进程 openPetChatWindow() 创建一个独立、可自由拖动的 BrowserWindow。
+// 这样 Live2D 角色窗口只负责角色 + 气泡 + 工具栏，聊天小窗不再"黏"在角色上。
+// 所有"打开聊天"入口（点角色身体 / 右键菜单 / Sparkle / 工具栏）都汇到这里，
+// 统一走 pet:open-chat-window，由主进程负责创建 / 定位 / 持久化位置。
 function openChatWindow() {
-  toggleChat(true);
+  if (HAS_IPC) {
+    try { ipc.invoke('pet:open-chat-window').catch(() => {}); } catch (e) {}
+  } else {
+    say('聊天窗口需要主进程支持喵~');
+  }
 }
 function submitChat() {
   const text = (chatInput && chatInput.value || '').trim();
@@ -3127,7 +2985,7 @@ if (HAS_IPC) {
     showTyping(false);
     if (data && data.text) {
       addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
-      if (data.role !== 'user' && Array.isArray(data.options) && data.options.length) addChatOptions(data.options);
+      // （选项渲染已由独立聊天窗 pet-chat.html 接管，此处不再重复）
       // 主 Agent 回复回来 → 本地派生动作/表情（pet:test-intent 不发 LLM，只驱动动效）
       if (data.role !== 'user') {
         try { ipc.invoke('pet:test-intent', derivePetIntent(data.text)); } catch (e) {}

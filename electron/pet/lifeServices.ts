@@ -158,8 +158,11 @@ export function decideScreenCapture(
   const gate = getScreenGate()
   try {
     const small = img.resize({ width: 16, height: 16, quality: 'good' })
-    // Electron 40 的 d.ts 把 getBitmap 误标为 void，运行时实际返回原始像素 Buffer（每像素 4 字节，BGRA/RGBA，帧差对通道顺序不敏感）
-    const bmp = small.getBitmap() as unknown as Buffer
+    // 🔧 2026-10-10：`getBitmap()` 已废弃（dev 控制台会刷 DeprecationWarning），
+    //   改用 `toBitmap()`。两者返回的都是原始像素 Buffer（每像素 4 字节，BGRA/RGBA，
+    //   帧差对通道顺序不敏感）。旧代码里那个 `as unknown as Buffer` 是因为
+    //   旧版 d.ts 把 getBitmap 标成了 void —— toBitmap 的类型是正确的，无需强转。
+    const bmp = small.toBitmap()
     const gray: number[] = new Array(256)
     for (let i = 0; i < 256; i++) {
       const o = i * 4

@@ -113,25 +113,9 @@ export async function preExecuteSearch(text: string, skipAutoSearch = false): Pr
     }
   }
 
-  for (const pattern of SEARCH_INTENT_PATTERNS) {
-    const match = trimmed.match(pattern.regex)
-    if (!match) {continue}
-
-    // 提取搜索查询词
-    let query = (match[1] || trimmed)
-      .replace(/[:：]\s*$/, '')   // 去冒号
-      .replace(/[，,；;]\s*$/, '') // 去逗号
-      .trim()
-      .slice(0, 200)
-
-    if (query.length < 2) {continue}
-
-    // 🔧 2026-07-12: 清理 query 首部的"最近""今天"等时间词（防止搜索引擎把时间词当核心关键词）
-    query = query.replace(/^(?:最近|今天|今日|现在|当前|眼下|这会儿|这两天|本周|本月)\s*(?:的|有|是)?\s*/i, '').trim()
-
-    // 过滤无意义的查询词
-    const noise = /^(一下|一下吗|看看|搜一搜|搜索|查查|查一下|搜一下|帮我|帮我搜|帮我查|这个|那个|这些|那些|它|他|她|我|你|怎么|什么|为什么|谁|多少|几|哪|吗|呢|吧|啊)$/i
-    if (noise.test(query)) {continue}
+  const intent = matchSearchIntent(trimmed)
+  if (intent) {
+    let query = intent.query
 
     // ── v12.0 改进：三层时效性判断 ──
     //   Layer 1: 用户消息含时间词 → 必时效
@@ -175,7 +159,7 @@ export async function preExecuteSearch(text: string, skipAutoSearch = false): Pr
     }
 
     try {
-      console.log(`[PreSearch] 检测到意图 ["${pattern.description}": "${query}"]，执行搜索...`)
+      console.log(`[PreSearch] 检测到意图 ["${intent.description}": "${query}"]，执行搜索...`)
       // 时效性查询获取更多结果（10条），非时效性保持5条
       const searchCount = isTimeSensitive
         ? 10
@@ -208,8 +192,46 @@ export async function preExecuteSearch(text: string, skipAutoSearch = false): Pr
     } catch (err: any) {
       console.warn(`[PreSearch] 搜索失败: ${err.message}`)
     }
-    // 只匹配第一个命中的模式
-    break
+  }
+  return null
+}
+
+/**
+ * 从用户消息里提取「要搜什么」（纯函数，可单测）。
+ *
+ * 【为什么抽出来】这段逻辑原来内联在 `preExecuteSearch` 的循环里，
+ *   只能靠**联网**才能验证，于是「查询被提取错」这类 bug 长期没被发现。
+ *   实测 2026-10-13：「使命召唤23什么时候发布」被提取成 **「发布」**
+ *   （主体整个丢掉）—— 抽成纯函数后可以直接断言"提取出来的查询里必须含主体"。
+ *
+ * 返回第一个命中的意图模式；query 为清洗后的搜索词。
+ */
+export function matchSearchIntent(trimmed: string): { query: string; description: string } | null {
+  for (const pattern of SEARCH_INTENT_PATTERNS) {
+    const match = trimmed.match(pattern.regex)
+    if (!match) {continue}
+
+    // 提取搜索查询词
+    let query = (match[1] || trimmed)
+      .replace(/[:：]\s*$/, '')   // 去冒号
+      .replace(/[，,；;]\s*$/, '') // 去逗号
+      .trim()
+      .slice(0, 200)
+
+    if (query.length < 2) {continue}
+
+    // 🔧 2026-07-12: 清理 query 首部的"最近""今天"等时间词（防止搜索引擎把时间词当核心关键词）
+    query = query.replace(/^(?:最近|今天|今日|现在|当前|眼下|这会儿|这两天|本周|本月)\s*(?:的|有|是)?\s*/i, '').trim()
+
+    // 过滤无意义的查询词
+    //   🆕 2026-10-13: 除了原来的固定词表，再补一条"纯命令"识别 ——
+    //   用户只发「帮我查一下」（没有检索对象）时，会把 **「帮我查一下」本身**
+    //   拿去搜索，返回一堆无关结果。这类纯命令（没有检索对象）直接不搜。
+    const noise = /^(?:一下|一下吗|看看|搜一搜|搜索|查查|查一下|搜一下|帮我|帮我搜|帮我查|这个|那个|这些|那些|它|他|她|我|你|怎么|什么|为什么|谁|多少|几|哪|吗|呢|吧|啊)$/i
+    const cmdOnly = /^(?:帮我|请|给我|帮忙)?\s*(?:搜|搜索|搜一下|搜一搜|查|查一下|查阅|检索|查找|找找|找一下|看一下|看看|来一下)?\s*(?:一下|一搜|一次|吗|呢|吧|啊)?$/i
+    if ((noise.test(query) || cmdOnly.test(query)) && query.replace(/\s/g, '').length >= 2) {continue}
+
+    return { query, description: pattern.description }
   }
   return null
 }

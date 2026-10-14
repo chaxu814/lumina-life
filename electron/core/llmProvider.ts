@@ -200,9 +200,23 @@ export class LLMProvider {
     const isReasoning = profile?.model.category === 'reasoning'
 
     // 超时计算
+    //
+    // 🐛 2026-10-10 修复（dev 控制台实测）：这里原来写 `isSocialMode ? 0 : …`。
+    //   0 是「无限」的哨兵值，下面 `httpTimeoutSeconds > 0 ? … : 1_800_000` 会兜住，
+    //   所以**行为**没错；但日志直接打印了 `httpTimeoutSeconds` →
+    //   控制台显示「超时:0s」，看起来像「完全没有超时保护」，极易被误判成故障
+    //   （实测被用户当成问题报上来）。另外社交模式这里回退 30min，
+    //   而 AgentRunner 用 12h —— 两条路径对同一模式给了不同上限。
+    //   现在：哨兵显式化 + 两条路径统一 + 日志打印**真实生效值**。
     const envTimeout = parseInt(process.env.LUMINA_LLM_TIMEOUT || '0', 10)
     const profileTimeout = profile?.model.recommendedHttpTimeout || 300
-    const httpTimeoutSeconds = isSocialMode ? 0 : (envTimeout || profileTimeout)
+    /** 社交模式（团队群聊/委托）上限，与 agentRunner.callLLM 保持一致 */
+    const SOCIAL_MODE_TIMEOUT_SEC = 12 * 3600
+    /** 普通模式兜底（profile 也没给时的最后一道） */
+    const DEFAULT_TIMEOUT_SEC = 1800
+    const httpTimeoutSeconds = isSocialMode
+      ? SOCIAL_MODE_TIMEOUT_SEC
+      : (envTimeout || profileTimeout || DEFAULT_TIMEOUT_SEC)
 
     // 工具路由
     // fix: 只要调用方显式传入 tools，就尽量发送，让模型自行处理
@@ -255,7 +269,8 @@ export class LLMProvider {
     if (this.kind !== 'openai') {
       console.log(`[LLMProvider] 🌉 原生协议 ${this.kind} → ${url.split('?')[0]}`)
     }
-    const effectiveTimeout = httpTimeoutSeconds > 0 ? httpTimeoutSeconds * 1000 : 1_800_000 // 默认 30min
+    // httpTimeoutSeconds 现在恒为正数（社交 12h / 普通 profile 值或 30min 兜底）
+    const effectiveTimeout = httpTimeoutSeconds * 1000
 
     // 🔧 P0-1 修正（2026-10-05）：外部 signal、内部超时、看门狗必须【组合】。
     //

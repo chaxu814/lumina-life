@@ -33,6 +33,18 @@ export type FeatureKey =
   | 'developer.companion'
   // I4 关系事件记忆
   | 'memory.relationshipEvents'
+  // 🆕 记忆与进化（设置页）
+  | 'memory.conversation'
+  | 'memory.localSkills'
+  // 🆕 记忆会话级双开关（对标 MiniMax Code）
+  //   memory.recall  —— 「使用记忆」：是否把长期记忆注入对话上下文 / 允许检索
+  //   memory.write   —— 「生成记忆」：是否把本轮对话沉淀为新记忆
+  //   拆成两个独立开关，是因为「读」和「写」的风险不同：
+  //   有人希望「你可以用我的记忆，但别再记新的」，反之亦然。
+  | 'memory.recall'
+  | 'memory.write'
+  // 🆕 中文词表分词增强（零依赖；关闭回到纯 unigram+bigram）
+  | 'memory.cjkDict'
   // I6 隐私引导/自托管叙事
   | 'onboarding.privacy'
   // I7 精简模式（v0.1 公开版只露三件事）
@@ -61,6 +73,16 @@ const DEFAULTS: Record<FeatureKey, boolean> = {
   'developer.companion': true,
   // I4：关系事件记忆——开
   'memory.relationshipEvents': true,
+  // 🆕 对话记忆——默认开（记住对话中的重要信息）
+  'memory.conversation': true,
+  // 🆕 本地记忆与技能——默认开（工作过程自动记录并优化技能，仅存本地）
+  'memory.localSkills': true,
+  // 🆕 使用记忆（召回）——默认开：允许把长期记忆注入对话
+  'memory.recall': true,
+  // 🆕 生成记忆（写入）——默认开：允许把对话沉淀为长期记忆
+  'memory.write': true,
+  // 🆕 中文词表分词——默认开：严格增量（只加匹配机会），可关闭回退
+  'memory.cjkDict': true,
   // I6：隐私引导文案——开
   'onboarding.privacy': true,
   // I7：精简模式——默认关，公开版打包时通过环境变量打开

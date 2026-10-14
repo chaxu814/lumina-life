@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { showToast } from './Toast'
+import { isImeComposing } from '../lib/ime'
 
 // ─── 类型 ──────────────────────────────────────────
 interface MomentPost {
@@ -228,6 +229,7 @@ export default function AgentMoments() {
               background: '#fff',
             }}
             onKeyDown={e => {
+              if (isImeComposing(e)) {return}
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postMoment() }
             }}
           />

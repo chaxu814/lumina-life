@@ -149,16 +149,16 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
   if (isLocalEndpoint(cfg.url) && !looksLikeVisionModel(cfg.model)) {
     console.warn(`[CU] 视觉端点模型「${cfg.model}」从命名看不像视觉模型，若看屏/识图失败，请换 Qwen2.5-VL / GPT-4o / GLM-4V 等 VLM`)
   }
-  const body = JSON.stringify(bodyObj)
 
-  return new Promise<string>((resolve, reject) => {
+  /** 发一次请求；bodyStr 已序列化，便于降级重试时换一份 body */
+  const doRequest = (bodyStr: string): Promise<string> => new Promise<string>((resolve, reject) => {
     const r = t.request({
       hostname: u.hostname, port: u.port || (t === https ? 443 : 80),
       path: u.pathname, method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${cfg.key}`,
-        'Content-Length': String(Buffer.byteLength(body)),
+        'Content-Length': String(Buffer.byteLength(bodyStr)),
       },
       timeout: 30000,
     }, res => {
@@ -193,8 +193,29 @@ export function callVisionModel(sys: string, usr: string, b64: string, jsonMode 
     })
     r.on('error', reject)
     r.on('timeout', () => { r.destroy(); reject(new Error('vlm_timeout')) })
-    r.write(body)
+    r.write(bodyStr)
     r.end()
+  })
+
+  const body = JSON.stringify(bodyObj)
+
+  return doRequest(body).catch(err => {
+    // 🐛 2026-10-10 修复（dev 控制台实测）：
+    //   `response_format.type = 'json_object'` **并非所有 OpenAI 兼容服务端都支持**。
+    //   实测 LM Studio 直接 400：
+    //     `'response_format.type' must be 'json_schema' or 'text'`
+    //   → 视觉理解**每次都失败**（截图白拍，只留下一条 warning）。
+    //   这里在「明确因 response_format 被拒」时去掉该字段重试一次：
+    //   系统提示里本来就要求「只输出 JSON」，且解析侧（parseVision）能容忍额外文字，
+    //   所以降级是安全的；支持严格模式的端点仍走第一次请求，行为不变。
+    const msg = String((err as Error)?.message || err)
+    if (jsonMode && /response_format|json_schema|json_object/i.test(msg)) {
+      console.warn('[CU] 服务端不支持 response_format=json_object，已去掉该字段重试（结果解析不变）')
+      const retryBodyObj: any = { ...bodyObj }
+      delete retryBodyObj.response_format
+      return doRequest(JSON.stringify(retryBodyObj))
+    }
+    throw err
   })
 }
 

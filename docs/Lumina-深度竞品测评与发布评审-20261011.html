@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina Life · 深度竞品测评与发布评审（2026-10-11）</title>
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#131a23; --card:#161d27; --card2:#1b2430;
+    --line:#242e3b; --line2:#2f3b4a;
+    --txt:#e6edf3; --txt2:#9fb0c0; --txt3:#6b7c8f;
+    --pink:#ec4899; --pink2:#ff6b9d; --cyan:#22d3ee; --blue:#3b82f6;
+    --green:#3fb950; --amber:#e3b341; --red:#f85149; --purple:#a371f7;
+    --grad:linear-gradient(135deg,#ec4899,#a371f7 55%,#22d3ee);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    line-height:1.75;font-size:15px;
+    background-image:radial-gradient(900px 500px at 12% -8%,rgba(236,72,153,.10),transparent 60%),
+                     radial-gradient(800px 460px at 92% 4%,rgba(34,211,238,.09),transparent 60%);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px 90px}
+  header.hero{padding:64px 0 34px;text-align:center;border-bottom:1px solid var(--line)}
+  .kicker{display:inline-block;font-size:12.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--pink2);border:1px solid rgba(236,72,153,.35);border-radius:999px;
+    padding:6px 16px;margin-bottom:22px;background:rgba(236,72,153,.06)}
+  h1{font-size:40px;line-height:1.22;margin:0 0 14px;font-weight:800;letter-spacing:-.5px}
+  h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{color:var(--txt2);font-size:16.5px;max-width:760px;margin:0 auto 26px}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;font-size:12.5px;color:var(--txt3)}
+  .meta span{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 12px}
+  h2{font-size:25px;margin:56px 0 8px;padding-top:22px;font-weight:750;letter-spacing:-.3px;border-top:1px solid var(--line)}
+  h2 .num{color:var(--pink);font-variant-numeric:tabular-nums;margin-right:10px;font-weight:800}
+  h3{font-size:18.5px;margin:32px 0 10px;font-weight:700;color:#fff}
+  h4{font-size:15.5px;margin:22px 0 6px;font-weight:700;color:var(--cyan)}
+  p{margin:12px 0;color:var(--txt2)}
+  strong{color:var(--txt);font-weight:650}
+  a{color:var(--cyan);text-decoration:none;border-bottom:1px dotted rgba(34,211,238,.4)}
+  code{background:#0a0f16;border:1px solid var(--line);border-radius:5px;padding:1.5px 6px;
+    font-family:"Cascadia Code",Consolas,monospace;font-size:13px;color:var(--pink2)}
+  .lead{font-size:16px;color:var(--txt)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:18px 0}
+  .card.accent{border-color:rgba(236,72,153,.35);background:linear-gradient(180deg,rgba(236,72,153,.07),transparent 60%),var(--card)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--card2);color:#fff;font-weight:650;font-size:13px}
+  tr:nth-child(even) td{background:rgba(255,255,255,.012)}
+  .yes{color:var(--green);font-weight:700}
+  .no{color:var(--txt3);font-weight:600}
+  .part{color:var(--amber);font-weight:700}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;letter-spacing:.02em}
+  .b-pink{background:rgba(236,72,153,.16);color:var(--pink2);border:1px solid rgba(236,72,153,.35)}
+  .b-cyan{background:rgba(34,211,238,.14);color:var(--cyan);border:1px solid rgba(34,211,238,.32)}
+  .b-green{background:rgba(63,185,80,.14);color:var(--green);border:1px solid rgba(63,185,80,.32)}
+  .b-amber{background:rgba(227,179,65,.14);color:var(--amber);border:1px solid rgba(227,179,65,.32)}
+  .b-red{background:rgba(248,81,73,.14);color:var(--red);border:1px solid rgba(248,81,73,.32)}
+  .b-purple{background:rgba(163,113,247,.15);color:var(--purple);border:1px solid rgba(163,113,247,.34)}
+  ul,ol{margin:10px 0;padding-left:22px;color:var(--txt2)}
+  li{margin:6px 0}
+  li::marker{color:var(--pink)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13.5px;margin:10px 0}
+  .kv dt{color:var(--txt3)}
+  .kv dd{margin:0;color:var(--txt)}
+  .score{display:flex;align-items:center;gap:12px;margin:8px 0}
+  .score .bar{flex:1;height:9px;background:#0a0f16;border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+  .score .fill{height:100%;border-radius:999px;background:var(--grad)}
+  .score .n{width:42px;text-align:right;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+  .callout{border-left:3px solid var(--pink);background:rgba(236,72,153,.06);
+    padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+  .callout.warn{border-color:var(--amber);background:rgba(227,179,65,.06)}
+  .callout.good{border-color:var(--green);background:rgba(63,185,80,.06)}
+  .callout.info{border-color:var(--blue);background:rgba(59,130,246,.06)}
+  .callout p{margin:4px 0}
+  .tag-row{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+  .tag{font-size:12px;background:var(--card2);border:1px solid var(--line);border-radius:7px;padding:3px 10px;color:var(--txt2)}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 26px;margin:26px 0}
+  .toc h3{margin:0 0 12px}
+  .toc ol{columns:2;column-gap:30px;padding-left:20px}
+  @media(max-width:820px){.toc ol{columns:1}}
+  .toc a{border:none;color:var(--txt2)}
+  .toc a:hover{color:var(--pink2)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);text-align:center;color:var(--txt3);font-size:12.5px}
+  .hl{color:var(--pink2);font-weight:700}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--txt2)}
+  .rank{font-size:34px;font-weight:800;line-height:1;background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .mini{font-size:12.5px;color:var(--txt3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">独立深度测评 · Competitive Review</div>
+  <h1>Lumina Life<br><span class="g">深度竞品测评与发布评审</span></h1>
+  <p class="sub">对标 N.E.K.O · AIRI · openclaw · cc-haha —— 从源码逐文件核对到 Agent / 团队 Agent 质量评估，附普通用户与专业用户的落地效果模拟。</p>
+  <div class="meta">
+    <span>测评对象：<b>K:\2\Lumina AI</b></span>
+    <span>HEAD：<b>52d16de</b></span>
+    <span>测评日：<b>2026-10-11</b></span>
+    <span>方法：<b>实机跑测 + 源码核对 + 官方材料交叉验证</b></span>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#s0">结论速览（TL;DR）</a></li>
+    <li><a href="#s1">测评方法与独立验证证据</a></li>
+    <li><a href="#s2">Lumina 是什么：架构解剖</a></li>
+    <li><a href="#s3">Agent 与团队 Agent 质量深评 ★核心</a></li>
+    <li><a href="#s4">四项目逐项拆解</a></li>
+    <li><a href="#s5">优缺点 · 竞争性 · 创新创意</a></li>
+    <li><a href="#s6">用户效果模拟（普通 / 专业）</a></li>
+    <li><a href="#s7">发布前风险与改进清单</a></li>
+    <li><a href="#s8">评分卡与总评</a></li>
+  </ol>
+</div>
+
+<!-- ============ 0 ============ -->
+<h2 id="s0"><span class="num">00</span>结论速览（TL;DR）</h2>
+
+<div class="card accent">
+  <p class="lead"><strong>一句话定位：Lumina 是「有身体的团队 Agent」——把「多 Agent 协作 + 真实情绪数值 + 桌宠形象 + 长期记忆 + 桌面操控」捏进同一个 Electron 应用。在对标的 4 个项目里，<span class="hl">没有第二个同时占满这五项</span>。这个交集是真的空的。</strong></p>
+</div>
+
+<div class="grid3">
+  <div class="card">
+    <div class="rank">8.5</div>
+    <h4>工程底座</h4>
+    <p class="mini">我独立跑 <code>tsc --noEmit --strict</code> → <b style="color:var(--green)">0 错误</b>（25s）。259+7 个测试文件、~26 万行、文档诚实度罕见地高。扣分项：测试套件对负载敏感（flaky）、<code>agentRunner.ts</code> 4285 行单体。</p>
+  </div>
+  <div class="card">
+    <div class="rank">8.0</div>
+    <h4>Agent 真实度</h4>
+    <p class="mini">独立 Runner、角色硬权限闸门（deny 优先 / fail-closed）、并发对抗评审、五阶段门控、动态雇工 + git worktree 隔离——<b>全部是可读可测的真实代码，不是 PPT</b>。扣分项：路由是「模型裁量」而非确定性调度，同一问题可能两次派活不同。</p>
+  </div>
+  <div class="card">
+    <div class="rank">2.0</div>
+    <h4>分发 / 生态</h4>
+    <p class="mini">0 star、仅 Windows 实机验证、技能生态为空、无远程接入。直接对手 N.E.K.O 已上 Steam，上游 openclaw 有约 39 万 star。<b>这是最大短板，且不是功能问题。</b></p>
+  </div>
+</div>
+
+<div class="callout">
+  <p><strong>给发布的核心判断：</strong>功能层面已接近可发布；<b>真正的风险不在代码，在「单作者 + 0 社区 + 仅 Windows」的结构性劣势</b>。0 → 第一个 1000 star 靠的是内容与分发，不是继续堆功能。发布策略应该是「<b>用一份诚实的 README + 一段能打动人的演示视频，把差异化讲清楚</b>」，而不是去和 openclaw 拼渠道数量。</p>
+</div>
+
+<!-- ============ 1 ============ -->
+<h2 id="s1"><span class="num">01</span>测评方法与独立验证证据</h2>
+
+<p>本报告刻意区分「我亲自实测/读码验证的」与「基于官方公开材料归纳的」，避免把转述当实测。</p>
+
+<table>
+  <thead><tr><th style="width:120px">类别</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-green">✅ 亲自实测</span></td><td>在本机对该仓库直接执行命令得到的数字（类型检查、代码规模、git 历史、模块行数）。</td></tr>
+    <tr><td><span class="badge b-cyan">✅ 亲自读码</span></td><td>打开具体源文件逐行核对过的机制（<code>rolePolicy.ts</code> / <code>routingDecider.ts</code> / <code>phaseGate.ts</code> / <code>adversarialReview.ts</code> / <code>emotionGating.ts</code> / <code>agentTeamPersonas.ts</code> 等）。</td></tr>
+    <tr><td><span class="badge b-amber">🔎 公开归纳</span></td><td>4 个竞品的数据来自官方 README / 架构文档 / 官网实抓，<b>未 clone 竞品源码逐行审计</b>，结论是「基于公开材料的归纳」。</td></tr>
+  </tbody>
+</table>
+
+<h3>1.1 我这次独立跑出来的硬数据</h3>
+<table>
+  <thead><tr><th>项目</th><th>结果</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>类型检查</td><td><code>npx tsc --noEmit --strict</code> → <span class="yes">0 error</span>（25s）</td><td>稳定复现，<b>与 README 宣称一致</b>。这是 0-star 项目最硬的信任锚。</td></tr>
+    <tr><td>测试文件</td><td><code>tests/</code> 259 个 + <code>electron/</code> 7 个 = <b>266 个</b></td><td>README 写 242——<b>说明测试还在增长</b>，不是停滞。</td></tr>
+    <tr><td>提交历史</td><td><b>218 commits</b>；作者 chaxu814 <b>196</b> + Qwen(AI 协作) <b>22</b></td><td>单主作者开发，AI 参与约 10%。诚实，但也是「巴士系数 = 1」的集中风险。</td></tr>
+    <tr><td><code>agentRunner.ts</code></td><td><b>4285 行</b></td><td>README 自曝 4117 行——<b>还在长</b>，单体债未收敛。</td></tr>
+    <tr><td>工具模块规模</td><td><code>electron/tools/</code> = <b>25,433 行</b></td><td>最大的主进程子模块，工具生态是重资产。</td></tr>
+    <tr><td>代码分层</td><td>主进程 40+ 子模块；渲染 40+ 面板</td><td>模块化程度高，职责边界清晰。</td></tr>
+  </tbody>
+</table>
+
+<div class="callout good">
+  <p><strong>值得单独表扬的一点：</strong>Lumina 仓库里已经有一整套自评文档（<code>docs/BENCHMARKS.md</code>、多份「发布前评测」、<code>Lumina-聊天质量审计-20261010.md</code>）。其中聊天质量审计查出了 <b>20 项缺陷（含 2 项 P0 级静默数据损坏）</b>并当晚全部修复，还写了反向证明（移除修复后测试挂 3 条）。<b>这种「自己抓自己的 P0 并留证据」的工程纪律，在 0-star 项目里极其罕见</b>——它比任何功能列表都更能说明作者可信。</p>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="s2"><span class="num">02</span>Lumina 是什么：架构解剖</h2>
+
+<h3>2.1 技术栈与进程模型</h3>
+<table>
+  <thead><tr><th>层</th><th>技术</th><th>实测规模</th></tr></thead>
+  <tbody>
+    <tr><td>桌面壳</td><td>Electron 40 + electron-vite + electron-builder（NSIS）</td><td>3 平台打包脚本齐备（仅 Windows 实机验收）</td></tr>
+    <tr><td>主进程</td><td>TypeScript（承载几乎全部「智能」）</td><td><code>electron/</code> 40+ 子模块</td></tr>
+    <tr><td>渲染进程</td><td>React 19 + Zustand 5 + UnoCSS + i18next</td><td><code>src/</code> 40+ 面板</td></tr>
+    <tr><td>桌宠</td><td>独立多窗口（Live2D / VRM / 精灵表 / MMD / 程序化小猫）</td><td><code>electron/pet/</code> = 11,068 行</td></tr>
+    <tr><td>持久化</td><td>better-sqlite3（记忆）+ JSON store</td><td>需 electron-rebuild 对齐 ABI（CI 有门禁）</td></tr>
+    <tr><td>语音（可选）</td><td>Python（Whisper STT / edge-tts）</td><td><code>python/</code> + <code>stt-server</code></td></tr>
+    <tr><td>测试</td><td>Vitest</td><td>266 个测试文件</td></tr>
+  </tbody>
+</table>
+
+<p>进程模型是经典 Electron 三段式：<b>主进程（全部 Agent 逻辑与工具执行）→ IPC → 渲染进程（面板 UI）</b>，另加<b>桌宠独立多窗口</b>。主进程承载全部「智能」，渲染进程基本是壳——<b>这对安全有利</b>（工具不在渲染进程执行，攻击面更小）。</p>
+
+<h3>2.2 一次请求的完整数据流</h3>
+<div class="card mono" style="white-space:pre-wrap;line-height:1.9">
+用户输入
+ → 工具路由 toolRouter（按语义从 138 个里挑 31~45 个暴露给模型）
+ → 路由仲裁 routingDecider（规则高置信直接定 / 歧义调一次 LLM / 失败静默退回）
+ → AgentRunner ReAct 主循环（maxRounds=30，防空转）
+ → [可选] 委托 Yak / 热茶 / 动态雇工 → 对抗评审 → 验证闭环
+ → 角色闸门 rolePolicy（deny 优先，执行层 + 广告层双重过滤）
+ → 情绪门控 emotionGating（只能收紧，永不放宽）
+ → 记忆写入 / 召回（source 决定权威性 + 五维证据排序）
+ → Lumina 整理成人话 → 用户（只看到 Lumina）</div>
+
+<h3>2.3 设计上的一个亮点：工具按需筛选</h3>
+<p>修复前每轮把整档工具<b>全量</b>塞进 function list——agent 档 9,710 tokens、developer 档 12,075 tokens，<b>每次模型调用都重发一遍</b>（包括问「现在几点」）。现在 <code>toolRouter.ts</code> 按你这句话挑相关子集，每轮 <b>5,495 tokens 起</b>，能力一个没少。这是一个真实且正确的工程优化，README 里有完整的前后对照。</p>
+
+<!-- ============ 3 ============ -->
+<h2 id="s3"><span class="num">03</span>Agent 与团队 Agent 质量深评 <span class="badge b-pink">核心</span></h2>
+
+<p class="lead">这是你最关心的问题。结论先给：<strong>Lumina 的 Agent 团队是真的，机制设计水平高于它的社区体量两个数量级；但它有一个「不可预测性」的原生缺陷，必须如实认知。</strong></p>
+
+<h3>3.1 三个 Agent 与「铁则」</h3>
+<table>
+  <thead><tr><th>Agent</th><th>角色</th><th>对用户可见</th><th>工具边界</th><th>职责</th></tr></thead>
+  <tbody>
+    <tr><td><b>Lumina</b> 🐱</td><td><code>boss</code></td><td class="yes">✅ 唯一入口</td><td>全量放行</td><td>对话 · 情绪 · 派活 · 整理结果</td></tr>
+    <tr><td><b>Yak</b> 💻</td><td><code>worker</code></td><td class="no">❌ 隐身</td><td>可写 / 可执行 / 可提交（白名单 30+）</td><td>写码 · 调 bug · 重构 · 跑测试</td></tr>
+    <tr><td><b>热茶</b> 🍵</td><td><code>worker</code></td><td class="no">❌ 隐身</td><td><b>只读</b>（显式 deny 写 / 执行 / 提交）</td><td>审查 · 挑错 · 风险评估</td></tr>
+  </tbody>
+</table>
+<p>三条铁则：① 用户只跟 Lumina 说话；② Worker 不主动跟用户说话、不直接返回结果；③ Worker 之间不直接对话，通信经 Lumina 转发。这是「<b>单入口 + 隐身团队</b>」的产品判断，与 openclaw 的「多 session 各自可见」、cc-haha 的「泳道可视化」是不同路线。</p>
+
+<h3>3.2 逐个机制的质量判定（我逐文件核对过）</h3>
+
+<h4>① 角色权限闸门 <code>rolePolicy.ts</code> —— 单一事实源，<span class="badge b-green">优秀</span></h4>
+<ul>
+  <li><b>deny 优先</b>：显式拒绝优先级最高，即使误入 allow 也一律拒绝。</li>
+  <li><b>fail-closed</b>：传入的全量工具清单为空时，<b>绝不返回空 deny 悄悄放行</b>，而是退回静态 denylist——保证受限角色仍被禁用。这是一个真正的安全设计（防「静默提权」）。</li>
+  <li><b>别名解析</b>：历史配置写的是语义别名（<code>write_code</code>），运行时先解析成真实工具名（<code>file_write</code>）再判定，避免历史配置被误判。</li>
+  <li><b>广告层 + 执行层双重调用</b>：不只过滤给模型看的工具清单，<code>reactEngine</code> 硬闸门在真正执行前<b>再查一次</b>。这是「不信任模型自觉」的正确姿势。</li>
+</ul>
+
+<h4>② 路由仲裁 <code>routingDecider.ts</code> —— 三档降级，<span class="badge b-green">设计优秀</span> <span class="badge b-amber">但本质是建议</span></h4>
+<ul>
+  <li>三档：规则高置信直接定（零延迟零成本）→ 歧义才调一次 LLM（<b>1.2s 硬超时</b>，fire-and-forget 预热缓存）→ LLM 失败 / 超时 / 返回垃圾 → 静默退回规则默认。<b>任何一环失败都不让用户卡住</b>。</li>
+  <li>处理了两个经典失败模式：漏派（「这玩意跑起来就崩，你帮我看看」无关键词）和错派（「解释一下这段 JSON 的 algorithm 字段」是纯答疑）。</li>
+  <li>先判「这句话是不是没头没尾」（<code>clarifyScope</code>），模糊任务优先要澄清而非硬派——这是很多 Agent 产品没做的。</li>
+  <li><span class="badge b-amber">⚠️ 关键真相</span>：<b>终点是一句注入 system prompt 的提示语，不是确定性派活</b>。派不派、派给谁，最终由模型读完 prompt 后自己判断。<b>好处</b>是灵活、不会误路由；<b>代价</b>是同一问题两次问，可能一次派给 Yak、一次 Lumina 自己答。<span class="hl">这是全项目最需要向用户如实说明的一点。</span></li>
+</ul>
+
+<h4>③ 对抗式评审 <code>adversarialReview.ts</code> —— 并发多视角，<span class="badge b-green">优秀</span></h4>
+<ul>
+  <li>用 <code>Promise.all</code> <b>并发</b>委托多视角（正确性 / 安全 / 可复现），每个怀疑者输出 JSON 判定（verdict / severity / findings）。</li>
+  <li><b>多数票 + 高危一票否决</b>，再上「完整性批评员」专查评审本身漏掉了什么（没测的边界、没考虑的回滚、缺失的验收步骤）。</li>
+  <li>JSON 解析失败会退化为文本启发式判定（不因格式问题丢结论）；热茶未配置时自动雇临时复核员兜底。</li>
+  <li>把「亲密度 → 审查语气」真正接在了这里（<code>reviewTonePrompt()</code>）——注释里明说「以前写好了却没人调用，属于文档吹了、代码没接」，现在接通了。</li>
+</ul>
+
+<h4>④ 五阶段门控 <code>phaseGate.ts</code> —— Research→Plan→Execute→Verify→Review，<span class="badge b-cyan">良好</span></h4>
+<ul>
+  <li>每阶段有明确准入条件（<code>checkGate</code>），阶段间通过任务看板传递产物，支持动态跳过与并行批次。</li>
+  <li>关键阶段（execute / verify）失败即终止后续，不硬撑。</li>
+  <li><b>自动降级</b>：简单任务自动降级为一次普通 <code>delegate_to</code>，避免「杀鸡用牛刀」。</li>
+  <li>修复了历史角色映射错误（调研/执行/验证曾挂给只读的热茶，导致门控形同虚设）。</li>
+</ul>
+
+<h4>⑤ 情绪门控 <code>emotionGating.ts</code> —— 情绪进执行层，<span class="badge b-purple">创新点</span></h4>
+<div class="callout good">
+  <p>这是全项目<b>最有想法的设计之一</b>，核心是一条安全约束：<b>情绪只能「收紧」工具，绝不能「放开」</b>。</p>
+  <p>为什么重要：如果「开心时解锁更多工具」，那么「诱导她开心」就变成了「解锁更多权限」的社工攻击面——从对话层攻击到执行层。收紧方向则是安全的：情绪低落时少接重活，最坏结果是「这轮没做完」，用户再问一次即可。</p>
+  <p>三个策略：① 焦虑高 + 情绪不稳 → 暂缓不可逆操作（删文件/发邮件/git push/桌面操控）；② 疲劳高 → 暂缓重活；③ 好奇高 → <b>刻意什么都不做</b>（如果拿好奇心解锁能力，就违反了整个模块的安全前提）。</p>
+</div>
+
+<h4>⑥ 动态雇工 + 隔离 + 模型分层 <code>team/</code> —— <span class="badge b-green">优秀</span></h4>
+<ul>
+  <li>7 工种（research/search/data/code/review/test/general）当场雇佣、并行执行、干完即散。</li>
+  <li>code worker 自动开 <b>git worktree 隔离</b>，成功自动合并、失败保留现场——这是工程化 Agent 的成熟做法。</li>
+  <li>杂活工种自动换便宜模型（<code>modelTier.ts</code>）——成本控制意识。</li>
+  <li>全局并发帽默认 2（可调 1~8），<b>刻意保守</b>，避免常驻桌宠夜间烧 token。</li>
+</ul>
+
+<h3>3.3 团队 Agent 整体质量判定</h3>
+<div class="grid2">
+  <div class="card">
+    <h4 style="color:var(--green)">强项（真实、可测）</h4>
+    <ul>
+      <li>独立 Runner 实例，<b>不是同一 prompt 换皮</b></li>
+      <li>权限闸门是「单一事实源 + deny 优先 + fail-closed」，安全姿势正确</li>
+      <li>对抗评审是真并发 + 多数票 + 高危否决 + 完整性批评，<b>比单次委托严格得多</b></li>
+      <li>编排能力丰富：门控 / 雇工 / 任务板 / 信箱 / 快照 / 日报 / 泳道</li>
+      <li>弱模型自动降级（≤7B 进轻量模式，砍掉危险工具）</li>
+      <li>反幻觉落地：空产出强制转失败、UI 标注「来源: llm / template」</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color:var(--red)">弱项（必须如实认知）</h4>
+    <ul>
+      <li><b>不可预测</b>：路由/编排触发依赖模型自觉，无确定性调度器</li>
+      <li><code>agentRunner.ts</code> 4285 行单体，外部贡献者可读性差</li>
+      <li>约 5100 条 <code>no-explicit-any</code> warning（棘轮管理，只减不增）</li>
+      <li>测试套件对负载敏感，慢机/并发下个别时序测试会间歇失败</li>
+      <li>五阶段门控 / 对抗评审<b>未经真实任务充分验证</b>（作者自己标注）</li>
+      <li>人格厚度：每人 55~75 行身份文件 vs N.E.K.O 的 <code>persona/</code> 8 模块</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout warn">
+  <p><strong>我的判定：Agent 团队的「设计质量」是 8/10，「经过验证的可靠性」是 6/10。</strong>差距在于——机制都对，但大部分编排路径只有测试和作者自测覆盖，<b>没有真实用户数据</b>。发布时如果把这两者混为一谈（把「设计得好」说成「验证过好用」），会在 issue 区被拆穿。<b>建议 README 明确写「编排能力丰富，但触发依赖模型裁量、未经大规模真实任务验证」。</b>（好消息：项目已有自评文档在这么做。）</p>
+</div>
+
+<!-- ============ 4 ============ -->
+<h2 id="s4"><span class="num">04</span>四项目逐项拆解</h2>
+
+<table>
+  <thead><tr><th>项目</th><th>是什么</th><th>与 Lumina 重叠</th><th>一句话定性</th></tr></thead>
+  <tbody>
+    <tr><td><b>N.E.K.O</b></td><td>Python+FastAPI+Electron 的桌面 AI 猫娘</td><td><span class="badge b-red">~85% 🔴 唯一直接对手</span></td><td>同样有主动性、有记忆、有形象的桌面伴侣</td></tr>
+    <tr><td><b>AIRI</b></td><td>Vue3 monorepo 的「数字生命容器」</td><td><span class="badge b-amber">~55% 🟠 形象层竞争</span></td><td>形象工程更强，但记忆还没做完</td></tr>
+    <tr><td><b>openclaw</b></td><td>自托管 Gateway + 30+ IM 渠道</td><td><span class="badge b-cyan">~30% 🔵 上游标准制定者</span></td><td>定义了「AI 助手可达性」的基础设施规范</td></tr>
+    <tr><td><b>cc-haha</b></td><td>Claude Code 的桌面工作台</td><td><span class="badge b-cyan">~25% 🔵 工程参考书</span></td><td>服务人群与 Lumina 几乎不重叠</td></tr>
+  </tbody>
+</table>
+
+<h3>4.1 🔴 N.E.K.O —— 唯一真正的直接对手</h3>
+<dl class="kv">
+  <dt>形态</dt><dd>Python 3.11 + FastAPI 后端，Electron 壳，<b>五种 Avatar</b>（Live2D / VRM / MMD / PNGTuber / 猫咪），已上架 <b>Steam（appid 4099310）+ 创意工坊</b>，移动端内测中，Apache-2.0</dd>
+  <dt>它最强</dt><dd><b>记忆系统的工程深度</b>——<code>memory/</code> 目录 35+ 个 Python 模块（证据链、混合召回、后台 embedding_worker、人格自我修正、说话人信任、复读治理、记忆校对 UI）；<b>分发渠道已跑通</b>（Steam）</dd>
+  <dt>它最弱</dt><dd><b>单角色</b>（猫娘 YUI 一个人做所有事），<b>没有多 Agent 团队结构</b>；没有 Agent 间关系记忆；没有分级沙箱；工程债外显（.git 约 390MB 塞满历史二进制）</dd>
+</dl>
+<div class="callout warn">
+  <p><strong>关键判断：</strong>N.E.K.O 的「证据链 + 混合召回 + 人格自我修正」与 Lumina 的设计哲学<b>高度同构</b>。<span class="hl">记忆系统不是 Lumina 的护城河，是行业共识</span>。Lumina 真正独有的是——<b>多 Agent 团队结构 + 情绪数值建模 + 桌宠绑定真实执行状态</b>。不要在记忆赛道硬拼。</p>
+</div>
+
+<h3>4.2 🟠 AIRI —— 形象工程的巨人，记忆上的弱者</h3>
+<dl class="kv">
+  <dt>形态</dt><dd>pnpm monorepo（40+ packages），Vue3 + TS + Vite；Web（stage-web）+ 桌面（stage-tamagotchi, Electron）+ 移动（stage-pocket, Capacitor）；MIT；约 5 万 star</dd>
+  <dt>它最强</dt><dd>同一份 domain 层驱动三端；<b>5 种渲染后端</b>（Live2D / VRM / MMD / Spine / Tachie 立绘）；30+ 模型供应商；6 语言完整 i18n + Crowdin；winget / brew / nix 全渠道分发；WebGPU / WASM 前瞻投入</dd>
+  <dt>它最弱</dt><dd>其官方 Roadmap 上 <b>Memory Alaya 至今为 <code>[ ]</code> 未勾选</b>——一个主打「数字生命」的产品，「记得你」那一格还没做完</dd>
+</dl>
+<div class="callout info">
+  <p><strong>注意一处 Lumina 曾自我纠正的地方：</strong>Lumina 上一版对比表写 AIRI「WebGPU 真本地推理 ✅」，<b>这是错的</b>——其官方 Roadmap 上该项仍为 <code>[ ]</code> 未勾选。AIRI 的 <code>services/computer-use-mcp</code> 也比「看屏幕」强得多（已有 macOS 桌面编排、审批队列、审计日志、15 个 browser_dom 工具），但<b>尚未跨出 macOS</b>。项目已按此更正——<b>这种「主动改正对自己有利的错误」的态度，是发布时的重要加分项</b>。</p>
+</div>
+
+<h3>4.3 🔵 openclaw —— 别当对手，当上游</h3>
+<dl class="kv">
+  <dt>形态</dt><dd>自托管 <b>Gateway 单一控制面</b> + <b>30+ IM 渠道</b>（Discord/Telegram/WhatsApp/Slack/Signal/iMessage/Google Chat/MS Teams/Feishu/Matrix…）+ 5 端原生 App（macOS/Windows/iOS/Android/Web）；Node 24+；MIT；由 501(c)(3) 非营利基金会治理；约 39 万 star、周均 2000+ 提交</dd>
+  <dt>它最强</dt><dd><b>渠道可达性</b>（一个 Gateway 同时服务所有渠道）；节点配对安全体系（设备身份 + <code>connect.challenge</code> 签名 + 配对审批）；ClawHub 技能市场定义了技能分发/审核/安全展示标准；多智能体路由（按 agent/工作区/发送者隔离会话）</dd>
+  <dt>它最弱</dt><dd><b>完全没有形象 / 人格 / 情感层</b>。记忆刻意做成纯 Markdown 文件——对 agent 够用，但无任何情绪/关系/主动性建模</dd>
+</dl>
+<p><b>结论：不是竞争，是必须警惕的上游。</b>渠道能力、技能分发、远程设备接入这三件事已被它定义成事实标准。Lumina 若在这三件事上缺席，天花板会锁死在单机应用。</p>
+
+<h3>4.4 🔵 cc-haha —— 工程参考书</h3>
+<dl class="kv">
+  <dt>形态</dt><dd>Electron 桌面工作区，把 Claude Code 及其周边能力装进 GUI；TypeScript + Bun 本地运行时；MIT；约 1.5 万 star</dd>
+  <dt>它最强</dt><dd><b>可视化多 Agent 工程工作台的完整度</b>——Agent Teams 依赖泳道画布、动态 Workflow 现场编排（并发/流水线 + 阶段视图 + 中断恢复）、模型 trace 面板、Worktree 隔离启动、逐文件 diff 审查、内置带登录态浏览器预览、5 级权限模式、IM 8 渠道 + H5 远程</dd>
+  <dt>它最弱</dt><dd><b>本质是 Claude Code 的 GUI 外壳，能力继承而非自研</b>（记忆 100% 依赖 Claude Code，自己没有记忆层）；<b>桌宠是玩具属性且默认关闭</b>——作者自己写明其桌宠「只是个状态提示和跳转入口，<b>不能替你批准权限</b>」；商业模式靠 API 中转站赞助（利益绑定结构）</dd>
+</dl>
+
+<!-- ============ 5 ============ -->
+<h2 id="s5"><span class="num">05</span>优缺点 · 竞争性 · 创新创意</h2>
+
+<h3>5.1 综合能力矩阵</h3>
+<table>
+  <thead><tr><th>能力</th><th>Lumina</th><th>N.E.K.O</th><th>AIRI</th><th>openclaw</th><th>cc-haha</th></tr></thead>
+  <tbody>
+    <tr><td>多 Agent 团队编排</td><td class="yes">✅ 3人+门控+对抗评审+雇工</td><td class="no">❌ 单角色</td><td class="no">❌ 无编排层</td><td class="yes">✅ 成熟 session/subagent</td><td class="yes">✅ 成熟+可视化</td></tr>
+    <tr><td>拟人情感</td><td class="yes">✅ 3连续数值+亲密度</td><td class="yes">✅ 会主动</td><td class="yes">✅ 表情丰富</td><td class="no">❌ 零人格</td><td class="part">⚠️ 状态提示</td></tr>
+    <tr><td><b>桌宠绑定真实执行状态</b></td><td class="yes">✅ <b>唯一</b></td><td class="no">❌</td><td class="no">❌</td><td class="no">❌</td><td class="part">⚠️ 仅状态提示</td></tr>
+    <tr><td>桌宠形象形态</td><td class="yes">✅ Live2D/VRM/精灵表/MMD/猫咪</td><td class="yes">✅ 五形态</td><td class="yes">✅ 五种(含Spine/立绘)</td><td class="no">❌</td><td class="part">⚠️ 8×9精灵表</td></tr>
+    <tr><td>多端支持</td><td class="part">⚠️ 仅Windows实机</td><td class="yes">✅ Steam+移动内测</td><td class="yes">✅ Web/桌面/移动/PWA</td><td class="yes">✅ 5端原生App</td><td class="yes">✅ 三平台</td></tr>
+    <tr><td>IM 渠道</td><td class="part">⚠️ 7个已接线/仅TG默认开</td><td class="part">⚠️ 有限</td><td class="yes">✅ 4+</td><td class="yes">✅ 30+</td><td class="yes">✅ 8个</td></tr>
+    <tr><td>应用内本地推理</td><td class="no">❌ 需外挂LM Studio</td><td class="no">❌</td><td class="part">⚠️ 路线图未勾选</td><td class="part">⚠️ 作为插件</td><td class="part">⚠️ LM Studio/Ollama</td></tr>
+    <tr><td>Computer Use</td><td class="yes">✅ 键鼠/OCR/UIA+情绪收紧</td><td class="part">⚠️ 截图</td><td class="part">⚠️ 已有CU-MCP(限macOS)</td><td class="part">⚠️ 看屏幕</td><td class="yes">✅ macOS原生不抢鼠标</td></tr>
+    <tr><td>桌面安全沙箱</td><td class="yes">✅ 双层审查+32规则+三层闸门</td><td class="part">⚠️ 未展开</td><td class="part">⚠️ 审批队列</td><td class="yes">✅ trusted gateway</td><td class="yes">✅ 五档权限</td></tr>
+    <tr><td>团队社交</td><td class="yes">✅ 群聊+朋友圈+早安</td><td class="part">⚠️ 有限</td><td class="part">⚠️ 有限</td><td class="no">❌</td><td class="no">❌</td></tr>
+    <tr><td>记忆系统</td><td class="yes">✅ BM25+RRF+五维证据</td><td class="yes">✅ 35+模块(最深)</td><td class="no">❌ Alaya WIP</td><td class="part">⚠️ 纯Markdown</td><td class="part">⚠️ 继承Claude Code</td></tr>
+    <tr><td>社区体量</td><td class="no">0（未发布）</td><td>~3,000★</td><td>~50,000★</td><td class="yes"><b>~390,000★</b></td><td>~15,000★</td></tr>
+  </tbody>
+</table>
+<p class="mini">※ 竞品数据为公开材料归纳（采集 2026-10-04/05 及本次复核），会过时；Lumina 的 ⚠️ 项均为项目自曝的真实边界。</p>
+
+<h3>5.2 Lumina 的竞争优势（按可持续性排序）</h3>
+<div class="card">
+  <h4>🥇 桌宠绑定真实 Agent 执行状态 —— 唯一的护城河</h4>
+  <p>这是 5 个对标项目里<b>唯一一个「让干活的人自己被看见」的</b>。Yak 写代码 → 敲键盘循环 + 专注光晕；热茶审查 → 审视表情 + 怀疑色；验证失败 → 捂脸/黯淡。零 LLM 调用（纯状态机映射），1.2s 防抖，空闲不接管。</p>
+  <p>对照：cc-haha 作者自己写明其桌宠「只是个状态提示和跳转入口，<b>不能替你批准权限</b>」；AIRI 的表情来自模型输出但不绑定真实执行状态。<span class="hl">Lumina 恰好越过了这条线</span>——审查员真的在审查代码产出。</p>
+</div>
+<div class="card">
+  <h4>🥈 情绪参与系统决策（而非只换表情）</h4>
+  <p><code>delegationManager</code> 里情绪影响重试次数；<code>emotionGating</code> 让情绪参与工具收紧（且只能收紧不能放宽）。多数项目的「情绪系统」只是换头像和语气词，<b>Lumina 让它进了执行层</b>。</p>
+</div>
+<div class="card">
+  <h4>🥉 「用户只看到一个 Lumina」的隐藏编排</h4>
+  <p>后台三 Agent 协作，用户全程不知道。对比 openclaw 的多渠道多 session（用户要自己管理 session 概念），这是不同的产品判断——<b>把复杂度留给自己，把简单留给用户</b>。</p>
+</div>
+<div class="card">
+  <h4>🏅 反幻觉的工程化落地</h4>
+  <ul>
+    <li>记忆权威性<b>只由 <code>source</code> 决定</b>，模型无权自封 <code>confidence: 1.0</code></li>
+    <li>worker 只调工具不下结论的空产出<b>强制转失败</b>（防「空信封 → 主模型自己编一个结论」）</li>
+    <li>UI 标注 <code>来源: llm / 来源: template</code>，<b>绝不假装是大模型写的</b></li>
+  </ul>
+  <p class="mini">最后一条在开源项目里极其稀缺——大量项目把模板兜底伪装成 AI 输出。</p>
+</div>
+<div class="card">
+  <h4>⑤ 8×9 精灵表 UGC：把做桌宠的门槛降下来</h4>
+  <p>Live2D/VRM 需要会 Blender、会绑 3D 模型。精灵表把门槛从「掌握 Blender」降到「会跟 AI 画画的普通人」：三条创建路径（单张静态图 1 分钟 / 提示词 10 分钟 / 已有图集导入），全程本地处理不消耗模型额度，有校验器。</p>
+</div>
+
+<h3>5.3 创新创意评级</h3>
+<table>
+  <thead><tr><th>创新点</th><th>原创度</th><th>可复制性</th><th>评价</th></tr></thead>
+  <tbody>
+    <tr><td>桌宠绑定真实执行状态</td><td><span class="badge b-green">高（对手未做）</span></td><td>低（需架构支持）</td><td>真护城河</td></tr>
+    <tr><td>情绪参与执行层（只收紧）</td><td><span class="badge b-green">高</span></td><td>低</td><td>安全设计有想法</td></tr>
+    <tr><td>隐身团队 + 单入口</td><td><span class="badge b-amber">中（产品判断）</span></td><td>中</td><td>差异化定位</td></tr>
+    <tr><td>对抗式评审（并发多视角）</td><td><span class="badge b-amber">中（借鉴 cc-haha）</span></td><td>高</td><td>落地完整，非原创</td></tr>
+    <tr><td>8×9 精灵表 UGC</td><td><span class="badge b-amber">中</span></td><td>中</td><td>降低创作门槛</td></tr>
+    <tr><td>记忆证据链</td><td><span class="badge b-red">低（行业共识）</span></td><td>高</td><td><b>不是护城河</b></td></tr>
+    <tr><td>工具按需筛选（省 token）</td><td><span class="badge b-amber">中</span></td><td>高</td><td>工程优化，非创新</td></tr>
+  </tbody>
+</table>
+
+<h3>5.4 Lumina 明确不如别人的地方（如实列出）</h3>
+<table>
+  <thead><tr><th>维度</th><th>谁更强</th><th>差距</th></tr></thead>
+  <tbody>
+    <tr><td>生态与社区体量</td><td>openclaw</td><td>~39万星 vs 0，差三个数量级</td></tr>
+    <tr><td>多端覆盖</td><td>AIRI / N.E.K.O</td><td>Lumina 只实测 Windows；AIRI 三端，N.E.K.O 有 Steam + 移动内测</td></tr>
+    <tr><td>分发渠道</td><td>N.E.K.O</td><td>Steam 已上架 + 创意工坊</td></tr>
+    <tr><td>应用内本地推理</td><td>AIRI</td><td>WebGPU 方向 vs Lumina 需外挂 LM Studio</td></tr>
+    <tr><td>多 Agent 可视化编排</td><td>cc-haha</td><td>依赖泳道画布、动态 Workflow、模型 trace</td></tr>
+    <tr><td>IM 渠道</td><td>openclaw(30+) / cc-haha(8)</td><td>Lumina 7 个适配器已接线，仅 Telegram 默认开启、未经端到端真机验证</td></tr>
+    <tr><td>记忆模块工程深度</td><td>N.E.K.O</td><td>35+ 模块 vs Lumina 13 个</td></tr>
+    <tr><td>i18n 完整度</td><td>AIRI</td><td>6 语言 + Crowdin vs Lumina zh/en</td></tr>
+    <tr><td>人格厚度</td><td>N.E.K.O</td><td><code>persona/</code> 8 模块 vs Lumina 每人 55~75 行身份文件</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ 6 ============ -->
+<h2 id="s6"><span class="num">06</span>用户效果模拟（普通用户 / 专业用户）</h2>
+
+<h3>6.1 普通用户（不懂技术，想要一个「有温度」的桌面伙伴）</h3>
+<div class="grid2">
+  <div class="card">
+    <h4 style="color:var(--green)">✅ 会满意的部分</h4>
+    <ul>
+      <li><b>3 分钟上手</b>：默认云端优先，三个 Agent 已预填 Provider（Lumina→硅基流动、Yak→DeepSeek、Recha→智谱），填 Key 即用，<b>新手无需装任何本地推理软件</b></li>
+      <li><b>有温度</b>：情绪数值 + 主动关心（「你对着屏幕发呆好久了，要休息一下吗？」）+ 群聊朋友圈 + 早安仪式</li>
+      <li><b>桌宠有反馈</b>：Yak 干活时她会敲键盘，这是「看得见的陪伴」</li>
+      <li><b>安全</b>：敏感操作先弹窗问；沙箱玻璃房实时显示每条命令的处置</li>
+      <li>弱模型自动降级：1.9B~7B 小模型也能稳定当「陪伴 + 检索」用</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color:var(--red)">⚠️ 会碰壁的部分</h4>
+    <ul>
+      <li><b>仍要自己弄 API Key</b>——「零配置开箱即用」是 N.E.K.O 的说法，Lumina 做不到</li>
+      <li>没有应用内本地推理，隐私党必须外挂 LM Studio / Ollama</li>
+      <li>仅 Windows；Mac 用户装不了（Roadmap v1.3.0）</li>
+      <li>弱模型下团队编排会退化，体验打折</li>
+      <li>技能生态为空，装不到第三方技能</li>
+      <li>约 775MB 内存占用（桌宠运行中），4GB 内存机器紧张</li>
+    </ul>
+  </div>
+</div>
+<div class="callout">
+  <p><strong>普通用户模拟结论：</strong>对「Windows + 愿意花 5 分钟填 API Key」的用户，Lumina 提供的陪伴体验是 4 个竞品里最完整的（有情绪、有团队、有桌宠、有记忆）。<b>但它不是「零门槛」产品</b>，发布文案如果把「云端优先、填 Key 即用」说成「开箱即用」，会引来落差型差评。<b>建议如实写「3 分钟上手（需自备 API Key）」。</b></p>
+</div>
+
+<h3>6.2 专业用户（开发者 / 想用 Agent 真干活的人）</h3>
+<div class="grid2">
+  <div class="card">
+    <h4 style="color:var(--green)">✅ 会认可的部分</h4>
+    <ul>
+      <li><b>真能干活</b>：写/改/调试/重构代码（自动跑 tsc + 测试，不通过自己修）</li>
+      <li><b>对抗式评审</b>：多视角并发挑刺 + 高危一票否决，比单 reviewer 严格</li>
+      <li><b>五阶段门控</b>：复杂任务 Research→Plan→Execute→Verify→Review</li>
+      <li><b>git worktree 隔离</b>：并行改代码不互相踩文件</li>
+      <li><b>权限闸门</b>：Yak 可写、热茶只读，deny 优先 + fail-closed，安全姿势正确</li>
+      <li><b>质量闸门可信</b>：<code>tsc --strict</code> 0 错误（我独立复现）、CI 3×2 矩阵、测试占全仓约 12%</li>
+      <li><b>CLI + REST API</b>：<code>lumina doctor/chat/tool list/agent status/memory search</code></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color:var(--red)">⚠️ 会挑剔的部分</h4>
+    <ul>
+      <li><b>路由不可预测</b>：同一问题两次可能派活不同——专业用户最在意「确定性」</li>
+      <li><code>agentRunner.ts</code> 4285 行单体，读码成本高</li>
+      <li>约 5100 条 any warning，代码洁癖者会皱眉</li>
+      <li>测试 flaky（慢机/并发下间歇失败）——CI 上可能不稳</li>
+      <li>无 IDE 集成（无 ACP / LSP 宿主协议），只能在本应用里用</li>
+      <li>无法装第三方技能，扩展性受限于内置工具</li>
+      <li>无远程接入（cc-haha 有 H5，openclaw 有 30+ 渠道）</li>
+      <li>VS cc-haha：没有可视化泳道画布、模型 trace 面板</li>
+    </ul>
+  </div>
+</div>
+<div class="callout warn">
+  <p><strong>专业用户模拟结论：</strong>Lumina 的 Agent 能力<b>真实可用，但更适合「个人开发者的副驾」，而非「团队工程流水线」</b>。会买单的是：认可「有情绪 + 能干活」这个组合、且愿意接受单机 Windows 形态的人。<b>硬核 Agent 工程师大概率会选择 cc-haha（可视化 + 模型 trace）或直接用 Claude Code。</b>Lumina 对他们的吸引力是「陪伴 + 干活二合一」，不是「最强的编码 Agent」。</p>
+</div>
+
+<h3>6.3 三类用户的迁移意愿模拟</h3>
+<table>
+  <thead><tr><th>用户画像</th><th>会不会用 Lumina</th><th>关键理由</th></tr></thead>
+  <tbody>
+    <tr><td>想要「有温度的桌宠」的普通用户</td><td><span class="badge b-green">高</span></td><td>情绪 + 主动关心 + 桌宠绑定真实状态，体验最完整；但需自备 Key</td></tr>
+    <tr><td>要「AI 帮我写代码」的开发者</td><td><span class="badge b-amber">中</span></td><td>能力够，但会被 cc-haha / Claude Code 分流；Lumina 的差异化是「团队 + 情绪」而非「最强编码」</td></tr>
+    <tr><td>要「远程 / 多渠道 agent」的极客</td><td><span class="badge b-red">低</span></td><td>openclaw 的 30+ 渠道 + 基金会治理是碾压级；Lumina 无远程接入</td></tr>
+    <tr><td>要「最强形象工程」的二创玩家</td><td><span class="badge b-amber">中</span></td><td>AIRI 的 5 后端 + 6 语言 + 全渠道分发更强；Lumina 的 8×9 精灵表 UGC 门槛更低</td></tr>
+    <tr><td>要「记忆最深 + Steam 分发」的用户</td><td><span class="badge b-red">低</span></td><td>N.E.K.O 35+ 记忆模块 + Steam 创意工坊更成熟</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ 7 ============ -->
+<h2 id="s7"><span class="num">07</span>发布前风险与改进清单</h2>
+
+<h3>7.1 结构性风险（最重要，且无法靠加功能解决）</h3>
+<div class="callout warn">
+  <p><strong>① 巴士系数 = 1。</strong>218 次提交里 196 次来自单一作者。发布后一旦作者停更，项目即死。openclaw 有基金会、AIRI/N.E.K.O 有团队。<b>缓解：发布时明确 CONTRIBUTING 与「欢迎共建」信号，先把 issue 模板、good-first-issue 准备好。</b></p>
+  <p><strong>② 0 → 1000 star 靠内容与分发，不靠功能。</strong>Lumina 的功能密度已经很高，但社区体量是 0。继续堆功能的边际收益极低。<b>缓解：把力气花在「一段 60~90 秒能打动人的演示视频 + 一份诚实且有钩子的 README」上。</b></p>
+  <p><strong>③ 仅 Windows 实机验证。</strong>macOS/Linux 有代码但从未真机验收，CU 键鼠强依赖 Windows API。<b>缓解：README 已如实标注，保持即可，别在宣传里暗示跨平台。</b></p>
+</div>
+
+<h3>7.2 技术改进清单（按优先级）</h3>
+<table>
+  <thead><tr><th>优先级</th><th>项</th><th>动作</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-red">P0</span></td><td>测试 flaky</td><td>定位时序/负载敏感用例（30s 超时、mock 清理类），加显式等待或隔离；目标是「确定性地绿」</td></tr>
+    <tr><td><span class="badge b-red">P0</span></td><td>README 数字与代码对齐</td><td>测试文件数已从 242 涨到 266、agentRunner 从 4117 涨到 4285——<b>发布前重新采样一次所有数字</b></td></tr>
+    <tr><td><span class="badge b-amber">P1</span></td><td><code>agentRunner.ts</code> 拆分</td><td>4285 行单体，按「LLM 调用 / ReAct 循环 / 工具执行」拆成 3~4 个模块，提升外部贡献者可读性</td></tr>
+    <tr><td><span class="badge b-amber">P1</span></td><td>路由确定性</td><td>至少提供一个「强制派活」的用户显式指令（如 <code>/yak</code> / <code>/recha</code>），给专业用户一个确定性逃生舱</td></tr>
+    <tr><td><span class="badge b-amber">P1</span></td><td>IM 端到端验证</td><td>7 个适配器至少把 Telegram 真机跑通并录屏，其余如实标注「未验证」</td></tr>
+    <tr><td><span class="badge b-cyan">P2</span></td><td><code>no-explicit-any</code> 棘轮</td><td>保持只减不增即可，不必在发布前清零</td></tr>
+    <tr><td><span class="badge b-cyan">P2</span></td><td>技能生态</td><td>通道已通但生态为空——发布后可用 1~2 个官方示例技能「占位」，让市场不是空的</td></tr>
+    <tr><td><span class="badge b-purple">P3</span></td><td>记忆 CJK 分词</td><td>当前 unigram+bigram 无词典，精度有限；可评估接一个轻量中文分词</td></tr>
+  </tbody>
+</table>
+
+<h3>7.3 该抄的清单（来自竞品）</h3>
+<table>
+  <thead><tr><th>来源</th><th>抄什么</th></tr></thead>
+  <tbody>
+    <tr><td>cc-haha</td><td>Agent Teams 依赖泳道画布、模型 trace 面板、H5 远程访问、<code>/remember</code> 审批式记忆</td></tr>
+    <tr><td>N.E.K.O</td><td><code>persona/</code> 的人格融合与自我修正、<code>/memory_browser</code> 记忆校对 UI</td></tr>
+    <tr><td>MiniMax Code</td><td>Goal 机制（可验证最终目标持续推进）、记忆会话级双开关、「不记什么」清单、ACP 协议</td></tr>
+    <tr><td>openclaw</td><td>A2A adapter 借渠道（N.E.K.O 已做 <code>brain/openclaw_adapter.py</code>）、节点配对安全设计</td></tr>
+    <tr><td>AIRI</td><td>渲染后端抽象层、多语言 i18n 工程、全渠道安装包分发</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ 8 ============ -->
+<h2 id="s8"><span class="num">08</span>评分卡与总评</h2>
+
+<div class="card">
+  <div class="score"><span style="width:130px">工程底座</span><div class="bar"><div class="fill" style="width:85%"></div></div><span class="n">8.5</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">类型/规模/模块质量扎实（我独立复现 tsc 0 错误）；扣分：测试 flaky、agentRunner 单体。</p>
+  <div class="score"><span style="width:130px">Agent 真实度</span><div class="bar"><div class="fill" style="width:80%"></div></div><span class="n">8.0</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">真实现，独立 Runner + 权限闸门；扣分：路由不可预测、编排未经真实任务充分验证。</p>
+  <div class="score"><span style="width:130px">多 Agent 协作</span><div class="bar"><div class="fill" style="width:78%"></div></div><span class="n">7.8</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">编排能力丰富（门控/对抗评审/雇工/任务板/worktree），但触发依赖模型自觉。</p>
+  <div class="score"><span style="width:130px">记忆系统</span><div class="bar"><div class="fill" style="width:70%"></div></div><span class="n">7.0</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">证据链/混合召回是真的；CJK 无词典分词，深度不及 N.E.K.O。</p>
+  <div class="score"><span style="width:130px">情绪系统</span><div class="bar"><div class="fill" style="width:75%"></div></div><span class="n">7.5</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">进了执行层（真影响重试与工具），这是真差异；昼夜节律仅二值开关。</p>
+  <div class="score"><span style="width:130px">安全沙箱</span><div class="bar"><div class="fill" style="width:72%"></div></div><span class="n">7.2</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">三层闸门 + 32 条规则 + fail-closed；缺命令归一化，有编码绕过面。</p>
+  <div class="score"><span style="width:130px">桌宠创新</span><div class="bar"><div class="fill" style="width:90%"></div></div><span class="n">9.0</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">4 个竞品里唯一「绑定真实 Agent 执行状态」——真护城河。</p>
+  <div class="score"><span style="width:130px">文档诚实度</span><div class="bar"><div class="fill" style="width:92%"></div></div><span class="n">9.2</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">罕见地自曝死代码、夸大点、P0 缺陷与修复证据；主动改正对自己有利的错误。</p>
+  <div class="score"><span style="width:130px">分发 / 生态</span><div class="bar"><div class="fill" style="width:20%"></div></div><span class="n">2.0</span></div>
+  <p class="mini" style="margin:2px 0 14px 142px">0 star、仅 Windows 实机、技能生态为空、无远程——最大短板。</p>
+</div>
+
+<div class="card accent">
+  <h3 style="margin-top:0">总评</h3>
+  <p><strong>综合（工程 × 创新）：约 7.6 / 10。</strong>这是一个<b>工程诚实、创新点明确、但零社区的单作者入场项目</b>。</p>
+  <p><strong>你的 Agent 和团队 Agent 整体质量：设计和工程实现处于「远高于其社区体量」的水准</strong>——权限闸门、路由降级、并发对抗评审、worktree 隔离这些机制，很多万星项目都没做到这么细。真正的问题不是「做得不好」，而是<b>「做得很好但没人知道，且只有一个人做」</b>。</p>
+  <p><strong>发布建议（三句话）：</strong>① <b>不要继续堆功能</b>——功能密度已经够了，边际收益低；② <b>把差异化讲清楚</b>——「有身体的团队 Agent」这个交集是真的空的，用 60~90 秒演示视频把它演出来；③ <b>保持诚实</b>——你已经做得比 99% 的开源项目更诚实，这是你最稀缺的资产，别在发布压力下丢掉它。</p>
+</div>
+
+<footer>
+  <p>本报告由独立审计生成 · 测评日 2026-10-11 · HEAD <code>52d16de</code></p>
+  <p>实测数据来自本机执行（tsc --strict 0 error / 266 测试文件 / 218 commits）；竞品数据为官方公开材料归纳，会过时。</p>
+</footer>
+
+</div>
+</body>
+</html>

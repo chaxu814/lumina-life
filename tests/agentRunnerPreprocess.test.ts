@@ -63,3 +63,57 @@ describe('检索预处理模块拆分', () => {
     expect(isCompanionChat('帮我查一下今天上海的天气')).toBe(false)
   })
 })
+
+// ============================================================
+// 查询提取（2026-10-13）
+//
+// 【要防的真实故障】实测日志：
+//   用户问「使命召唤23什么时候发布」→ 实际搜索的查询是 **「发布」**
+//     —— 主体整个丢掉，搜出来全是"发布"这个词本身的结果。
+//   用户问「帮我查一下量子纠缠的由来」→ 查询是「量子纠缠的」
+//     —— 末尾悬空一个「的」。
+//
+// 根因：`SEARCH_INTENT_PATTERNS` 里「事实」那条把**问词写在前面**：
+//   /(?:什么时候|在哪里|…) \s* (.+)/ —— 中文里这类问句的主语在问词**之前**，
+//   于是捕获组只拿到问词后面的残句。
+//
+// 本测试锁住：提取出来的查询必须包含"主体"，且不能是纯命令/纯噪声。
+// ============================================================
+describe('matchSearchIntent — 提取的查询必须含主体（不能只剩问词尾巴）', () => {
+  it('「X 什么时候 Y」要拿到 X，而不是 Y', async () => {
+    const { matchSearchIntent } = await import('../electron/agentRunner.preprocess')
+    expect(matchSearchIntent('使命召唤23什么时候发布')?.query).toBe('使命召唤23')
+    expect(matchSearchIntent('量子纠缠什么时候发现的')?.query).toBe('量子纠缠')
+  })
+
+  it('「X 是什么」这种主语在前的写法也要触发（原来完全不搜）', async () => {
+    const { matchSearchIntent } = await import('../electron/agentRunner.preprocess')
+    expect(matchSearchIntent('尼古喵喵是什么')?.query).toBe('尼古喵喵')
+    expect(matchSearchIntent('量子纠缠是什么意思')?.query).toBe('量子纠缠')
+  })
+
+  it('「X 怎么样」也要触发', async () => {
+    const { matchSearchIntent } = await import('../electron/agentRunner.preprocess')
+    expect(matchSearchIntent('A股怎么样')?.query).toBe('A股')
+    expect(matchSearchIntent('今天天气怎么样')?.query).toBe('天气')
+  })
+
+  it('问词在前的老写法不能被破坏', async () => {
+    const { matchSearchIntent } = await import('../electron/agentRunner.preprocess')
+    expect(matchSearchIntent('什么是量子纠缠')?.query).toBe('量子纠缠')
+    expect(matchSearchIntent('介绍一下量子纠缠')?.query).toBe('量子纠缠')
+  })
+
+  it('「X 多少钱 / 在哪里」同样拿到主体', async () => {
+    const { matchSearchIntent } = await import('../electron/agentRunner.preprocess')
+    expect(matchSearchIntent('特斯拉股价多少')?.query).toBe('特斯拉')
+    expect(matchSearchIntent('故宫在哪里')?.query).toBe('故宫')
+  })
+
+  it('纯命令（没有检索对象）不搜索 —— 否则会把"帮我查一下"本身拿去搜', async () => {
+    const { matchSearchIntent } = await import('../electron/agentRunner.preprocess')
+    expect(matchSearchIntent('帮我查一下')).toBeNull()
+    expect(matchSearchIntent('搜索一下')).toBeNull()
+    expect(matchSearchIntent('这个是什么')).toBeNull()
+  })
+})

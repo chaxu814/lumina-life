@@ -10,6 +10,7 @@
 // ════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { isImeComposing } from '../lib/ime'
 
 // ═══════════════════════════════════════════════════════════
 // 类型（与主进程 decisionService 保持一致）
@@ -108,6 +109,8 @@ export default function DecisionCard({ request, onSubmit, onCancel, compact }: P
 
   // 自定义输入框：Enter 提交、Shift+Enter 换行
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 中文输入法选词回车 ≠ 提交
+    if (isImeComposing(e)) {return}
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()

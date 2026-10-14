@@ -7,6 +7,9 @@
 
 import type { ToolDef, ToolResult } from '../types'
 import { httpGet, stripHtml } from '../utils/httpClient'
+import { extractMainContent } from '../utils/contentExtractor'
+import { renderPageWithBrowser } from '../utils/pageRenderer'
+import { isChallengePage } from './search'
 
 // ═══════════════════════════════════════════════════════════
 // 「没做成」的统一口径（与 tools/registry.ts 的 buildNotExecutedResult 对齐）
@@ -60,22 +63,57 @@ export async function webFetch(args: Record<string, any>): Promise<ToolResult> {
   try {
     const response = await httpGet(url, {}, 15000)
 
-    if (!response.ok) {
-      // HTTP 非 200 = 根本没拿到内容，必须显式失败（原文保留，别丢状态码）
+    // 🆕 2026-10-12: 拿不到内容 / 拿到反爬挑战页时，改用**离屏真浏览器**渲染兜底。
+    //   这是覆盖 B站、百度百科、知乎这类站点的唯一办法 ——
+    //   它们要么靠 JS 渲染正文，要么直接返回验证页，纯 HTTP 注定拿不到。
+    //   渲染失败才如实报失败（绝不伪造内容）。
+    const needRender = !response.ok || isChallengePage(response.text)
+    if (needRender) {
+      const rendered = await renderPageWithBrowser(url)
+      if (rendered) {
+        const extracted = extractMainContent(rendered.html || '', { maxChars: Math.max(max_chars, 500) })
+        const body = extracted.text || rendered.text
+        const bits = [extracted.siteName || '', rendered.title || extracted.title].filter(Boolean)
+        return {
+          callId: '',
+          ok: true,
+          content: `📄 网页内容 (${url})\n🖥️ 经浏览器渲染获取（纯 HTTP ${response.ok ? '拿到的是验证页' : `失败 HTTP ${response.status}`}）`
+            + (bits.length ? `\n📌 来源: ${bits.join(' · ')}` : '')
+            + `\n📏 ${body.length} 字符\n\n${body.slice(0, max_chars)}`,
+        }
+      }
+      if (!response.ok) {
+        // HTTP 非 200 且渲染也没成功 = 真的拿不到，必须显式失败（保留状态码）
+        return notExecuted(
+          'web_fetch',
+          `无法访问 ${url}（HTTP ${response.status}）`,
+          `已尝试浏览器渲染仍未取得内容。可换一个来源，或用 web_search 搜索该主题。原始响应状态: HTTP ${response.status}`,
+        )
+      }
+      // 拿到的是验证页、渲染也失败 → 如实说清楚（不要当成"网页内容"回灌）
       return notExecuted(
         'web_fetch',
-        `无法访问 ${url}（HTTP ${response.status}）`,
-        `可尝试 browser(action="search_and_read", query="...") 通过搜索自动获取内容，或换一个来源。原始响应状态: HTTP ${response.status}`,
+        `${url} 返回的是验证/反爬页面（不是网页正文）`,
+        '已尝试浏览器渲染仍未通过。可换一个来源，或改用 web_search 搜索该主题。',
       )
     }
 
     let content: string
+    let sourceNote = ''
     const contentType = response.contentType
 
     if (extract_mode === 'json' || contentType.includes('json')) {
       content = JSON.stringify(JSON.parse(response.text), null, 2)
+    } else if (extract_mode === 'html') {
+      content = response.text
     } else {
-      content = extract_mode === 'html' ? response.text : stripHtml(response.text)
+      // 🆕 2026-10-12: 默认模式改用正文提取（Readability-lite），不再"删标签了事"。
+      //   旧实现把整页标签删掉后原样返回，导航/弹幕/推荐/备案号全都混在里面 ——
+      //   模型得自己从一堆「沪ICP备…」里找有用信息。
+      const extracted = extractMainContent(response.text, { maxChars: Math.max(max_chars, 500) })
+      content = extracted.text || stripHtml(response.text)
+      const bits = [extracted.siteName, extracted.title].filter(Boolean)
+      if (bits.length > 0) {sourceNote = `\n📌 来源: ${bits.join(' · ')}`}
     }
 
     // 截断
@@ -90,7 +128,7 @@ export async function webFetch(args: Record<string, any>): Promise<ToolResult> {
     return {
       callId: '',
       ok: true,
-      content: `📄 网页内容 (${url})\n📏 ${charCount} 字符 / ~${wordCount} 词\n\n${content}`,
+      content: `📄 网页内容 (${url})${sourceNote}\n📏 ${charCount} 字符 / ~${wordCount} 词\n\n${content}`,
     }
   } catch (err: any) {
     // 抛异常同样是没抓到正文；error 里必须带上原始 message，不能只写「失败」

@@ -105,6 +105,16 @@ declare global {
         usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null
         error?: string
       }>
+      llmEnhancePrompt: (params: { baseUrl: string; apiKey?: string; model: string; text: string }) => Promise<{
+        content?: string
+        error?: string
+        /** 输出长度预算（字符） */
+        budget?: number
+        originalChars?: number
+        enhancedChars?: number
+        /** 模型超预算、结果被兜底裁剪过 */
+        trimmed?: boolean
+      }>
 
       // 获取 LLM 提供商支持的模型列表
       llmFetchModels: (params: { baseUrl: string; apiKey: string }) => Promise<{
@@ -135,7 +145,7 @@ declare global {
 
       // v5.0: Per-Agent 独立 LLM 配置
       agentLlmGetConfig: (agentId: string) => Promise<{ config?: any; error?: string }>
-      agentLlmSetConfig: (agentId: string, config: any) => Promise<{ ok: boolean; config?: any; error?: string }>
+      agentLlmSetConfig: (agentId: string, config: any) => Promise<{ ok?: boolean; success?: boolean; config?: any; error?: string }>
       agentLlmGetAllConfigs: () => Promise<{
         configs?: Record<string, any>
         agents?: Array<{ id: string; name: string; icon: string; configured: boolean; provider: string; model: string }>
@@ -216,6 +226,10 @@ declare global {
           socialMode?: boolean
           isGroupChat?: boolean
           trackReasoning?: boolean  // 🧠 v10.6: thinking_stream
+          /** 🆕 2026-10-10: 后台任务标记（自主刷新/朋友圈等）—— 不打断用户对话 */
+          background?: boolean
+          /** 🆕 2026-10-10（P2-1）：本次请求唯一 id，主进程会回显在每条事件上 */
+          requestId?: string
         }
         conversationHistory?: Array<{ role: string; content: string }>
       }) => Promise<{ success: boolean; content?: string; compactedContext?: string; totalTokens?: number; contextWindow?: number; error?: string }>
@@ -236,7 +250,11 @@ declare global {
       providerSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
       providerFetchModels: (id: string, override?: { baseUrl?: string; apiKey?: string }) => Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }>; error?: string }>
       providerTestConnection: (id: string) => Promise<{ success: boolean; latency?: number; error?: string }>
-      providerDiscoverLocal: () => Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>
+      providerDiscoverLocal: (input?: { baseUrl?: string }) => Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>
+      providerProbeLocalConfig: (input: { baseUrl: string; provider?: string; apiKey?: string }) => Promise<{
+        provider: { id: string; label: string; baseUrl: string; models: string[]; recommendedModel: string; apiKey: string } | null
+        failure: { kind: string; baseUrl: string; status?: number; advice: string } | null
+      }>
       providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) => Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; contextWindow?: number; contextDetected?: boolean; error?: string }>
 
       onAgentEvent: (callback: (event: {

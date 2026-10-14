@@ -24,6 +24,28 @@ export interface Achievement {
   hidden?: boolean
 }
 
+/**
+ * 可跨进程传输的成就 DTO —— `Achievement` 去掉 `condition`。
+ *
+ * 【为什么需要】`condition` 是函数，**无法通过 Electron IPC 的结构化克隆**。
+ *   任何要把成就发给渲染进程的路径都必须先用 `toPublicAchievement()` 转换，
+ *   否则会抛 `Error: Failed to serialize arguments` 且消息静默丢失。
+ */
+export type PublicAchievement = Omit<Achievement, 'condition'>
+
+/** 把成就定义转成可序列化 DTO（见 PublicAchievement 注释） */
+export function toPublicAchievement(a: Achievement): PublicAchievement {
+  return {
+    id: a.id,
+    name: a.name,
+    description: a.description,
+    icon: a.icon,
+    category: a.category,
+    showCelebration: a.showCelebration,
+    hidden: a.hidden,
+  }
+}
+
 export interface UserStats {
   /** 总对话次数 */
   totalChats: number
@@ -263,7 +285,17 @@ class AchievementManager {
         newlyUnlocked.push(achievement)
 
         // 发送成就解锁事件
-        globalEventBus.emit(BusEvents.ACHIEVEMENT_UNLOCKED, achievement)
+        //
+        // 🐛 2026-10-10 修复（dev 控制台实测报错）：
+        //   原来直接把**整个 Achievement 对象**发出去，而它含
+        //   `condition: (stats) => boolean` —— 一个函数。
+        //   `main.ts` 会把这个事件原样 `webContents.send('gamification:achievement', …)`
+        //   给渲染进程，而 Electron IPC 走**结构化克隆**，**函数无法克隆**，于是：
+        //     Error: Failed to serialize arguments
+        //   后果有两层：① dev 控制台刷错误；② **成就庆祝动画从来没显示过**
+        //   （消息压根没到渲染进程，静默丢失）。
+        //   修法：发**可序列化的 DTO**（剥掉 condition 等非数据字段）。
+        globalEventBus.emit(BusEvents.ACHIEVEMENT_UNLOCKED, toPublicAchievement(achievement))
 
         // 通知监听器
         this._listeners.forEach(l => l(achievement))

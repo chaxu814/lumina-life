@@ -1,0 +1,85 @@
+{
+  "activeProviderId": "deepseek",
+  "providers": {
+    "deepseek": {
+      "baseUrl": "https://api.deepseek.com/v1",
+      "apiKey": "在此填入你的 DeepSeek API Key",
+      "model": "deepseek-chat",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "qwen": {
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "",
+      "model": "qwen-plus",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "openai": {
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "",
+      "model": "gpt-4o",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "zhipu": {
+      "baseUrl": "https://open.bigmodel.cn/api/v4",
+      "apiKey": "",
+      "model": "glm-4-plus",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "siliconflow": {
+      "baseUrl": "https://api.siliconflow.cn/v1",
+      "apiKey": "",
+      "model": "Qwen/Qwen2.5-7B-Instruct",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "ollama": {
+      "baseUrl": "http://127.0.0.1:11434/v1",
+      "apiKey": "",
+      "model": "qwen2.5:7b",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 256000
+    },
+    "lmstudio": {
+      "baseUrl": "http://127.0.0.1:1234/v1",
+      "apiKey": "",
+      "model": "your-model-name",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "azure": {
+      "baseUrl": "https://YOUR_RESOURCE.openai.azure.com",
+      "apiKey": "",
+      "model": "gpt-4o",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "gemini": {
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "apiKey": "",
+      "model": "gemini-2.5-flash",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    },
+    "claude": {
+      "baseUrl": "https://api.anthropic.com",
+      "apiKey": "",
+      "model": "claude-sonnet-4-5-20250929",
+      "enabled": true,
+      "timeout": 600,
+      "maxContextTokens": 131072
+    }
+  }
+}

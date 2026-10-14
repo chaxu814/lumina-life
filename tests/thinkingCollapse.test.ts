@@ -87,12 +87,19 @@ describe('群聊：回复完毕自动收回', () => {
     expect(writes).toBeGreaterThanOrEqual(2)
   })
 
-  it('自动收回不写在 setMessages 的 updater 里（React 反模式）', () => {
+  it('自动收回不写在状态 updater 里（React 反模式）', () => {
     const anim = functionBody(gcSrc, 'if (i >= fullText.length)')
-    const updaterStart = anim.indexOf('setMessages(prev => {')
+    // 2026-10-10：完成分支的写入已从裸 `setMessages(prev => …)` 收敛到
+    //   `commitToSession(sid, prev => …)`（会话安全提交，见 P0-1 修复）。
+    //   两者都是「状态 updater」，反模式约束不变：updater 里不得改别的 state。
+    const updaterStart = Math.max(
+      anim.indexOf('setMessages(prev => {'),
+      anim.indexOf('commitToSession(sid, prev => {'),
+    )
     const updaterEnd = anim.indexOf('return updated', updaterStart)
     const updater = anim.slice(updaterStart, updaterEnd)
 
+    expect(updaterStart, '没找到完成分支的状态 updater（结构变了？）').toBeGreaterThanOrEqual(0)
     expect(updater.length).toBeGreaterThan(0)
     // reducer 里只允许算 updated / 存盘 / 广播，不能改别的 state
     expect(updater).not.toContain('setThinkingCollapsed')

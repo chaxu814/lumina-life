@@ -5,7 +5,7 @@
 // 路由到 CommandRouter，返回结果给渲染进程。
 // ============================================================
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { getCommandRouter, CommandRouter } from '../chatCommands'
 import { getHooksSummary } from '../hooks/hookManager'
 import { getModelCapabilityCache } from '../modelCapabilityCache'
@@ -16,6 +16,20 @@ let _getActiveAgent: (() => AgentRunner | null) | null = null
 /** 注册活跃 Agent 引用（由 agentIpc 调用） */
 export function setActiveAgentRef(fn: () => AgentRunner | null): void {
   _getActiveAgent = fn
+}
+
+/**
+ * DelegationManager 的最小接口（仅强制派活命令用到的部分）。
+ * 用懒加载 require 拿实例、用本接口约束类型 —— 既避免顶层 import 的
+ * 初始化顺序问题，也不引入 `any`。
+ */
+interface DelegationManagerLike {
+  isConfigured(id: string): boolean
+  delegate(from: string, req: { to: string; task: string; taskType: string }): Promise<{
+    success?: boolean
+    content?: string
+    error?: string
+  }>
 }
 
 export function registerCommandHandlers(): void {
@@ -138,6 +152,70 @@ export function registerCommandHandlers(): void {
     // 用空消息触发重试机制
     const result = await agent.run('请重试上次失败的操作。')
     return { success: true, message: result || '重试完成' }
+  })
+
+  // ═══════════════════════════════════════════════════
+  // /yak /recha /lumina — 🆕 确定性强制派活（逃生舱）
+  //
+  // 【为什么需要这三条命令】
+  //   默认路由由模型裁量（routingDecider 只往 system prompt 注入一句提示），
+  //   同一句话两次问可能派活不同。专业用户最在意「确定性」——这三条命令
+  //   跳过路由仲裁，把**这一条消息**强制交给指定角色（一次性，不改变后续）。
+  //
+  // 【为什么用懒加载 require】
+  //   delegationManager 的依赖链会 import agentRunner（类型），在模块顶层
+  //   import 可能触发初始化顺序问题；懒加载让命令真正被调用时才解析依赖，
+  //   与同文件里 /hooks 的写法一致。
+  // ═══════════════════════════════════════════════════
+  const forceDelegate = (target: 'yak' | 'recha') =>
+    async (parsed: { args: string[] }) => {
+      const task = parsed.args.join(' ').trim()
+      const who = target === 'yak' ? 'Yak 💻（代码工程师）' : '热茶 🍵（审查员）'
+      if (!task) {return { success: false, message: `用法: /${target} <任务描述>` }}
+
+      let dm: DelegationManagerLike
+      try {
+        dm = require('../delegationManager').getDelegationManager() as DelegationManagerLike
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        return { success: false, message: `团队编排未就绪: ${msg}` }
+      }
+
+      if (!dm?.isConfigured?.(target)) {
+        return {
+          success: false,
+          message: `⚠️ ${who} 尚未配置 LLM，无法强制派活。\n请到「设置 → Lumina Team 供应商配置」里给 TA 填上 endpoint / model / key，或改用 /lumina 自己作答。`,
+        }
+      }
+
+      try {
+        const res = await dm.delegate('lumina', {
+          to: target,
+          task,
+          taskType: target === 'yak' ? 'code_write' : 'code_review',
+        })
+        const body = res?.content || res?.error || '（无返回内容）'
+        return {
+          success: !!res?.success,
+          message: `🎯 已强制派给 ${who}\n\n${body}`,
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        return { success: false, message: `强制派活失败: ${msg}` }
+      }
+    }
+
+  router.register('yak', forceDelegate('yak'))
+  router.register('recha', forceDelegate('recha'))
+
+  // /lumina — 强制由 Lumina 自己作答，不外派（直接把任务交给当前 Agent）
+  router.register('lumina', async (parsed) => {
+    const task = parsed.args.join(' ').trim()
+    if (!task) {return { success: false, message: '用法: /lumina <任务描述>' }}
+    const agent = _getActiveAgent?.()
+    if (!agent) {return { success: false, message: '请先启动 Agent' }}
+    const result = await agent.run(task)
+    return { success: true, message: result || '（无返回内容）' }
   })
 
   // ═══════════════════════════════════════════════════

@@ -68,3 +68,36 @@ describe('兜底文案：不得谎报成因', () => {
     expect(describeRunFailure('用户取消了')).toContain('中止')
   })
 })
+
+// ============================================================
+// 本地 vs 云端的文案区分（2026-10-10）
+//
+// 【问题】旧 describeRunFailure 对所有 401/403 一律回「请检查 API Key / 账户余额」。
+//   本地 LM Studio / Ollama 没有「账户余额」概念，用户照着这条建议去翻
+//   OpenAI/DeepSeek 后台找余额，方向完全错。真实原因通常是：
+//     · LM Studio 开了 Require Authentication
+//     · 用户在设置里误填了一个占位 key
+// 【本文件守的】
+//   isLocal=true 时，auth 文案必须提到「本地」「LM Studio / Ollama」，
+//   且不得出现「账户余额」这类云端专属词。
+// ============================================================
+describe('本地 vs 云端：auth 文案必须区分', () => {
+  it('本地 401 → 提示 LM Studio / Ollama 鉴权，不提账户余额', () => {
+    const msg = describeRunFailure('LLM 返回 401: Unauthorized', { isLocal: true })
+    expect(msg, '本地 auth 文案应提到「本地」').toContain('本地')
+    expect(msg, '本地 auth 文案应提到 LM Studio 或 Ollama').toMatch(/LM Studio|Ollama/)
+    expect(msg, '本地没有「账户余额」概念，不该出现').not.toContain('账户余额')
+    expect(msg, '不该说成「模型服务」（本地推理是用户自己的服务）').not.toContain('模型服务')
+  })
+
+  it('云端 401 → 仍保留「请检查 API Key / 账户余额」（向后兼容）', () => {
+    const msg = describeRunFailure('401 unauthorized', { isLocal: false })
+    expect(msg).toContain('鉴权')
+    expect(msg).toContain('API Key')
+  })
+
+  it('不传 isLocal → 默认按云端处理（向后兼容老调用方）', () => {
+    const msg = describeRunFailure('401 unauthorized')
+    expect(msg).toContain('API Key')
+  })
+})

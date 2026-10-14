@@ -6,7 +6,14 @@
 // ============================================================
 
 import type { ToolDef, ToolResult } from '../types'
-import { webSearch, fetchWebContent } from './webSearch'
+// 🆕 2026-10-13: 改用**主搜索栈**（`./search`），不再用另一条独立实现（`./webSearch`）。
+//
+// 【为什么要合并】原先 browser 工具走的是 `impl/webSearch.ts`（Bing RSS + DDG），
+//   那条栈**没有**查询净化之外的东西：没有相关性过滤、没有主体重排、
+//   没有自动抓正文、没有反爬渲染兜底 —— 于是「模型调 web_search」和
+//   「模型调 browser 搜索」拿到的质量完全不一样（同一件事两种结果）。
+//   现在只有一条栈，两边行为一致；Bing RSS 也已作为兜底引擎并入主栈。
+import { webSearch as webSearchTool, parseResultBlocks, fetchReadablePage } from './search'
 import { exec } from 'child_process'
 
 // ═══════════════════════════════════════════════════════════
@@ -66,8 +73,8 @@ export async function browserHandler(args: Record<string, any>): Promise<ToolRes
           return notExecuted('browser(action="search")', '缺少参数 query（搜索关键词）', '', Date.now() - start)
         }
         const count = Math.min(args.count || 5, 10)
-        const result = await webSearch(query, count)
-        return { callId: '', ok: true, content: result, durationMs: Date.now() - start }
+        const r = await webSearchTool({ query, count })
+        return { callId: '', ok: true, content: r.content || '', durationMs: Date.now() - start }
       }
 
       case 'snapshot':
@@ -81,10 +88,18 @@ export async function browserHandler(args: Record<string, any>): Promise<ToolRes
         }
 
         try {
-          const content = await fetchWebContent(url)
+          const page = await fetchReadablePage(url)
+          if (!page) {
+            return notExecuted(
+              `browser(action="${action}")`,
+              `${url} 未能提取到网页正文（可能是反爬 / 需要登录 / 页面无文字）`,
+              '可换一个来源，或用 web_search 搜索该主题。',
+            )
+          }
+          const content = page.text.slice(0, 5000)
           return {
             callId: '', ok: true,
-            content: `📄 ${url}\n\n${content}\n\n---\n💡 提示: 这是网页正文提取结果（最多5000字）。如需查看更多，请告诉我具体关注哪些内容。`,
+            content: `📄 ${url}${page.title ? `\n📌 ${page.title}` : ''}\n\n${content}\n\n---\n💡 提示: 这是网页正文提取结果（已剥离导航/弹幕/备案等模板噪音，最多5000字）。如需查看更多，请告诉我具体关注哪些内容。`,
             durationMs: Date.now() - start,
           }
         } catch (err: any) {
@@ -105,10 +120,11 @@ export async function browserHandler(args: Record<string, any>): Promise<ToolRes
         }
 
         const count = Math.min(args.count || 5, 10)
-        const searchResult = await webSearch(query, count)
+        const sr = await webSearchTool({ query, count })
+        const searchResult = sr.content || ''
         // ⚠️ 口径：搜索真的跑了、只是 0 条命中 = 成功的查询，保持 ok:true，
         //    但必须写明「0 条结果」，否则模型会当成「拿到了内容」。
-        if (searchResult.includes('未找到结果')) {
+        if (/未找到与查询相关的有效结果|所有引擎均失败|未找到结果/.test(searchResult)) {
           return {
             callId: '', ok: true,
             content: `✅ 查询成功，0 条结果：搜索 "${query}" 在所有引擎都没有命中。这条是「查过了、没有」，不是搜索结果。`,
@@ -116,14 +132,10 @@ export async function browserHandler(args: Record<string, any>): Promise<ToolRes
           }
         }
 
-        // 🔧 2026-07-14: 多候选 URL 自动 fallback
-        //   提取所有搜索结果中的链接，逐个尝试抓取，直到成功为止
+        // 用主栈的**结构化解析器**取链接（不再依赖旧栈的 `🔗` 符号）
         const allUrls: string[] = []
-        const urlRegex = /🔗\s+(\S+)/g
-        let urlMatch: RegExpExecArray | null
-        while ((urlMatch = urlRegex.exec(searchResult)) !== null) {
-          const u = urlMatch[1].trim()
-          if (u.startsWith('http') && !allUrls.includes(u)) {allUrls.push(u)}
+        for (const s of parseResultBlocks(searchResult)) {
+          if (/^https?:\/\//i.test(s.link) && !allUrls.includes(s.link)) {allUrls.push(s.link)}
         }
 
         if (allUrls.length === 0) {
@@ -141,10 +153,11 @@ export async function browserHandler(args: Record<string, any>): Promise<ToolRes
         for (let i = 0; i < allUrls.length; i++) {
           const url = allUrls[i]
           try {
-            const content = await fetchWebContent(url)
+            const page = await fetchReadablePage(url)
+            if (!page) {throw new Error('未能提取到网页正文（反爬 / 需登录 / 无文字）')}
             return {
               callId: '', ok: true,
-              content: `🔍 "${query}"\n📄 ${url}\n\n${content}${allUrls.length > 1 ? `\n\n---\n💡 共 ${allUrls.length} 个结果，已成功读取第 ${i + 1} 个。` : ''}`,
+              content: `🔍 "${query}"\n📄 ${url}${page.title ? `\n📌 ${page.title}` : ''}\n\n${page.text.slice(0, 5000)}${allUrls.length > 1 ? `\n\n---\n💡 共 ${allUrls.length} 个结果，已成功读取第 ${i + 1} 个。` : ''}`,
               durationMs: Date.now() - start,
             }
           } catch (err: any) {

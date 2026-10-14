@@ -7,7 +7,6 @@ import React, { useState, useEffect, useMemo } from 'react'
 // 群聊成员显示开关（2026-10-04）：默认全开时后台成员持续发言，
 // 消息流会眼花缭乱，让用户自己决定谁参与群聊。
 import { isAgentVisible, setAgentVisible, type ControllableAgentId } from '../services/teamVisibility'
-import TeamCollabSection from './TeamCollabSection'
 
 type AgentActivity = 'sleeping' | 'waking' | 'working' | 'social' | 'idle' | 'resting' | 'analyzing' | 'coding' | 'caring'
 
@@ -545,9 +544,6 @@ export default function TeamPanel() {
           ))
         )}
       </div>
-
-      {/* ── 🤝 v3.20 协作中心：任务板 / 信箱 / 动态 worker / CU 策略 ── */}
-      <TeamCollabSection />
     </div>
   )
 }

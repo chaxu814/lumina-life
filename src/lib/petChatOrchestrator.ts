@@ -109,6 +109,7 @@ export class PetChatOrchestrator {
     let attempt = 0
     let lastReason = '空回复'
 
+    let reply = ''
     for (;;) {
       this.agentCallCount++
       let res: PetAgentResult
@@ -126,11 +127,8 @@ export class PetChatOrchestrator {
         res.content.length > 0
 
       if (ok) {
-        const reply = (res as PetAgentResult).content as string
-        this.deps.addMessage('assistant', reply)
-        this.deps.sendToPet(reply, 'assistant')
-        try { this.deps.dispatchLocalIntent?.(reply) } catch { /* 表情派生失败不影响回复 */ }
-        return
+        reply = (res as PetAgentResult).content as string
+        break
       }
 
       // 失败：记录原因，退避后重试
@@ -142,11 +140,52 @@ export class PetChatOrchestrator {
       attempt++
     }
 
-    // 重试仍失败 → 友好错误（上屏 + 推桌宠），不再静默
-    const safeReason = String(lastReason).replace(/\s+/g, ' ').slice(0, 60) || '未知错误'
-    const errText = `抱歉，我暂时没答上来（${safeReason}）。稍等一下再发一次试试？`
-    this.deps.addMessage('assistant', errText)
-    this.deps.sendToPet(errText, 'assistant')
+    if (!reply) {
+      // 重试仍失败 → 友好错误（上屏 + 推桌宠），不再静默
+      const safeReason = String(lastReason).replace(/\s+/g, ' ').slice(0, 60) || '未知错误'
+      const errText = `抱歉，我暂时没答上来（${safeReason}）。稍等一下再发一次试试？`
+      this.deps.addMessage('assistant', errText)
+      this.deps.sendToPet(errText, 'assistant')
+      return
+    }
+
+    // 🔧 2026-10-10：拦截「占位型」回复（如「我来帮你查一下…」）。
+    //   真实踩坑：桌宠引导式 ABC 选项（"想了解群聊怎么发公告吗？"）走的是
+    //   mode:'chat' + noAutoSearch:true 的轻量陪伴 Agent —— 模型**有权限**
+    //   调 web_search，但实际只回一句占位确认就结束，用户看到的回复永远停在
+    //   "我来帮你查一下…"，内容不完整。修法：检测到占位后**自动续一轮**，
+    //   明确要求模型用 web_search 真正搜并给出答案，最多续 1 次避免死循环。
+    if (isPlaceholderReply(reply)) {
+      const continuationText = '（系统提示：上一条是占位回复。请实际调用 web_search 工具搜索并给出完整的答案，不要再只说"我来查"。）'
+      // 🐛 2026-10-10（P2-10）修复：这里原来调 `addMessage('user', continuationText)`
+      //   把这条**内部指令**持久化成了用户消息。PetChatSync 的 getHistory /
+      //   onPetHistoryRequest 只过滤 role!=='system'，于是它会：
+      //     ① 混进主窗口的桌宠对话历史，被回推给桌宠窗；
+      //     ② 在后续每轮的上下文里反复出现，污染真实对话。
+      //   现在：只把它拼进**本次请求的 history**，不落库、不上屏。
+      try {
+        const history2: PetTurnMessage[] = [
+          ...this.deps.getHistory(),
+          { role: 'user', content: continuationText },
+        ]
+        this.agentCallCount++
+        const res2 = await this.deps.agentChat(continuationText, history2)
+        const ok2 = !!res2 && res2.success !== false && typeof res2.content === 'string' && res2.content.length > 0
+        if (ok2) {
+          const realReply = (res2 as PetAgentResult).content as string
+          // 续轮成功 → 只上屏真答案（第一轮的占位回复从未 addMessage，无需清理）
+          this.deps.addMessage('assistant', realReply)
+          this.deps.sendToPet(realReply, 'assistant')
+          try { this.deps.dispatchLocalIntent?.(realReply) } catch { /* 表情派生失败不影响回复 */ }
+          return
+        }
+      } catch { /* 续轮失败就回退到原占位回复，不让用户看到空 */ }
+    }
+
+    // 默认：直接上屏第一轮回复
+    this.deps.addMessage('assistant', reply)
+    this.deps.sendToPet(reply, 'assistant')
+    try { this.deps.dispatchLocalIntent?.(reply) } catch { /* 表情派生失败不影响回复 */ }
   }
 }
 
@@ -185,4 +224,43 @@ export function deriveLocalIntent(replyText: string): { action: string; mood?: s
   }
   // 默认：点头回应
   return { action: 'nod', mood: '平静 😐' }
+}
+
+/**
+ * 🔧 2026-10-10：识别「占位型」回复 —— 模型说要做某事但没真做。
+ * 实测踩坑：桌宠引导式 ABC 选项（"想了解群聊怎么发公告吗？"）走轻量 chat 模式，
+ *   模型回 "我来帮你查一下群聊发公告的具体方法。" 就结束，从不调 web_search。
+ *   用户看到的回复永远停在"我来查"，内容不完整。
+ *
+ * 识别规则：短回复（≤80 字）+ 包含「将要去做」的措辞 + 不含具体内容。
+ *   · 强信号（命中任一即判定为占位）：
+ *     我来(帮你|帮你查|查一下|看看|搜一下|搜一搜|找一下|找找)
+ *     让我(查|看看|搜|找|查查|搜搜)
+ *     I'll|let me|I will|I can help.*(check|look|search|find)
+ *   · 弱信号（需配合长度 ≤80）：
+ *     等我|稍等|马上|一会儿
+ *
+ * 反向排除：包含具体答案关键词（步骤/1./第一步/链接/示例/…）的不算占位。
+ */
+export function isPlaceholderReply(reply: string): boolean {
+  const t = String(reply || '').trim()
+  if (!t) {return false}
+  // 已经给了具体内容的，不算占位
+  if (/[1-9]\.|第[一二三四五六七八九十]步|步骤|链接|示例|比如|例如|http|https|\.com|\.cn|```/.test(t)) {
+    return false
+  }
+  // 🐛 2026-10-10（P2-11）修复：函数文档一直写的是「**短**回复（≤80 字）」，
+  //   但代码只对**弱信号**做了长度限制，强信号无限制 —— 于是像
+  //   「让我看看这段代码的问题，我觉得可能是异步竞态导致的…」（长回复）
+  //   也会被判成占位 → 白多打一轮 LLM。这里把 ≤80 提到最前面，强/弱信号统一生效。
+  if (t.length > 80) {return false}
+  // 强信号
+  const strong = /我来(帮你)?(查|看看|搜|找|查查|搜搜|找找|看一下)|让我(查|看看|搜|找|查查|搜搜|找找)|i'll|let me |i will|i can help.*(check|look|search|find)/i.test(t)
+  if (strong) {return true}
+  // 弱信号 + 短回复
+  if (/等我|稍等|马上|一会儿/.test(t)) {return true}
+  // ⚠️ 残留歧义：像「让我看看这个报错。」这种「只有一句宣告、没有实质内容」的短回复
+  //   仍会被判为占位。这是可接受的：误判的代价只是**多打一轮 LLM**，
+  //   而漏判的代价是用户永远看到「我来帮你查一下…」的半截回复。
+  return false
 }

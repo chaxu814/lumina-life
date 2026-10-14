@@ -15,6 +15,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStore } from '../stores/appStore'
 import { useAgentRuntime } from '../stores/agentRuntimeStore'
 import { sttService, type STTStatus } from '../services/sttService'
+import { isImeComposing } from '../lib/ime'
 import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
 import { getDisabledToolNames } from '../stores/appStore'
@@ -144,6 +145,11 @@ export default function ChatPanel() {
   const latestRef = useRef({ activeConversationId, isProcessing, mode, selectedRole } as const)
   latestRef.current = { activeConversationId, isProcessing, mode, selectedRole }
   const handleSendRef = useRef<((text: string) => void) | null>(null)
+  // 🔒 同步发送锁（2026-10-10）：`isProcessing` 是 store 状态、异步生效，
+  //   挡不住同一 tick 内的二次 Enter（含输入法选词回车）→ 同一条消息发两遍。
+  //   用 ref 做同步守卫；释放交给「isProcessing 变回 false」的 effect。
+  const chatSendLockRef = useRef(false)
+  useEffect(() => { if (!isProcessing) {chatSendLockRef.current = false} }, [isProcessing])
   // handleSendRef.current ?handleSendWithText 声明后赋?
   /** 🔧 v2.8.x: 跟踪上一个 mode，用于切换时清理上下文 */
   const prevModeRef = useRef<'chat' | 'agent' | 'developer' | 'worker' | 'group'>(mode)
@@ -212,6 +218,13 @@ export default function ChatPanel() {
 
   // 📋 任务派发中心（Lumina Agent 同步入口）
   const [showTaskDispatcher, setShowTaskDispatcher] = useState(false)
+
+  // 🆕 工作区「派人」按钮 → 打开派发中心（跨组件事件总线）
+  useEffect(() => {
+    const open = () => setShowTaskDispatcher(true)
+    window.addEventListener('lumina:open-dispatcher', open)
+    return () => window.removeEventListener('lumina:open-dispatcher', open)
+  }, [])
 
   // 🧭 决策卡片：agent 调 ask_decision 工具时主进程推过来，用户选完回传
   const [pendingDecisions, setPendingDecisions] = useState<DecisionRequest[]>([])
@@ -721,6 +734,11 @@ export default function ChatPanel() {
       // 没有最近产出 → 继续正常对话（LLM 会回答）
     }
 
+    // 🔒 到这里才是真正的「发消息给 LLM」流程（命令分支 / 「看看」展开都已 return）。
+    //   上同步锁，挡住同一 tick 内的二次 Enter；释放交给 isProcessing→false 的 effect。
+    if (chatSendLockRef.current) {return}
+    chatSendLockRef.current = true
+
     // ── 🔓 解锁 AudioContext（确保首次 TTS 不被 autoplay 阻止）──
     ttsEngine.unlock()
 
@@ -741,8 +759,14 @@ export default function ChatPanel() {
       clearAttachments()
     }
     // 修复 — 用户消息写入 store（之前从未持久化！）
-    const currentConvId = useStore.getState().activeConversationId || activeConversationId
-    useStore.getState().addMessage(currentConvId, 'user', userMessage)
+    // 🔒 这一轮的「归属会话」（P0 修复 2026-10-10）：用户消息写在这里，
+    //   回复也必须写回**这里**。旧实现在完成时重算 activeConversationId，
+    //   用户在生成期间切走会话时，回复会落到**另一个**会话，
+    //   而原会话里那条提问永远等不到回答（消息「消失」）。
+    const convAtSend = useStore.getState().activeConversationId || activeConversationId
+    // 🆕 P2-1：本次请求唯一 id，随 config 下发、后端回显在事件上，用于过滤串台事件
+    const reqId = `cp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    useStore.getState().addMessage(convAtSend, 'user', userMessage)
     setLastAgentEvents([])
     setThinkingExpanded(false)
     setLiveThinkingExpanded(true)
@@ -790,9 +814,8 @@ export default function ChatPanel() {
       useStore.getState().addMessage(activeConversationId, 'system',
         '🌙 还没有可用的模型，我没法思考。\n\n' +
         '任选一种就能开始：\n' +
-        '· **免费在线** — 引导里选「OpenCode Zen」，无需 Key（推荐）\n' +
-        '· **云端 API** — 设置 → LLM 模型配置，填 baseUrl + Key\n' +
-        '· **本地模型** — 装 LM Studio 或 Ollama 后，在同一页点「检测本地模型」\n\n' +
+        '· **本地免费** — 装 LM Studio 或 Ollama，再点「检测本地模型」，完全免费、数据不出本机\n' +
+        '· **云端 API** — 设置 → LLM 模型配置，填 baseUrl + Key（DeepSeek 很便宜）\n\n' +
         '配好之后这句话就会得到回答。')
       setInput('')
       setIsProcessing(false)
@@ -877,6 +900,9 @@ export default function ChatPanel() {
 
     const unsub = window.luminaAPI.onAgentEvent((ev) => {
       if (abortRef.current) {return}
+      // 🆕 P2-1：只处理属于本次请求的事件（后端回显 config.requestId）。
+      //   避免在途的后台任务 / 其它请求把 thinking_stream、tool_* 串进本次回复的思考面板。
+      if (reqId && (ev as any)?.requestId && (ev as any).requestId !== reqId) {return}
 
       // 推理流 — 不再吞掉！推入 ThinkingStep 显示推理内容
       if (ev.type === 'thinking_stream') {
@@ -997,14 +1023,17 @@ export default function ChatPanel() {
 
     try {
       // 传递当前对话的完整历史?Agent，确保重?切换对话后能恢复上下?
-      const latestConvId = useStore.getState().activeConversationId || activeConversationId
+      // 🔒 用「发起会话」而非「当前会话」：两者之间隔着若干 await，
+      //   用户若在此间隙切走，取当前会话会把**别的**会话的历史喂给模型。
+      const latestConvId = convAtSend
       const latestConv = useStore.getState().conversations.find(c => c.id === latestConvId)
       const history = latestConv?.messages
         .filter(m => m.role !== 'system')
         .map(m => ({ role: m.role, content: m.content })) || []
       const result = await window.luminaAPI.agentChat({
         text,
-        config,
+        // 🆕 P2-1：带上请求 id，后端回显在事件上供前端过滤串台
+        config: { ...config, requestId: reqId },
         sessionId: latestConvId,
         compactedContext: latestConv?.compactedContext,
         conversationHistory: history,
@@ -1035,41 +1064,49 @@ export default function ChatPanel() {
 
         // 死循环检测
         if (checkResult.isDoomLoop && checkResult.doomLoopMessage) {
-          const finalConvId = useStore.getState().activeConversationId || activeConversationId
+          const finalConvId = convAtSend  // 🔒 归属发起会话，不随切换漂移
           useStore.getState().addMessage(finalConvId, 'system', checkResult.doomLoopMessage)
         }
 
         // 达到最大迭代次数
         if (checkResult.shouldPause && checkResult.pauseReason) {
-          const finalConvId = useStore.getState().activeConversationId || activeConversationId
+          const finalConvId = convAtSend  // 🔒 归属发起会话，不随切换漂移
           useStore.getState().addMessage(finalConvId, 'system', checkResult.pauseReason)
           luckyMode.pause(checkResult.pauseReason)
         }
       }
 
       if (agentText && !abortRef.current) {
-        // ── 🔧 v2.17: 修复闭包过期 — 使用最新 convId，切换对话时不丢消息 ──
-        const finalConvId = useStore.getState().activeConversationId || activeConversationId
+        const finalConvId = convAtSend  // 🔒 归属发起会话，不随切换漂移
         useStore.getState().addMessage(finalConvId, 'assistant', agentText)
         // ═══ 浏览器链接智能联动：开关开启时，新回复含 URL 则自动在内置浏览器打开 ═══
         // 仅对「刚落地的新回复」触发；切换/渲染历史会话不会走到这里。
         void maybeAutoOpenBrowserOnReply(agentText)
         // ── v2.4.1: 流式打字动画 ──────────────────────
-        startTypingAnimation(agentText, finalConvId, () => {
+        const onTypingDone = () => {
           // @ts-expect-error
           addAuditLog('llm', 'agent_chat', `[${mode}] ${text.slice(0, 50)}`)
           playTTS(agentText)
-        })
+        }
+        // 🔒 打字机浮层属于「当前正在看的会话」：用户已切走时不要在别的会话里播放
+        //   （消息已写入 convAtSend 的存档，切回去就能看到）。副作用（TTS/审计）照常执行。
+        if (useStore.getState().activeConversationId === convAtSend) {
+          startTypingAnimation(agentText, finalConvId, onTypingDone)
+        } else {
+          onTypingDone()
+        }
       } else if (result.error) {
         // v6.0: 后端返回了错误
-        const finalConvId = useStore.getState().activeConversationId || activeConversationId
+        const finalConvId = convAtSend  // 🔒 归属发起会话，不随切换漂移
         if (result.content) {
           // 附带了用户友好的说明内容
           useStore.getState().addMessage(finalConvId, 'assistant', result.content)
-          startTypingAnimation(result.content, finalConvId, () => {
-            // @ts-expect-error
-            addAuditLog('llm', 'agent_chat', `[${mode}] ${text.slice(0, 50)}`)
-          })
+          if (useStore.getState().activeConversationId === convAtSend) {
+            startTypingAnimation(result.content, finalConvId, () => {
+              // @ts-expect-error
+              addAuditLog('llm', 'agent_chat', `[${mode}] ${text.slice(0, 50)}`)
+            })
+          }
         } else {
           // 没有 content 时也要显示错误消息（之前静默失败）
           useStore.getState().addMessage(finalConvId, 'assistant',
@@ -1082,7 +1119,7 @@ export default function ChatPanel() {
       setCurrentThinkingSteps([])
       useAgentRuntime.getState().resetAgentRuntime()
       // v6.0: 网络错误/异常也显示友好提示，不要静默消失
-      const finalConvId = useStore.getState().activeConversationId || activeConversationId
+      const finalConvId = convAtSend  // 🔒 归属发起会话，不随切换漂移
       const errMsg = err?.message || String(err)
       if (errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNREFUSED')) {
         useStore.getState().addMessage(finalConvId, 'assistant',
@@ -1134,6 +1171,10 @@ export default function ChatPanel() {
     setStreamingText('')
   }
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // ⚠️ 中文输入法（IME）选词时按回车只是「确认候选词」，不是「发送」。
+    //   不判 isComposing 的话，拼音打字按回车会把半截内容当消息发出去
+    //   （甚至发空）—— 表现为「聊天断断续续 / 模型说没看到问题」。
+    if (isImeComposing(e)) {return}
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
@@ -1330,6 +1371,9 @@ export default function ChatPanel() {
                               onChange={e => setEditName(e.target.value)}
                               onBlur={commitRename}
                               onKeyDown={e => {
+                                // 组词中的回车/Esc 属于输入法（确认/取消候选词），
+                                // 不应触发重命名提交或关闭编辑态。
+                                if (isImeComposing(e)) {return}
                                 if (e.key === 'Enter') {commitRename()}
                                 if (e.key === 'Escape') {setEditingNameId(null)}
                               }}
@@ -1351,7 +1395,7 @@ export default function ChatPanel() {
                             </div>
                           )}
                           <div style={{
-                            fontSize: 10, color: 'var(--text-secondary)', marginTop: 2,
+                            fontSize: 11, color: 'var(--text-secondary)', marginTop: 2,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>
                             {formatDateLabel(conv.createdAt)} · {conv.messages.length} 条消息
@@ -1925,6 +1969,16 @@ export default function ChatPanel() {
 
           {messages.map((msg, i) => {
             const isUser = msg.role === 'user'
+            // ── P2-3 修复：避免同一段回复显示两份 ──────────────────────────
+            // 回复完成时先 addMessage 写入全文，紧接着 startTypingAnimation 用
+            // 独立浮层逐字播放同一段文本 → 打字期间列表与浮层同时可见，出现「双份」。
+            // 这里在打字机播放期间，把列表里那条刚落地的回复暂时隐藏。
+            if (
+              isStreaming && fullResponseRef.current &&
+              !isUser && msg.role === 'assistant' &&
+              msg.content === fullResponseRef.current &&
+              i === messages.length - 1
+            ) {return null}
             return (
             <div key={msg.id} className="msg-anim-in"
               onMouseEnter={() => msg.role !== 'system' && setHoveredMsgId(msg.id)}
@@ -1958,12 +2012,12 @@ export default function ChatPanel() {
                 color: 'var(--text-primary)',
               }}>
                 {isUser && profile.nickname && (
-                  <div style={{ fontSize: 10, fontWeight: 600, color: '#3b82f6', marginBottom: 2 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', marginBottom: 2 }}>
                     {profile.nickname}
                   </div>
                 )}
                 <div style={{
-                  fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                  fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word', userSelect: 'text',
                 }}><LinkifiedText text={msg.content.replace(/^\n+/, '')} /></div>
                 {/* ═══ v2.14: 内联操作按钮 ═══ */}
@@ -2342,9 +2396,9 @@ export default function ChatPanel() {
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: 10,
                 border: `1.5px solid ${getAgentRole(selectedRole).color}40`,
-                fontSize: 13, outline: 'none', fontFamily: 'inherit',
+                fontSize: 15, outline: 'none', fontFamily: 'inherit',
                 resize: 'vertical', minHeight: 52, paddingRight: 74,
-                boxSizing: 'border-box', lineHeight: 1.5,
+                boxSizing: 'border-box', lineHeight: 1.6,
                 transition: 'border-color 0.2s',
               }}
               onFocus={e => { (e.target as HTMLElement).style.borderColor = getAgentRole(selectedRole).color }}

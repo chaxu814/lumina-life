@@ -12,6 +12,7 @@
 // ============================================================
 
 import { getMemoryStore } from './memoryStore'
+import { isEnabled } from '../core/featureFlags'
 import { TokenEstimator } from '../tokenEstimator'
 
 const SUMMARY_EVERY_N_TURNS = 10
@@ -279,8 +280,11 @@ export class ConversationSummarizer {
   /** @deprecated 使用结构化压缩替代 */
   async summarize(summaryText: string): Promise<void> {
     try {
-      getMemoryStore().addConversationSummary(summaryText)
-      getMemoryStore().cleanup(50)
+      // 🔗 记忆与进化 ·「对话记忆」开关：关掉后不再把对话沉淀成长期记忆
+      if (isEnabled('memory.conversation')) {
+        getMemoryStore().addConversationSummary(summaryText)
+        getMemoryStore().cleanup(50)
+      }
     } catch { /* ignore */ }
     this.buffer = this.buffer.slice(-5)
   }
@@ -374,8 +378,10 @@ export class GlobalMemoryRefiner {
     memory?: { lessons?: string[]; systemInfo?: string[]; projectConventions?: string[]; toolExperience?: string[] }
   }): void {
     try {
-      if (result.user) {getMemoryStore().saveUserProfile(result.user)}
-      if (result.memory) {getMemoryStore().saveMemoryConfig(result.memory)}
+      const store = getMemoryStore()
+      // 🔗 「对话记忆」管用户画像；「本地记忆与技能」管工作过程/技能经验
+      if (result.user && isEnabled('memory.conversation')) {store.saveUserProfile(result.user)}
+      if (result.memory && isEnabled('memory.localSkills')) {store.saveMemoryConfig(result.memory)}
     } catch { /* ignore */ }
   }
 
@@ -394,6 +400,7 @@ export class GlobalMemoryRefiner {
   applyFactsExtraction(facts: Array<{
     category: string; content: string; confidence: number; source: string
   }>): void {
+    if (!isEnabled('memory.conversation')) {return}   // 🔗 「对话记忆」开关
     try {
       const store = getMemoryStore()
       for (const f of facts) {
@@ -410,6 +417,7 @@ export class GlobalMemoryRefiner {
   applyReflections(reflections: Array<{
     topic: string; insight: string; action: string
   }>): void {
+    if (!isEnabled('memory.conversation')) {return}   // 🔗 「对话记忆」开关
     try {
       const store = getMemoryStore()
       for (const r of reflections) {
@@ -422,6 +430,7 @@ export class GlobalMemoryRefiner {
     traits?: string[]; traitChange?: string
     bigFive?: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; playfulness: number }
   }): void {
+    if (!isEnabled('memory.localSkills')) {return}    // 🔗 「本地记忆与技能」开关（人格进化）
     try {
       if (persona.bigFive) {getMemoryStore().savePersonaTraits(persona.bigFive)}
       if (persona.traits) {getMemoryStore().addPersonaTraits(persona.traits)}

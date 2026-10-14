@@ -751,7 +751,15 @@ export function compactMessages(
   const effectiveExistingSummary = compressedSummary || existingSummaryInMessages
 
   // 保留最近完整消息
-  const recentMsgs = messages.slice(-COMPACTOR_RECENT_PAIRS)
+  //
+  // 🐛 2026-10-10（P2-8）修复：原来直接 `messages.slice(-COMPACTOR_RECENT_PAIRS)`。
+  //   当 messages.length ≤ COMPACTOR_RECENT_PAIRS（50）时，这个切片会把**全部**
+  //   消息都留下 —— 其中就包含 system 块；而下面 return 时又拼了一次
+  //   `cleanedSystemMsgs`，于是系统提示词在结果里出现**两份**。
+  //   （触发：Scroll 模式，或恢复路径把 messages 砍到 ~15 条后再次 compactContext。）
+  //   修法：recentMsgs 只取非 system —— system 的归属由 cleanedSystemMsgs 统一负责。
+  const nonSystemMsgs = messages.filter(m => m.role !== 'system')
+  const recentMsgs = nonSystemMsgs.slice(-COMPACTOR_RECENT_PAIRS)
 
   // 中间消息（需要被压缩的部分）
   const systemEndIndex = systemMsgs.length

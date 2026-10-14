@@ -7,9 +7,9 @@ import ModelPickerModal from './ModelPickerModal'
 
 /* ── 供应商列表 ──
  *
- * 2026-10-04 移除了「免费模型（OpenCode Zen）」入口。
- * free 字段保留在类型里：老用户的 localStorage 可能仍存着 provider: 'opencode-zen'，
- * 渲染时若直接访问不存在的字段会炸，所以过滤条件保留 !p.free 只是恒真。
+ * free 字段保留在类型里仅作向后兼容：老用户的 localStorage 可能仍存着旧数据，
+ * 渲染时直接访问不存在的字段虽不会崩，但保留它可避免类型漂移。
+ * 当前所有内置供应商均为非 free，过滤条件 !p.free 是防御性恒真判断。
  */
 interface LLMProviderDef {
   id: string; name: string; url: string; model: string; free?: boolean
@@ -696,7 +696,6 @@ export default function SettingsLLM() {
 
               const handleAgentProvider = (providerId: string, endpoint: string, model: string) => {
                 const next: any = { ...cfg, provider: providerId, endpoint: endpoint || cfg.endpoint, model: model || cfg.model }
-                if (providerId === 'opencode-zen') {next.apiKey = 'public'}
                 setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: next }))
               }
 
@@ -817,18 +816,23 @@ export default function SettingsLLM() {
                       {teamAdvancedOpen[agent.id] ? '收起高级选项' : '⚙️ 高级选项'}
                     </button>
                     {teamAdvancedOpen[agent.id] && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 6 }}>
+                      // 🔧 2026-10-10 修复（运行时验证发现）：
+                      //   ① 原来第一栏标签写「最大输出 (tokens)」，但它绑定的
+                      //      `maxContextTokens` 语义其实是**上下文窗口**（默认 262144、
+                      //      _applyAgentLlmConfig 用它推导 contextWindow）—— 标签反了；
+                      //   ② 原来第二栏「上下文窗口」绑定 `contextWindow`，而后端
+                      //      AgentLlmConfig 里**根本没有这个字段**，保存时也没带上 →
+                      //      用户填了**从来没生效过**。属于同一个概念的第二个真相源，
+                      //      已删除，只保留 `maxContextTokens` 一个入口。
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
                         <div>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>最大输出 (tokens)</div>
-                          <input type="number" min="1" max="524288" style={{ width: '100%', padding: '5px 8px', borderRadius: 5, fontSize: 11, border: '1.5px solid var(--border-light)', outline: 'none', background: 'var(--surface-0)', boxSizing: 'border-box' }}
-                            value={cfg.maxContextTokens ?? 262144}
-                            onChange={e => setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: { ...cfg, maxContextTokens: Math.min(parseInt(e.target.value) || 262144, 1048576) } }))} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>上下文窗口</div>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>上下文窗口 (tokens)</div>
                           <input type="number" min="0" max="1048576" style={{ width: '100%', padding: '5px 8px', borderRadius: 5, fontSize: 11, border: '1.5px solid var(--border-light)', outline: 'none', background: 'var(--surface-0)', boxSizing: 'border-box' }}
-                            value={cfg.contextWindow ?? 0}
-                            onChange={e => setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: { ...cfg, contextWindow: Math.min(parseInt(e.target.value) || 0, 1048576) } }))} />
+                            value={cfg.maxContextTokens ?? 262144}
+                            onChange={e => setAgentLlmConfigs(prev => ({ ...prev, [agent.id]: { ...cfg, maxContextTokens: Math.min(parseInt(e.target.value) || 0, 1048576) } }))} />
+                          <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 3, lineHeight: 1.4 }}>
+                            该模型能读入的总长度。填得比模型实际能吃的大，会每轮重复预填充、首 token 变慢。
+                          </div>
                         </div>
                         <div>
                           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>温度</div>

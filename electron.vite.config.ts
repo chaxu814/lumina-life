@@ -72,6 +72,13 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin(), copyPetAssets()],
     build: {
       outDir: 'out/main',
+      // 🛡️ 不让 Vite 自动清空 out/main。
+      //   原因：某些受限终端环境会拦截"一次删除 >50 个文件"的批量操作
+      //   （`fs.rm(dir,{recursive})`），导致构建在清空 out/main/chunks|assets 时
+      //   直接失败 → dev server 起不来 → 主窗口白屏（实测踩过）。
+      //   改为由 `scripts/prebuild-clean.cjs`（predev/prebuild 钩子）**逐个**清理，
+      //   逐个 unlink 不会被拦，且效果等价。
+      emptyOutDir: false,
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'electron/main.ts'),

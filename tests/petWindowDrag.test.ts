@@ -13,17 +13,28 @@ import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 
 const html = fs.readFileSync('electron/pet/pet-live2d.html', 'utf-8')
+// ⚠️ 2026-10-11 架构变更：聊天面板已从 pet-live2d.html 剥离为**独立窗口**
+//    （electron/pet/pet-chat.html），角色窗只剩 角色 + 气泡 + 工具栏。
+//    因此「聊天面板标题栏可拖」的断言必须改读 pet-chat.html —— 角色窗里
+//    已经不存在 #chat-panel 了。
+const chatHtml = fs.readFileSync('electron/pet/pet-chat.html', 'utf-8')
 
 describe('Live2D 窗口全屏拖动', () => {
-  it('聊天面板标题栏是拖动区域', () => {
-    const i = html.indexOf('#chat-panel .cp-head {')
-    const block = html.slice(i, i + 700)
+  it('独立聊天窗的标题栏是拖动区域', () => {
+    const i = chatHtml.indexOf('#chat-panel .cp-head {')
+    expect(i, 'pet-chat.html 里找不到 .cp-head 样式').toBeGreaterThan(-1)
+    const block = chatHtml.slice(i, i + 700)
     expect(block).toMatch(/-webkit-app-region:\s*drag/)
   })
 
   it('标题栏内的按钮/输入必须 no-drag，否则按下去变成拖窗口而不是点击', () => {
-    expect(html).toMatch(/#chat-panel \.cp-head \.cp-actions[\s\S]*?-webkit-app-region:\s*no-drag/)
-    expect(html).toMatch(/#chat-panel \.cp-head button[\s\S]*?-webkit-app-region:\s*no-drag/)
+    expect(chatHtml).toMatch(/#chat-panel \.cp-head \.cp-actions[\s\S]*?-webkit-app-region:\s*no-drag/)
+    expect(chatHtml).toMatch(/#chat-panel \.cp-head \.cp-btn,[\s\S]*?-webkit-app-region:\s*no-drag/)
+  })
+
+  it('角色窗里不再内嵌聊天面板（已剥离为独立窗口）', () => {
+    // 防止「内嵌面板」被无意间加回来 —— 那会和独立窗打架
+    expect(html).not.toContain('#chat-panel .cp-head {')
   })
 
   it('页面别处仍是 no-drag（不能整体变可拖，否则模型点击全废）', () => {

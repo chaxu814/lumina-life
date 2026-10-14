@@ -1108,7 +1108,7 @@ export default function NewsPanel() {
           border: '1px solid rgba(255,255,255,0.1)',
           color: '#fff',
           maxWidth: 320,
-          fontFamily: "'Segoe UI', system-ui, sans-serif",
+          fontFamily: 'var(--font-sans)',
           display: 'flex', alignItems: 'center', gap: 10,
           animation: 'slideUp 0.3s ease-out',
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',

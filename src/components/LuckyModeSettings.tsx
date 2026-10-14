@@ -7,6 +7,7 @@
 // ============================================================
 
 import React, { useState } from 'react'
+import { isImeComposing } from '../lib/ime'
 import type { LuckyModePreset } from './LuckyModeSelector'
 
 export interface LuckySettingsConfig {
@@ -533,6 +534,7 @@ export default function LuckyModeSettings({
                     value={newTask}
                     onChange={e => setNewTask(e.target.value)}
                     onKeyDown={e => {
+                      if (isImeComposing(e)) {return}
                       if (e.key === 'Enter' && newTask.trim()) {
                         update({ goal: { ...config.goal, subTasks: [...config.goal.subTasks, newTask.trim()] } })
                         setNewTask('')

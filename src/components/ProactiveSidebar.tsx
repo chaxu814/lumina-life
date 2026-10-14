@@ -262,7 +262,7 @@ export default function ProactiveSidebar({ visible, onClose }: Props) {
     <div style={{
       display: 'flex', flexDirection: 'column',
       height: '100%', background: '#f8f9fb',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontFamily: 'var(--font-sans)',
       overflow: 'hidden',
     }}>
       {/* ═══ 标题栏 ═══ */}

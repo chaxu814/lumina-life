@@ -41,3 +41,56 @@ export function normalizeUrl(raw: string): string {
   }
   return `https://${s}`
 }
+
+// ═══════════════════════════════════════════════════════════
+// 默认搜索引擎（地址栏输入非网址时用）
+// ═══════════════════════════════════════════════════════════
+
+/** 默认搜索引擎：Bing。urlTemplate 里的 {q} 会被替换为编码后的查询词 */
+export const SEARCH_ENGINE = {
+  id: 'bing',
+  name: 'Bing',
+  urlTemplate: 'https://www.bing.com/search?q={q}',
+} as const
+
+/** 把查询词拼成搜索 URL */
+export function buildSearchUrl(query: string, engine: { urlTemplate: string } = SEARCH_ENGINE): string {
+  return engine.urlTemplate.replace('{q}', encodeURIComponent(String(query || '').trim()))
+}
+
+/** 输入是否"像网址"（裸域名 / localhost / host:port），而不是搜索词 */
+function looksLikeDomain(s: string): boolean {
+  if (/\s/.test(s)) {return false}                 // 有空格 → 搜索词
+  if (/[\u4e00-\u9fa5]/.test(s)) {return false}    // 含中文 → 搜索词
+  if (/^localhost(:\d+)?([/?#].*)?$/i.test(s)) {return true}
+  return /^[\w-]+(\.[\w-]+)+(:\d+)?([/?#].*)?$/.test(s)
+}
+
+/**
+ * 解析地址栏输入 → 最终导航 URL。
+ *   · 空                     → about:blank
+ *   · scheme://…             → 只放行 http(s)/file，其余落空白页
+ *   · 像网址（裸域名/localhost/host:port）→ 补 https://
+ *   · 其它伪协议（about: 放行，javascript:/data: 落空白页）
+ *   · 其余（中文 / 空格 / 裸词）→ 当作搜索词，走默认搜索引擎（Bing）
+ */
+export function resolveAddressInput(raw: string, engine: { urlTemplate: string } = SEARCH_ENGINE): string {
+  const s = String(raw || '').trim()
+  if (!s) {return 'about:blank'}
+
+  // 1) 显式 "scheme://"
+  const m = /^([a-z][a-z0-9+.-]*):\/\//i.exec(s)
+  if (m) {return /^(https?|file)$/i.test(m[1]) ? s : 'about:blank'}
+
+  // 2) 像网址（含 localhost / host:port）→ 补 https
+  //    必须放在"伪协议"判断之前，否则 localhost:3000 会被当成 scheme=localhost
+  if (looksLikeDomain(s)) {return `https://${s}`}
+
+  // 3) 其余带冒号的伪协议：about: 放行，javascript:/data:/mailto: 一律拒绝
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) {
+    return /^about:/i.test(s) ? s : 'about:blank'
+  }
+
+  // 4) 其它 → 搜索
+  return buildSearchUrl(s, engine)
+}

@@ -55,7 +55,8 @@
     "nav_channels": "Channels",
     "nav_security": "Security",
     "nav_tasks": "Scheduled Tasks",
-    "nav_pet": "Desktop Pet"
+    "nav_pet": "Desktop Pet",
+    "nav_memory": "Memory & Evolution"
   },
   "llm": {
     "provider_label": "Provider",
@@ -78,8 +79,6 @@
     "agent_llm_title": "Agent LLM",
     "agent_llm_subtitle": "Used in normal mode (chat / AI agent / quick / fix)",
     "connected": "Connected",
-    "free_models_title": "🎯 Free models (no setup, ready to use)",
-    "free_models_desc": "Free API provided by OpenCode Zen — no signup needed. Great for a quick try-out and light use.",
     "local_models_title": "🖥️ Local models (free, private to this machine)",
     "cloud_models_title": "☁️ Cloud models",
     "detect_local": "🔎 Auto-detect local models",

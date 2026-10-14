@@ -37,6 +37,8 @@ import {
 import { webSearchDef, webSearch } from './impl/search'
 // Time
 import { datetimeDef, datetime } from './impl/datetime'
+// 自我认知（Agent 查询自身实时信息）
+import { aboutLuminaDef, aboutLumina } from './impl/aboutLumina'
 // Memory (v2.4: 三层 + 向量检索)
 import {
   memorySaveDef, memorySave,
@@ -218,6 +220,9 @@ export function registerAllTools(): void {
   if (!claimToolsRegistration()) {return}
 
   // ── 基础工具 ─────────────────────────────────────────
+
+  // 自我认知（实时查询自身：版本/平台/团队/工具/技能/边界）
+  registerTool(aboutLuminaDef, aboutLumina)
 
   // Shell
   registerTool(shellExecDef, shellExec)

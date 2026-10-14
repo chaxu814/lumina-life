@@ -105,10 +105,13 @@ describe('llmPersist · 全部改配置入口都落盘', () => {
 describe('llmPersist · 顶栏模型切换落盘', () => {
   const src = readSrc('src/components/ModelSelector.tsx')
 
-  it('两处切换都走 switchAndPersist', () => {
-    // 2 个切换调用点（预设展开 / 模型列表）
+  it('供应商切换都走 switchAndPersist（不再有裸切换）', () => {
+    // 模型列表里每个切换点都必须走落盘入口。
+    // 注：数量不再固定为 2 —— 原先有「免费」+「其他」两段，
+    //     免费段（OpenCode Zen）已下线移除，现在只剩一段。
+    // 真正的不变式是「不存在裸的 switchLLMProvider」——见下一条用例。
     const calls = (src.match(/switchAndPersist\(store/g) || []).length
-    expect(calls).toBe(2)
+    expect(calls, '至少应有一个落盘切换点').toBeGreaterThanOrEqual(1)
   })
 
   it('不再存在裸的 switchLLMProvider + setLLMConfig 组合', () => {

@@ -72,6 +72,35 @@ describe('classifyByRules — Lumina 自答不外派', () => {
   }
 })
 
+describe('classifyByRules — 任务类型先行：纯推理/闲聊走 Lumina 自答（不触发 LLM 仲裁）', () => {
+  const reasoningCases = [
+    '集合 C={1,2,3,...,13} 子集 N 个元素 不含五个连续整数 概率',
+    '证明根号2是无理数',
+    '从 10 个人里选 3 个人有多少种组合',
+    '解方程 x^2 - 5x + 6 = 0',
+  ]
+  for (const t of reasoningCases) {
+    it(`reasoning→lumina: ${t}`, () => {
+      const v = classifyByRules({ text: t })
+      expect(v.target).toBe('lumina')
+      expect(v.confidence).toBe('high')
+    })
+  }
+
+  it('知识解释类（无代码/审查信号）也走 Lumina 自答', () => {
+    const v = classifyByRules({ text: '什么是量子纠缠' })
+    expect(v.target).toBe('lumina')
+    expect(v.confidence).toBe('high')
+  })
+
+  it('「优缺点是什么」仍归热茶 —— 知识类不得抢审查信号', () => {
+    const v = classifyByRules({ text: '这两个框架的优缺点是什么' })
+    expect(v.target).toBe('recha')
+    expect(v.confidence).toBe('high')
+  })
+})
+
+
 describe('classifyByRules — 歧义任务必须交给 LLM（正则盲区）', () => {
   it('「这玩意跑起来就崩」——旧正则一个都不匹配，必须仲裁', () => {
     const v = classifyByRules({ text: '这玩意跑起来就崩，你帮我看看' })

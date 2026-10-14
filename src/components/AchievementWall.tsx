@@ -128,7 +128,7 @@ export default function AchievementWall({ unlockedAchievements, onClose }: Achie
       zIndex: 99998, background: 'rgba(10,10,30,0.92)',
       backdropFilter: 'blur(12px)',
       display: 'flex', flexDirection: 'column',
-      color: '#fff', fontFamily: "'Segoe UI', system-ui, sans-serif",
+      color: '#fff', fontFamily: 'var(--font-sans)',
       animation: 'aw-fadeIn 0.3s ease-out',
     }}>
       <style>{`

@@ -15,6 +15,44 @@ import { useTaskWorkspace, mapAgentEventToTimeline } from '../stores/taskWorkspa
 let _initialized = false
 const _unsubs: Array<() => void> = []
 
+/** 扩展名 → 语言（给「对话产物」层用） */
+const EXT_LANG: Record<string, string> = {
+  md: 'markdown', markdown: 'markdown', txt: 'text', log: 'text',
+  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
+  py: 'python', java: 'java', go: 'go', rs: 'rust', cpp: 'cpp', c: 'c', h: 'c', cs: 'csharp',
+  json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml', xml: 'xml', html: 'html', htm: 'html',
+  css: 'css', scss: 'scss', sql: 'sql', sh: 'shell', bash: 'shell', ps1: 'powershell',
+  csv: 'csv', tsv: 'csv', vue: 'vue', svelte: 'svelte',
+}
+
+/**
+ * 【C】产物落盘即入库 —— Worker 用 file_write/file_edit 成功写出文件时，
+ * 自动把它登记进「对话产物 / 最近文件」层。
+ * 🔧 2026-10-09：此前 addArtifact 只有自测组件在调，真实使用中产物层恒空。
+ */
+function maybeRecordArtifact(ev: any, store: ReturnType<typeof useTaskWorkspace.getState>): void {
+  if (ev.tool !== 'file_write' && ev.tool !== 'file_edit') {return}
+  if (ev.error) {return}
+  const p = ev.args?.filePath || ev.args?.path
+  if (!p || typeof p !== 'string') {return}
+  const filename = p.replace(/\\/g, '/').split('/').pop() || p
+  const ext = (filename.includes('.') ? filename.split('.').pop()! : '').toLowerCase()
+  const now = Date.now()
+  const taskId = store.activeTaskId || 'conversation'
+  try {
+    store.addArtifact({
+      id: `${taskId}:${p}`,
+      taskId,
+      filename,
+      language: EXT_LANG[ext] || 'text',
+      content: typeof ev.args?.content === 'string' ? ev.args.content : '',
+      filePath: p,
+      createdAt: now,
+      mtime: now,
+    })
+  } catch { /* 登记失败不影响主流程 */ }
+}
+
 /** 后台 runner 事件的工具调用也进「工具执行」列表 */
 function recordRunnerToolEvent(ev: any, agentId: string): void {
   if (!ev || !ev.tool) {return}
@@ -23,6 +61,7 @@ function recordRunnerToolEvent(ev: any, agentId: string): void {
     store.recordToolStart(ev.tool, agentId, null, ev.args)
   } else if (ev.type === 'tool_end') {
     store.recordToolEnd(ev.tool, !ev.error, agentId, null, ev.result)
+    maybeRecordArtifact(ev, store)
   } else if (ev.type === 'tool_error') {
     store.recordToolEnd(ev.tool, false, agentId, null, ev.error)
   }
@@ -50,6 +89,11 @@ export function initTaskWorkspaceBridge(): void {
       })
       store.switchTask(wid)
       if (task.status === 'running') {
+        // 任务一开始跑就自动弹开面板。
+        // 🔧 2026-10-09 修复：这里原本是个**空的 if 块**（注释写了"running 时自动弹开面板"
+        //   但函数体是空的）→ 后台委托在静默执行，用户永远看不到「任务工作区」在工作，
+        //   实测表现为「这个面板好像从没被用过」。补上真正的弹开动作。
+        store.setPanelOpen(true)
       }
     }))
   }

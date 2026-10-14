@@ -22,6 +22,7 @@ import fs from 'fs'
 import path from 'path'
 import { getMemoryDbPath } from '../paths'
 import { isEnabled } from '../core/featureFlags'
+import { setCjkDictEnabled } from './layeredMemory'
 import {
   type RelationshipEventInput,
   type RelationshipEventQuery,
@@ -89,6 +90,8 @@ export class JsonMemoryStore {
     this.model = this.load()
     // 关系事件自增序号接续
     this.relSeq = (this.model.relEvents.reduce((m, e) => Math.max(m, e.id || 0), 0)) + 1
+    // 🆕 中文词表分词增强：按 feature flag 设置（默认开；关闭即回到纯 unigram+bigram）
+    try { setCjkDictEnabled(isEnabled('memory.cjkDict')) } catch { /* flag 未就绪则保持默认开 */ }
   }
 
   private load(): JsonModel {

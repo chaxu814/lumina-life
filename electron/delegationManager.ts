@@ -35,6 +35,7 @@ import type { TheaterRole } from './orchestration/theater'
 import { PhaseGate, getPhasesFromComplexity } from './orchestration/phaseGate'
 // v02: Worker 委托 Prompt 构建（传递完整上下文）
 import { buildWorkerSystemPrompt, buildWorkerFirstMessage, type WorkerPromptContext } from './orchestration/delegationPrompt'
+import { buildSelfKnowledgeBlock } from './selfKnowledge'
 import { resolveToolset } from './tools/registry'
 // v0.1.1: 委托结果驱动 Agent 间动态关系
 import { getRelationshipStore } from './agentRelationships'
@@ -848,6 +849,8 @@ ${lastError.slice(0, 1000)}
     parts.push(`你是 ${to}，正在执行来自 ${from} 的委托任务。`)
     parts.push(`这是一个子任务（spawn_subagent fork），你有独立的上下文空间。`)
     parts.push('')
+    // 自我认知：让 fork 出来的子任务也知道项目与团队（修复"答不出团队有谁/Lucky 是什么"）
+    try { parts.push(buildSelfKnowledgeBlock(to, { compact: true })); parts.push('') } catch { /* ignore */ }
     parts.push('## 任务信息')
     parts.push(`- 任务类型: ${taskType}`)
     parts.push(`- 委托方: ${from}`)

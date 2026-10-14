@@ -44,7 +44,8 @@ export async function handleChat(args: string[]): Promise<{ ok: boolean; data?: 
       model: agentCfg.model,
       baseUrl: agentCfg.endpoint,
       apiKey: agentCfg.apiKey || '',
-      maxTokens: agentCfg.maxContextTokens,
+      // 🐛 2026-10-10 修复：maxContextTokens 是**上下文窗口**，不是输出上限
+      contextWindow: agentCfg.maxContextTokens || 0,
       personaId: agentId,
     }
 

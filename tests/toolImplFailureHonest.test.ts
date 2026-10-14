@@ -46,13 +46,20 @@ vi.mock('../electron/tools/utils/httpClient', () => ({
 }))
 
 const webState = {
-  search: async (_q: string, _c: number) => '',
-  fetch: async (_url: string) => '',
+  // 🆕 2026-10-13: browser 工具已改用**主搜索栈**（./search），
+  //   这里对主栈做**部分 mock**（保留真实导出，只替换 webSearch / fetchReadablePage），
+  //   否则会把 webFetch 等工具依赖的 isChallengePage / extractMainContent 一起 mock 掉。
+  search: async (_args: { query: string; count: number }): Promise<{ content: string }> => ({ content: '' }),
+  fetch: async (_url: string): Promise<{ title: string; text: string } | null> => null,
 }
-vi.mock('../electron/tools/impl/webSearch', () => ({
-  webSearch: (q: string, c: number) => webState.search(q, c),
-  fetchWebContent: (u: string) => webState.fetch(u),
-}))
+vi.mock('../electron/tools/impl/search', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../electron/tools/impl/search')>()
+  return {
+    ...real,
+    webSearch: (args: { query: string; count: number }) => webState.search(args),
+    fetchReadablePage: (u: string) => webState.fetch(u),
+  }
+})
 
 const ctxState = { entries: [] as any[] }
 vi.mock('../electron/delegationManager', () => ({
@@ -170,17 +177,17 @@ describe('browser：参数非法 / 读不到 / 提不出链接都是失败', () 
   })
 
   it('action=search_and_read 搜索 0 命中 → 仍是成功的查询 ok:true', async () => {
-    webState.search = async () => `搜索 "不存在的东西" 未找到结果。`
+    webState.search = async () => ({ content: '（未找到与查询相关的有效结果）' })
     expectEmptySuccess(await browserMod.browserHandler({ action: 'search_and_read', query: '不存在的东西' }))
   })
 
   it('action=search_and_read 提取不到任何链接 → ok:false', async () => {
-    webState.search = async () => `🔍 搜索 "x" (2 条):\n\n**1. 标题**\n   📄 摘要`
+    webState.search = async () => ({ content: '🔍 BING 搜索: "x"\n\n1. 标题\n   （无链接）\n   摘要' })
     expectFailure(await browserMod.browserHandler({ action: 'search_and_read', query: 'x' }), '提取不到任何链接')
   })
 
   it('action=search_and_read 所有链接都读失败 → ok:false，保留最后错误', async () => {
-    webState.search = async () => `🔍 搜索 "x" (1 条):\n\n**1. 标题**\n   🔗 https://example.com/a\n   📄 摘要`
+    webState.search = async () => ({ content: '🔍 BING 搜索: "x"\n\n1. 标题\n   https://example.com/a\n   摘要' })
     webState.fetch = async () => { throw new Error('HTTP 500 最后一个链接的错误') }
     const res = await browserMod.browserHandler({ action: 'search_and_read', query: 'x' })
     expectFailure(res, '均无法读取正文')
@@ -188,8 +195,8 @@ describe('browser：参数非法 / 读不到 / 提不出链接都是失败', () 
   })
 
   it('action=search_and_read 读到正文 → ok:true', async () => {
-    webState.search = async () => `🔍 搜索 "x" (1 条):\n\n**1. 标题**\n   🔗 https://example.com/a\n   📄 摘要`
-    webState.fetch = async () => '真实正文内容'
+    webState.search = async () => ({ content: '🔍 BING 搜索: "x"\n\n1. 标题\n   https://example.com/a\n   摘要' })
+    webState.fetch = async () => ({ title: '标题', text: '真实正文内容' })
     const res = await browserMod.browserHandler({ action: 'search_and_read', query: 'x' })
     expect(res.ok).toBe(true)
     expect(res.content).toContain('真实正文内容')

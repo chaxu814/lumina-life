@@ -22,6 +22,11 @@ export type RendererFlagKey =
   | 'emotion.coldWar'
   | 'developer.companion'
   | 'memory.relationshipEvents'
+  | 'memory.conversation'
+  | 'memory.localSkills'
+  | 'memory.recall'
+  | 'memory.write'
+  | 'memory.cjkDict'
   | 'onboarding.privacy'
   | 'mode.minimal'
 
@@ -38,6 +43,11 @@ const CLIENT_DEFAULTS: Record<RendererFlagKey, boolean> = {
   'emotion.coldWar': true,
   'developer.companion': true,
   'memory.relationshipEvents': true,
+  'memory.conversation': true,
+  'memory.localSkills': true,
+  'memory.recall': true,
+  'memory.write': true,
+  'memory.cjkDict': true,
   'onboarding.privacy': true,
   'mode.minimal': false,
 }
@@ -52,6 +62,11 @@ export const FLAG_META: Array<{ key: RendererFlagKey; name: string; desc: string
   { key: 'social.deepTeam', name: '团队社交深化', desc: '剧本化事件、亲密度的实际行为后果', group: '团队' },
   { key: 'developer.companion', name: '开发者陪伴', desc: '只读 review diff/commit，长时间调试后关怀', group: '团队' },
   { key: 'memory.relationshipEvents', name: '关系事件记忆', desc: '承诺/共同完成的事/你上次难过的原因', group: '记忆' },
+  { key: 'memory.conversation', name: '对话记忆', desc: '记住对话中的重要信息，让后续回答更贴合你', group: '记忆' },
+  { key: 'memory.recall', name: '使用记忆', desc: '允许 Lumina 在回答前检索并参考长期记忆（建议在新对话开始前设定）', group: '记忆' },
+  { key: 'memory.write', name: '生成记忆', desc: '允许把本轮对话沉淀为新记忆，可随时开关', group: '记忆' },
+  { key: 'memory.cjkDict', name: '中文词表分词', desc: '零依赖词表增强中文召回精度，关闭即回退按字切分', group: '记忆' },
+  { key: 'memory.localSkills', name: '本地记忆与技能', desc: '自动记录工作过程并优化技能，数据仅保存在你的设备上', group: '记忆' },
   { key: 'dream.llmGeneration', name: '梦境 LLM 生成', desc: '未配 LLM 时自动回退模板并诚实标注', group: '记忆' },
   { key: 'pet.vrmExpressive', name: 'VRM 情绪动作(beta)', desc: '与 Live2D 对等前保持 beta、默认关', group: '桌宠' },
   { key: 'personality.subPersona', name: '副人格(实验)', desc: '长期记忆+情绪驱动的人格漂移，实验性默认关', group: '实验' },

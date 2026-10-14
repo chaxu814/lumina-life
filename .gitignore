@@ -163,6 +163,17 @@ userData/
 
 # ── Local agent runtime configs: contain API keys / LAN endpoints, NEVER commit ──
 agents/
+# 根目录 provider/LLM 运行态配置（含真实 API Key 与局域网端点）；
+# 随仓库分发的是 *.example.json 脱敏模板
+/agent-llm-configs.json
+/lumina-providers.json
+
+# ── 本地审计/命令输出日志（不随仓库分发）────────────────────
+/*-out.txt
+/*-timing.txt
+eslint-out.txt
+tsc-out.txt
+vitest-out.txt
 
 # ── Pet prototype scratch (standalone POC, not part of the shipping tree) ──
 pet-poc/
@@ -233,6 +244,8 @@ docs/gaming-autoplay-evidence/
 # ── Agent 内部脚手架，不属于产品文档 ────────────────────────
 /knowledge/
 /stt-server/
+# 用户会话数据（隐私）— 防止 git add -A 误提交
+/sessions/
 
 # ── 精灵表 UGC 资产：必须入库 ─────────────────────────────
 # 上面的 *.png 是为了挡住测试截图与运行期产物；

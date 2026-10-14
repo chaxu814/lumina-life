@@ -71,7 +71,7 @@ export async function fileRead(args: Record<string, any>): Promise<ToolResult> {
     try {
       stat = await fs.promises.stat(filePath)
     } catch {
-      return { callId: '', ok: false, content: '', error: `文件不存在: ${rawFilePath}。请使用绝对路径（如 "J:\\LuminaLife2.0\\memory\\MEMORY.md"）` }
+      return { callId: '', ok: false, content: '', error: `文件不存在: ${rawFilePath}。请检查路径拼写或使用绝对路径。` }
     }
 
     // 目录 → 列出内容

@@ -136,17 +136,21 @@ describe('接线：解密必须覆盖所有加载路径', () => {
 
   it('归一化在「所有加载路径之后」执行，不在任何 early-return 之前', () => {
     // ⚠️ 必须剥掉注释再断言：我自己在解释这个 bug 的注释里就写了 "return" 这个词，
-    //    不剥注释的话断言会对着说明文字报错 —— 这坑今��已经踩过两次了
-    //    （上一次是注释里的 “.run()” 被当成真实调用）。
+    //    不剥注释的话断言会对着说明文字报错 —— 这坑今天已经踩过两次了
+    //    （上一次是注释里的 ".run()" 被当成真实调用）。
+    // ⚠️ endIndex 也必须走 stripped 索引：纯用 src 索引切 stripped，src 里新增
+    //    注释会让 endIndex 向后偏移、stripped.slice 后越界到无关方法（getActiveProviderId
+    //    里的 `return this.store.activeProviderId`），断言就误报。
     const codeOnly = (s: string) => s
       .split('\n')
       .filter(l => { const t = l.trim(); return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*') })
       .join('\n')
-
-    const diskBranch = codeOnly(src).slice(
-      codeOnly(src).indexOf('✅ 已加载'),
-      src.indexOf('private normalizeStoreKeys'),
-    )
+    const stripped = codeOnly(src)
+    const startIdx = stripped.indexOf('✅ 已加载')
+    const endIdx = stripped.indexOf('private normalizeStoreKeys')
+    expect(startIdx, '找不到磁盘加载分支标记').toBeGreaterThan(-1)
+    expect(endIdx, '找不到归一化方法定义').toBeGreaterThan(-1)
+    const diskBranch = stripped.slice(startIdx, endIdx)
     expect(diskBranch, '磁盘加载分支仍在 early-return，导致归一化被跳过')
       .not.toMatch(/^\s*return\s*$/m)
   })
@@ -158,7 +162,7 @@ describe('接线：解密必须覆盖所有加载路径', () => {
     expect(start, '找不到 getAllProviderConfigs 的方法定义').toBeGreaterThan(-1)
     const body = src.slice(start, src.indexOf('\n  }', start))
     expect(body, 'getAllProviderConfigs 仍把 store 里的原值直接交出去')
-      .toContain('decryptApiKey(saved.apiKey)')
+      .toContain('decryptProviderApiKey(saved.apiKey)')
   })
 })
 

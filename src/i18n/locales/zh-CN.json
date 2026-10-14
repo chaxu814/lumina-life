@@ -55,7 +55,8 @@
     "nav_channels": "渠道",
     "nav_security": "安全中心",
     "nav_tasks": "定时任务",
-    "nav_pet": "桌宠"
+    "nav_pet": "桌宠",
+    "nav_memory": "记忆与进化"
   },
   "llm": {
     "provider_label": "供应商",
@@ -78,8 +79,6 @@
     "agent_llm_title": "Agent LLM",
     "agent_llm_subtitle": "普通模式使用（聊天 / AI智能体 / 快速 / 修复）",
     "connected": "已连接",
-    "free_models_title": "🎯 免费模型（无需配置，开箱即用）",
-    "free_models_desc": "免费 API 由 OpenCode Zen 提供，无需注册即可使用。适合快速体验和轻度使用。",
     "local_models_title": "🖥️ 本地模型（免费·隐私不出本机）",
     "cloud_models_title": "☁️ 云端模型",
     "detect_local": "🔎 一键检测本地模型",

@@ -11,13 +11,13 @@ import { isAgentVisible } from '../services/teamVisibility'
 import { isLocalInferenceRuntime } from '../services/isLocalEndpoint'
 import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
 // 📋 任务工作区的开合状态来自同一个 store，所以「任务派发中心」旁边
-import { IconSend } from '../components/Icons'
 import AgentTaskBoard from '../components/AgentTaskBoard'
 import ThinkingStepList from '../components/ThinkingStepList'
 import AgentMoments from '../components/AgentMoments'
-import { LuminaDailyReport, TeamMilestones, YakTechNotes } from '../components/NoteCycle'
-import MemoryTheater from '../components/MemoryTheater'
 import { sttService, type STTStatus } from '../services/sttService'
+import { handlePasteInsert } from '../lib/pasteInsert'
+import { isImeComposing } from '../lib/ime'
+import { estimateTokens } from '../lib/tokenEstimate'
 import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
 import { updateEmotion } from '../services/agentEmotion'
@@ -71,17 +71,21 @@ import { useAgentRuntime } from '../stores/agentRuntimeStore'
 //   前端必须 ≥ 后端超时，否则会在后端仍在处理时强制中断。
 const GC_CHAT_HARD_MS = 600_000
 
-async function agentChatWithTimeout(args: any): Promise<{ content: string; error?: string }> {
+async function agentChatWithTimeout(args: any, requestId?: string): Promise<{ content: string; error?: string }> {
+  // 🆕 P2-1：把本次请求 id 注入 config，后端会回显在每条事件上，供前端过滤。
+  const payload = requestId
+    ? { ...args, config: { ...(args?.config || {}), requestId } }
+    : args
   const deadline = Date.now() + GC_CHAT_HARD_MS
   try {
     const p = new Promise<any>((resolve, reject) => {
       const t = setInterval(() => {
         if (Date.now() > deadline) {
           clearInterval(t)
-          reject(new Error('群聊回复超时（300秒），请缩短输入或稍后重试。'))
+          reject(new Error(`群聊回复超时（${Math.round(GC_CHAT_HARD_MS / 1000)} 秒），请缩短输入或稍后重试。`))
         }
       }, 1_000)
-      ;(window as any).luminaAPI.agentChat(args).then((r: any) => {
+      ;(window as any).luminaAPI.agentChat(payload).then((r: any) => {
         clearInterval(t)
         resolve(r)
       }).catch((e: any) => {
@@ -261,7 +265,7 @@ function buildHistoryForAgent(
       text = `[${agentName}]: ${raw}`
     }
 
-    const est = Math.ceil(text.length / 4) + PER_MSG_OVERHEAD
+    const est = estimateTokens(text) + PER_MSG_OVERHEAD
     if (tokenEst + est > MAX_HISTORY_TOKENS && result.length > 0) {break}
     tokenEst += est
     result.unshift({ role, content: text })
@@ -278,7 +282,7 @@ function buildHistoryForAgent(
       const clipped = (entry.content || '').slice(0, 3000)
       const summaryKey = clipped.slice(0, 80).trim()
       if (existingSummaries.has(summaryKey)) {continue} // 跳过已在 messages 中出现的条目
-      const est = Math.ceil(clipped.length / 4) + PER_MSG_OVERHEAD
+      const est = estimateTokens(clipped) + PER_MSG_OVERHEAD
       if (tokenEst + est > MAX_HISTORY_TOKENS) {break}
       tokenEst += est
       if (!addedSummaryHeader && tokenEst + 8 <= MAX_HISTORY_TOKENS) {
@@ -291,7 +295,18 @@ function buildHistoryForAgent(
   }
 
   if (result.length === 0) {
-    result.push({ role: 'user', content: '(对话开始)' })
+    // 🐛 2026-10-12 修复：这里原本返回 `[{ role: 'user', content: '(对话开始)' }]`。
+    //
+    //   但这条占位符会被模型**当成一句用户发言**来理解 ——
+    //   「(对话开始)」字面意思就是"对话刚开始"，于是模型回复：
+    //     「抱歉，这是我们的第一次对话，还没有之前的对话内容可以参考。
+    //       如果你能告诉我你想讨论的话题或问题，我会很乐意帮你！」
+    //   实测故障（用户问「尼古喵喵是什么」，两个 Agent 都这么回）。
+    //
+    //   历史为空时正确的做法是**什么都不塞**：后端 sendMessage 会自己把
+    //   用户本轮的问题 push 进上下文，模型自然就有题面了。
+    //   塞一条假发言只会污染上下文（这与「不要伪造 user 消息」是同一条教训）。
+    return []
   }
 
   return result
@@ -485,6 +500,7 @@ function NextRefreshCountdown({ next }: { next: number | null }) {
 
 export default function GroupChatView() {
   const llmConfig = useStore(s => s.llmConfig)
+  const agentLlmConfigs = useStore(s => s.agentLlmConfigs)
   const getAgentLlmConfig = useStore(s => s.getAgentLlmConfig)
   const loadAgentLlmConfigs = useStore(s => s.loadAgentLlmConfigs)
   const activePanel = useStore(s => s.activePanel)
@@ -496,63 +512,75 @@ export default function GroupChatView() {
   // 🆕 v10.8: 启动时加载 per-agent LLM 配置
   useEffect(() => { loadAgentLlmConfigs() }, [])
 
-  // LLM 配置检测
-  //
-  // 🔧 2026-10-04 修复：旧判据是 `!!(llmConfig.model && llmConfig.apiKey)`，**强制要求 API Key**。
-  // 但 LM Studio / Ollama 走 localhost，本来就不存在 Key —— 本地模型配好了也被判成「未配置」，
-  // 于是黄色提示框常驻、Agent 全部退回预设话术。用户的 LM Studio 里明明加载着 qwen2.5:7b，
-  // 只是 apiKey 是空字符串，就被这个条件直接打死。
-  //
-  // 现在拆成两层：
-  //   · llmConfigured —— 端点 / 模型配了没（云端要 Key，本地不要）
-  //   · llmReady      —— 最终能不能真发请求。本地额外要求模型真的加载了；
-  //                      探测未完成时（null）不阻塞，避免刚打开就闪一下「模拟模式」。
-  const isCloudAPI = llmConfig.apiKey?.startsWith('sk-') || llmConfig.baseUrl?.includes('api.openai.com') || llmConfig.baseUrl?.includes('api.moonshot') || llmConfig.baseUrl?.includes('api.deepseek')
-  // 🔧 2026-10-04：原先只认 localhost / 127.0.0.1 / ollama，认不出局域网 IP。
-  // 用户把 LM Studio 跑在内网另一台机（http://192.168.1.2:1234/v1）时，
-  // 本地模型探测不跑、还会被误报成「云端 API」。
-  // 统一走 isLocalEndpoint —— 原来这个判定散在 6+ 处且写法各不相同。
-  const isLocalLLM = isLocalInferenceRuntime(llmConfig.baseUrl)
-  const llmConfigured = !!(llmConfig.model && (llmConfig.apiKey || isLocalLLM))
+  // Lumina Team 的实际 LLM 配置来自 per-agent 配置，而不是主聊天页的全局 llmConfig。
+  // 以前这里用全局配置 + providerDiscoverLocal（会轮询其他 Agent 的端点/Key），
+  // 可能因为 Yak/Recha 或另一个槽位的 Key 能用，就把 Lumina 显示成「已就绪」；
+  // 但发送时 agentIpc 使用的是 Lumina 自己的 endpoint/model/apiKey，结果就是 UI 绿、发出后 401。
+  const luminaTeamConfig = agentLlmConfigs.lumina
+  const readinessConfig = {
+    provider: luminaTeamConfig?.provider || '',
+    model: luminaTeamConfig?.model || '',
+    baseUrl: luminaTeamConfig?.endpoint || '',
+    apiKey: luminaTeamConfig?.apiKey || '',
+  }
+  const isCloudAPI = readinessConfig.apiKey?.startsWith('sk-') || readinessConfig.baseUrl?.includes('api.openai.com') || readinessConfig.baseUrl?.includes('api.moonshot') || readinessConfig.baseUrl?.includes('api.deepseek')
+  // 本地地址（包括局域网 IP）按实际 Lumina Team 配置判定；本地免 Key，云端需 Key。
+  const isLocalLLM = isLocalInferenceRuntime(readinessConfig.baseUrl)
+  const llmConfigured = !!(
+    luminaTeamConfig?.enabled
+    && readinessConfig.model
+    && readinessConfig.baseUrl
+    && (readinessConfig.apiKey || isLocalLLM)
+  )
 
-  // ── 🔧 2026-10-04：提示框的两个真问题 ──
-  // (a) 「本地 LLM 模式」原本只看 baseUrl 是不是 localhost，
-  //     所以**模型已经连好了它还一直显示**（绿框 + 黄框常驻占位）。
-  //     改成真正探测一次 LM Studio / Ollama 有没有加载模型。
-  // (b) 「云端 API 模式」是常驻横幅占位置。改为可关闭，
-  //     且**每天重新提示一次**（记日期，不永久隐藏）。
-  // null = 尚未探测完；true = 本地模型已就绪；false = 没就绪（该提醒）
+  // 本地「就绪」必须用 Lumina Agent 自己保存的 endpoint + API Key 检查，
+  // 不能用全局供应商或其它 Team Agent 的凭据代替。
   const [localModelReady, setLocalModelReady] = useState<boolean | null>(null)
   const [localDetecting, setLocalDetecting] = useState(false)
-  /** 🔧 2026-10-05：探测的真实失败原因（null = 就绪或尚未探测） */
   const [localProbeInfo, setLocalProbeInfo] = useState<{
     ok: boolean
     kind: string | null
     headline: string
     advice: string
   } | null>(null)
-  // 探测逻辑抽成函数：初始挂载和「↻ 重新检测」按钮共用一套判定，
-  // 免得两处判定漂移（曾经出现初始判定通过、按钮判定不通过的隐患）。
   const probeLocal = () => {
     setLocalDetecting(true)
-    return window.luminaAPI?.providerDiscoverLocal?.()
+    return window.luminaAPI?.providerProbeLocalConfig?.({
+      baseUrl: readinessConfig.baseUrl,
+      provider: readinessConfig.provider,
+      apiKey: readinessConfig.apiKey,
+    })
       .then((r: any) => {
-        // found 里真的带 models 才算「模型已加载」
-        const ready = Array.isArray(r?.found) && r.found.some(
-          (f: any) => Array.isArray(f?.models) && f.models.length > 0,
-        )
-        // 🔧 2026-10-05：把探测的【真实失败原因】留下来。
-        //   旧实现只回一个布尔值，于是「服务没开」「key 不对」「没加载模型」
-        //   三种完全不同的故障，在界面上全部渲染成同一句「尚未配置 LLM」。
-        //   用户因此反复去检查 API 地址 —— 而真实原因可能只是 key 不对。
-        if (!ready) { setLocalProbeInfo(r?.summary || null) } else { setLocalProbeInfo(null) }
+        const ready = Array.isArray(r?.provider?.models) && r.provider.models.length > 0
+        if (!ready) {
+          const failure = r?.failure
+          const headlines: Record<string, string> = {
+            auth: 'Lumina Team 的 API Key 鉴权失败',
+            unreachable: 'Lumina Team 的本地模型服务无法连接',
+            'no-model': 'Lumina Team 的本地服务尚未加载模型',
+            http: 'Lumina Team 的本地服务返回错误',
+          }
+          setLocalProbeInfo(failure ? {
+            ok: false,
+            kind: failure.kind || 'http',
+            headline: headlines[failure.kind] || 'Lumina Team 本地模型检测失败',
+            advice: failure.advice || '请检查 Lumina Team 配置中的端点、模型和 API Key。',
+          } : {
+            ok: false,
+            kind: 'http',
+            headline: 'Lumina Team 本地模型检测失败',
+            advice: '未能核验 Lumina Agent 自己的端点与 API Key；请确认应用主进程已更新后重试。',
+          })
+        } else {
+          setLocalProbeInfo(null)
+        }
         return ready
       })
       .catch((e: any) => {
         setLocalProbeInfo({
           ok: false,
           kind: 'http',
-          headline: '本地模型探测失败',
+          headline: 'Lumina Team 本地模型探测失败',
           advice: `无法完成探测：${e?.message || e}`,
         })
         return false
@@ -560,15 +588,47 @@ export default function GroupChatView() {
       .finally(() => { setLocalDetecting(false) })
   }
   const retryLocalDetect = () => { probeLocal().then((ready) => { setLocalModelReady(ready) }) }
+  const [syncingGlobalConfig, setSyncingGlobalConfig] = useState(false)
+  const [globalConfigSyncNotice, setGlobalConfigSyncNotice] = useState('')
+  const syncGlobalConfigToLumina = async () => {
+    const global = useStore.getState().llmConfig
+    if (!global.baseUrl || !global.model || !global.apiKey) {
+      setGlobalConfigSyncNotice('普通模式供应商还缺 Endpoint、Model 或 API Key；请先在设置中完成配置。')
+      return
+    }
+    setSyncingGlobalConfig(true)
+    setGlobalConfigSyncNotice('')
+    try {
+      const result = await window.luminaAPI?.agentLlmSetConfig?.('lumina', {
+        provider: global.provider || 'custom',
+        model: global.model,
+        endpoint: global.baseUrl,
+        apiKey: global.apiKey,
+        timeout: 600,
+        maxContextTokens: global.contextWindow || 0,
+      })
+      if (!result || result.success === false || result.ok === false) {
+        throw new Error(result?.error || '保存 Lumina Team 配置失败')
+      }
+      await loadAgentLlmConfigs()
+      setLocalModelReady(null)
+      setGlobalConfigSyncNotice('已将普通模式的 Endpoint、Model 和 Key 复制到 Lumina Team → Lumina；正在重新检查。')
+    } catch (e: any) {
+      setGlobalConfigSyncNotice(`复制失败：${e?.message || e}`)
+    } finally {
+      setSyncingGlobalConfig(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
-    if (!(llmConfigured && isLocalLLM)) { setLocalModelReady(null); return }
+    if (!(llmConfigured && isLocalLLM)) { setLocalModelReady(null); setLocalProbeInfo(null); return }
     probeLocal().then((ready) => { if (alive) { setLocalModelReady(ready) } })
     return () => { alive = false }
-  }, [llmConfigured, isLocalLLM, llmConfig.baseUrl])
+  }, [llmConfigured, isLocalLLM, readinessConfig.baseUrl, readinessConfig.model, readinessConfig.apiKey, readinessConfig.provider])
 
-  // 本地：探测出 false 才算「没就绪」；null（探测中）先按就绪处理，避免闪烁
+  // 探测未完成时允许发送（agentIpc 仍会用实际 Agent 凭据做运行时鉴权）；
+  // 一旦精确探测确认鉴权失败/无模型，就不再把 Lumina 标成就绪。
   const llmReady = llmConfigured && (isLocalLLM ? localModelReady !== false : true)
 
   // 云端提示的关闭状态：记「关到哪一天」，跨天自动复活
@@ -639,11 +699,25 @@ export default function GroupChatView() {
   const hiddenCount = Object.values(hiddenAgents).reduce((a, b) => a + b, 0)
 
   const [input, setInput] = useState('')
+  const [promptEnhancing, setPromptEnhancing] = useState(false)
+  const [promptEnhanceNotice, setPromptEnhanceNotice] = useState('')
+  /** 增强前的草稿，用于一键撤销（null = 无可撤销） */
+  const [promptEnhanceUndo, setPromptEnhanceUndo] = useState<string | null>(null)
   // 🛠️ v8.1: 输入框 key，当从其他面板回到聊天时重新挂载 textarea
   // 修复 Electron display:none→flex 后 <textarea> 可能无法点击的问题
   const [inputKey, setInputKey] = useState(0)
   const prevPanelRef = useRef(activePanel)
   const [sending, setSending] = useState(false)
+  // 🔒 同步发送锁（2026-10-10）
+  //   `setSending(true)` 要等下一次渲染才生效，这中间的几十毫秒里
+  //   再按一次 Enter（含中文输入法选词回车）会**二次进入** send：
+  //     · 同一条消息发两遍；或
+  //     · 第二次读到已被清空的输入框 → 发出空消息
+  //       → 模型回「这一轮我没有看到具体的问题或话题」（用户实测截图）
+  //   用 ref 做同步守卫；释放交给下方「sending 变回 false」的 effect，
+  //   这样所有 setSending(false) 的路径（含中断、异常）都能自动解锁。
+  const sendLockRef = useRef(false)
+  useEffect(() => { if (!sending) {sendLockRef.current = false} }, [sending])
   const [thinkingMode, setThinkingMode] = useState(true) // 🔧 v10.2: 🧠 思考过程开关，默认开启
   const [replyingAgent, setReplyingAgent] = useState<string | null>(null)
   const [prevReplyingAgent, setPrevReplyingAgent] = useState<string | null>(null)  // 🆕 v5.4: 接力过渡
@@ -707,12 +781,12 @@ export default function GroupChatView() {
   // 首次加载 ACP 成员
   useEffect(() => { loadAcpMembers() }, [])
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)  // 🔥 v2.8.1: 展开详细资料
-  const [teamTab, setTeamTab] = useState<'chat' | 'tasks' | 'loop' | 'moments' | 'theater' | 'daily' | 'milestone' | 'yak'>('chat')
+  const [teamTab, setTeamTab] = useState<'chat' | 'tasks' | 'moments'>('chat')
   // 🌸 外部（桌宠"生活"入口）切换 朋友圈 / 剧场 / 日报 tab
   useEffect(() => {
     const onTeamTab = (e: Event) => {
       const tab = (e as CustomEvent).detail?.tab
-      if (tab === 'moments' || tab === 'theater' || tab === 'daily') {setTeamTab(tab)}
+      if (tab === 'moments') {setTeamTab(tab)}
     }
     window.addEventListener('lumina:team-tab', onTeamTab as EventListener)
     return () => window.removeEventListener('lumina:team-tab', onTeamTab as EventListener)
@@ -720,12 +794,7 @@ export default function GroupChatView() {
   const teamTabs = [
     { key: 'chat' as const, label: '群聊', icon: '💬' },
     { key: 'tasks' as const, label: '任务', icon: '📋' },
-    { key: 'loop' as const, label: 'Loop', icon: '🔁' },  // 🆕 自驱任务看板
     { key: 'moments' as const, label: '朋友圈', icon: '🌸' },
-    { key: 'theater' as const, label: '剧场', icon: '🎬' },
-    { key: 'daily' as const, label: '日报', icon: '🌅' },
-    { key: 'milestone' as const, label: '纪念日', icon: '💝' },
-    { key: 'yak' as const, label: 'Yak 笔记', icon: '📘' },
   ]
 
   // 📋 角色选择界面控制
@@ -780,8 +849,15 @@ export default function GroupChatView() {
   // 每个流独立的 Agent 事件监听器 — 彻底防止多 Agent 思考步骤串台
   //   之前使用单一共享 ref → IPC 事件队列中旧流事件可能泄漏到新流
   //   现在改为每流独立 onAgentEvent → 每个流的 IPC 监听器在流结束后被移除
-  const subscribeAgentEvents = useCallback((cb: (ev: any) => void) => {
-    return window.luminaAPI.onAgentEvent(cb)
+  const subscribeAgentEvents = useCallback((cb: (ev: any) => void, requestId?: string) => {
+    return window.luminaAPI.onAgentEvent((ev: any) => {
+      // 🆕 P2-1：只处理「属于本次请求」的事件。
+      //   后端会把 config.requestId 原样回显在每条事件上；若带的是**别的** id，
+      //   说明它来自另一个在途请求（例如先前启动的后台任务），丢弃以免思考面板串台。
+      //   事件不带 requestId 时按原行为放行（向后兼容）。
+      if (requestId && ev?.requestId && ev.requestId !== requestId) {return}
+      cb(ev)
+    })
   }, [])
 
   // 🆕 全局监听 token_update 事件，更新上下文用量指示器
@@ -813,6 +889,13 @@ export default function GroupChatView() {
 
   // 📋 任务派发中心
   const [showTaskDispatcher, setShowTaskDispatcher] = useState(false)
+
+  // 🆕 工作区「派人」按钮 → 打开派发中心（跨组件事件总线）
+  useEffect(() => {
+    const open = () => setShowTaskDispatcher(true)
+    window.addEventListener('lumina:open-dispatcher', open)
+    return () => window.removeEventListener('lumina:open-dispatcher', open)
+  }, [])
 
   // ═══ v2.14: TTS 排队播放 ═══
   const ttsQueueRef = useRef<Array<{text:string; voice:string}>>([])
@@ -865,6 +948,72 @@ export default function GroupChatView() {
     const el = gcTextareaRef.current
     if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }
   }, [])
+
+  const enhancePrompt = async () => {
+    const original = input.trim()
+    if (!original || promptEnhancing) {return}
+    const currentConfig = useStore.getState().llmConfig
+    if (!currentConfig.baseUrl || !currentConfig.model) {
+      setPromptEnhanceNotice('❌ 先在模型选择器中配置 Endpoint 和 Model。')
+      return
+    }
+    const enhanceApi = window.luminaAPI?.llmEnhancePrompt
+    if (!enhanceApi) {
+      setPromptEnhanceNotice('❌ 当前版本不支持提示词增强，请重启或重新构建应用。')
+      return
+    }
+
+    setPromptEnhancing(true)
+    setPromptEnhanceNotice('正在润色草稿（保留原意，只改表达）…')
+    try {
+      const result = await enhanceApi({
+        baseUrl: currentConfig.baseUrl,
+        apiKey: currentConfig.apiKey || '',
+        model: currentConfig.model,
+        text: original,
+      })
+      if (result?.error) {throw new Error(result.error)}
+      const enhanced = String(result?.content || '').trim()
+      if (!enhanced) {throw new Error('模型没有返回增强后的提示词。')}
+
+      // 请求期间允许用户继续编辑；若草稿已变化，绝不覆盖用户新输入。
+      const latestDraft = gcTextareaRef.current?.value?.trim() ?? input.trim()
+      if (latestDraft !== original) {
+        setPromptEnhanceNotice('增强已返回，但你期间修改了草稿；为避免覆盖，未替换当前内容。')
+        return
+      }
+
+      // 若模型原样返回（说明原文已经够好），如实告诉用户，别假装"增强过了"
+      if (enhanced === original) {
+        setPromptEnhanceNotice('原文已经比较清晰，模型认为无需改写（草稿未变）。')
+        return
+      }
+
+      setPromptEnhanceUndo(original)   // 存起来供一键撤销
+      setInput(enhanced)
+      const oLen = result?.originalChars ?? original.length
+      const eLen = result?.enhancedChars ?? enhanced.length
+      const ratio = oLen > 0 ? (eLen / oLen) : 1
+      const ratioText = `${oLen} → ${eLen} 字${ratio > 1.8 ? '（变化较大，可撤销）' : ''}`
+      setPromptEnhanceNotice(
+        `✨ 已润色（${ratioText}）${result?.trimmed ? ' · 已按预算裁剪' : ''}；请检查后再发送。`,
+      )
+      requestAnimationFrame(() => gcAutoResize())
+    } catch (err: any) {
+      setPromptEnhanceNotice(`❌ 增强失败：${err?.message || err}`)
+    } finally {
+      setPromptEnhancing(false)
+    }
+  }
+
+  /** 撤销上一次增强，恢复增强前的草稿 */
+  const undoEnhancePrompt = () => {
+    if (promptEnhanceUndo === null) {return}
+    setInput(promptEnhanceUndo)
+    setPromptEnhanceUndo(null)
+    setPromptEnhanceNotice('已撤销增强，恢复为原来的草稿。')
+    requestAnimationFrame(() => gcAutoResize())
+  }
 
   // ═══ v2.7 群聊同步升级 ═══
   const [sttListening, setSttListening] = useState(false)
@@ -925,6 +1074,54 @@ export default function GroupChatView() {
     }
   }, [])
 
+  // 🆕 2026-10-13：跨 origin 兜底 —— 本 origin 的 localStorage 为空时，
+  //   从主进程的 dialog 日志恢复群聊历史。
+  //
+  //   为什么需要：localStorage **按 origin 隔离**（开发模式 http://localhost:5173、
+  //   打包模式 file://），切换运行方式后前端读不到任何会话 —— 用户以为「历史全丢了」。
+  //   而 dialog 日志是**主进程的文件**，不受 origin 影响。
+  //
+  //   ⚠️ 只在 localStorage 为空时执行，绝不覆盖已有数据；
+  //      并且在写入前**再查一次**（期间用户可能已经新建了会话）。
+  useEffect(() => {
+    if (loadGCSessions().length > 0) {return}
+    const api = (window as any).luminaAPI
+    if (!api?.gcRestoreFromLogs) {return}
+    let cancelled = false
+    api.gcRestoreFromLogs('lumina').then((res: any) => {
+      if (cancelled || !res?.ok || !Array.isArray(res.sessions) || res.sessions.length === 0) {return}
+      if (loadGCSessions().length > 0) {return}   // 期间已有数据 → 不覆盖
+      const META: Record<string, { icon: string; name: string }> = {
+        lumina: { icon: '🐱', name: 'Lumina' },
+        recha: { icon: '🍵', name: '热茶' },
+        yak: { icon: '📊', name: 'Yak' },
+        user: { icon: '👤', name: '我' },
+      }
+      for (const s of res.sessions) {
+        if (!Array.isArray(s.messages) || s.messages.length === 0) {continue}
+        saveGCMessages(s.id, s.messages.map((m: any, i: number) => ({
+          id: `restored-${s.id}-${i}`,
+          from: m.from || 'lumina',
+          fromIcon: META[m.from]?.icon || '🤖',
+          fromName: META[m.from]?.name || String(m.from || ''),
+          content: m.content || '',
+          time: m.time || '',
+          // 恢复的都是历史 → 标记已完成，否则渲染层会当成"还在打字"而展开思考过程
+          _animDone: true,
+        })) as any)
+      }
+      saveGCSessions(res.sessions.map((s: any) => ({
+        id: s.id,
+        date: new Date(s.lastAt || Date.now()).toLocaleDateString('zh-CN'),
+        preview: s.preview || '（已恢复）',
+        count: s.count || 0,
+      })))
+      window.dispatchEvent(new Event('gc:sessions-updated'))
+      console.info(`[GroupChatView] 📥 已从主进程日志恢复 ${res.sessions.length} 个群聊会话（本 origin 的 localStorage 原本为空）`)
+    }).catch(() => { /* 恢复失败不影响正常使用 */ })
+    return () => { cancelled = true }
+  }, [])
+
   // activeSessionId 变化时重置回复状态
   useEffect(() => {
     setReplyingAgent(null)
@@ -958,15 +1155,19 @@ export default function GroupChatView() {
   const forceSave = useCallback(() => {
     saveGCMessages(activeSessionId, messages)
     const preview = messages.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || ''
+    // 🐛 2026-10-13：用 `loadGCSessions()`（最新）而不是组件内的 `sessions` state。
+    //   同一个 key 有多个持有者（本组件 + GroupChatHistorySidebar），
+    //   用过期副本构造列表会把对方新增的会话**整体覆盖掉** ——
+    //   用户看到的就是「聊过的会话凭空消失」。
     const updated: GCSession[] = [
       { id: activeSessionId, date: new Date().toLocaleDateString('zh-CN'),
         preview, count: messages.length },
-      ...sessions.filter(s => s.id !== activeSessionId),
+      ...loadGCSessions().filter(s => s.id !== activeSessionId),
     ]
     setSessions(updated)
     saveGCSessions(updated)
     window.dispatchEvent(new Event('gc:sessions-updated'))
-  }, [activeSessionId, messages, sessions])
+  }, [activeSessionId, messages])
 
   // 🧹 流式合帧 ——
   // 推理 token 比帧还快，thinkingSteps 每个 token 都要 setMessages 一次，
@@ -1013,8 +1214,10 @@ export default function GroupChatView() {
     saveGCMessages(activeSessionId, messages)
     // 仅当消息数真正增加（有新消息）时，才更新会话时间并置顶；
     // 仅仅切换/加载历史会话（消息数 === 基线）时保持原顺序、原日期。
+    // 🐛 2026-10-13：传入 `loadGCSessions()`（最新）而不是组件内的 `sessions` state ——
+    //   否则会用过期副本覆盖掉侧边栏等其他持有者新增的会话。
     const updated = buildSessionsOnPersist(
-      sessions, activeSessionId, messages, sessionBaselineRef.current[activeSessionId],
+      loadGCSessions(), activeSessionId, messages, sessionBaselineRef.current[activeSessionId],
     )
     if (updated) {
       setSessions(updated)
@@ -1069,6 +1272,37 @@ export default function GroupChatView() {
   messagesRef.current = messages
   const activeSessionRef = useRef(activeSessionId)
   activeSessionRef.current = activeSessionId
+
+  /**
+   * 会话安全写入（P0 修复 · 2026-10-10）
+   *
+   * 把「某一轮回复」的写入绑定到**发起它的会话**，而不是「当前正在看的会话」。
+   *
+   * 【旧实现的坑（静默数据损坏）】
+   *   生成期间用户切走会话后，`setMessages(prev => saveGCMessages(activeSessionId, prev))`
+   *   里的 `activeSessionId` 是闭包捕获的**旧值**，而 `prev` 已经是**新会话**的消息数组
+   *   → 把新会话的内容写进旧会话的存档，旧会话历史被永久覆盖。
+   *   同时回复按 `replyId` 在 `prev` 里查找必然落空 → 回复文本丢失。
+   *
+   * 【现在的语义】
+   *   · 仍在发起会话 → 正常 setMessages（视图与存档一致）
+   *   · 已切走       → 只更新**发起会话的存档**（读盘→改→写盘），绝不碰当前视图
+   */
+  const commitToSession = useCallback((sessionId: string, mutate: (msgs: GCMsg[]) => GCMsg[]) => {
+    if (activeSessionRef.current === sessionId) {
+      setMessages(prev => {
+        const updated = mutate(prev)
+        saveGCMessages(sessionId, updated)
+        return updated
+      })
+      return
+    }
+    // 已切走：读发起会话的存档来改，避免把当前会话的内容写进去
+    try {
+      const stored = loadGCMessages(sessionId)
+      if (stored.length > 0) {saveGCMessages(sessionId, mutate(stored))}
+    } catch { /* 存档写入失败不影响当前会话 */ }
+  }, [])
 
   // 思考过程自动收合逻辑已迁移到 animateTyping 完成时统一处理
 
@@ -1357,31 +1591,48 @@ export default function GroupChatView() {
   }, [processGCFile])
 
   // ═══ v2.7 流式打字效果 ═══
-  const animateTyping = useCallback((msgId: string, fullText: string) => {
+  //  sessionId 可选：传「发起这一轮的会话」即可在用户中途切走时仍正确落档（见 commitToSession）。
+  const animateTyping = useCallback((msgId: string, fullTextRaw: string, sessionId?: string) => {
+    const sid = sessionId || activeSessionRef.current
+    // 🆕 2026-10-13：空文本兜底 —— **最后一道防线**。
+    //
+    //   实测（读 localStorage 落盘数据）：主窗口会话里存着 content 为 `''` 且
+    //   `_animDone: true` 的 assistant 消息。成因是这里的 `i >= fullText.length`
+    //   在空串上**立即成立**（0 >= 0）→ 直接写入空内容并标记完成；
+    //   重启后 `loadGCMessages` 会把它过滤掉 → 用户看到「我问了但没回复」，
+    //   而且那条气泡**凭空消失**，比显示"没答上来"更让人困惑。
+    //
+    //   空回复的来源有多条（后端返回空 / 清洗链把内容剥空 / 流式被打断），
+    //   与其逐个去堵，不如在这里统一兜住 —— 它覆盖所有路径。
+    const fullText = fullTextRaw && fullTextRaw.trim()
+      ? fullTextRaw
+      : '（这轮没能生成有效回复。可以让我再说一次，或换个说法试试。）'
+    // 仍在发起会话才动视图；否则只改该会话的存档
+    const applyTyping = (mutate: (msgs: GCMsg[]) => GCMsg[]) => {
+      if (activeSessionRef.current !== sid) {return}
+      setMessages(prev => mutate(prev))
+    }
     let i = 0
     const intervalMs = 16
     const timer = setInterval(() => {
       if (abortRef.current) {
         clearInterval(timer)
         // v2.14: 中断时至少保存已输入的内容
-        setMessages(prev => {
-          const updated = prev.map(m => m.id === msgId ? { ...m, content: fullText.slice(0, i), _animDone: false } as any : m)
-          saveGCMessages(activeSessionId, updated)
-          return updated
-        })
+        commitToSession(sid, prev => prev.map(m =>
+          m.id === msgId ? { ...m, content: fullText.slice(0, i), _animDone: false } as any : m,
+        ))
         return
       }
       if (i >= fullText.length) {
         clearInterval(timer)
-        setMessages(prev => {
+        commitToSession(sid, prev => {
           const updated = prev.map(m => m.id === msgId ? { ...m, content: fullText, _animDone: true } as any : m)
-          // v3.6: 写作完成后保存消息 + 同步更新会话列表
-          saveGCMessages(activeSessionId, updated)
+          // v3.6: 写作完成后同步更新会话列表
           const preview = updated.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || ''
           const sessions: GCSession[] = [
-            { id: activeSessionId, date: new Date().toLocaleDateString('zh-CN'),
+            { id: sid, date: new Date().toLocaleDateString('zh-CN'),
               preview, count: updated.length },
-            ...JSON.parse(localStorage.getItem('lumina_gc_sessions') || '[]').filter((s: GCSession) => s.id !== activeSessionId),
+            ...JSON.parse(localStorage.getItem('lumina_gc_sessions') || '[]').filter((s: GCSession) => s.id !== sid),
           ]
           saveGCSessions(sessions)
           window.dispatchEvent(new Event('gc:sessions-updated'))
@@ -1403,10 +1654,10 @@ export default function GroupChatView() {
       } else {
         i++
       }
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: fullText.slice(0, i) } as any : m))
+      applyTyping(prev => prev.map(m => m.id === msgId ? { ...m, content: fullText.slice(0, i) } as any : m))
     }, intervalMs)
     return () => clearInterval(timer)
-  }, [activeSessionId])
+  }, [commitToSession])
 
   const parseMention = (text: string): string | null => {
     const m = text.match(/@(Lumina|lumina|热茶|recha|Yak|yak)/)
@@ -1755,6 +2006,15 @@ export default function GroupChatView() {
   const send = useCallback(async () => {
     if ((!input.trim() && gcAttachments.length === 0) || sending) {return}
 
+    // 🔒 把「这一轮」绑定到发起它的会话（P0 修复）。
+    //   生成期间用户可能切走会话 —— 后续所有写入都必须落到**发起会话**，
+    //   否则会把当前会话的内容写进发起会话的存档（静默数据损坏），
+    //   且回复按 replyId 在当前数组里查找落空 → 丢失。
+    const sessionAtSend = activeSessionRef.current
+    // 🆕 P2-1：本次请求的唯一 id —— 随 config 下发，后端回显在每条事件上，
+    //   前端据此丢弃在途后台任务混进来的事件（思考面板串台）。
+    const reqId = `gc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
     const userText = input
     const currentAttachments = [...gcAttachments]
     setGcAttachments([])
@@ -1781,6 +2041,11 @@ export default function GroupChatView() {
     }
 
     // ═══ v2.7: 组??附件消息 ═══
+    // 🔒 同步守卫：命令分支已 return，这里才真正进入「发消息」流程。
+    //   setSending 是异步的，挡不住同一 tick 内的二次调用（双击 / 输入法回车）。
+    if (sendLockRef.current) {return}
+    sendLockRef.current = true
+
     let fullText = userText
     if (currentAttachments.length > 0) {
       const fileDescs = currentAttachments.map((a, i) => {
@@ -1804,7 +2069,13 @@ export default function GroupChatView() {
       })) : undefined,
       time: formatDateLabel(Date.now()),
     }
-    setMessages(prev => [...prev, userMsg])
+    setMessages(prev => {
+      const updated = [...prev, userMsg]
+      // 🔒 用户消息立即落盘（P2-5）：持久化 effect 在「有消息正在动画」时会整体跳过，
+      //   若此刻崩溃/关窗，本轮提问会丢。这里先把提问写进**发起会话**的存档。
+      if (activeSessionRef.current === sessionAtSend) {saveGCMessages(sessionAtSend, updated)}
+      return updated
+    })
     setInput('')
     setSending(true)
     abortRef.current = false
@@ -1841,7 +2112,7 @@ export default function GroupChatView() {
             `📋 已为你创建自动任务（待确认）：\n\n` +
             `🎯 目标：${loopIntent.goal}\n⏰ 触发：${freqLabel}\n\n` +
             `我会帮你做这些事：\n${plan}\n\n` +
-            `去「团队群聊 → Loop → 确认启动」后即可开始运转。`,
+            `去「团队群聊 → 任务」后即可查看并确认启动。`,
           time: formatDateLabel(Date.now()),
         }])
         setMsgCounter(c => c + 1)
@@ -2030,7 +2301,7 @@ export default function GroupChatView() {
           // 团队协作 token 追踪
           addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'yak')
         }
-      })
+      }, reqId)
       // fix: 使用 ref 替代 let 变量
       collabCurrentMsgIdRef.current = ''
       const collabMsgs: GCMsg[] = []
@@ -2061,7 +2332,7 @@ export default function GroupChatView() {
         let est = 0
         const result: typeof raw = []
         for (let i = raw.length - 1; i >= 0; i--) {
-          const itemEst = raw[i].content.length / 4 + 8
+          const itemEst = estimateTokens(raw[i].content) + 8
           if (est + itemEst > BUDGET && result.length > 0) {break}
           est += itemEst
           result.unshift(raw[i])
@@ -2150,6 +2421,7 @@ export default function GroupChatView() {
           const codingCfg = getTaskConfig(true)
           const phase1Result = await agentChatWithTimeout({
             text: `[${codingIteration === 1 ? 'Yak，用户让你写代码。你是编码者，直接动手，不要只说建议。' : 'Yak，上一轮测试发现错误，请修复代码！'}]\n\n${phase1Task}`,
+            sessionId: sessionAtSend,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
@@ -2167,7 +2439,7 @@ export default function GroupChatView() {
               socialMode: true,
             },
             conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
-          })
+          }, reqId)
 
           let coderReply = (phase1Result.content || '代码已写好').trimStart()
           // 🆕 团队阶段错误检测：若是超时/错误兜底文本，中断协作链并提示重试
@@ -2181,7 +2453,7 @@ export default function GroupChatView() {
           }
           setMessages(prev => prev.map(m => m.id === coderMsgId
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-          animateTyping(coderMsgId, coderReply)
+          animateTyping(coderMsgId, coderReply, sessionAtSend)
           // v14.0-fix: Phase 1 完成后追加结果到 runningHistory（🆕 P2: 扩到 3000 字符避免信息丢失）
           runningHistory.push(
             { role: 'user', content: `[Yak 收到需求] ${fullText.slice(0, 500)}` },
@@ -2243,7 +2515,7 @@ export default function GroupChatView() {
           }
           setMessages(prev => prev.map(m => m.id === reviewMsgId
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-          animateTyping(reviewMsgId, reviewReply)
+          animateTyping(reviewMsgId, reviewReply, sessionAtSend)
           // v14.0-fix: Phase 2 完成后追加审查结果到 runningHistory（🆕 P2: 扩到 3000 字符）
           runningHistory.push(
             { role: 'assistant' as const, content: `[热茶审阅] ${reviewReply.slice(0, 3000)}` },
@@ -2276,6 +2548,7 @@ export default function GroupChatView() {
             
             const phase3Result = await agentChatWithTimeout({
               text: `[Yak，热茶审查了你的代码，有一些建议。请根据审阅意见修改代码。]\n\n热茶的审阅意见：${reviewReply.slice(0, 500)}`,
+              sessionId: sessionAtSend,
               config: {
                 mode: codingCfg.mode,
                 isGroupChat: true,
@@ -2292,7 +2565,7 @@ export default function GroupChatView() {
                 socialMode: true,
               },
               conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
-            })
+            }, reqId)
             
             const fixReply = (phase3Result.content || '修复完成').trimStart()
             // 🆕 团队阶段错误检测
@@ -2306,7 +2579,7 @@ export default function GroupChatView() {
             }
             setMessages(prev => prev.map(m => m.id === fixMsgId
               ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-            animateTyping(fixMsgId, fixReply)
+            animateTyping(fixMsgId, fixReply, sessionAtSend)
             // v14.0-fix: Phase 3 完成后追加修复结果（🆕 P2: 扩到 3000 字符）
             runningHistory.push(
               { role: 'assistant' as const, content: `[Yak 修复] ${fixReply.slice(0, 3000)}` },
@@ -2341,6 +2614,7 @@ export default function GroupChatView() {
           
           const phase4Result = await agentChatWithTimeout({
             text: `[Lumina，Yak 和热茶完成了编码和审阅，你来测试一下代码是否能正常运行。]\n\n用户需求：${fullText.slice(0, 500)}\n\nYak 的代码概要：${coderReply.slice(0, 1500)}（完整代码详见上方对话记录）`,
+            sessionId: sessionAtSend,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
@@ -2357,7 +2631,7 @@ export default function GroupChatView() {
               socialMode: true,
             },
             conversationHistory: buildHistoryForAgent(messages, 'lumina', codingCfg.contextWindow, runningHistory),
-          })
+          }, reqId)
 
           const testReply = (phase4Result.content || '测试完成').trimStart()
           // 🆕 团队阶段错误检测
@@ -2371,7 +2645,7 @@ export default function GroupChatView() {
           }
           setMessages(prev => prev.map(m => m.id === testMsgId
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-          animateTyping(testMsgId, testReply)
+          animateTyping(testMsgId, testReply, sessionAtSend)
 
           // 🔧 2026-08-14: 补全 Lumina 测试结果的 runningHistory，避免上下文断层
           runningHistory.push(
@@ -2423,10 +2697,26 @@ export default function GroupChatView() {
         setLastAgent(null)
         // 协作完成后延迟再保存一次，确保所有动画已完成
         setTimeout(() => {
-          setMessages(prev => { saveGCMessages(activeSessionId, prev); return prev })
-          const ss = JSON.parse(localStorage.getItem('lumina_gc_sessions') || '[]')
-          if (!ss.some((s: GCSession) => s.id === activeSessionId)) {
-            saveGCSessions(ss)
+          commitToSession(sessionAtSend, prev => prev)
+          // 🐛 2026-10-13 修复：原实现是 **no-op** —— 它把读出来的 `ss` 原样写回，
+          //   从未把本会话**加进**列表（`saveGCSessions(ss)` 里 ss 就是当前内容），
+          //   所以「协作流程跑完后，这个会话仍然不在侧边栏」。
+          //   现在按原意真正补上：只在缺失时插入。
+          //   另外用 `sessionAtSend` 而不是 `activeSessionId` —— 后者是 3 秒后
+          //   的闭包值，用户中途切走就指错了会话。
+          const latest = loadGCSessions()
+          if (!latest.some((s: GCSession) => s.id === sessionAtSend)) {
+            const msgs = loadGCMessages(sessionAtSend)
+            saveGCSessions([
+              {
+                id: sessionAtSend,
+                date: new Date().toLocaleDateString('zh-CN'),
+                preview: msgs.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || '',
+                count: msgs.length,
+              },
+              ...latest,
+            ])
+            window.dispatchEvent(new Event('gc:sessions-updated'))
           }
         }, 3000)
       }
@@ -2525,7 +2815,7 @@ export default function GroupChatView() {
         } else if (ev.type === 'token_update' && ev.delta !== undefined && ev.delta > 0) {
           addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, 'yak')
         }
-      })
+      }, reqId)
       collabCurrentMsgIdRef.current = ''
       const collabMsgs: GCMsg[] = []
 
@@ -2547,7 +2837,7 @@ export default function GroupChatView() {
         let est = 0
         const result: typeof raw = []
         for (let i = raw.length - 1; i >= 0; i--) {
-          const itemEst = raw[i].content.length / 4 + 8
+          const itemEst = estimateTokens(raw[i].content) + 8
           if (est + itemEst > BUDGET && result.length > 0) {break}
           est += itemEst
           result.unshift(raw[i])
@@ -2617,6 +2907,7 @@ export default function GroupChatView() {
           const codingCfg = getTaskConfig(true)
           const phase1Result = await agentChatWithTimeout({
             text: `[${codingIteration === 1 ? 'Yak，用户让你写代码。你是编码者，直接动手，不要只说建议。' : 'Yak，上一轮审查发现代码有问题，请修复！'}]\n\n${phase1Task}`,
+            sessionId: sessionAtSend,
             config: {
               mode: codingCfg.mode,
               isGroupChat: true,
@@ -2634,7 +2925,7 @@ export default function GroupChatView() {
               socialMode: true,
             },
             conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
-          })
+          }, reqId)
 
           let coderReply = (phase1Result.content || '代码已写好').trimStart()
           // 🆕 团队阶段错误检测：若是超时/错误兜底文本，中断协作链并提示重试
@@ -2648,7 +2939,7 @@ export default function GroupChatView() {
           }
           setMessages(prev => prev.map(m => m.id === coderMsgId
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-          animateTyping(coderMsgId, coderReply)
+          animateTyping(coderMsgId, coderReply, sessionAtSend)
           runningHistory.push(
             { role: 'user', content: `[Yak 收到需求] ${fullText.slice(0, 500)}` },
             { role: 'assistant', content: `[Yak 输出] ${coderReply.slice(0, 3000)}` },
@@ -2707,7 +2998,7 @@ export default function GroupChatView() {
           }
           setMessages(prev => prev.map(m => m.id === reviewMsgId
             ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-          animateTyping(reviewMsgId, reviewReply)
+          animateTyping(reviewMsgId, reviewReply, sessionAtSend)
           runningHistory.push(
             { role: 'assistant' as const, content: `[热茶审阅] ${reviewReply.slice(0, 3000)}` },
           )
@@ -2737,6 +3028,7 @@ export default function GroupChatView() {
 
             const phase3Result = await agentChatWithTimeout({
               text: `[Yak，热茶审查了你的代码，有一些建议。请根据审查意见修改代码。]\n\n热茶的审查意见：${reviewReply.slice(0, 500)}`,
+              sessionId: sessionAtSend,
               config: {
                 mode: codingCfg.mode,
                 isGroupChat: true,
@@ -2753,7 +3045,7 @@ export default function GroupChatView() {
                 socialMode: true,
               },
               conversationHistory: buildHistoryForAgent(messages, 'yak', codingCfg.contextWindow, runningHistory),
-            })
+            }, reqId)
 
             const fixReply = (phase3Result.content || '修复完成').trimStart()
             // 🆕 团队阶段错误检测
@@ -2767,7 +3059,7 @@ export default function GroupChatView() {
             }
             setMessages(prev => prev.map(m => m.id === fixMsgId
               ? { ...m, thinkingSteps: [...phaseThinkingAccum] } as GCMsg : m))
-            animateTyping(fixMsgId, fixReply)
+            animateTyping(fixMsgId, fixReply, sessionAtSend)
             runningHistory.push(
               { role: 'assistant' as const, content: `[Yak 修复] ${fixReply.slice(0, 3000)}` },
             )
@@ -2813,10 +3105,26 @@ export default function GroupChatView() {
         setReplyingAgent(null)
         setLastAgent(null)
         setTimeout(() => {
-          setMessages(prev => { saveGCMessages(activeSessionId, prev); return prev })
-          const ss = JSON.parse(localStorage.getItem('lumina_gc_sessions') || '[]')
-          if (!ss.some((s: GCSession) => s.id === activeSessionId)) {
-            saveGCSessions(ss)
+          commitToSession(sessionAtSend, prev => prev)
+          // 🐛 2026-10-13 修复：原实现是 **no-op** —— 它把读出来的 `ss` 原样写回，
+          //   从未把本会话**加进**列表（`saveGCSessions(ss)` 里 ss 就是当前内容），
+          //   所以「协作流程跑完后，这个会话仍然不在侧边栏」。
+          //   现在按原意真正补上：只在缺失时插入。
+          //   另外用 `sessionAtSend` 而不是 `activeSessionId` —— 后者是 3 秒后
+          //   的闭包值，用户中途切走就指错了会话。
+          const latest = loadGCSessions()
+          if (!latest.some((s: GCSession) => s.id === sessionAtSend)) {
+            const msgs = loadGCMessages(sessionAtSend)
+            saveGCSessions([
+              {
+                id: sessionAtSend,
+                date: new Date().toLocaleDateString('zh-CN'),
+                preview: msgs.filter(m => m.from === 'user').slice(-1)[0]?.content?.slice(0, 30) || '',
+                count: msgs.length,
+              },
+              ...latest,
+            ])
+            window.dispatchEvent(new Event('gc:sessions-updated'))
           }
         }, 3000)
       }
@@ -2859,7 +3167,15 @@ export default function GroupChatView() {
         from: responder.id, fromIcon: responder.icon, fromName: responder.name,
         content: '', time: formatDateLabel(Date.now()),
       }
-      setMessages(prev => [...prev, replyMsg])
+      setMessages(prev => {
+        const updated = [...prev, replyMsg]
+        // 🔒 占位消息立即落盘（P0 配套）：生成期间若用户切走会话，
+        //   回复要靠 replyId 在**发起会话的存档**里定位 —— 存档里没有占位就没处可写，
+        //   回复会丢失。saveGCMessages 会保留「未完成」的空占位，
+        //   而 loadGCMessages 在重载时会把仍然空的占位过滤掉（不会留空气泡）。
+        if (activeSessionRef.current === sessionAtSend) {saveGCMessages(sessionAtSend, updated)}
+        return updated
+      })
       setMsgCounter(c => c + 1)
 
       // 思考过程追踪（借鉴 QwenPaw）
@@ -2985,7 +3301,7 @@ export default function GroupChatView() {
           // 独立 Agent token 追踪
           addTokenUsage(effectiveLlmConfig.model || 'unknown', ev.delta, responder.id)
         }
-      })
+      }, reqId)
 
       try {
         // v2.8: 更新情绪
@@ -3067,6 +3383,19 @@ export default function GroupChatView() {
         const result = await agentChatWithTimeout({
           // v10.9: 支持多模态 — 图片以 base64 格式传给视觉模型
           text: visionContent as any,
+          // 🆕 2026-10-13：把当前会话 id 传给后端。
+          //
+          //   旧实现不传 → `agentRunner` 落到硬编码兜底 `session-1786780079226`，
+          //   后果是**所有主窗口会话的落库日志堆在同一个 session 里**
+          //   （实测 7791 条、横跨 2 个月），而前端真实会话 id 是
+          //   `mv6lbvk2hk7l4o` 这种 base36 串 —— 两边完全对不上。
+          //   任何「按 sessionId 查历史」的后续能力都会串味。
+          //
+          //   用 `sessionAtSend`（发起这一轮时的会话）而不是当前活跃会话：
+          //   用户中途切走时，这一轮仍应归属它**发起时**所在的会话。
+          //   （对话上下文本身不受影响 —— 那是靠 conversationHistory 传的，
+          //     这里只是让后端日志能按会话切分。）
+          sessionId: sessionAtSend,
           config: {
             mode: 'agent' as const,  // 群聊普通回复必须用 agent 模式，否则无法调用搜索/文件等工具
             isGroupChat: true,
@@ -3085,7 +3414,20 @@ export default function GroupChatView() {
             trackReasoning: thinkingMode,  // 🧠 v10.6: 思考过程开关 → 后端控制 thinking_stream 事件
           },
           conversationHistory: historyForLLM,
-        })
+        }, reqId)
+
+        // ═══ 中断守卫（P1-2 / P2-2 修复 · 2026-10-10）═══════════════════════
+        // 用户点了「中断」时，后端在 abort 后仍可能返回兜底文案
+        // （「这轮我没能给出有效回复…」）。这里必须丢弃，否则用户会看到一条
+        // 「明明是我主动中断的，却说我失败了」的误导气泡，且它不匹配超时恢复正则，
+        // 还会继续触发链式火花（雪崩式多余回复）。
+        // （ChatPanel 一直有 `!abortRef.current` 守卫，群聊此前缺失。）
+        if (abortRef.current) {
+          commitToSession(sessionAtSend, prev => prev.filter(m => m.id !== replyId))
+          setSending(false); setReplyingAgent(null); setLastAgent(null)
+          return
+        }
+
         // 🧠 思考模式 — 提取 <thinking> 标签 → 捕获为 thinkingSteps
         if (result.content && thinkingMode) {
           const tagRegex = /<thinking>([\s\S]*?)<\/thinking>/g
@@ -3185,13 +3527,16 @@ export default function GroupChatView() {
 
         // 将累积的思考步骤附加到消息
         // （event listener 已经在实时推送，这里做最终确认）
-        setMessages(prev => prev.map(m => m.id === replyId
-          ? { ...m, thinkingSteps: [...thinkingAccum] } as GCMsg : m))
+        // 仅在仍处于发起会话时更新视图；切走后存档由 animateTyping 负责。
+        if (activeSessionRef.current === sessionAtSend) {
+          setMessages(prev => prev.map(m => m.id === replyId
+            ? { ...m, thinkingSteps: [...thinkingAccum] } as GCMsg : m))
+        }
 
         // ═══ v2.7: 流式打字 + TTS ═══
         // 过滤过短回复 — 已移至后端 checkCompletion 统一处理，前端不再拦截
         const finalReply = dedupedReply
-        animateTyping(replyId, finalReply)
+        animateTyping(replyId, finalReply, sessionAtSend)
         try {
           const cleanText = cleanTtsText(finalReply)
           if (cleanText.length > 10 && !useStore.getState().ttsMuted) {
@@ -3213,7 +3558,7 @@ export default function GroupChatView() {
           setReplyingAgent(null)
           setSending(false)
           setTimeout(() => {
-            setMessages(prev => { saveGCMessages(activeSessionId, prev); return prev })
+            commitToSession(sessionAtSend, prev => prev)
           }, 2000)
           return
         }
@@ -3293,6 +3638,7 @@ export default function GroupChatView() {
               const helperResult = await agentChatWithTimeout({
                 // 简化消息格式
                 text: nextContext,
+                sessionId: sessionAtSend,
                 config: {
                   mode: chainTaskConfig.mode,
                   isGroupChat: true,
@@ -3313,7 +3659,7 @@ export default function GroupChatView() {
                   trackReasoning: thinkingMode,  // 🧠 v10.6: 思考过程开关
                 },
                 conversationHistory: helperHistory,
-              })
+              }, reqId)
               // 🧠 思考模式 — 提取 <thinking> 标签 → 捕获为 thinkingSteps
               if (helperResult.content && thinkingMode) {
                 const tagRegex = /<thinking>([\s\S]*?)<\/thinking>/g
@@ -3385,7 +3731,7 @@ export default function GroupChatView() {
             }
 
             // 显示回复（流式打字）
-            animateTyping(hId, helperReply)
+            animateTyping(hId, helperReply, sessionAtSend)
             try { const ct = cleanTtsText(helperReply); if (ct.length > 10 && !useStore.getState().ttsMuted) {enqueueTTS(ct, getEffectiveVoice(helper.id))} } catch {}
 
             // 更新状态
@@ -3439,7 +3785,7 @@ export default function GroupChatView() {
         unsubTool()
         // 链式火花完成后延迟保存，确保动画结束
         setTimeout(() => {
-          setMessages(prev => { saveGCMessages(activeSessionId, prev); return prev })
+          commitToSession(sessionAtSend, prev => prev)
         }, 2000)
       }
     } else {
@@ -3456,13 +3802,17 @@ export default function GroupChatView() {
         content: '', time: formatDateLabel(Date.now()),
       }])
       setMsgCounter(c => c + 1)
-      animateTyping(mockId, mockReply)
+      animateTyping(mockId, mockReply, sessionAtSend)
       try { const cleanT = cleanTtsText(mockReply); if (cleanT.length > 10 && !useStore.getState().ttsMuted) {enqueueTTS(cleanT, getEffectiveVoice(responder.id))} } catch {}
     }
 
     setReplyingAgent(null)
     setSending(false)
-  }, [input, sending, messages, llmReady, llmConfig, getAgentLlmConfig, lastAgent, gcAttachments, agentVoices, animateTyping, getEffectiveVoice])
+    // 🆕 2026-10-10：补上 `thinkingMode` 与 `teamSecurity`。
+    //   这两者在本函数体内被读取（思考模式开关、工具白名单/权限档位），
+    //   却不在依赖数组里 → 用户切换后，下一次 send 仍可能用到旧闭包值。
+    //   （`teamSecurity` 是 useState 对象，身份稳定，不会造成每帧重建。）
+  }, [input, sending, messages, llmReady, llmConfig, getAgentLlmConfig, lastAgent, gcAttachments, agentVoices, animateTyping, getEffectiveVoice, thinkingMode, teamSecurity])
 
   // 用 ref 跟踪最新的 send，供 setTimeout 闭包使用
   const sendRef = useRef(send)
@@ -3472,6 +3822,11 @@ export default function GroupChatView() {
     if (!decQuestion.trim()) {return}
     setDecLoading(true)
     setShowDecision(false)
+
+    // 🔒 绑定发起会话（同 send）：讨论可能持续很久，期间用户可能切走。
+    const sessionAtDecision = activeSessionRef.current
+    // 🆕 P2-1：讨论也用独立请求 id，避免与其它在途请求的事件串台
+    const reqId = `gc-dec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
     // 重做：决策讨论直接进入群聊，所有Agent自然参与讨论
     const decisionMsg: GCMsg = {
@@ -3579,7 +3934,7 @@ export default function GroupChatView() {
               decUpsertStep({ id: `dte-${Date.now()}`, type: 'tool_end', label: `✅ ${ev.tool || ''}`, tool: ev.tool, result: ev.result?.ok ? '完成' : '失败', timestamp: Date.now() })
             }
             pushThinking(decMsgId, [...decThinkingAccum])
-          })
+          }, reqId)
 
           try {
             // 🔧 2026-07-12: 放宽 — 保留 20 条，每条 2000 字符
@@ -3669,7 +4024,7 @@ export default function GroupChatView() {
             setMessages(prev => prev.map(m => m.id === decMsgId
               ? { ...m, content: dedupedDecReply, thinkingSteps: [...decThinkingAccum] } as GCMsg : m))
             // 流式打字（用清洗后的文本）
-            animateTyping(decMsgId, dedupedDecReply)
+            animateTyping(decMsgId, dedupedDecReply, sessionAtDecision)
           } catch {
             setMessages(prev => prev.map(m => m.id === decMsgId
               ? { ...m, content: `（${agent.name}正在思考这个问题…）`, thinkingSteps: [...decThinkingAccum] } as GCMsg : m))
@@ -3758,6 +4113,12 @@ export default function GroupChatView() {
         disabledTools: teamDisabledTools,
         systemPrompt: '',
         socialMode: true,  // 🆕 v1.0: 任务生成是自动触发的，用短超时
+        // 🆕 2026-10-10: 标记为后台任务。
+        //   这里一次 Promise.all 并发 6 路 agent:chat（3 任务 + 3 朋友圈），
+        //   旧行为下它们会互相打断（只有最后一路跑完）、还会打断用户正在生成的回复，
+        //   表现就是「聊天断断续续 / 面板时有时无」。
+        //   标记 background 后：不打断用户、不占用 running 标记、前台在跑时整批跳过。
+        background: true,
       }
 
       // 并行请求三个Agent的任务
@@ -3969,9 +4330,9 @@ export default function GroupChatView() {
                   旧文案恒定引导用户去「检查 API 地址 / 加载模型」，
                   而本例的真实原因是 401 鉴权失败 —— 用户照旧文案排查会完全走错方向。 */}
               <span style={{ display: 'block', margin: '4px 0' }}>{localProbeInfo.advice}</span>
-              {llmConfig.baseUrl ? (
+              {readinessConfig.baseUrl ? (
                 <span style={{ display: 'block', margin: '2px 0', opacity: 0.85 }}>
-                  当前端点：<code>{llmConfig.baseUrl}</code>
+                  Lumina Team → Lumina 当前端点：<code>{readinessConfig.baseUrl}</code>
                 </span>
               ) : null}
             </>
@@ -3983,11 +4344,11 @@ export default function GroupChatView() {
                   而是 LM Studio / Ollama 里没加载模型。文案要指向真正的动作，否则用户会去设置里
                   找 Key 找半天。 */}
               {isLocalLLM
-                ? <>请确认 <strong>LM Studio / Ollama 正在运行且已加载模型</strong>，然后在 <strong>设置 → LLM 配置</strong> 中选择该模型。本地模型不需要 API Key。</>
-                : <>请在 <strong>设置 → LLM 配置</strong> 中填写 API Key 和模型，三位 Agent 将拥有真实的个性化对话能力。</>}
+                ? <>请确认 <strong>LM Studio / Ollama 正在运行且已加载模型</strong>，然后在 <strong>设置 → Lumina Team 供应商配置 → Lumina</strong> 中核对 Endpoint 和 Model。本地模型通常不需要 API Key；若服务启用了鉴权，必须在 Lumina 这一栏填入服务端的同一个 Key。</>
+                : <>请在 <strong>设置 → Lumina Team 供应商配置 → Lumina</strong> 中填写 Endpoint、Model 和有效 API Key。Yak 与热茶的配置彼此独立。</>}
             </>
           )}
-          <div style={{ marginTop: 6 }}>
+          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
             <button
               onClick={() => useStore.getState().setActivePanel('settings')}
               style={{
@@ -3996,6 +4357,19 @@ export default function GroupChatView() {
                 padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
               }}
             >⚙️ 去设置</button>
+            {!!(llmConfig.baseUrl && llmConfig.model && llmConfig.apiKey) && (
+              <button
+                onClick={() => { void syncGlobalConfigToLumina() }}
+                disabled={syncingGlobalConfig}
+                title="会用普通模式当前 Endpoint、Model 和 API Key 覆盖 Lumina Team → Lumina 独立配置；Yak 与热茶不变"
+                style={{
+                  border: '1px solid #d97706', background: '#fff7ed', color: '#9a3412',
+                  fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6,
+                  cursor: syncingGlobalConfig ? 'wait' : 'pointer', opacity: syncingGlobalConfig ? 0.65 : 1,
+                }}
+              >{syncingGlobalConfig ? '同步中…' : '将普通模式 API 复制给 Lumina Team'}</button>
+            )}
+            {globalConfigSyncNotice && <span style={{ fontSize: 11, color: '#166534' }}>{globalConfigSyncNotice}</span>}
           </div>
         </div>
       )}
@@ -4064,7 +4438,7 @@ export default function GroupChatView() {
             onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent-50)' }}
           >←</button>
         )}
-        <span style={{ fontWeight: 600, fontSize: compact ? 12 : 14, color: 'var(--text-primary)' }}>👥 团队群聊</span>
+        <span style={{ fontWeight: 600, fontSize: compact ? 12 : 15, color: 'var(--text-primary)' }}>👥 团队群聊</span>
         {selectedRole && (() => {
           const card = TASK_TYPE_CARDS.find(c => c.id === selectedRole)
           return card ? (
@@ -4084,7 +4458,7 @@ export default function GroupChatView() {
             </span>
           ) : null
         })()}
-        {!compact && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>| 随机回复 · @指定某人</span>}
+        {!compact && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>| 随机回复 · @指定某人</span>}
         <div style={{ flex: 1 }} />
 
                 {/* v2.9: 团队成员 — 悬浮层不挤压聊天区 */}
@@ -4096,12 +4470,23 @@ export default function GroupChatView() {
             .gc-tool-btn-active { background: var(--accent-50) !important; border-color: #93c5fd !important; }
             .gc-tool-btn-active:hover { background: var(--accent-100) !important; }
           `}</style>
+          {/* 👥 Lumina团队社区（2026-10-09 从左侧边栏移入头部栏） */}
+          <button onClick={() => useStore.getState().setActivePanel('teamcommunity')}
+            className="gc-tool-btn"
+            title="Lumina团队社区（社区/协作中心/剧场/日报/纪念日/Yak笔记…）"
+            style={{
+              border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
+              fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            }}>
+            👥 Lumina团队社区
+          </button>
           <button onClick={() => setShowTeamMembers(!showTeamMembers)}
             className={'gc-tool-btn' + (showTeamMembers ? ' gc-tool-btn-active' : '')}
             title="团队管理"
             style={{
               border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
-              fontSize: 11, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
             👥 团队
@@ -4113,10 +4498,32 @@ export default function GroupChatView() {
             title="添加外部 Agent 为团队成员"
             style={{
               border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
-              fontSize: 11, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
             🌐 添加成员
+          </button>
+
+          {/* 📋 任务派发中心 / 任务工作区（2026-10-09 从下方工具条移入头部栏） */}
+          <button onClick={() => setShowTaskDispatcher(true)}
+            className="gc-tool-btn"
+            title="任务派发中心"
+            style={{
+              border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
+              fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            }}>
+            📋 任务派发中心
+          </button>
+          <button onClick={toggleTaskPanel}
+            className={'gc-tool-btn' + (taskPanelOpen ? ' gc-tool-btn-active' : '')}
+            title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}
+            style={{
+              border: '1px solid var(--border-light)', borderRadius: 8, padding: '5px 12px',
+              fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            }}>
+            {taskPanelOpen ? '📕' : '📋'} 任务工作区
           </button>
 
           {/* 🔊 v2.13: TTS 静音 */}
@@ -4352,27 +4759,27 @@ export default function GroupChatView() {
         {teamTabs.map(tab => (
           <button key={tab.key} onClick={() => setTeamTab(tab.key)}
             style={{
-              padding: compact ? '4px 6px' : '6px 10px', border: 'none',
+              padding: compact ? '5px 8px' : '7px 12px', border: 'none',
               borderBottom: teamTab === tab.key ? '2px solid var(--accent, #3b82f6)' : '2px solid transparent',
               background: 'none', cursor: 'pointer',
-              fontSize: compact ? 10 : 11, fontWeight: teamTab === tab.key ? 600 : 400,
+              fontSize: compact ? 11 : 12.5, fontWeight: teamTab === tab.key ? 600 : 400,
               color: teamTab === tab.key ? 'var(--accent, #3b82f6)' : 'var(--text-secondary)',
               marginBottom: -2, transition: 'all 0.2s',
-              display: 'flex', alignItems: 'center', gap: compact ? 2 : 4,
+              display: 'flex', alignItems: 'center', gap: compact ? 3 : 5,
               whiteSpace: 'nowrap',
             }}>
-            <span style={{ fontSize: compact ? 11 : 12 }}>{tab.icon}</span> {!compact && tab.label}
+            <span style={{ fontSize: compact ? 12 : 13.5 }}>{tab.icon}</span> {!compact && tab.label}
           </button>
         ))}
         {/* 📋 切换角色按钮 — 紧凑 */}
         {teamTab === 'chat' && !compact && (
           <button onClick={() => setShowRoleSelector(!showRoleSelector)}
             style={{
-              marginLeft: 'auto', padding: '4px 10px', border: '1px solid var(--border-light)',
-              borderRadius: 6, fontSize: 11, cursor: 'pointer',
+              marginLeft: 'auto', padding: '5px 12px', border: '1px solid var(--border-light)',
+              borderRadius: 6, fontSize: 12, cursor: 'pointer',
               background: showRoleSelector ? 'var(--accent, #6366f1)' : 'var(--surface-100)',
               color: showRoleSelector ? 'white' : 'var(--text-secondary)',
-              display: 'flex', alignItems: 'center', gap: 3,
+              display: 'flex', alignItems: 'center', gap: 4,
               alignSelf: 'center', whiteSpace: 'nowrap',
               borderColor: showRoleSelector ? 'var(--accent, #6366f1)' : 'var(--border-light)',
             }}>
@@ -4383,11 +4790,11 @@ export default function GroupChatView() {
         {teamTab === 'chat' && !compact && (
           <button onClick={() => setShowDecision(!showDecision)}
             style={{
-              padding: '4px 10px', border: '1px solid var(--border-light)',
-              borderRadius: 6, fontSize: 11, cursor: 'pointer',
+              marginLeft: 8, padding: '5px 12px', border: '1px solid var(--border-light)',
+              borderRadius: 6, fontSize: 12, cursor: 'pointer',
               background: showDecision ? 'var(--accent, #3b82f6)' : 'var(--surface-100)',
               color: showDecision ? 'white' : 'var(--text-secondary)',
-              display: 'flex', alignItems: 'center', gap: 3,
+              display: 'flex', alignItems: 'center', gap: 4,
               alignSelf: 'center', whiteSpace: 'nowrap',
             }}>
             🎯 决策讨论
@@ -4510,7 +4917,11 @@ export default function GroupChatView() {
               placeholder="让团队帮你讨论什么？例如：周末去哪玩？"
               value={decQuestion}
               onChange={e => setDecQuestion(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); triggerDecision() } }}
+              onKeyDown={e => {
+                // 中文输入法选词回车 ≠ 提交（同发送框，见 sendLockRef 注释）
+                if (isImeComposing(e)) {return}
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); triggerDecision() }
+              }}
               style={{
                 flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db',
                 fontSize: 12, boxSizing: 'border-box',
@@ -4534,7 +4945,11 @@ export default function GroupChatView() {
             placeholder="补充背景信息（可选，回车发起讨论）"
             value={decContext}
             onChange={e => setDecContext(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); triggerDecision() } }}
+            onKeyDown={e => {
+              // 中文输入法选词回车 ≠ 提交
+              if (isImeComposing(e)) {return}
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); triggerDecision() }
+            }}
             style={{
               width: '100%', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-light)',
               fontSize: 11, marginTop: 5, boxSizing: 'border-box', color: 'var(--text-secondary)',
@@ -5081,22 +5496,33 @@ export default function GroupChatView() {
             ref={gcTextareaRef}
             placeholder={llmReady ? '发消息... @Lumina @热茶 @Yak 指定回复者 （Shift+Enter 换行）' : '发消息...（模拟模式，配置LLM后解锁真实对话）'}
             value={input}
-            onChange={e => { setInput(e.target.value); gcAutoResize() }}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+            onChange={e => { setInput(e.target.value); setPromptEnhanceNotice(''); gcAutoResize() }}
+            onPaste={e => handlePasteInsert(e, input, setInput)}
+            onKeyDown={e => {
+              // ⚠️ 中文输入法（IME）选词时按回车只是「确认候选词」，不是「发送」。
+              //   不判 isComposing 的话，拼音打字按回车会把半截内容当成消息发出去
+              //   （甚至发空）—— 典型的「聊天断断续续」。
+              if (isImeComposing(e)) {return}
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+            }}
             onDragOver={e => e.preventDefault()}
             rows={1}
             style={{
               width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-light)',
               fontSize: 13, outline: 'none', fontFamily: 'inherit',
-              resize: 'vertical', minHeight: 52, paddingRight: 74,
+              resize: 'vertical', minHeight: 72, paddingLeft: 14, paddingRight: 224, paddingBottom: 40,
               boxSizing: 'border-box', lineHeight: 1.5,
             }}
           />
-          {/* ── 发送 / 中断（输入框内右下角） ── */}
+          {/* ── 模型选择器紧挨发送/中断按钮左侧 ── */}
           <div style={{
-            position: 'absolute', right: 10, bottom: 8,
-            display: 'flex', alignItems: 'center',
+            position: 'absolute', right: 10, bottom: 8, zIndex: 2,
+            maxWidth: 'calc(100% - 20px)', display: 'flex', gap: 7, alignItems: 'center',
           }}>
+            <div style={{ minWidth: 0, maxWidth: 160, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+              <ModelSelector />
+            </div>
+            {/* ── 发送 / 中断（圆形上箭头；无内容暗淡，有内容高亮） ── */}
           {sending ? (
             <button onClick={() => { abortRef.current = true; setSending(false); setReplyingAgent(null); window.luminaAPI.agentAbort() }}
               title="中断回复"
@@ -5113,18 +5539,21 @@ export default function GroupChatView() {
             </button>
           ) : (
             <button onClick={send} disabled={sending || !input.trim()}
-              className="btn-send-pulse"
-              title="发送消息"
+              aria-label="发送消息"
+              title="发送消息（Enter）"
               style={{
-                border: 'none', borderRadius: 6, padding: '4px 12px',
-                background: input.trim() ? 'var(--accent, #3b82f6)' : 'var(--border-light)',
-                color: input.trim() ? '#fff' : 'var(--text-secondary)',
-                fontSize: 12, cursor: input.trim() ? 'pointer' : 'default', fontWeight: 600,
-                fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
-                display: 'flex', alignItems: 'center', gap: 4,
+                width: 32, height: 32, padding: 0, flexShrink: 0,
+                border: 'none', borderRadius: '50%',
+                background: input.trim() ? '#dbeafe' : '#eef0f3',
+                color: input.trim() ? '#2563eb' : '#a0a5ae',
+                cursor: input.trim() ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background .16s ease, color .16s ease, transform .12s ease',
+                boxShadow: input.trim() ? '0 0 0 1px rgba(37,99,235,.12)' : 'none',
               }}>
-              <IconSend size={14} />
-              发送
+              <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4.25 3.8 12.9c-.33.35-.08.93.4.93h4.35v5.42c0 .3.24.54.54.54h5.82c.3 0 .54-.24.54-.54v-5.42h4.35c.48 0 .73-.58.4-.93L12 4.25Z" fill="currentColor" />
+              </svg>
             </button>
           )}
           </div>
@@ -5134,8 +5563,46 @@ export default function GroupChatView() {
           display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
           fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
         }}>
-          {/* ── 🧠 模型选择 ── */}
-          <ModelSelector />
+          {/* ✨ 增强提示词：按任务类型自适应改写草稿，不会自动发送 */}
+          <button
+            onClick={() => { void enhancePrompt() }}
+            disabled={!input.trim() || promptEnhancing}
+            title="保留原意润色草稿：改含糊/啰嗦/语病，不替你加需求、不加维度；只替换输入草稿，不会自动发送"
+            style={{
+              padding: '4px 10px', borderRadius: 6,
+              border: `1.5px solid ${input.trim() && !promptEnhancing ? '#c4b5fd' : 'var(--border-light)'}`,
+              background: input.trim() && !promptEnhancing ? '#f5f3ff' : 'var(--surface-50)',
+              color: input.trim() && !promptEnhancing ? '#6d28d9' : 'var(--text-secondary)',
+              cursor: !input.trim() || promptEnhancing ? 'default' : 'pointer',
+              opacity: !input.trim() ? 0.55 : 1,
+              fontSize: 12, display: 'flex', alignItems: 'center', gap: 4,
+              fontFamily: 'inherit', transition: 'all .15s',
+            }}
+          >
+            <span aria-hidden="true">{promptEnhancing ? '⏳' : '✨'}</span>
+            {promptEnhancing ? '正在增强…' : '增强提示词'}
+          </button>
+          {/* ↩︎ 撤销增强：恢复增强前的草稿 */}
+          {promptEnhanceUndo !== null && !promptEnhancing && (
+            <button
+              onClick={undoEnhancePrompt}
+              title="恢复为增强前的草稿"
+              style={{
+                padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-light)',
+                background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                fontSize: 12, display: 'flex', alignItems: 'center', gap: 4,
+                fontFamily: 'inherit',
+              }}
+            >
+              <span aria-hidden="true">↩︎</span>撤销
+            </button>
+          )}
+          {promptEnhanceNotice && (
+            <span role="status" style={{
+              fontSize: 10, color: promptEnhanceNotice.startsWith('❌') ? '#b91c1c' : 'var(--text-secondary)',
+              maxWidth: 360, lineHeight: 1.4,
+            }}>{promptEnhanceNotice}</span>
+          )}
           {/* ── 🍀 Lucky 模式（第二位） ── */}
           <LuckyModeSelector
             currentPreset={luckyMode.preset}
@@ -5370,49 +5837,6 @@ export default function GroupChatView() {
 
         </div>
 
-        {/* ── 📋 任务派发中心入口（工具条下方） ── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          fontFamily: 'var(--font-sans)',
-        }}>
-          <button
-            onClick={() => setShowTaskDispatcher(true)}
-            title="任务派发中心"
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: '1.5px solid var(--border-light)',
-              background: 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-100)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--surface-50)' }}
-          >
-            📋 任务派发中心
-          </button>
-          {/* 📋 任务工作区 —— 紧邻任务派发中心（2026-10-04 从顶部栏移来）
-               两者是同一件事的两面：派发 + 看结果，放一起省得来回找 */}
-          <button
-            onClick={toggleTaskPanel}
-            title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: `1.5px solid ${taskPanelOpen ? 'var(--accent, #6366f1)' : 'var(--border-light)'}`,
-              background: taskPanelOpen ? 'var(--accent-50)' : 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-100)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = taskPanelOpen ? 'var(--accent, #6366f1)' : 'var(--border-light)'; e.currentTarget.style.background = taskPanelOpen ? 'var(--accent-50)' : 'var(--surface-50)' }}
-          >
-            {taskPanelOpen ? '📕' : '📋'} 任务工作区
-          </button>          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-            选择任务类型 → 选择执行者 → 一键派发给团队成员
-          </span>
-        </div>
-
         {/* 子智能体（实习生）进度卡片：入口条正下方，与单聊一致 */}
         <SubagentCards sessionId={activeSessionId} />
       </div>
@@ -5437,12 +5861,6 @@ export default function GroupChatView() {
       </>
       )}
       {teamTab === 'tasks' && <AgentTaskBoard />}
-      {/* ═══ 🔁 Loop 视图：自驱任务看板 ═══ */}
-      {teamTab === 'loop' && (
-        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-          <AgentTaskBoard />
-        </div>
-      )}
       {teamTab === 'moments' && (
         <div style={{ flex: 1, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{
@@ -5453,65 +5871,6 @@ export default function GroupChatView() {
           </div>
         </div>
       )}
-      {teamTab === 'theater' && <MemoryTheater />}
-      {teamTab === 'daily' && (
-        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-          <div style={{
-            borderRadius: 10, border: '1px solid var(--border-light)', padding: 0,
-            background: 'var(--surface-0)', overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '10px 14px', borderBottom: '1px solid var(--border-light)',
-              background: 'var(--surface-0)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
-            }}>
-              🌅 Lumina 日报
-            </div>
-            <div style={{ padding: 12 }}>
-              <LuminaDailyReport />
-            </div>
-          </div>
-        </div>
-      )}
-      {teamTab === 'milestone' && (
-        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-          <div style={{
-            borderRadius: 10, border: '1px solid var(--border-light)', padding: 0,
-            background: 'var(--surface-0)', overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '10px 14px', borderBottom: '1px solid var(--border-light)',
-              background: 'var(--surface-0)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
-            }}>
-              💝 团队纪念日
-            </div>
-            <div style={{ padding: 12 }}>
-              <TeamMilestones />
-            </div>
-          </div>
-        </div>
-      )}
-      {teamTab === 'yak' && (
-        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-          <div style={{
-            borderRadius: 10, border: '1px solid var(--border-light)', padding: 0,
-            background: 'var(--surface-0)', overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '10px 14px', borderBottom: '1px solid var(--border-light)',
-              background: 'var(--surface-0)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
-            }}>
-              📘 Yak 技术笔记
-            </div>
-            <div style={{ padding: 12 }}>
-              <YakTechNotes />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* v2.14: 删除确认 */}
       {deletingTarget && (
         <div style={{

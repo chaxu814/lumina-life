@@ -21,6 +21,10 @@ import http from 'http'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+// 🆕 2026-10-12: 复用项目内已验证的搜索栈（净化 → 多引擎回退 → 相关性过滤）
+//   与单页正文抓取。此前本文件自己打 DDG 即时答案 API，实测不可达，
+//   导致整个深度调研流水线恒产出空报告。
+import { searchStructured, fetchReadablePage } from './tools/impl/search'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -72,6 +76,17 @@ export interface DRConfig {
 
 export class DeepResearch {
   private config: DRConfig
+  /**
+   * 🆕 2026-10-12: 整个调研过程里**抓取正文的总次数预算**。
+   *
+   * 为什么要设上限：一轮调研会搜多条查询（拆解子问题 + 递归发现新关键词），
+   * 每次搜索若都抓 2 条正文，12 次搜索就是 24 次网页请求 ——
+   * 单页超时 10s，最坏情况要几分钟，用户会以为卡死。
+   * 抓正文的价值主要在"给后续提取/交叉验证提供真实材料"，
+   * 前几篇就够用，不必每轮都抓。
+   */
+  private _pageFetchUsed = 0
+  private static readonly PAGE_FETCH_BUDGET = 4
 
   constructor(config: DRConfig = {}) {
     this.config = {
@@ -88,6 +103,7 @@ export class DeepResearch {
 
   async research(question: string, onProgress?: (step: string) => void): Promise<ResearchReport> {
     const startTime = Date.now()
+    this._pageFetchUsed = 0   // 🆕 2026-10-12: 每次调研重置抓页预算
     const allSources: ResearchSource[] = []
     const allQueries: string[] = []
 
@@ -178,20 +194,42 @@ export class DeepResearch {
   // ═══════════════════════════════════════════════════════
 
   private async search(query: string, count: number): Promise<ResearchSource[]> {
+    // 🐛 2026-10-12 修复（功能级）：
+    //   原实现打的是 `https://api.duckduckgo.com/?format=json` —— 那是
+    //   **即时答案 API**（只返回百科摘要，不是网页搜索），而且实测
+    //   **三个查询全部超时不可达**。于是「帮我调研 X」走进本工具后，
+    //   搜索恒返回空数组 → 多轮调研流水线跑完只产出一份空报告。
+    //
+    //   现在改用项目内已验证的搜索栈（electron/tools/impl/search.ts）：
+    //   净化查询 → 多引擎回退 → 相关性过滤 → 排序，拿到的是真正的网页结果。
     try {
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
-      const results = await this.fetchJson(url)
-      const topics = (results.RelatedTopics || []).slice(0, count)
-
-      return topics.map((t: any) => ({
-        url: t.FirstURL || t.Result?.split('href="')[1]?.split('"')[0] || '',
-        title: t.Text?.split(' - ')[0] || t.Text || '',
-        snippet: t.Text || '',
-        domain: this.extractDomain(t.FirstURL || ''),
+      const results = await searchStructured(query, count)
+      const sources: ResearchSource[] = results.map(r => ({
+        url: r.link,
+        title: r.title,
+        snippet: r.desc,
+        domain: this.extractDomain(r.link),
         credibility: 5, // 默认中等可信度
         fetchedAt: new Date().toISOString(),
-      })).filter((s: ResearchSource) => s.url)
-    } catch {
+      }))
+
+      // 🆕 2026-10-12: 深度调研不能只看搜索摘要 —— 抓前几条正文，
+      //   让后续「提取发现 / 交叉验证」有真正的材料可依据（这才是"爬虫"该做的）。
+      //   抓不到（反爬/JS 渲染）就静默跳过，摘要仍然可用。
+      //   总次数受 PAGE_FETCH_BUDGET 限制，避免多轮调研把时间耗在抓页面上。
+      const budget = Math.max(0, DeepResearch.PAGE_FETCH_BUDGET - this._pageFetchUsed)
+      const targets = sources.slice(0, Math.min(2, budget))
+      this._pageFetchUsed += targets.length
+      await Promise.all(targets.map(async (s) => {
+        const page = await fetchReadablePage(s.url)
+        if (page && page.text.length > 200) {
+          s.snippet = `${s.snippet}\n\n[正文节选] ${page.text.slice(0, 1200)}`
+        }
+      }))
+
+      return sources
+    } catch (err: any) {
+      console.warn('[deepResearch] 搜索失败:', err?.message || err)
       return []
     }
   }

@@ -114,6 +114,7 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
       'files', 'skill_system',                    // 磁盘列表 / 复合技能
       'system',                                   // 剪贴板等（system_extra 组依赖它）
       'git',                                      // 版本控制（「帮我提交一下」是日常请求）
+      'self',                                     // 🪞 自我认知（about_lumina：版本/平台/团队/工具/边界）
     ],
     tools: [],
   },
@@ -271,6 +272,12 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   mcp: {
     description: 'MCP 协议 — 连接外部工具服务器',
     tools: ['mcp_list_servers', 'mcp_connect', 'mcp_list_tools', 'mcp_call_tool'],
+  },
+
+  /** 🪞 自我认知 — Agent 查询自身实时信息（about_lumina：版本/平台/团队/工具/边界） */
+  self: {
+    description: '自我认知 — about_lumina（实时自省快照）',
+    tools: [],
   },
 
   skill_system: {

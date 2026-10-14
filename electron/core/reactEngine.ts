@@ -356,7 +356,11 @@ export class ReActEngine {
     tools: any[],
     totalTokens: { value: number },
   ): Promise<ReactResult> {
-    const maxRounds = this.config.maxToolCalls ?? 1_000_000
+    // 默认上限：30 轮（与 agentRunner 对齐）。
+    // 早期版本默认 1_000_000 是真空洞：任何绕过 agentRunner 直连的调用方
+    // 会拿到无上限循环，把"防 ReAct 死循环"承诺落空。agentRunner.ts:616
+    // 固定传 30 仍保持优先；这里只兜住直连路径。
+    const maxRounds = this.config.maxToolCalls ?? 30
     let finalText = ''
     let consecutiveEmptyCount = 0
     let shortReplyCount = 0      // 🆕 v11.0-fix: 短回复独立计数，不污染空回复计数器

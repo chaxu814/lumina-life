@@ -30,8 +30,8 @@ export function computeDhashFromImage(buffer: Buffer): boolean[] {
   const img = nativeImage.createFromBuffer(buffer)
   if (img.isEmpty()) {throw new Error('截图为空，无法计算 dHash')}
   const small = img.resize({ width: DHASH_W, height: DHASH_H, quality: 'good' })
-  // Electron 40 的 d.ts 把 getBitmap 误标为 void，运行时返回 Buffer
-  const bmp = small.getBitmap() as unknown as Buffer
+  // 🔧 2026-10-10：`getBitmap()` 已废弃（会刷 DeprecationWarning），改用 `toBitmap()`
+  const bmp = small.toBitmap()
   const gray = grayFromBmp(bmp, DHASH_W, DHASH_H)
   return dhash(gray, DHASH_W, DHASH_H)
 }

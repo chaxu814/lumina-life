@@ -35,9 +35,9 @@ import { existsSync } from 'fs'
 const SESSION_PARTITION = 'persist:lumina-browser'
 
 /** 设备预设与地址规则来自纯函数模块，方便单测 */
-export { DEVICE_PRESETS, isAllowedUrl, normalizeUrl } from './browserUrl'
+export { DEVICE_PRESETS, isAllowedUrl, normalizeUrl, resolveAddressInput, buildSearchUrl, SEARCH_ENGINE } from './browserUrl'
 export type { DevicePreset } from './browserUrl'
-import { isAllowedUrl, normalizeUrl } from './browserUrl'
+import { isAllowedUrl, normalizeUrl, resolveAddressInput } from './browserUrl'
 import { getAppIconPath } from '../appIcon'
 
 export interface BrowserState {
@@ -218,7 +218,8 @@ export async function navigate(
   raw: string,
 ): Promise<{ ok: boolean; url?: string; title?: string; error?: string }> {
   const input = String(raw || '').trim()
-  const target = normalizeUrl(input)
+  // 地址栏输入：像网址 → 补全；否则 → 默认搜索引擎（Bing）搜索
+  const target = resolveAddressInput(input)
   if (!isAllowedUrl(target)) {return { ok: false, error: `不支持的地址：${raw}` }}
 
   if (!getBrowserWindow()) {

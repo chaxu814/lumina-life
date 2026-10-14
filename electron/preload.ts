@@ -68,6 +68,8 @@ export interface AgentRunConfig {
   socialMode?: boolean
   /** 🆕 v15.0: 说出来模式 — 让 Agent 在搜索/工具调用时说出思考过程 */
   verbalizeThinking?: boolean
+  /** 🆕 2026-10-10: 后台任务标记（自主刷新/朋友圈等）—— 不打断用户对话 */
+  background?: boolean
 }
 
 export interface AgentEvent {
@@ -108,6 +110,19 @@ const api = {
   llmChat: (params: LLMChatParams) =>
     ipcRenderer.invoke('llm:chat', params) as Promise<LLMChatResult>,
 
+  /** 使用当前供应商/模型增强草稿提示词；只返回改写文本，不会发送原任务 */
+  llmEnhancePrompt: (params: { baseUrl: string; apiKey?: string; model: string; text: string }) =>
+    ipcRenderer.invoke('llm:enhance-prompt', params) as Promise<{
+      content?: string
+      error?: string
+      /** 输出长度预算（字符） */
+      budget?: number
+      originalChars?: number
+      enhancedChars?: number
+      /** 模型超预算、结果被兜底裁剪过 */
+      trimmed?: boolean
+    }>,
+
   /** 🔧 v2.9: 获取 LLM 提供商支持的模型列表 */
   llmFetchModels: (params: { baseUrl: string; apiKey: string; provider?: string }) =>
     ipcRenderer.invoke('llm:fetchModels', params) as Promise<{ models: Array<{ id: string; multimodal?: boolean; vision?: boolean }> }>,
@@ -132,7 +147,7 @@ const api = {
   agentLlmGetConfig: (agentId: string) =>
     ipcRenderer.invoke('agent-llm:get-config', { agentId }) as Promise<any>,
 
-  agentLlmSetConfig: (agentId: string, config: { provider: string; model: string; endpoint: string; apiKey: string; timeout?: number }) =>
+  agentLlmSetConfig: (agentId: string, config: { provider: string; model: string; endpoint: string; apiKey: string; timeout?: number; maxContextTokens?: number }) =>
     ipcRenderer.invoke('agent:configure-llm', { agentId, ...config }) as Promise<{ success: boolean }>,
 
   agentLlmGetAllConfigs: () =>
@@ -186,8 +201,18 @@ const api = {
     ipcRenderer.invoke('provider:test-connection', id) as Promise<{ success: boolean; latency?: number; error?: string }>,
 
   // 一键检测/接入本地模型（Ollama / LM Studio，免 Key）
-  providerDiscoverLocal: () =>
-    ipcRenderer.invoke('provider:discover-local') as Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>,
+  // input.baseUrl —— 把前端当前配置的端点一并纳入探测。
+  //   修复：用户把 LM Studio 跑在内网另一台机（http://192.168.1.11:1234/v1），
+  //   但 providerManager 的激活供应商还是云端项 → 探测只测 127.0.0.1 →
+  //   远端这台被漏掉 → 误报「无法连接」+「离线模式」。
+  providerDiscoverLocal: (input?: { baseUrl?: string }) =>
+    ipcRenderer.invoke('provider:discover-local', input) as Promise<{ found?: any[]; guide?: Array<{ title: string; body: string }>; error?: string }>,
+  /** 严格检测指定 Agent 的实际端点与 API Key，不尝试其它候选或 Agent 密钥 */
+  providerProbeLocalConfig: (input: { baseUrl: string; provider?: string; apiKey?: string }) =>
+    ipcRenderer.invoke('provider:probe-local-config', input) as Promise<{
+      provider: { id: string; label: string; baseUrl: string; models: string[]; recommendedModel: string; apiKey: string } | null
+      failure: { kind: string; baseUrl: string; status?: number; advice: string } | null
+    }>,
   providerApplyLocal: (input: { id?: string; baseUrl?: string; model?: string }) =>
     ipcRenderer.invoke('provider:apply-local', input) as Promise<{ success: boolean; id?: string; model?: string; baseUrl?: string; contextWindow?: number; contextDetected?: boolean; error?: string }>,
 
@@ -314,6 +339,26 @@ const api = {
   /** 中止 Agent 运行 */
   agentAbort: () =>
     ipcRenderer.invoke('agent:abort') as Promise<void>,
+
+  /**
+   * 🆕 2026-10-13：从主进程 dialog 日志恢复群聊会话（跨 origin 兜底）。
+   *
+   * 前端会话存在 localStorage，而它**按 origin 隔离**（开发 localhost / 打包 file://），
+   * 切换运行模式后读不到历史。dialog 日志是主进程文件，不受影响。
+   * 前端只在 localStorage 为空时调用，不会覆盖已有数据。
+   */
+  gcRestoreFromLogs: (agentId?: string) =>
+    ipcRenderer.invoke('gc:restore-from-logs', agentId) as Promise<{
+      ok: boolean
+      error?: string
+      sessions: Array<{
+        id: string
+        lastAt: number
+        count: number
+        preview: string
+        messages: Array<{ from: string; content: string; time: string }>
+      }>
+    }>,
 
   /** 清空 Agent 对话历史 */
   agentClear: () =>

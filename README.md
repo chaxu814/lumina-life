@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-3324%20passing%20%2F%20229%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="3324 tests passing across 229 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-3811%20passing%20%2F%20269%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="3811 tests passing across 269 test files"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
-  <img src="https://img.shields.io/badge/code-258k%20lines-4c1?style=flat-square&labelColor=1a1a2e" alt="258k lines of code">
+  <img src="https://img.shields.io/badge/code-236k%20lines-4c1?style=flat-square&labelColor=1a1a2e" alt="236k lines of code">
 </p>
 
 <h1 align="center">
@@ -51,10 +51,12 @@
 |---|---|---|---|
 | 🟠 | **仅 Windows 实机验证** | macOS/Linux 代码已适配但**从未真机验收**；Computer Use 的键鼠注入、沙箱规则库强依赖 Windows API | v1.3.0 |
 | 🟠 | **IM 渠道未经端到端真机验证** | 7 个适配器已接线，**仅 Telegram 默认开启**，其余需自配凭据 | v1.0 |
+| 🟡 | **测试套件对负载敏感（flaky）** | 已修复一批「源码重构后测试未同步」的确定性失败（5 条，见下方 Quality Gates）；剩余个别时序测试在**慢机/并发下**仍可能间歇失败——套件不再声称「永远全绿」 | 持续收敛 |
 | 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
-| 🟡 | **无第三方技能生态** | 技能市场通道已通，但**生态是空的**，装不到第三方技能 | 待社区 |
-| 🟡 | **`agentRunner.ts` 单文件 3782 行** | LLM 调用 / ReAct 循环 / 工具执行耦合在一起，外部贡献者可读性差 | 发布后重构 |
+| 🟡 | **无第三方技能生态** | 技能市场通道已通、`skills/` 有 **8 个内置示例技能**，但**没有第三方技能可装** | 待社区 |
+| 🟡 | **`agentRunner.ts` 单文件 4117 行** | LLM 调用 / ReAct 循环 / 工具执行耦合在一起，外部贡献者可读性差 | 发布后重构 |
 | 🔵 | **约 5100 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
+| 🔵 | **Chromium sandbox 为 `false`** | 渲染进程安全由**应用层**承担（rolePolicy + securityGuard + sandboxRules + 审批流），**不是**浏览器沙箱；文档已按此更正 | 已澄清 |
 
 > 💡 **在 Windows + LM Studio 上遇到「很卡 / 首 token 很慢」？先跑 `lumina health`（或界面「更多设置 → 诊断工具 → 🩺 模型体检」）。**
 > 它多半会直接告诉你原因：上下文窗口填得比模型实际能吃的大了。这是我们已经解决、但需要你看见的诊断能力。
@@ -143,7 +145,7 @@ routingDecider 判定复杂度（规则高置信直接用 / 歧义调一次 LLM 
 
 | 维度 | 说明 |
 |------|------|
-| **三维数值 → 五种表现** | 底层是 **3 个连续数值**：心情 mood / 精力 energy / 亲密度 affinity，带惯性、随机漂移与昼夜节律；它们组合映射为 5 种可观察表现：🥰开心 · 😴疲劳 · 🎯专注 · 😰焦虑 · 🤔好奇<br>3 continuous values (mood/energy/affinity) with inertia, drift and circadian rhythm, mapping to 5 observable expressions |
+| **三维数值 → 五种表现** | 底层是 **3 个连续数值**：心情 mood / 精力 energy / 亲密度 affinity，带惯性与随机漂移；当前版本用"昼/夜"两档开关微调（`pet/life/drives.ts:75 isNight`），尚未做连续正弦调制；它们组合映射为 5 种主要可观察表现（底层 9 个情绪标签经迟滞最近邻选定）：🥰开心 · 😴疲劳 · 🎯专注 · 😰焦虑 · 🤔好奇<br>3 continuous values (mood/energy/affinity) with inertia and drift, plus a day/night two-state modifier (no continuous sine yet); they map to 5 primary expressions selected by hysteresis nearest-neighbor from 9 underlying mood labels |
 | **实时可视化** | Lumina 的表情和语气随情绪实时变化<br>Her expression and tone shift in real time |
 | **关系记忆** | Agent 之间的亲密度/信任/协作数随**真实委托与群聊事件**演化，并持久化到本地（重启后保留）<br>Inter-agent affinity/trust evolve from real delegation & group-chat events and persist locally |
 | **主动搭话** | 不是冷通知——"主人你对着屏幕发呆好久了，要休息一下吗？"<br>Not a cold notification — "You've been staring at the screen for a while. Take a break?" |
@@ -166,7 +168,7 @@ routingDecider 判定复杂度（规则高置信直接用 / 歧义调一次 LLM 
 |------|------|
 | **短期记忆** | 当前对话上下文，支持自动压缩（按模型窗口分档，65%/60%/50% 触发率）|
 | **长期记忆** | SQLite 持久化 + 结构化事实/反思/人格 |
-| **混合召回** | **BM25 词法 + TF-IDF 向量余弦双路召回，RRF 融合（已实现，CJK 友好、零依赖）**；dense 语义向量（Ollama / embedding 服务）可在记忆设置中开启，**默认关闭**<br>Hybrid recall: BM25 lexical + TF-IDF cosine fused by RRF (shipped, zero-dependency); dense semantic embeddings optional, **off by default** |
+| **混合召回** | **BM25 词法 + TF-IDF 向量余弦双路召回，RRF 融合（已实现、零依赖）。中文用 unigram+bigram 字符级分词（无词典，精度有限）**；dense 语义向量（Ollama / embedding 服务）可在记忆设置中开启，**默认关闭**<br>Hybrid recall: BM25 lexical + TF-IDF cosine fused by RRF (shipped, zero-dependency); dense semantic embeddings optional, **off by default** |
 | **双层可信度** | ① 写入期：权威性**只由 `source` 决定**，模型无权自封 `confidence: 1.0`<br>② 读取期：五维证据评分（置信/新鲜/频率/佐证/重要，7 天半衰期）决定召回排序与生命周期，被证伪的记忆会沉底 |
 | **自动精炼** | 定时清理低质量记忆，保留真正重要的 |
 | **记忆剧场** | 可视化浏览你和 Lumina 的回忆 |
@@ -207,7 +209,7 @@ routingDecider 判定复杂度（规则高置信直接用 / 歧义调一次 LLM 
 
 | 等级 | 说明 |
 |------|------|
-| **双层安全审查** | ① 消息/参数级：securityGuard 6 级×10 类，审查 LLM 输入和工具参数；② 命令级：sandboxRules 7 级×8 类 26 条规则，审查即将执行的 shell 命令（含 BLOCK 级硬拦截：格式化/rm -rf 根/fork 炸弹/删系统目录） |
+| **双层安全审查** | ① 消息/参数级：securityGuard 6 级×10 类，审查 LLM 输入和工具参数；② 命令级：sandboxRules 32 条命令规则（按 BLOCK/CRITICAL/WARN 4 档分级），审查即将执行的 shell 命令（含 BLOCK 级硬拦截：格式化/rm -rf 根/fork 炸弹/删系统目录） |
 | **🔍 沙箱玻璃房** | 侧栏「沙箱玻璃房」面板实时显示每条命令命中的级别 / 威胁类别 / 处置（放行 · 降级 · 拦截 · 审批），安全过程对你透明 |
 | **审批流** | 危险操作先弹窗问你，你点头她才做 |
 | **密钥拦截** | Token/Key 自动检测，阻止外泄 |
@@ -353,14 +355,14 @@ Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有�
 | 能力 | Lumina | [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) | [AIRI](https://github.com/moeru-ai/airi) | [openclaw](https://github.com/openclaw/openclaw) | [cc-haha](https://github.com/NanmiCoder/cc-haha) | [MiniMax Code](https://agent.minimax.cn/docs/code/welcome) |
 |------|--------|------------------|----------------|----------------------|------------------|---------------------|
 | **多 Agent 团队编排** | ✅ 3 人 + 五阶段门控 + 对抗评审 + 动态雇工 | ❌ 单角色 | ❌ 无编排层 | ✅ 成熟 session/subagent | ✅ 成熟 | ✅ Agent Team |
-| **拟人情感** | ✅ 3 连续数值 + 亲密度 + 昼夜节律 | ✅ 会主动 | ✅ 表情丰富 | ❌ 零人格 | ⚠️ 状态提示 | ❌ 零人格 |
+| **拟人情感** | ✅ 3 连续数值 + 亲密度 + 昼/夜两档 | ✅ 会主动 | ✅ 表情丰富 | ❌ 零人格 | ⚠️ 状态提示 | ❌ 零人格 |
 | **桌宠绑定真实执行状态** | ✅ **唯一** | ❌ | ❌ | ❌ | ⚠️ 状态提示+跳转 | ❌ 无形象 |
 | **桌宠形象形态** | ✅ Live2D/VRM/精灵表/MMD/猫咪 | ✅ 五形态 | ✅ **五种（含 Spine/立绘）** | ❌ | ⚠️ 8×9 精灵表 | ❌ 无形象 |
 | **多端支持** | ⚠️ **Windows 实机验证**；macOS/Linux CI 覆盖但未实机验收 | ✅ Steam + 移动端内测 | ✅ Web/Electron/iOS/Android/PWA | ✅ 5 端原生 App | ✅ 三平台 | ✅ 桌面/CLI/Headless/ACP |
 | **IM 渠道** | ⚠️ **7 个适配器已接线，仅 Telegram 默认开启**，其余需自配凭据、未经端到端真机验证 | ⚠️ | ✅ 4+ | ✅ **32 个** | ✅ 8 个 | ✅ 微信/飞书/Telegram/Lark |
 | **本地推理** | ❌ 需外挂 LM Studio | ❌ | ⚠️ **路线图未勾选**（`[ ] Pure in-browser local (WebGPU) inference`）；可接 Ollama/vLLM | ⚠️ local models 作为插件 | ⚠️ LM Studio/Ollama | ⚠️ 自带托管模型 |
 | **Computer Use** | ✅ 键鼠/OCR/UIA + **情绪可收紧权限** | ⚠️ 截图 | ⚠️ **已有 `services/computer-use-mcp`**（macOS 桌面编排 + 审批队列 + 审计 + 15 个 browser_dom 工具），仍限 macOS | ⚠️ 看屏幕 | ✅ macOS 原生（不占真实鼠标） | ✅ |
-| **桌面安全沙箱** | ✅ 四层 + 26 规则 + 三层角色闸门 | ⚠️ 未展开 | ⚠️ 审批队列（CU 层） | ✅ trusted gateway 架构 | ✅ 五档权限 | ⚠️ 5 级权限 |
+| **桌面安全沙箱** | ✅ 双层审查 + 32 条命令规则 + 三层角色闸门 | ⚠️ 未展开 | ⚠️ 审批队列（CU 层） | ✅ trusted gateway 架构 | ✅ 五档权限 | ⚠️ 5 级权限 |
 | **团队社交** | ✅ 群聊 + 朋友圈 + 早安 | ✅ | ⚠️ | ❌ | ❌ | ❌ |
 | **记忆系统** | ✅ BM25+RRF+五维证据 | ✅ **35+ 模块，最深** | ❌ **Memory Alaya 至今 WIP 未勾选** | ⚠️ 纯 Markdown | ✅ 继承 Claude Code | ⚠️ 闭源不可验证 |
 | **社区体量** | 0（未发布） | 3,009 ★ | 49,956 ★ | **391,294 ★** | 14,860 ★ | 闭源商业 |
@@ -388,27 +390,33 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 ## 🔬 Quality Gates · 工程底座
 
 我们不靠 star 数说话，靠能跑的东西说话。**下面每一项都是我们本机实测跑出来的，
-不是 CI 徽章上的转述。**（数据采样：2026-10-05 · commit `072cb22`）
+不是 CI 徽章上的转述。**（数据采样：2026-10-11 · commit `52d16de`）
 
 | 闸门 | 命令 | 实测结果 |
 |---|---|---|
-| 测试套件 | `npm test` | **229 个测试文件 · 3324 个用例通过**（1 skipped），22.1 s |
-| 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error** |
+| 测试套件 | `npm test` | **269 个测试文件 · 3811 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
+| 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
 | 代码规范 | `npm run lint` | **0 error**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
 | CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
 | 打包 | `.github/workflows/release.yml` | Windows / macOS / Linux 三平台；**无签名证书时降级出包而不失败** |
 
-**代码规模**（不含依赖与构建产物）：
+> ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
+> 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
+> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 269 文件 / 3811 通过 / 0 失败。
+> 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
+> 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
+
+**代码规模**（不含依赖与构建产物，2026-10-11 实测）：
 
 | 模块 | 行数 | 占比 |
 |---|---:|---:|
-| `electron/` 主进程 | 174,994 | 68% |
-| `src/` 渲染进程 | 51,721 | 20% |
-| `tests/` | 33,000+ | **12%** |
-| 其余（python / scripts / agents / skills） | 2,925 | 1% |
-| **合计** | **260,000+** | 100% |
+| `electron/` 主进程 | 141,985 | 60% |
+| `src/` 渲染进程 | 53,747 | 23% |
+| `tests/` | 40,128 | **17%** |
+| 其余（python / scripts / agents / skills） | ~2,900 | 1% |
+| **合计** | **~236,000** | 100% |
 
-> 📌 **测试代码占全仓 12%**。同赛道的头部项目靠社区规模或基金会输血，
+> 📌 **测试代码占全仓约 17%**。同赛道的头部项目靠社区规模或基金会输血，
 > Lumina 在发布时什么都没有，只能靠自己写的测试。
 > 这是我们最想让你看的一个数字——它比上面任何功能列表都更能说明工程质量。
 
@@ -441,19 +449,21 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「优化一下这个项目」（模糊） | ⚠️ 尽力，可能过度编排 |
 | 「顺便在浏览器里点两下」 | ✅ 能（developer 模式）|
 | 「发封邮件」 | ✅ 能（v3.34 起 `mail_*` 已进入 agent 模式）|
-| 「帮我装个第三方技能」 | ❌ 生态是空的，没有第三方技能可装 |
-| 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据，**我们没做端到端真机验证** |
+| 「帮我装个第三方技能」 | ❌ 没有第三方技能可装（`skills/` 里有 8 个内置示例） |
+| 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：3,071 用例全绿**（`vitest run` 212 文件 / 3070 通过 / 1 skipped，
-实测 24.77s）；`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
+Linux 为 roadmap。**测试规模：269 文件 · 3811 用例通过 / 1 skipped / 0 失败**（本机实测；
+⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
+`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
 
 复现命令（在仓库根目录执行）：
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：212 文件 / 3070 passed / 1 skipped
+npx vitest run             # 预期：269 文件 / 3811 passed / 1 skipped
+node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
 ```</sub>
 
 > ⚠️ **一句实话**：本项目 90% 的能力描述来自**代码与测试**，而不是**真人使用数据**。
@@ -492,9 +502,14 @@ npm run dev                     # 启动！
 
 ### 连接 LLM（两分钟）
 
-> ⚠️ **默认配置指向 `http://127.0.0.1:1234/v1`（LM Studio）且模型名是占位符
-> `your-model-name`。** 这是为了开箱即用地跑在本地推理环境，但对**没有装
-> LM Studio 的用户来说，第一次启动就会卡住。**请先完成下面第 1 步。**
+> 💡 **默认就是云端优先**：开箱时 Lumina 的三个 Agent 已预填云端 Provider
+> （Lumina→硅基流动、Yak→DeepSeek、Recha→智谱），填好对应 API Key 即可用，
+> **新手无需装任何本地推理软件**。只有你主动选择"完全本地"时才需要 LM Studio / Ollama。
+>
+> 🪶 **弱模型自动降级**：若你坚持用本地小模型（≤7B），Lumina 会检测到并自动进入
+> "轻量模式"——只保留记忆 / 搜索 / 只读文件等安全工具，并提示模型直接简洁回答、
+> 不要跑团队编排。这样 1.9B~7B 的小模型也能稳定当"陪伴 + 检索"用，而不是频繁空回复。
+> 真正要写代码 / 调团队，仍建议 ≥14B 本地或云端大模型。
 
 **第 1 步：选一条路（普通用户选 A）**
 
@@ -585,7 +600,54 @@ curl -X POST http://localhost:3456/api/chat \
   -d '{"message":"你好","agent_id":"lumina"}'
 ```
 
-支持 10+ 端点：聊天 · 工具执行 · Agent 管理 · 记忆检索 · 技能管理 · 配置读写 · 定时任务
+支持 10+ 端点：聊天 · 工具执行 · Agent 管理 · 记忆检索 · 技能管理 · 配置读写 · 定时任务 · 审批队列
+
+### 📱 手机远程访问（H5）
+
+> 桌宠本来就是「必须常驻」的形态——所以「人不在电脑前也能管它」是刚需。
+> Lumina 复用上面的 REST API，内置了一个手机可访问的 H5 页面：**看消息、发指令、批准权限**，不用装 App、不用上架商店。
+
+```bash
+# 1) 启动 API（或直接跑 `npm run api:dev`）
+LUMINA_API_ENABLED=1 LUMINA_API_PORT=3456 electron .
+```
+
+把 API 的 `host` 设为 `0.0.0.0`（设置里改，或启动日志会提示），然后在**同一局域网**用手机浏览器打开：
+
+```
+http://<电脑局域网IP>:3456/m
+```
+
+启动日志会自动打印可用的局域网地址。页面支持：
+
+- 💬 与 Lumina 对话（走 `/api/chat`）
+- ✅ 手机上批准 / 拒绝待审批的敏感操作（走 `/api/approvals`）—— 这正是「桌宠绑定真实执行状态」在远程场景的延伸
+- 🔑 若开启了 API Key 认证，页面上填一次即可（仅存本机 localStorage）
+
+> ⚠️ 安全提示：H5 页面默认仅在**局域网**可用；如需公网访问，请自行加反代 + HTTPS + API Key，**不要**直接把端口暴露到公网。
+
+### 🎯 确定性派活命令（跳过自动路由）
+
+默认路由由模型裁量，同一句话两次问可能派活不同。专业用户想要确定性时，用这三条命令**一次性**指定谁干活：
+
+```
+/yak   帮我给这个函数补单元测试      # 强制派给 Yak（代码工程师）
+/recha 审一下这段代码有没有并发问题   # 强制派给 热茶（审查员）
+/lumina 解释一下这个报错是什么意思     # 强制由 Lumina 自己答
+```
+
+它们在聊天框内前置拦截、不发给模型自己判断，直接把这一条消息交给指定角色（不影响后续消息）。
+
+### 🧠 记忆会话级双开关
+
+把「读记忆」和「写记忆」分开管，并给出一份明确的**「不记什么」清单**：
+
+| 开关 | 作用 | 何时可改 |
+|---|---|---|
+| **使用记忆** | 是否在回答前检索并参考长期记忆 | 建议新对话前设定（进行中改动对下一对话生效） |
+| **生成记忆** | 是否把本轮对话沉淀为新记忆 | 随时可改，立即生效 |
+
+在「设置 → 记忆与进化」里。关掉后相关接口会**如实告知未生效**，不会假装存了 / 检索了。
 
 ---
 
@@ -609,7 +671,7 @@ Lumina：本月开支共 ¥3,280，比上月少 12% 哦！主要节省在餐饮�
 ### 🥈 铁则二：Lumina 有情绪，且情绪影响行为
 
 Lumina 不是冷冰冰的 API 返回器。底层是 **3 个连续数值**（心情 mood / 精力 energy /
-亲密度 affinity），带惯性、随机漂移与昼夜节律；它们组合映射为 5 种可观察表现
+亲密度 affinity），带惯性与随机漂移；当前用"昼/夜"两档开关微调，尚未做连续正弦调制；它们组合映射为 5 种主要可观察表现（底层 9 个情绪标签）
 （开心 / 疲劳 / 专注 / 焦虑 / 好奇）。桌宠表情则由大模型每帧实时输出。
 
 关键在于**情绪进了执行层**，不只是换表情：重试次数会被当前情绪影响
@@ -640,7 +702,7 @@ Lumina 记得你。每次对话都是你们关系的延续，不是从头开始�
 
 | 安全机制 | 说明 |
 |---------|------|
-| 🛡️ 沙箱模式 | 双层审查：消息/参数级（6×10）+ 命令级（7×8，26 条规则） |
+| 🛡️ 沙箱模式 | 双层审查：消息/参数级（6×10）+ 命令级（32 条规则，4 档分级） |
 | 📋 审批流 | 高风险操作需要用户手动确认 |
 | 🔒 隐私优先 | 所有数据本地存储，不上传云端 |
 | 🔑 API Key 隔离 | LLM Key 与应用权限分离 |
@@ -717,7 +779,7 @@ lumina-life/
 | 自动更新 Auto Update | electron-updater (GitHub Releases) |
 | 协议支持 Protocols | MCP (Model Context Protocol) |
 | 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **2,557 用例全绿** · `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| 测试规模 Tests | **269 文件 / 3811 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
 
 ---
 
@@ -726,7 +788,7 @@ lumina-life/
 完整版见 **[docs/ROADMAP.md](docs/ROADMAP.md)**（含已知缺口表与认领指引）。
 
 **✅ 当前开发版（v0.1.0-preview）**
-三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 维 + 亲密度 + 昼夜节律）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 138 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
+三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 主要表现 + 亲密度 + 昼/夜两档，底层 9 标签）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 138 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
 
 **✅ 已完成的发布加固**
 - [x] 原生模块 ABI 与 Electron 对齐（CI 有门禁，不再出现「测试绿、真机炸」）
@@ -744,7 +806,7 @@ lumina-life/
 ### 🧪 实验性 / 彩蛋功能（非主线，请勿当真）
 
 - **梦境日记、Agent 真人秀**：已接 LLM 真实生成（在设置里配好 LLM 后即走真实模型）；未配置时回退到 **9 个情绪锚点模板 + 记忆片段关键词**，UI 用 `来源: llm / 来源: template` 诚实标注，绝不假装是大模型写的。
-- **记忆检索**：默认 BM25 + TF-IDF 双路 RRF 混合召回（已实现、零依赖、CJK 友好）；dense 语义向量（Ollama nomic-embed-text 或外部 embedding 服务）可在记忆设置中开启，提供更强语义匹配。
+- **记忆检索**：默认 BM25 + TF-IDF 双路 RRF 混合召回（已实现、零依赖；中文用 unigram+bigram 字符级分词，无词典）；dense 语义向量（Ollama nomic-embed-text 或外部 embedding 服务）可在记忆设置中开启，提供更强语义匹配。
 - **副人格觉醒（实验）**：最小真实机制已上线——基于长期记忆 + 情绪状态的人格漂移 / 副视角，触发条件为「高亲密度 + 累计约 200 轮对话」或「持续高焦虑」，置于 `personality.subPersona` 开关后**默认关闭**、可随时关；仍属实验性，不代表核心陪伴能力。
 
 ---

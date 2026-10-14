@@ -27,6 +27,8 @@ import { registerAllTools } from './tools/index'
 import { isToolAllowedForRole } from './rolePolicy'
 import { parseXmlToolCalls as parseXmlToolCallsShared } from './llm/xmlToolCall'
 import { applyEmotionGate, renderGateNotice } from './orchestration/emotionGating'
+// 🎯 任务类型识别 · 术有专攻 —— 高置信纯推理题本轮隐藏联网工具
+import { profileTask, SEARCH_TOOLS } from './orchestration/taskProfiler'
 import { getEmotionAuditLog } from './orchestration/emotionAudit'
 // 🧩 情绪因果链：把「真实任务历史」接进门控。此前这两个函数无人调用。
 // 静态 import 是安全的：emotionCausalityBridge 只依赖 electron/pet/* 与 memory/*，
@@ -38,7 +40,8 @@ import { getAgentChatsManager } from './agentChatsManager'
 import { getAgentDialogManager } from './agentDialogManager'
 import { ConversationSummarizer } from './memory/summarizer'
 import { globalEventBus, BusEvents } from './eventBus'
-import { buildSystemPrompt, recoverUnsummarizedHistory, CHAT_MODE_TOOLS } from './prompts/systemPrompt'
+import { buildSystemPrompt, CHAT_MODE_TOOLS } from './prompts/systemPrompt'
+import { buildSelfKnowledgeBlock } from './selfKnowledge'
 import { autoRefine, globalTurnCount } from './memoryRefiner'
 import { getInjectionGuard } from './injectionGuard'
 import { getManualSystem } from './manualSystem'
@@ -125,7 +128,19 @@ import {
   KNOWN_MODEL_WINDOWS as _KNOWN_MODEL_WINDOWS,
 } from './core/agentUtils'
 import { cleanToolNoiseText } from './agent/toolNoise'
+import {
+  detectToolLoop,
+  buildToolSignature,
+  buildLoopStopMessage,
+  describeLoopTrigger,
+  TOOL_WINDOW,
+} from './agent/toolLoopGuard'
+import { applyEvidenceGuard, RETRIEVAL_TOOL_NAMES } from './agent/answerEvidenceGuard'
+import { trimToBudget } from './agent/contextBudget'
+import { pickRecoverySummaryText } from './agent/recoveryText'
+import { computePersistStart, advanceCursor } from './agent/persistCursor'
 import { resolveCapabilities, type ServerFacts } from './core/modelCapabilities'
+import { isLiteTier, LITE_TOOL_WHITELIST, LITE_SYSTEM_NOTE } from './orchestration/weakModelMode'
 import { recallServerFacts, rememberServerFacts, parseServerFactsFor } from './core/modelServerFacts'
 // 🧭 路由预热（静态导入）。
 //   2026-10-07：这里原本是 `require('./orchestration/routingDecider')`。
@@ -175,167 +190,31 @@ import { checkActionClaims } from './actionClaimGuard'
 // 三处都是幂等的（claimToolsRegistration 用 CAS 语义）。
 // 行为不变，但不再依赖 import 顺序。
 
-// ── 辅助函数 ──────────────────────────────────────────────
+// ── 辅助函数已抽离到 ./agentRunner.text.ts ──────────────────────
+//   纯函数辅助块（content 转文本 / 失败原因分类 / 协议合法化 / 未执行提示）
+//   原先内联在本文件，使单文件职责过载。这里同时 import + re-export：
+//   re-export 只把符号转出去、不会创建本地绑定，而本文件内部仍要直接调用它们。
+import {
+  toText,
+  clearModelToolBlacklist,
+  notExecutedNote,
+  toolResultText,
+  sanitizeHistoryForApi,
+  describeRunFailure,
+  ensureUserFirst,
+  type RunFailureKind,
+} from './agentRunner.text'
 
-/** 将 AgentMessage content 安全转为字符串 */
-function toText(content: AgentMessage['content']): string {
-  if (typeof content === 'string') {return content}
-  if (Array.isArray(content)) {
-    return content.map(part => part.text || '').join('')
-  }
-  return ''
+export {
+  toText,
+  clearModelToolBlacklist,
+  notExecutedNote,
+  toolResultText,
+  sanitizeHistoryForApi,
+  describeRunFailure,
 }
+export type { RunFailureKind }
 
-// 借鉴 QwenPaw — 去掉全局黑名单，改为实例级单次跳过
-//   QwenPaw 从不黑名单工具：每次请求都带 tools，模型自行处理。
-//   只在当前实例中记录"本次请求因工具失败→下次不带工具"的临时标记。
-//   新 AgentRunner 实例不受影响，旧实例可通过 reset() 清除。
-const _globalToolBlacklistCount = 0  // 仅用于统计日志
-
-/** 🆕 v3.9: 向后兼容存根 — 全局黑名单已移除，此函数为空操作 */
-export function clearModelToolBlacklist(_model?: string): void {
-  // 不再需要清除全局黑名单（黑名单已移除）
-  // 保留此导出以避免现有调用报错
-}
-
-// ───────────────────────────────────────────────────────────
-// 失败原因分类
-//
-// 早前所有失败都回同一句"抱歉，出了点问题，请稍后重试"。问题有两层：
-//   1. 用户分不清是模型超时、鉴权失败还是网络断了，没法采取任何行动
-//   2. Agent 自己拿不到可据以调整策略的信号，只能原样失败
-//
-// 这里的取舍：**透出可行动的原因分类，但不透出原始错误串**——
-// 原始串里常有 URL、本地路径、堆栈、密钥片段，直接回显既没用也不安全。
-// ───────────────────────────────────────────────────────────
-export type RunFailureKind =
-  | 'timeout'        // 模型响应超时
-  | 'auth'           // 鉴权 / 额度
-  | 'rate_limit'     // 触发限流
-  | 'network'        // 网络不可达
-  | 'context_length' // 上下文超长
-  | 'content_filter' // 被内容安全拦截
-  | 'cancelled'      // 用户主动中止
-  /** 🔧 2026-10-07 新增：团队成员没配 LLM —— 委托在第一步就失败 */
-  | 'teammate_unconfigured'
-  /** 🔧 2026-10-07 新增：工具被权限档位拦下（不是模型的问题，是等你批准） */
-  | 'tool_permission'
-  /** 🔧 2026-10-07 新增：工具执行失败（参数非法 / 目标不可用等） */
-  | 'tool_failed'
-  | 'unknown'
-
-const FAILURE_PATTERNS: Array<[RunFailureKind, RegExp, string]> = [
-  ['auth', /api[\s_-]?key|unauthorized|401|403|forbidden|invalid.*token|鉴权|密钥|额度|余额|quota/i,
-    '模型服务的鉴权或额度有问题，请检查 API Key / 账户余额后重试。'],
-  ['rate_limit', /rate[\s_-]?limit|429|too many requests|限流|频率/i,
-    '触发了模型服务的频率限制，等几十秒后重试即可。'],
-  ['timeout', /timeout|timed[\s_-]?out|超时|etimedout|aborted by timeout/i,
-    '模型响应超时，这次没能在时限内完成。可以把问题拆小一点再问一次。'],
-  ['context_length', /context[\s_-]?length|maximum context|too many tokens|上下文.*(超|长)/i,
-    '这次对话的内容超出了模型的上下文容量。建议新开一轮对话，或先让我总结一下再继续。'],
-  ['content_filter', /content[\s_-]?filter|content_policy|safety|敏感词|审核不通过/i,
-    '请求被模型服务的内容安全策略拦截了，换一种问法通常就能通过。'],
-  ['network', /econnrefused|enotfound|econnreset|network|fetch failed|getaddrinfo|网络|连接/i,
-    '连不上模型服务，请检查网络或代理设置。'],
-
-  // 🔧 2026-10-07 新增：工具层的失败。
-  // 【为什么要单列】实测 T3（「帮我写个爬虫，然后让团队审一下」）时，
-  //   真实原因是 delegate_to 报「Yak 未配置 LLM」+ file_write 参数非法，
-  //   但兜底文案说的是「模型服务返回了一个无法识别的错误」——
-  //   **把「团队没配好」和「工具被拦」伪装成了「模型出问题」**，
-  //   用户照着提示换一种问法、重试一百次也没用。
-  //   这些失败**根本不在模型侧**，必须单列并给出能行动的建议。
-  ['teammate_unconfigured', /未配置\s*LLM|not configured|未配置大模型|尚未配置/i,
-    '团队里有成员还没配置大模型，这次没能派活出去。到「设置 → LLM 模型」给 Yak / 热茶各配一个模型就好了。'],
-  ['tool_permission', /权限档位要求确认|需要用户批准|未获批准|requiresApproval|需要审批/i,
-    '这次的操作被权限档位拦下了，需要你批准才能执行。回复 /approve 批准，或到发送栏右侧的权限选择器调高档位。'],
-  ['tool_failed', /未执行成功|参数不是合法\s*JSON|不是合法\s*JSON|不在本轮可用|本轮未加载|工具\s*".*?"\s*不存在/i,
-    '这次是工具没能执行成功（比如参数格式不对、或该能力本轮没加载），不是模型出错。换个更明确的说法通常就能走通。'],
-]
-
-/**
- * 所有"没有真的执行"的路径统一用它拼提示。
- *
- * 为什么要统一：模型拿到一段"⛔ 被拦截"的文字时，如果不知道这件事**根本没发生**，
- * 就很容易把它当成一次失败的结果继续推理（甚至当成事实写进答案）。
- * 明确写"这不是结果 + 禁止据此作答"是消除这类幻觉最有效的一句。
- */
-export function notExecutedNote(reason: string): string {
-  return `⛔ 未执行成功（原因：${reason}）。以下是失败说明，**不是结果**。`
-    + `禁止把这段内容当作事实依据继续推理，也禁止写进最终回答。`
-    + `请改用其他可行方式重试；若确实做不到，就直接告诉用户"做不到 + 为什么"。`
-}
-
-/** 工具返回 ok:false 时的回灌文本（ok:true 时原样返回 content） */
-function toolResultText(result: { ok: boolean; content?: string; error?: string }): string {
-  return result.ok
-    ? (result.content || '')
-    : notExecutedNote(result.error || '未知错误')
-}
-
-/**
- * 把裁剪后的历史整理成"API 协议合法"的形态。
- *
- * 为什么需要：OpenAI 兼容协议要求 `role:'tool'` 消息必须**紧跟**一条带 `tool_calls`
- * 的 assistant 消息，且 tool_call_id 要能对上。直接 `slice(-N)` 很容易从半截开始，
- * 留下一堆没有父消息的孤儿 tool 消息 → 请求直接 400。
- * 早前恢复轮只留 `[system, user]`，协议上安全但会丢全部上下文；现在要保留上下文，
- * 就必须自己把协议补齐。
- *
- * 处理方式：孤儿 tool 消息降级成 user 角色的历史说明 —— 既不丢信息，也不违反协议。
- */
-export function sanitizeHistoryForApi<T extends { role: string; content?: any; tool_calls?: any[]; tool_call_id?: string }>(
-  msgs: T[],
-): T[] {
-  const out: T[] = []
-  for (const m of msgs) {
-    if (m.role !== 'tool') { out.push(m); continue }
-
-    // 往前跳过已保留的连续 tool 消息，找到最近的一条**非 tool** 消息作为父。
-    // 一条 assistant 可以带多个 tool_calls，后面会跟多条 tool 消息，
-    // 只看紧邻的上一条会把第二条误判成孤儿。
-    let j = out.length - 1
-    while (j >= 0 && out[j].role === 'tool') { j-- }
-    const parent = j >= 0 ? out[j] : undefined
-
-    const parentHasCall =
-      !!parent && parent.role === 'assistant' &&
-      Array.isArray(parent.tool_calls) &&
-      parent.tool_calls.some((tc: any) => tc?.id === m.tool_call_id)
-
-    if (parentHasCall) {
-      out.push(m)
-    } else {
-      // 孤儿：降级为普通历史说明，保留内容但不假装它是一次合法的工具返回
-      out.push({
-        ...m,
-        role: 'user',
-        tool_calls: undefined,
-        tool_call_id: undefined,
-        content: `[历史工具结果·仅供参考] ${String(m.content ?? '')}`,
-      } as T)
-    }
-  }
-  return out
-}
-
-/** 把上述失败原因映射成一句用户能据此行动的说明；未知情况给通用但诚实的话术 */
-export function describeRunFailure(raw?: string): string {
-  const s = String(raw || '')
-  if (/abort|cancel|用户.*(中止|取消)/i.test(s)) {
-    return '这次回答被中止了。'
-  }
-  for (const [kind, re, text] of FAILURE_PATTERNS) {
-    if (re.test(s)) {return text}
-  }
-  // 🔧 2026-10-07：原文案一口咬定「是模型服务返回的错误」。
-  //   实测证明这个断言不成立 —— 工具被权限拦下、队友没配 LLM、参数非法，
-  //   都会走到这个兜底。谎报成因会让用户朝错误方向排查（反复重装模型服务），
-  //   而不去检查真正的问题。现在如实说「原因未归类」并列出几种可能。
-  return '这次没能完成，原因没能自动归类 —— 可能是模型服务返回了异常，也可能是某个工具没执行成功' +
-    '（权限拦截、参数异常、或依赖的成员没配置好）。换一种说法、或把任务拆小一点通常能解决；' +
-    '如果反复出现，到「更多设置 → 诊断工具」看一眼具体报错。'
-}
 // 工具调用噪声过滤器已抽取到 ./agent/toolNoise（cleanToolNoiseText，行为保持不变）
 
 // ═══════════════════════════════════════════════════════════
@@ -407,12 +286,35 @@ export class AgentRunner {
 
 private summarizer: ConversationSummarizer | null = null
   private sessionId: string
-  /** 跟踪已持久化到 SQLite 的最后一条消息索引 */
-  private lastPersistedIndex = -1
-  /** P3-2: 跟踪已同步到 chats.json 的最后一条消息索引 */
-  private _lastChatsPersistIndex = -1
-  /** P4-1: 跟踪已同步到 dialog/ 的最后一条消息索引 */
-  private _lastDialogPersistIndex = -1
+  /**
+   * 三个持久化通道各自的「已落库的最后一条消息」—— 用**对象引用**而不是索引。
+   *
+   * ⚠️ 为什么不能用索引：`this.messages` 有 **13 处**被整体重建
+   *   （`filter` / `slice` / 恢复流程 / `setHistory` …），索引随时失效。
+   *   旧实现三个通道各持一个索引（`lastPersistedIndex` /
+   *   `_lastChatsPersistIndex` / `_lastDialogPersistIndex`），而修正逻辑
+   *   只在 `_stripTransientMessages` 里覆盖了其中一个 —— 其余全部失准。
+   *
+   *   实测后果（2026-10-13，从落库数据反查）：
+   *     · SQLite 重复写入 **50%**（system 4083→2037；一条内部指令被写了 1209 次）
+   *     · dialog 漏写（同一天同一会话：后端 55 条 / dialog 仅 34 条）
+   *
+   *   对象引用只要那条消息还在数组里就能正确定位 —— 这也正是项目约定
+   *   「不要用索引跟踪 `this.messages`」的由来。
+   */
+  private _lastPersistedMsg: AgentMessage | null = null
+  /** P3-2: chats.json 通道的游标（同上，用对象引用） */
+  private _lastChatsMsg: AgentMessage | null = null
+  /** P4-1: dialog/ 通道的游标（同上，用对象引用） */
+  private _lastDialogMsg: AgentMessage | null = null
+
+  /**
+   * 用对象引用算出本轮增量写入的起始下标（三通道共用）。
+   * 逻辑抽在 `electron/agent/persistCursor.ts`（纯函数，可单测）。
+   */
+  private _persistStartIndex(cursor: AgentMessage | null): number {
+    return computePersistStart(this.messages, cursor)
+  }
   /** 崩溃恢复标记 */
   private isRecovering = false
   /** 🔧 v2.16: 健康检查缓存 — 同一 Agent 实例只检查一次 */
@@ -430,11 +332,78 @@ private summarizer: ConversationSummarizer | null = null
   private _toolsUsedThisRun = false
   /** 🆕 v6.7: 本轮对话起点，恢复/去重只处理本轮内容 */
   private _runStartIndex = 0
+  /**
+   * 🆕 2026-10-12：「仅本轮有效」的内部消息（按对象引用登记）。
+   *
+   * 【为什么需要它】实测故障：用户问完第一个问题、再问第二个时，Lumina 回了
+   *   「明白了，收到。我会继续保持搜索任务的执行，不会把这条系统消息当作新的指令。」
+   *   —— 它在**回应上一轮注入的内部指令**。
+   *
+   * 根因：循环停止提示 / 强制收敛提示 / Lucky 提醒这类「控制消息」原先直接
+   *   `this.messages.push({role:'system', ...})`，于是**永久留在对话历史里**。
+   *   下一轮模型看到「接下来请遵守：不要向用户提到任何工具名称…」这种最近的
+   *   system 消息，就把它当成新指令去回复了。
+   *
+   * 修法：这类消息只对本轮有效 —— 用 _pushTransient 登记，每轮 sendMessage
+   *   开头统一清除（见 _stripTransientMessages）。
+   */
+  private _transientMsgs = new Set<AgentMessage>()
+
+  /**
+   * 🆕 2026-10-12：本轮用户消息的**对象引用**。
+   *
+   * 用途：作为上下文裁剪的「必须保留」标记（见 trimContext / contextBudget）。
+   *
+   * 为什么用对象引用而不是索引：`this.messages` 会被多处整体替换
+   *   （_stripTransientMessages 的 filter、Scroll 索引化的 slice、
+   *   恢复轮的重建），任何索引都可能瞬间失效；对象引用则始终指向同一条消息。
+   *
+   * 为什么必须记住它：实测故障 —— 用户在「问完第一个问题再问第二个」时，
+   *   模型回「抱歉，这是我们的第一次对话，还没有之前的对话内容可以参考」。
+   *   根因是**本轮问题在上下文裁剪中被丢掉**，模型拿到一段没有题面的上下文，
+   *   只能输出一句看似合理、实则完全跑偏的话（且不报错，极难排查）。
+   */
+  private _currentUserMsg: AgentMessage | null = null
+
+  /** 追加一条「仅本轮有效」的内部消息（下一轮开头会被自动清除） */
+  private _pushTransient(msg: AgentMessage): void {
+    this.messages.push(msg)
+    this._transientMsgs.add(msg)
+  }
+
+  /**
+   * 清除上一轮残留的内部消息。
+   * 必须在每轮 sendMessage 的**最开头**调用 —— 早于任何预处理注入与用户消息 push。
+   */
+  private _stripTransientMessages(): void {
+    if (this._transientMsgs.size === 0) {return}
+    const before = this.messages.length
+    // 🆕 2026-10-13：这里会重建数组，但持久化游标**不再依赖索引** ——
+    //   改用对象引用后（见 `_lastPersistedMsg` 注释），游标会自然跟着数组走。
+    //   原先那段「索引修正」补丁已无必要：它只覆盖了 `this.messages` 的
+    //   13 处重建里的 1 处，其余 12 处仍会失准（这正是重复写入 50% 的根因）。
+    this.messages = this.messages.filter((m) => !this._transientMsgs.has(m))
+    const removed = before - this.messages.length
+    if (removed > 0) {
+      console.log(`[AgentRunner] 🧹 清除 ${removed} 条上一轮残留的内部消息（避免被当成新指令）`)
+    }
+    this._transientMsgs.clear()
+  }
   /** 🆕 v4.0: 社交模式 — ChatTrack 纯文本对话，不使用工具 */
   private _socialMode = false
 
   /** 🆕 v9.0: QwenPaw 风格压缩摘要缓存 — 跨轮次保留 */
   private _compressedSummary: string | null = null
+  /**
+   * 🆕 2026-10-10：待注入的「历史压缩摘要」（来自前端 compactedContext）。
+   *
+   * 为什么不在 setHistory 里直接 push 进 messages：
+   *   sendMessage 会调用 initSystemPrompt()，而它把 **messages[0]** 整体替换成
+   *   系统提示词（见 initSystemPrompt 内 `this.messages[0] = {role:'system',...}`）。
+   *   若把摘要放在 0 号位，会被直接覆盖掉 —— 等于没注入。
+   *   所以先暂存，等 initSystemPrompt() 跑完再插到 1 号位。
+   */
+  private _pendingCompactedContext: string = ''
 
   /** 🔧 P0-3 / P1-4：已解析生效的上下文窗口（用户值与【服务端事实】取 min）。
    *
@@ -546,7 +515,16 @@ private summarizer: ConversationSummarizer | null = null
       ...config,
       mode: config.mode || 'agent',
     }
-    this.sessionId = options?.sessionId || `session-1786780079226`
+    // 🆕 2026-10-13：兜底不再用硬编码常量。
+    //
+    //   旧值是 `session-1786780079226` —— 一个**写死的**时间戳（≈2026-08-15），
+    //   于是所有未指定 sessionId 的调用都堆在它名下：实测 7791 条、横跨 2 个月，
+    //   而前端真实会话 id 是 `mv6lbvk2hk7l4o` 这种 base36 串，两边完全对不上。
+    //   后果：任何「按会话查历史」的能力都会串味，而且这个 session 越滚越大。
+    //
+    //   现在按实例生成：**同一实例内稳定**（一次对话不会自我分裂成多个 session），
+    //   不同实例各自独立 —— 不会再伪装成"同一个会话"。
+    this.sessionId = options?.sessionId || `session-${Date.now()}`
     // this._sessionId = this.sessionId  // 移除：_sessionId 未定义
 
     // v6.0: Per-agent LLM — 从 TEAM_MEMBERS 读取独立配置
@@ -561,7 +539,16 @@ private summarizer: ConversationSummarizer | null = null
     //  必须在 _applyAgentLlmConfig() 之后，用实际使用的 baseUrl/model 匹配
     const profile = matchProfile(this.config.baseUrl, this.config.model)
     if (profile) {
-      const ctx = profile.model.maxContextTokens || 256_000
+      // 🐛 2026-10-10 修复：**绝不覆盖用户显式设置的上下文窗口**。
+      //   旧实现无条件 `config.contextWindow = profile.maxContextTokens`，
+      //   而本地模型的兜底档案是 256000（providerProfiles.ts）→ 用户在设置里
+      //   填的 8192/32768 被静默丢弃，小模型被当成 256K 用：
+      //   历史预算与压缩触发线全部失真 → 每轮 prefill 超长、首 token 极慢、回复断续。
+      //   profile 只是「用户没填时」的猜测值，优先级必须低于用户输入。
+      const userCtx = Number((this.config as any).contextWindow) || 0
+      const ctx = userCtx > 0
+        ? userCtx
+        : (profile.model.maxContextTokens || 256_000)
       ;(this.config as any).contextWindow = ctx
       // 🔧 FIX: maxTokens 是「输出 token 上限」，不是上下文窗口大小。
       //   之前把 maxTokens 设成 ctx（如 256000），部分 API 会直接 400 报错，
@@ -570,12 +557,18 @@ private summarizer: ConversationSummarizer | null = null
       if (!this.config.maxTokens || this.config.maxTokens > 32768) {
         ;(this.config as any).maxTokens = 8192
       }
-      console.log(`[AgentRunner] 📐 profile 匹配: ${profile.model.category || 'unknown'}, context=${ctx}, maxOutput=${this.config.maxTokens}`)
+      console.log(`[AgentRunner] 📐 profile 匹配: ${profile.model.category || 'unknown'}, context=${ctx}${userCtx > 0 ? '(用户设置)' : '(档案推测)'}, maxOutput=${this.config.maxTokens}`)
     }
 
     // v3.0: 委托配置注入（setDelegateConfig 未实现，跳过）
     // 原 require('./tools/impl/team') 的 setDelegateConfig 不存在
 
+    // ⚠️ 2026-10-10 审计说明：`ConversationSummarizer` 这条路径目前**是死的** ——
+    //   实例被创建、也读它的 needsCompaction()/getBufferLength()，但
+    //   `addMessage()` **全项目无调用**，buffer 恒为空 → summarize() 永不触发。
+    //   真正生效的压缩在 compactContext() → agentCompactor.compactMessages()。
+    //   这里保留实例只为兼容既有读取点；若要启用它，必须先在每轮把
+    //   user/assistant 消息喂进 addMessage()，否则「有代码、没效果」。
     try {
       this.summarizer = new ConversationSummarizer(this.sessionId)
     } catch (err) {
@@ -594,10 +587,14 @@ private summarizer: ConversationSummarizer | null = null
       console.warn('[AgentRunner] ⚠️ Scroll/ReMe 初始化失败（不影响主流程）:', err)
     }
 
-    const pending = recoverUnsummarizedHistory()
-    if (pending.length > 0) {
-      console.log(`[AgentRunner] 上次有未总结消息，将自动处理: ${pending.slice(0, 80)}...`)
-    }
+    // 🐛 2026-10-10：这里原来调用 `recoverUnsummarizedHistory()`（**无参**），
+    //   而该函数在 `history` 为空时直接 return ''（systemPrompt.ts:806），
+    //   于是 `pending` 恒为 ''，下面那条「上次有未总结消息，将自动处理」的日志
+    //   从来没有打印过 —— 是一段**看起来在工作、实际从不生效**的逻辑。
+    //   而且此刻构造器里 `this.messages` 还没被 setHistory 填充，
+    //   即使传参也拿不到历史，所以这段「恢复」在当前位置本就无法成立。
+    //   已删除该调用与日志，避免继续造成「有自动恢复」的错觉。
+    //   注：真正生效的压缩路径是 agentCompactor.compactMessages（见 compactContext()）。
 
     // 初始化 LLM Provider + ReAct Engine
     // 🔧 FIX-3: LLMProvider 仍被创建，供 runReActLoop 内部的 callLLM 降级非流式使用
@@ -735,6 +732,12 @@ private summarizer: ConversationSummarizer | null = null
         })
         ;(this.config as any).contextWindow = caps.contextWindow
         ;(this.config as any).maxTokens = caps.outputBudget
+        // 🪶 弱模型自动降级：tier 落入 nano / small 时打开 lite 模式，
+        // 后续 getToolsForMode / initSystemPrompt 自动应用。
+        this._liteMode = isLiteTier(caps.tier)
+        if (this._liteMode) {
+          console.log(`[AgentRunner] 🪶 弱模型降级：模型 ${caps.paramSizeB ?? '?'}B 归入 ${caps.tier} 档，启用轻量模式`)
+        }
       }
     } catch (err) {
       console.warn(`[AgentRunner] 无法加载 AgentConfig:`, err)
@@ -971,6 +974,7 @@ private summarizer: ConversationSummarizer | null = null
    */
   clearHistory(): void {
     this.messages = []
+    this._currentUserMsg = null   // 🆕 2026-10-12: 历史已清空，旧的问题引用失效
     this.initSystemPrompt()
     this.turnCount = 0
     this.totalTokens = 0
@@ -984,6 +988,7 @@ private summarizer: ConversationSummarizer | null = null
     this._toolsUsedThisRun = false // 🆕 v3.9: 重置工具追踪
     // P1: _searchExecutedThisTurn 已移除
     this._runStartIndex = 0        // 🆕 v6.7: 重置本轮起点
+    this._currentUserMsg = null    // 🆕 2026-10-12: 旧会话的问题引用已失效
     this._reasoningStarted = false // 🆕 v5.2: 重置推理跟踪
     this._reasoningAccum = ''     // 🆕 v5.2: 重置推理跟踪
     // 全局黑名单已移除 — 不再需要 clear
@@ -992,6 +997,21 @@ private summarizer: ConversationSummarizer | null = null
   /** 从持久化历史恢复对话上下文（应用重启/切换对话时调用） */
   setHistory(history: Array<{ role: string; content: string }>, compactedContext?: string): void {
     this.messages = []
+    // 🆕 2026-10-12: 前端换了一整段历史 = 新会话；旧的「本轮问题」引用必须清掉，
+    //   否则 trimContext 的 mustKeep 会指向一个不在数组里的对象（无效标记）。
+    this._currentUserMsg = null
+    // 🆕 2026-10-13: 三个持久化游标同样要清 —— 它们指向**上一个会话**的消息对象，
+    //   留着会让 `_persistStartIndex` 的 indexOf 找不到（退化成全量重写，
+    //   虽不丢数据但会重复）。清零后新会话的历史会被完整落库一次，保证不漏。
+    this._lastPersistedMsg = null
+    this._lastChatsMsg = null
+    this._lastDialogMsg = null
+    // 🐛 2026-10-10 修复（P1-4）：第二个参数 `compactedContext` 此前**从未被使用**
+    //   —— 前端把压缩摘要传进来了，这里直接丢掉；sessionManager 里存的摘要也无人读取。
+    //   后果：只保留最近 25 轮（MAX_MSG_PAIRS），更早的对话**既不进历史、
+    //   也不以摘要形式回注** → 长对话「失忆 / 断断续续」。
+    //   现在暂存起来，等 initSystemPrompt() 之后再注入（见 _pendingCompactedContext 注释）。
+    this._pendingCompactedContext = (compactedContext || '').trim()
     // > v10.0 -> v14.0 -> v17.0: 动态放宽历史截断。
     //   v17.0: 群聊/协作模式下需要更多上下文（Yak → 热茶 → Lumina 多阶段协作）。
     //   改为检测是否有协作标记（user 消息中有 [Yak 输出]/[热茶 审阅] 等），自动翻倍。
@@ -1025,8 +1045,19 @@ private summarizer: ConversationSummarizer | null = null
     try {
       const store = getMemoryStore()
       if (!store) {return}
-      for (let i = this.lastPersistedIndex + 1; i < this.messages.length; i++) {
+      const start = this._persistStartIndex(this._lastPersistedMsg)
+      // 协议校验需要一个「上一条已落库的 role」—— 从游标的前一条推断
+      let lastWrittenRole: string = start > 0 ? (this.messages[start - 1]?.role || '') : ''
+      for (let i = start; i < this.messages.length; i++) {
         const msg = this.messages[i]
+        // 🆕 2026-10-13：`tool` 消息必须紧跟携带 tool_calls 的 assistant。
+        //   数组被裁剪/重建后常出现「孤儿 tool」（实测主会话 172 条里 38 条非法：
+        //   28 条前一条是 tool、9 条是 user）。直接落库会让这段历史在协议上不合法
+        //   —— 任何将来用它重建上下文的调用都会 400。
+        //   它本来也不参与记忆检索（getRecentConversation 只取 user/assistant），
+        //   所以跳过是安全的。
+        if (msg.role === 'tool' && lastWrittenRole !== 'assistant') {continue}
+
         const toolCalls = (msg as any).tool_calls
           ? JSON.stringify((msg as any).tool_calls)
           : undefined
@@ -1035,8 +1066,9 @@ private summarizer: ConversationSummarizer | null = null
           ? (msg.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join('\n')
           : (msg.content || '')
         store.addConversation(this.sessionId, msg.role, contentForStorage, toolCalls)
+        lastWrittenRole = msg.role
       }
-      this.lastPersistedIndex = this.messages.length - 1
+      this._lastPersistedMsg = advanceCursor(this.messages)
     } catch {
       // 持久化失败不影响对话
     }
@@ -1047,7 +1079,8 @@ private summarizer: ConversationSummarizer | null = null
     try {
       const agentId = this.config.personaId || 'lumina'
       const chatsManager = getAgentChatsManager()
-      for (let i = this._lastChatsPersistIndex + 1; i < this.messages.length; i++) {
+      const start = this._persistStartIndex(this._lastChatsMsg)
+      for (let i = start; i < this.messages.length; i++) {
         const msg = this.messages[i]
         const contentForStorage = Array.isArray(msg.content)
           ? (msg.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join('\n')
@@ -1058,7 +1091,7 @@ private summarizer: ConversationSummarizer | null = null
           metadata: (msg as any).tool_calls ? { toolCalls: (msg as any).tool_calls } : undefined,
         })
       }
-      this._lastChatsPersistIndex = this.messages.length - 1
+      this._lastChatsMsg = advanceCursor(this.messages)
     } catch (e) {
       console.warn('[AgentRunner] 同步 chats.json 失败:', e)
     }
@@ -1069,7 +1102,8 @@ private summarizer: ConversationSummarizer | null = null
     try {
       const agentId = this.config.personaId || 'lumina'
       const dialogManager = getAgentDialogManager()
-      for (let i = this._lastDialogPersistIndex + 1; i < this.messages.length; i++) {
+      const start = this._persistStartIndex(this._lastDialogMsg)
+      for (let i = start; i < this.messages.length; i++) {
         const msg = this.messages[i]
         dialogManager.appendMessage(agentId, this.sessionId, {
           role: msg.role,
@@ -1079,7 +1113,7 @@ private summarizer: ConversationSummarizer | null = null
           metadata: (msg as any).tool_calls ? { toolCalls: (msg as any).tool_calls } : undefined,
         })
       }
-      this._lastDialogPersistIndex = this.messages.length - 1
+      this._lastDialogMsg = advanceCursor(this.messages)
     } catch (e) {
       console.warn('[AgentRunner] 同步 dialog 失败:', e)
     }
@@ -1099,8 +1133,12 @@ private summarizer: ConversationSummarizer | null = null
       return response.usage
     }
     // 估算 completion tokens
+    // 🔧 2026-10-10：改用统一的 TokenEstimator（CJK 1.5 / 英文 4 加权），
+    //   不再用 `length / 3.5` —— 项目里曾并存 /4、/3.5、TokenEstimator 三套系数，
+    //   同一个对话在不同模块算出的 token 数互不相同，排查时极易误导。
+    const _tokEst = new TokenEstimator()
     const completionText = response.text || ''
-    const completionTokens = Math.max(1, Math.ceil(completionText.length / 3.5))
+    const completionTokens = Math.max(1, _tokEst.estimate(completionText))
     // 估算 prompt tokens（从本轮 messages 推算）
     // v10.9: 支持多模态 — 提取纯文本进行估算
     const promptText = this.messages.map(m => {
@@ -1109,7 +1147,7 @@ private summarizer: ConversationSummarizer | null = null
         : (m.content || '')
       return c + (m.name || '')
     }).join(' ')
-    const promptTokens = Math.max(1, Math.ceil(promptText.length / 3.5))
+    const promptTokens = Math.max(1, _tokEst.estimate(promptText))
     return {
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
@@ -1177,13 +1215,24 @@ private summarizer: ConversationSummarizer | null = null
     this._autoContinueCount = 0  // 🆕 v16.0-fix: 每次 sendMessage 重置
     this._lastIntentHash = ''    // 🆕 v16.0-fix: 重置意图句式追踪
     this._toolsUsedThisRun = false // 🆕 v3.9: 每次 sendMessage 重置
+    // 🆕 2026-10-12: 清除上一轮残留的内部「控制消息」
+    //   （循环停止提示 / 强制收敛提示 / Lucky 提醒等）——
+    //   否则模型会把它们当成新指令来回应（实测：「明白了，收到。不会把这条系统消息当作新的指令」）
+    this._stripTransientMessages()
     // P1: _searchExecutedThisTurn 已移除
 
     // 去重 — 如果 history 最后一条 user 消息刚好和本次 text 一样，
     //   说明 frontend 已经把用户消息放进了 conversationHistory，sendMessage 又 push 一次。
     //   去掉重复的最后一条 user，避免 LLM 看到同一问题两次。
     // v10.9: 支持多模态 — 比较时提取纯文本
-    if (this.messages.length >= 2) {
+    //
+    // 🐛 2026-10-10（P2-9）修复：原条件是 `length >= 2`。
+    //   **新会话的首条消息**时，前端 setHistory 只得到 [{user}]（长度 1）
+    //   → 去重被跳过 → 同一句问题被 push 两次（或经相邻同角色合并成
+    //   "问题\n\n问题"），模型看到重复。去重只需要「末条是 user 且内容相同」，
+    //   长度 1 完全够用；且此处 pop 之后紧接着 1592 行会 push 本次 text，
+    //   不会留下空数组。
+    if (this.messages.length >= 1) {
       const last = this.messages[this.messages.length - 1]
       const lastText = Array.isArray(last.content)
         ? (last.content as any[]).find(c => c.type === 'text')?.text || ''
@@ -1275,6 +1324,20 @@ private summarizer: ConversationSummarizer | null = null
         || this.messages[0].content.includes('## 📢 群聊模式指令'))
     if (this.messages.length === 0 || !firstIsOurSystem) {
       this.initSystemPrompt()
+    }
+
+    // 🆕 2026-10-10（P1-4）：注入历史压缩摘要。
+    //   必须放在 initSystemPrompt() **之后** —— 它会替换 messages[0]，
+    //   放 0 号位的摘要会被覆盖。这里插到 1 号位（系统提示词之后、历史之前）。
+    //   只注入一次（本轮用完即清），避免多轮叠加。
+    if (this._pendingCompactedContext) {
+      this.messages.splice(1, 0, {
+        role: 'system',
+        content: '[历史摘要·非用户发言] 以下是本次对话更早内容的压缩摘要，'
+          + '仅供你保持前后连贯，不要逐字复述，也不要把它当成用户刚说的话：\n'
+          + this._pendingCompactedContext,
+      })
+      this._pendingCompactedContext = ''
     }
 
     // 🆕 P1: Loop Engineering — 应用 Loop 模板
@@ -1473,7 +1536,11 @@ private summarizer: ConversationSummarizer | null = null
 2. 优先采信官方公告/权威媒体
 3. 只报告搜索结果中明确出现的信息，不编造不延伸
 4. 如果搜索结果与用户的问题无关，如实说明"
-5. 直接给出回答，不要额外输出 <tool_call> 等 XML 标记`
+5. 直接给出回答，不要额外输出 <tool_call> 等 XML 标记
+6. 🆕 如果标题和摘要**不足以回答**（问「是什么/介绍/资料/由来/出处」这类问题时很常见）：
+   用 web_fetch(url="...") 打开最相关的 1~2 条页面，**读完正文再总结**；
+   不要只凭标题猜内容，也不要反复换关键词重复搜索。
+7. 🆕 回答时给出**信息来源**（网站名或链接），让用户能自己核对。`
             : `搜索未返回有效结果。请如实告知用户当前搜索没有找到相关信息，并建议用户换个关键词试试。`
           const followUpContent = verbalizeEnabled
             ? `${baseFollowUp}\n\n请先简要说出你从搜索结果中查到的关键信息，再给出完整回答。`
@@ -1524,6 +1591,9 @@ private summarizer: ConversationSummarizer | null = null
 
     // v10.9: 支持多模态 — text 可以是字符串或 OpenAI Vision 格式的数组
     this.messages.push({ role: 'user', content: text as any })
+    // 🆕 2026-10-12: 记住本轮用户消息的对象引用 —— 上下文裁剪时**必须保留**它。
+    //   （丢了它 = 模型在答一道没有题面的题，且不会报错，只会输出跑偏的答案）
+    this._currentUserMsg = this.messages[this.messages.length - 1]
     this.turnCount++
     this.persistConversationHistory()  // 用户消息立即持久化
     this.persistToDialog()  // P4-1: 用户消息立即归档到 dialog/
@@ -1633,6 +1703,20 @@ private summarizer: ConversationSummarizer | null = null
     //   新路径 (ReActEngine): 5+ 次空回复后返回 ''
     //   旧路径 (runReActLoop): 经过 safeStripChain + 重试后仍可能返回 ''
     //   统一在这里做最后兜底，避免前端显示空消息或旧 fallback
+    //
+    // 🐛 2026-10-10 修复：**用户主动中止时不走恢复路径**。
+    //   旧行为：用户点「中断」→ ReAct 循环立即 break → result 为空 →
+    //   兜底把它填成「这轮我没能给出有效回复（模型返回了无法识别的内容…）」，
+    //   并包成 {success:true} 返回 → 前端（群聊无 abortRef 守卫）把它当正常回复上屏。
+    //   用户看到的是「我明明主动中断了，它却说我失败了」，误导且会触发链式火花。
+    //   中止不是失败，直接返回空串，由调用方按「已中止」处理。
+    const _abortedByUser = !!this.abortController?.signal?.aborted
+    if (_abortedByUser) {
+      console.log('[AgentRunner] ⏹ 用户已中止，跳过空结果恢复与兜底文案')
+      // 仍然执行收尾（持久化用户消息等），只是不返回任何「失败」文案
+      await this.postProcess()
+      return ''
+    }
     if (!result || result.trim().length === 0) {
       console.warn(`[AgentRunner] ⚠️ sendMessage 最终结果为空，启动全路径恢复`)
       // 尝试最后一次重试：用极简上下文
@@ -1822,6 +1906,11 @@ private summarizer: ConversationSummarizer | null = null
     let consecutiveEmptyCount = 0  // 🔧 v2.11: 连续空回复计数，防止空回复消耗所有轮次
     let slowThinkingRetries = 0    // 🆕 v5.3: 慢速思考重试计数，防止无限 retry
     let lastToolNames: string[] = []    // 🆕 v14.2: 最近 N 轮调用的工具名，用于检测重复
+    let lastToolSignatures: string[] = []  // 🆕 工具调用的「名字+参数」签名，用于识别真·死循环
+    // 🆕 「无证据事实断言」兜底：跟踪本轮有没有真正取得检索证据
+    //    （用于最终答案的"未经核实"标注 —— 见 agent/answerEvidenceGuard.ts）
+    let retrievalAttempted = false
+    let retrievalSucceeded = false
     let totalToolCallsThisRun = 0       // 🆕 v14.2: 本轮总计工具调用次数
     let converged = false               // 🆕 v15: 是否已触发过强制收敛（防重复触发）
     const blockedTools = new Map<string, number>()  // 🆕 v14.3: 被安全门临时封禁的工具 → 解封轮次
@@ -1831,19 +1920,29 @@ private summarizer: ConversationSummarizer | null = null
 
       // ── 🛡️ P1: 两道安全门（精简自原四道） ──
 
-      // 门 1: 同一工具重复 5 次以上 → 注入停止提示 + 临时封禁该工具 2 轮
-      const toolFreq = lastToolNames.reduce<Record<string, number>>((acc, n) => {
-        acc[n] = (acc[n] || 0) + 1; return acc
-      }, {})
-      const repeatedTool = Object.entries(toolFreq).find(([, count]) => count >= 5)
-      if (repeatedTool) {
-        this.emit({ type: 'thinking', text: `🛡️ "${repeatedTool[0]}" 重复 ${repeatedTool[1]} 次，已临时封禁 2 轮` })
-        this.messages.push({
-          role: 'system',
-          content: `"${repeatedTool[0]}" 已重复调用 ${repeatedTool[1]} 次但未推进任务。该工具已被临时封禁，请用已有信息直接回复，不要再重复调用此工具。`,
+      // 门 1: 真·死循环检测 → 注入停止提示 + 临时封禁该工具 2 轮
+      //
+      // 【判据已抽到 agent/toolLoopGuard.ts（纯函数、可单测）】
+      //   旧实现只看「同一工具名出现 ≥5 次」——但**复杂问答本来就可能连续搜索 5 次**
+      //   （每次换关键词）。旧规则会把正常研究误判成死循环、把搜索工具封掉，于是
+      //   模型只能凭记忆硬答 → 直接导致事实幻觉。这是「复杂问答表现不稳定」的
+      //   结构性原因之一（实测：问「使命召唤 23 发布日期」时搜索被封，模型编出了
+      //   错误的产品名与发行日期）。
+      //   现在分两级：① 同名+同参数 ≥3 次 = 真死循环；② 同名 ≥10 次 = 兜底上限。
+      const verdict = detectToolLoop(lastToolNames, lastToolSignatures)
+
+      if (verdict.tool) {
+        this.emit({
+          type: 'thinking',
+          text: `🛡️ "${verdict.tool}" ${describeLoopTrigger(verdict.reason!)} ${verdict.count} 次，已临时封禁 2 轮`,
         })
-        blockedTools.set(repeatedTool[0], round + 2)
+        this._pushTransient({
+          role: 'system',
+          content: buildLoopStopMessage(verdict.count, verdict.reason!),
+        })
+        blockedTools.set(verdict.tool, round + 2)
         lastToolNames = []
+        lastToolSignatures = []
       }
 
       // 清理已过期的封禁
@@ -1858,7 +1957,7 @@ private summarizer: ConversationSummarizer | null = null
       if (!converged && totalToolCallsThisRun > 30) {
         converged = true
         this.emit({ type: 'thinking', text: `🛡️ 工具调用已达 ${totalToolCallsThisRun} 次，强制收敛` })
-        this.messages.push({
+        this._pushTransient({
           role: 'system',
           content: `已调用工具 ${totalToolCallsThisRun} 次。请立即停止，使用已有信息回复用户。`,
         })
@@ -1940,7 +2039,7 @@ private summarizer: ConversationSummarizer | null = null
           //   统一话术的最大问题是——用户和开发者都分不清"模型超时"和"工具挂了"，
           //   出问题后无从排查，Agent 也拿不到可据以调整的信号。
           //   这里只隐藏真正的技术细节（堆栈、URL、密钥），保留**可行动的原因分类**。
-          finalText = describeRunFailure(response.error)
+          finalText = describeRunFailure(response.error, { isLocal: isLocalEndpoint(this.config.baseUrl) })
           break
         }
 
@@ -1951,6 +2050,18 @@ private summarizer: ConversationSummarizer | null = null
           lastToolNames.push(...toolNames)
           // 只保留最近 30 轮的工具名
           if (lastToolNames.length > 30) {lastToolNames.splice(0, lastToolNames.length - 30)}
+
+          // 同时记录「名字 + 参数」签名：用于区分「真·死循环」与「合理的多次调用」
+          //（复杂问答会连续搜 5 次但关键词不同，那种不该被封禁）
+          for (const tc of response.toolCalls) {
+            lastToolSignatures.push(buildToolSignature(tc.function.name, tc.function.arguments))
+          }
+          if (lastToolSignatures.length > TOOL_WINDOW) {
+            lastToolSignatures.splice(0, lastToolSignatures.length - TOOL_WINDOW)
+          }
+
+          // 🆕 标记「本轮尝试过检索」——供最终答案的"未经核实"兜底判断
+          if (toolNames.some(n => RETRIEVAL_TOOL_NAMES.has(n))) {retrievalAttempted = true}
 
           this._toolsUsedThisRun = true  // 🆕 v3.9: 标记已用过工具
           const assistantMsg: AgentMessage = {
@@ -2123,7 +2234,13 @@ private summarizer: ConversationSummarizer | null = null
               const unblockRound = blockedTools.get(fn.name)!
               const blockedResult = {
                 callId: tc.id, ok: false, content: '', durationMs: 0,
-                error: notExecutedNote(`工具 "${fn.name}" 已被安全门临时封禁（至第 ${unblockRound} 轮）`),
+                // ⚠️ 这条会作为 tool 结果回灌给模型，所以措辞要防止它被复述给用户：
+                //    不提工具名、不提"封禁"，并顺带压住"查不到就凭记忆编"的冲动。
+                error: notExecutedNote(
+                  `该能力本轮已暂停使用（至第 ${unblockRound} 轮）。` +
+                  `不要向用户提及工具名或此机制；` +
+                  `若这条信息需要检索才能确认，就如实说暂时查不到，不要凭记忆猜测事实（日期/数字/版本等）。`,
+                ),
               }
               this.emit({ type: 'tool_end', tool: fn.name, result: blockedResult })
               this.messages.push({
@@ -2148,6 +2265,16 @@ private summarizer: ConversationSummarizer | null = null
               result = await executeToolWithRetry(fn.name, args, this.toolRetryConfig())
             }
             const toolDuration = Date.now() - toolStartTime
+
+            // 🆕 标记「本轮成功取得检索证据」——只有拿到非空内容才算数
+            //    （工具返回 ok:true 但内容为空，仍视为没证据）
+            if (
+              RETRIEVAL_TOOL_NAMES.has(fn.name) &&
+              result.ok &&
+              String(result.content || '').trim().length > 0
+            ) {
+              retrievalSucceeded = true
+            }
 
             // 诊断埋点 — 工具调用
             getDiagnosticsStore().addToolCall({
@@ -2181,7 +2308,8 @@ private summarizer: ConversationSummarizer | null = null
                 const unblockRound = blockedTools.get(tc.function.name)!
                 this.messages.push({
                   role: 'tool',
-                  content: notExecutedNote(`工具 "${tc.function.name}" 已被安全门临时封禁（至第 ${unblockRound} 轮）`),
+                  // 与串行分支保持同一措辞：不把"封禁"这类内部机制写进给模型看的串里
+                  content: notExecutedNote(`该能力本轮已暂停使用（至第 ${unblockRound} 轮）`),
                   tool_call_id: tc.id,
                 })
                 continue
@@ -2294,7 +2422,7 @@ private summarizer: ConversationSummarizer | null = null
 
             if (decision.shouldRemind && decision.remindMessage) {
               console.log(`[LuckyMode] 💡 注入提醒: ${decision.remindMessage}`)
-              this.messages.push({
+              this._pushTransient({
                 role: 'system',
                 content: `[Lucky 模式提醒] ${decision.remindMessage}`,
               })
@@ -2310,7 +2438,27 @@ private summarizer: ConversationSummarizer | null = null
         }
 
         // 纯文本回复
-        finalText = cleanToolNoiseText((response.text || '').trim())
+        //
+        // 🐛 2026-10-13 修复（「聊久了突然说没有可用的工具」的**第二个入口**）
+        //
+        //   本轮可能**故意没给工具** —— 例如「全路径恢复」就是 `runReActLoop([])`。
+        //   模型此时仍可能输出 XML 工具调用 → callLLM 会把它替换成
+        //   「这轮没有可用的工具…」的诊断文案，并通过 `noToolsHint` 标记出来。
+        //
+        //   那段文案的用途是「在用户可见的轮次里诚实说明为什么没做成事」，
+        //   **不是**对用户问题的回答。直接上屏会把用户引向
+        //   「到设置里检查工具是否被关闭」这个**错误的排查方向**
+        //   （工具没被关，是这一轮内部流程故意没给）。
+        //
+        //   现在按「空回复」处理：交给下面的空回复恢复/收敛逻辑，
+        //   让它有机会换个方式真正作答，而不是把内部诊断当答案。
+        const noToolDiag = response.noToolsHint === true
+        if (noToolDiag) {
+          console.warn(
+            '[AgentRunner] ⚠️ 本轮无工具但模型仍尝试调用工具 → 丢弃诊断文案，按空回复处理',
+          )
+        }
+        finalText = noToolDiag ? '' : cleanToolNoiseText((response.text || '').trim())
         if (!finalText) {
           consecutiveEmptyCount++
           console.warn(`[AgentRunner] LLM 返回空回复且无工具调用 (连续 ${consecutiveEmptyCount} 次)`)
@@ -2473,7 +2621,7 @@ private summarizer: ConversationSummarizer | null = null
           if (decision.shouldContinue && !decision.shouldPause) {
             console.log(`[LuckyMode] 🔄 Lucky 模式继续循环（完成度不足）`)
             this.emit({ type: 'thinking', text: `🔄 ${decision.remindMessage || '继续循环...'}` })
-            this.messages.push({
+            this._pushTransient({
               role: 'system',
               content: `[Lucky 模式] ${decision.remindMessage || '继续推进任务。'}`,
             })
@@ -2512,7 +2660,7 @@ private summarizer: ConversationSummarizer | null = null
           this.isRecovering = true
           // 🔧 P3 重做: 同样给分类文案，但只透出**用户能理解的部分**。
           //   原始 err.message 可能含 URL / 路径 / 堆栈 / 密钥片段，不直接回显。
-          finalText = describeRunFailure(err?.message || '未知错误')
+          finalText = describeRunFailure(err?.message || '未知错误', { isLocal: isLocalEndpoint(this.config.baseUrl) })
           try { this.messages = this.messages.slice(-10) } catch {}
           this.isRecovering = false
         }
@@ -2529,12 +2677,14 @@ private summarizer: ConversationSummarizer | null = null
       console.warn(`[AgentRunner] ReAct 循环耗尽，启动恢复`)
 
       // 第 1 级：聚合本轮 assistant 回复（去重）
-      // 🔧 P0: 尝试从 compactedSummary 恢复
-      if (this._compressedSummary && this._compressedSummary.length > 10) {
-        finalText_ = this._compressedSummary + '\n\n' + (finalText_ || '')
-        console.log(`[AgentRunner] ✅ compactedSummary 恢复: ${this._compressedSummary.length} 字`)
-      }
-
+      //
+      // 🐛 2026-10-10（P2-7）修复：这里原来把 `_compressedSummary` **直接拼到
+      //   用户可见回复的最前面**：
+      //     finalText_ = this._compressedSummary + '\n\n' + finalText_
+      //   而摘要是内部结构化产物（形如「📋 【对话摘要…】」），
+      //   于是用户会在正文前看到一段内部摘要原文 —— 既不是回答，也暴露了内部机制。
+      //   现在：摘要只作为**总结轮的上下文**注入（见下方第 2 级），
+      //   绝不拼进最终回复；宁可走诚实的兜底文案，也不泄漏内部产物。
       const seen = new Set<string>()
       const assistantTexts = this.messages
         .slice(this._runStartIndex)
@@ -2559,17 +2709,79 @@ private summarizer: ConversationSummarizer | null = null
       } else {
         // 第 2 级：请求 LLM 无工具总结（仅一次）
         try {
-          const runMsgs = this.messages.slice(this._runStartIndex)
+          // ════════════════════════════════════════════════════════════
+          // 🐛 2026-10-12 修复（「AI 突然失忆」的真凶之一）
+          //
+          //   旧写法 `this.messages.slice(this._runStartIndex)` 有个致命错位：
+          //   `_runStartIndex` 是在**用户消息 push 之后**才记录的
+          //   （见 sendMessage：push user → ... → `_runStartIndex = length`），
+          //   所以切片**恰好把用户本轮的问题切掉了**。
+          //
+          //   于是总结轮的上下文 = [system, 工具结果…, 总结指令]，
+          //   **没有题面**。叠加 system 提示词超预算导致的裁剪，
+          //   模型最终只看到一句「请根据本轮对话给出一个简洁的自然语言回复」，
+          //   只能回：「抱歉，这是我们的第一次对话，还没有之前的对话内容可以参考。」
+          //
+          //   现在改为以**本轮用户消息的对象引用**定位起点，问题一定在上下文里。
+          //   （用引用而不是索引：_runStartIndex 会被数组重建打乱，
+          //     而问题本身是整轮唯一的锚点，丢了就全错。）
+          // ════════════════════════════════════════════════════════════
+          const qIdx = this._currentUserMsg ? this.messages.indexOf(this._currentUserMsg) : -1
+          const runMsgs = this.messages.slice(qIdx >= 0 ? qIdx : this._runStartIndex)
           const sys = this.messages[0]
-          this.messages = runMsgs.length > 24
-            ? [sys, ...runMsgs.slice(-24)]
+          // 截断时同样必须保住**第一条（用户的问题）** ——
+          //   旧写法 `runMsgs.slice(-24)` 在工具调用多时会把问题挤出窗口。
+          const tailLimit = 24
+          this.messages = runMsgs.length > tailLimit
+            ? [sys, runMsgs[0], ...runMsgs.slice(-(tailLimit - 1))]
             : [sys, ...runMsgs]
           this.messages.push({
             role: 'user',
-            content: '请根据本轮对话给出一个简洁的自然语言回复。不要调用工具，不要输出代码块。',
+            // 🆕 2026-10-13：补一句「本轮没有工具」。
+            //   实测（DB 实证：A股那轮的 conversation_history）—— 小模型
+            //   （4B 档 QwenPaw Flash 4B Q4）无视「不要调用工具」，仍输出
+            //   XML 工具调用，于是这轮产出被替换成「没有可用的工具」诊断文案，
+            //   用户看到一句与问题无关的内部说明（现已由 pickRecoverySummaryText
+            //   丢弃）。**明确告知「本轮没有任何工具可用」**能显著降低模型继续
+            //   尝试调工具的概率，少走一次无效轮次。
+            //   注意：原句必须保持原样开头 —— tests/agentStabilityGuards.test.ts
+            //   用它作定位串断言「这条伪造 user 消息被登记为瞬态」。
+            content: '请根据本轮对话给出一个简洁的自然语言回复。不要调用工具，不要输出代码块。'
+              + '（本轮没有任何工具可用，请直接依据上面的对话与搜索结果作答；'
+              + '如果信息不足，就如实说明缺少什么，不要编造。）',
           })
+          // 🆕 2026-10-12: 这条「总结轮」提示是伪造的 user 消息，只对本轮有效。
+          //   若留到下一轮，模型会看到一条"用户说：请给出简洁回复"的假历史并可能去回应它。
+          this._transientMsgs.add(this.messages[this.messages.length - 1])
+          // 🆕 P2-7：把压缩摘要作为**上下文**交给总结轮（而不是拼进用户可见回复）
+          if (this._compressedSummary && this._compressedSummary.length > 10) {
+            const summaryMsg: AgentMessage = {
+              role: 'system',
+              content: '[历史摘要·非用户发言] 以下是更早对话的压缩摘要，'
+                + '仅供你组织回答，不要逐字复述，也不要暴露这段摘要本身：\n'
+                + this._compressedSummary,
+            }
+            this.messages.splice(this.messages.length - 1, 0, summaryMsg)
+            this._transientMsgs.add(summaryMsg)  // 同样只对本轮有效
+          }
           const resp = await this.callLLM([], { timeoutOverride: 300 })
-          const raw = (resp.text || '').trim()
+          // 🐛 2026-10-13 修复（「聊久了突然说没有可用的工具」的真凶）
+          //
+          //   总结轮是**故意**不带工具的（`callLLM([])`），提示词也明确写了
+          //   「不要调用工具」—— 但小模型（实测 4B 档 QwenPaw Flash 4B Q4）
+          //   经常无视该指令，仍然输出 XML 工具调用。
+          //   此时 callLLM 会把它替换成「这轮没有可用的工具…」的诊断文案，
+          //   并通过 `noToolsHint` 标记出来。
+          //
+          //   旧实现直接 `const raw = resp.text` 采用 → 用户看到一句与问题
+          //   毫不相干的内部说明（而且指向「到设置里检查工具是否被关闭」，
+          //   把用户引向错误的排查方向）。
+          //
+          //   现在改用 pickRecoverySummaryText：诊断文案一律丢弃，
+          //   让 finalText_ 保持为空、继续走下一级兜底
+          //   （sendMessage 的 Level B 简化上下文恢复）——那才是正确的出路。
+          //   取舍逻辑抽在 electron/agent/recoveryText.ts，可单测。
+          const raw = pickRecoverySummaryText(resp)
           if (raw) {
             finalText_ = _stripRepeatedBlocks(raw)
             this.messages.push({ role: 'assistant', content: finalText_ })
@@ -2595,6 +2807,31 @@ private summarizer: ConversationSummarizer | null = null
 
     // 重复结构化块截断（同一段新闻/列表/搜索输出最多出现 1 次）
     finalText = _stripRepeatedBlocks(finalText)
+
+    // 🛡️ 「无证据的事实断言」兜底（agent/answerEvidenceGuard.ts）
+    //
+    // 【为什么放在最后、由代码而不是模型来做】
+    //   2026-10-11 实测：检索失败后模型凭记忆编出了错误的产品名与发行日期，
+    //   而且用加粗给出确定语气，用户无从察觉。提示词纪律只能降低概率，
+    //   真正兜住必须在代码层判断「事实型问题 + 无检索证据 + 答案含具体断言」，
+    //   然后由代码加一行"未经核实"的说明。
+    //   三条件缺一不介入，避免给稳定知识（如历史常识）乱加免责声明。
+    if (finalText) {
+      const lastUserMsg = [...this.messages].reverse().find(m => m.role === 'user')
+      const questionText = lastUserMsg ? toText(lastUserMsg.content) : ''
+      const guarded = applyEvidenceGuard({
+        question: questionText,
+        retrievalAttempted,
+        retrievalSucceeded,
+        answer: finalText,
+      })
+      if (guarded !== finalText) {
+        console.warn(
+          `[AgentRunner] 🛡️ 无证据事实断言兜底已介入（问题需外部证据、本轮未取得检索结果、答案含具体断言）`,
+        )
+        finalText = guarded
+      }
+    }
 
     // 🩺 记下失败原因，供 sendMessage 的兜底文案展示给用户。
     //   没这一步的话，用户只会看到「没能给出有效回复」而给不出任何复现信息。
@@ -2633,7 +2870,7 @@ private summarizer: ConversationSummarizer | null = null
     const workerConfig: AgentRunConfig = {
       ...config,
       mode: 'agent',
-      systemPrompt: `你是 Lumina Worker，高效执行单个子任务。只输出结果，不闲聊。`,
+      systemPrompt: `你是 Lumina Worker，高效执行单个子任务。只输出结果，不闲聊。\n\n${(() => { try { return buildSelfKnowledgeBlock(undefined, { compact: true }) } catch { return '' } })()}`,
       maxToolCalls: 3,
     }
     const runner = new AgentRunner(workerConfig)
@@ -2833,45 +3070,37 @@ private summarizer: ConversationSummarizer | null = null
   }
 
   /** 裁剪消息历史以适应上下文窗口（保留 system 消息 + 最近的消息） */
+  /**
+   * 上下文裁剪 —— 决策逻辑抽在 `electron/agent/contextBudget.ts`（纯函数，可单测）。
+   *
+   * 这里只负责：注入 token 估算器 + 把 `_currentUserMsg`（本轮问题）作为
+   * **必须保留** 的消息传下去。
+   *
+   * 为什么必须传 mustKeep（实测故障 2026-10-12）：
+   *   用户问「尼古喵喵是什么」，模型连搜 5 次耗尽循环 → 走总结轮兜底。
+   *   而总结轮的上下文里**没有用户的问题**（`_runStartIndex` 是在问题之后才记录的，
+   *   见下方恢复段的修复），system 提示词又已超预算 → 旧实现只留最后 3 条非 system
+   *   （assistant空/tool/总结指令）→ 模型对着一条"请给出简洁回复"作答，
+   *   回复「抱歉，这是我们的第一次对话，还没有之前的对话内容可以参考。」
+   *   用户看到的是"AI 突然失忆"，本质是**问题被静默裁掉了**。
+   */
   private trimContext(messages: AgentMessage[], contextLimit: number): AgentMessage[] {
-    // 安全阈值：使用窗口的 85%，留 15% 给生成
-    const safeLimit = Math.floor(contextLimit * 0.85)
-
-    // 分离 system 消息和非 system 消息
-    const sysMsgs = messages.filter(m => m.role === 'system')
-    const otherMsgs = messages.filter(m => m.role !== 'system')
-
-    // 估算 system 消息的 token 数
     const estimator = new TokenEstimator()
-    const sysTokens = estimator.estimateMessages(sysMsgs as any[])
+    const result = trimToBudget<AgentMessage>(messages, contextLimit, t => estimator.estimate(t), {
+      mustKeep: this._currentUserMsg,
+    })
 
-    // 剩余空间给对话历史
-    const historyBudget = safeLimit - sysTokens
-    if (historyBudget <= 0) {
-      // 连 system 消息都超了，只能保留最后一条 system
-      console.warn(`[AgentRunner] ⚠️ 系统提示词 (${TokenEstimator.format(sysTokens)}) 超出上下文预算!`)
-      return [...sysMsgs.slice(-1), ...otherMsgs.slice(-3)]
+    if (result.warning) {
+      console.warn(`[AgentRunner] ⚠️ ${result.warning}`)
     }
-
-    // 从后往前保留对话消息，直到接近历史预算
-    const kept: AgentMessage[] = []
-    let usedTokens = 0
-    for (let i = otherMsgs.length - 1; i >= 0; i--) {
-      const est = estimator.estimate(toText(otherMsgs[i].content))
-      if (usedTokens + est > historyBudget * 0.9 && kept.length >= 2) {break}
-      kept.unshift(otherMsgs[i])
-      usedTokens += est
-    }
-
-    if (otherMsgs.length - kept.length > 0) {
+    if (result.droppedHistory > 0) {
       console.log(
-        `[AgentRunner] 📐 上下文裁剪: ${otherMsgs.length}→${kept.length} 条对话消息 ` +
-        `(sys:${TokenEstimator.format(sysTokens)}, hist:${TokenEstimator.format(usedTokens)}, ` +
-        `limit:${TokenEstimator.format(contextLimit)})`
+        `[AgentRunner] 📐 上下文裁剪: 裁掉 ${result.droppedHistory} 条对话消息`
+        + `（limit:${TokenEstimator.format(contextLimit)}）`
+        + (result.mustKeepRescued ? ' · 已强制保回本轮用户问题' : ''),
       )
     }
-
-    return [...sysMsgs, ...kept]
+    return result.messages
   }
 
   private async callLLM(tools: any[], options?: { timeoutOverride?: number }): Promise<{
@@ -2881,6 +3110,19 @@ private summarizer: ConversationSummarizer | null = null
     error?: string
     aborted?: boolean
     earlyResults?: Record<string, { content: string; error?: string }>
+    /**
+     * 🆕 2026-10-13：`text` **不是**对用户问题的回答，而是「模型想调工具、
+     *   但本轮没给它工具」的**诊断性说明**（见下方 `tools.length === 0` 分支）。
+     *
+     *   为什么必须显式标出来：内部兜底路径（如「总结恢复」）会**故意**
+     *   `callLLM([])` 不带工具，而小模型常无视「不要调用工具」的指令、
+     *   仍输出 XML 工具调用 → 诊断文案会被上层当成正式回复上屏。
+     *   真实故障：长对话后用户突然收到「（我本来想调用一个工具，但这轮
+     *   没有可用的工具…）」——一句与所问问题毫不相干的内部说明。
+     *
+     *   凡是把它当回复用的调用方，都必须先检查这个标记。
+     */
+    noToolsHint?: boolean
   }> {
     // 从 API 动态检测上下文窗口（替代硬编码推测）
     const contextLimit = await this.detectContextLimit()
@@ -2916,16 +3158,29 @@ private summarizer: ConversationSummarizer | null = null
 
     // 防御性检查 — 确保第一条非 system 消息是 user 角色
     //   Qwen 等模型的 Jinja 模板要求 system 后面紧跟 user，不能是 tool/assistant
-    const hasUserMessage = mergedMessages.some(m => m.role === 'user')
-    const firstNonSystemIdx = mergedMessages.findIndex(m => m.role !== 'system')
-    const firstNonSystemIsUser = firstNonSystemIdx >= 0 && mergedMessages[firstNonSystemIdx]?.role === 'user'
-
-    if (!hasUserMessage || !firstNonSystemIsUser) {
-      const insertIdx = firstNonSystemIdx >= 0 ? firstNonSystemIdx : 1
-      mergedMessages.splice(insertIdx, 0, {
-        role: 'user',
-        content: hasUserMessage ? '（继续）' : '你好',
-      })
+    //
+    // 🆕 2026-10-12 重做（本轮修的核心 bug 之一）：
+    //   旧实现会往 user 位置**插入一条伪造消息**（先是字面量「（继续）」，
+    //   后来改成「【系统占位·不是用户发言】…不要把它当成新指令」）。
+    //   但实测证明：**任何**伪造的 user 消息都可能被模型当成真消息来回应 ——
+    //     · 「（继续）」        → 模型问「"（继续）"这个指示是什么意思？」
+    //     · 「【系统占位…】」   → 模型回「明白了，收到。不会把这条系统消息当作新的指令。」
+    //                            （这条回复直接把用户的真实问题吞掉了）
+    //   只要往 user 位置塞东西，就有概率被"回应"。
+    //   现在改为**优先丢弃**开头的孤立 assistant/tool 消息（没有对应 user 的半截上下文），
+    //   只有整段历史都没有 user 时才退化为最短的中性占位。逻辑抽在
+    //   agentRunner.text.ts 的 ensureUserFirst()（纯函数，可单测）。
+    {
+      const fixed = ensureUserFirst(mergedMessages)
+      if (fixed.droppedLeading > 0) {
+        console.warn(
+          `[AgentRunner] 🧹 丢弃开头 ${fixed.droppedLeading} 条孤立消息（没有对应 user 的半截上下文）` +
+          `—— 避免伪造 user 消息被模型当成新指令`,
+        )
+      }
+      // 原地替换，保持 mergedMessages 的引用不变（后续还有 length=0 + push 的用法）
+      mergedMessages.length = 0
+      mergedMessages.push(...fixed.messages)
     }
 
     // 🔧 协议清洗 — 合并相邻 assistant 之后，可能出现 tool_call_id 对不上的
@@ -2983,15 +3238,35 @@ private summarizer: ConversationSummarizer | null = null
     // 超时优先级：环境变量 > provider档案 > 默认值
     const envTimeout = parseInt(process.env.LUMINA_LLM_TIMEOUT || '0', 10)
     const profileTimeout = profile?.model.recommendedHttpTimeout || 300
-    // 社交模式（团队群聊/委托）使用无限超时
-    //   团队群聊需要长时间推理和多轮工具调用，600s 不够
-    //   子 Agent 委托也需要足够时间处理复杂任务
-    const httpTimeoutSeconds = isSocialMode ? 0 : (envTimeout || profileTimeout)
+    // 社交模式（团队群聊/委托）不设实际超时上限
+    //   团队群聊需要长时间推理和多轮工具调用，600s 不够；
+    //   子 Agent 委托也需要足够时间处理复杂任务。
+    //
+    // 🐛 2026-10-10 修复：这里原来写的是 `isSocialMode ? 0 : ...`，意图用 0 表示「无限」。
+    //   但 0 是 falsy，会被下面 `|| 300` 的短路链吃掉 → 社交模式实际只有 **300s**，
+    //   比普通聊天（本地 Qwen 档案 600s）**更短**，与注释意图完全相反。
+    //   AbortSignal.timeout 又必须是有限值，所以用一个「大而有限」的哨兵。
+    const SOCIAL_MODE_TIMEOUT_SEC = 12 * 3600  // 12 小时
+    const httpTimeoutSeconds = isSocialMode ? SOCIAL_MODE_TIMEOUT_SEC : (envTimeout || profileTimeout)
 
     // 最大上下文 tokens
+    //
+    // 🐛 2026-10-10 修复（运行时验证发现）：这里原来只读
+    //   `env || profile.maxContextTokens || 256_000` —— **完全无视**用户配置的窗口，
+    //   也无视上面 `detectContextLimit()` 刚解析出的 `_effectiveContextWindow`。
+    //   后果（实测）：配置里写 contextWindow=32768，AgentRunner 日志显示
+    //   `context=32768(用户设置)`，但同一轮 LLMProvider 却打印 `上下文:256.0k`，
+    //   而且 3189 行的「预检超预算」按 256000×0.85 判断 →
+    //   **对 32K 模型永远不会告警**，超长 prompt 直接发出去 → prefill 卡死/超时。
+    //   改为按优先级取「已解析的有效窗口 → 用户显式设置 → profile → 兜底」。
     const maxContextTokens = parseInt(
       process.env.LUMINA_LLM_MAX_CONTEXT_TOKENS ||
-        String(profile?.model.maxContextTokens || 256_000),
+        String(
+          this._effectiveContextWindow
+          || (this.config as any).contextWindow
+          || profile?.model.maxContextTokens
+          || 256_000,
+        ),
       10,
     )
 
@@ -3408,12 +3683,20 @@ private summarizer: ConversationSummarizer | null = null
         // 🔧 P1-1 配套（内联路径）：同样【不】降级到非流式。
         //   流式慢的原因（prefill 重 / 上下文过大 / GPU 被后台任务占用）
         //   在非流式路径【完全相同】，重发只会丢掉已有内容、白算一遍 prefill，
-        //   并让用户在 600s 内看不到任何反馈。
-        //   零字可收时给出可行动的错误，并把最可能的成因（上下文窗口填大了）点出来。
+        //   并让用户在超时前看不到任何反馈。
+        //
+        //   文案诚实化（2026-10-10）：原来只点出「上下文窗口填大了」一个成因，
+        //   会把用户往单一方向引。改为列出真实成因并给出可行动的两步。
+        const timeoutLabel = effectiveTimeout >= 3600
+          ? `${Math.round(effectiveTimeout / 3600)} 小时`
+          : `${effectiveTimeout} 秒`
         return {
-          error: `模型响应超时（${effectiveTimeout}s 内未收到内容）。`
-            + '如果每次都超时，请在「设置 → LLM 模型」里把上下文窗口改成与服务端实际值一致'
-            + '（0=自动检测）——窗口填得比模型实际能吃的还大，会导致每轮重新预填充全部历史。',
+          error: `模型响应超时（${timeoutLabel} 内未收到任何内容）。`
+            + '常见原因：① 上下文窗口设置大于模型实际能吃的大小'
+            + '（「设置 → LLM 模型 → 上下文窗口」，0=自动检测）；'
+            + '② 本地模型正在被后台任务占用算力；'
+            + '③ 问题过大导致预填充过久。'
+            + '可以先试：把上下文窗口改成与服务端一致，或把问题拆小一点再问一次。',
         }
       }
       console.error(`[AgentRunner] 流式异常:`, err.message)
@@ -3499,7 +3782,7 @@ private summarizer: ConversationSummarizer | null = null
           `[AgentRunner] ⚠️ 模型输出了 XML 工具调用，但本轮可用工具数为 0（已保留内容不丢弃）。` +
           `parsed=${xmlResult.calls.length} diag=${xmlResult.diagnostic || 'n/a'}`,
         )
-        return { text: hint, usage: streamUsage, earlyResults: earlyResultsObj }
+        return { text: hint, usage: streamUsage, earlyResults: earlyResultsObj, noToolsHint: true }
       }
       return { toolCalls: xmlResult.calls, text: xmlResult.text || undefined, usage: streamUsage, earlyResults: earlyResultsObj }
     }
@@ -3872,6 +4155,48 @@ private summarizer: ConversationSummarizer | null = null
       console.log(`[getToolsForMode] 🧩 情绪因果链：${causalNote}`)
     }
 
+    // 🪶 弱模型（nano / small）自动降级：只保留安全白名单工具，
+    //   砍掉团队协作 / 写文件 / 跑命令 / git 等小模型协调不动也易跑飞的重操作。
+    //   放在所有硬性过滤之后，是最后一道"减法"，不影响前面的逻辑。
+    if (this._liteMode) {
+      const kept = tools.filter(t => LITE_TOOL_WHITELIST.has(t))
+      if (kept.length > 0) {
+        tools = kept
+        toolsetName += '+轻量'
+      } else {
+        // 失败开放：白名单被上游过滤全干掉时，至少退回 memory_search，
+        // 保证模型还能"回忆"，而不是手里空空直接崩。
+        tools = ['memory_search']
+        toolsetName += '+轻量(兜底)'
+      }
+      console.log(`[getToolsForMode] 🪶 轻量模式：工具裁剪至 [${tools.join(', ')}]`)
+    }
+
+    // 🎯 能力匹配（术有专攻）：高置信「纯推理题」本轮隐藏联网工具。
+    //
+    // 【为什么】用户实测：问纯组合概率题「集合 C={1,2,3,...,13} 子集 N 个元素
+    //   不含五个连续整数 概率」，模型却先 web_search 搜题目原文，返回无关百科页。
+    //   system prompt 的能力匹配指引是主手段；这里再做一道**硬保证**——
+    //   把 web_search / web_fetch / browser 从本轮名单拿掉，让它想搜也搜不了，
+    //   只能老老实实自己推理。
+    //
+    // 【安全前提】只在「高置信纯推理」时收紧；判不出 / 低置信一律不动（失败开放）。
+    //   与 emotionGating 同一条铁则：本模块只做减法，永不放宽。
+    try {
+      const profile = profileTask(this._pendingUserText || '')
+      if (profile.suppressSearch) {
+        const before = tools.length
+        tools = tools.filter(t => !SEARCH_TOOLS.includes(t))
+        if (tools.length < before) {
+          toolsetName += '+推理'
+          console.log(
+            `[getToolsForMode] 🎯 纯推理题（${profile.signals.join('、')}）：` +
+            `本轮隐藏 ${before - tools.length} 个联网工具，让模型自己算`,
+          )
+        }
+      }
+    } catch { /* 能力匹配失败绝不能影响主流程 */ }
+
     // 📋 记下本轮真正暴露的工具名 —— 供执行层在「模型调了未加载的工具」时
     //   给出可用清单（否则会把它误报成「工具不存在」）。
     this._exposedTools = tools
@@ -3902,6 +4227,16 @@ private summarizer: ConversationSummarizer | null = null
 
   /** 🔍 最近一次情绪收紧的审计 id（空串 = 本轮未收紧）；供 UI 跳转审计详情 */
   private _lastGateAuditId = ''
+
+  /**
+   * 🪶 弱模型（nano / small 档）自动降级开关。
+   *
+   * 由 loadAgentLLMConfig 里 resolveCapabilities 的 tier 推导（见下方
+   * caps 解析块）。为 true 时 getToolsForMode 把工具裁到白名单、
+   * initSystemPrompt 追加"轻量模式"指令 —— 小模型只做陪伴 + 检索，
+   * 不再被要求跑完整团队编排。默认 false（完整模式），只有明确弱模型才开。
+   */
+  private _liteMode = false
 
   private initSystemPrompt(): void {
     // 群聊场景已由前端（getAgentSystemPromptLite）提供精准 prompt，
@@ -3985,7 +4320,14 @@ private summarizer: ConversationSummarizer | null = null
 
     // 替换已有的 system 消息或插入到最前面，不能覆盖整个 messages 数组
     if (this.messages[0]?.role === 'system') {
-      this.messages[0] = { role: 'system', content: prompt }
+      // 🪶 弱模型（nano / small）自动降级：追加"轻量模式"指令。
+    //   明确告诉小模型直接简洁回答、不要委派团队工具、别跑复杂工具链，
+    //   并在遇到重任务时诚实建议换大模型 —— 比硬撑残缺结果更可信。
+    if (this._liteMode) {
+      prompt += '\n\n' + LITE_SYSTEM_NOTE
+    }
+
+    this.messages[0] = { role: 'system', content: prompt }
     } else {
       this.messages.unshift({ role: 'system', content: prompt })
     }

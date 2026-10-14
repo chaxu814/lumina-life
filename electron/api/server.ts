@@ -21,7 +21,7 @@
 
 import * as http from 'http'
 import * as url from 'url'
-import * as crypto from 'crypto'
+import * as os from 'os'
 
 import { handleChatRoute } from './routes/chat'
 import { handleToolsRoute } from './routes/tools'
@@ -31,6 +31,9 @@ import { handleSkillsRoute } from './routes/skills'
 import { handleCronRoute } from './routes/cron'
 import { handleConfigRoute } from './routes/config'
 import { handleHealthRoute } from './routes/health'
+// 🆕 手机远程访问：H5 页面 + 审批端点
+import { renderMobilePage } from './mobilePage'
+import { handleApprovalsRoute } from './routes/approvals'
 // 🆕 Phase C: 深度调研 API
 import { handleDeepResearchRoute, handleDeepResearchStatusRoute } from './routes/deepResearch'
 // 🆕 Phase C: 渠道 Webhook API
@@ -82,9 +85,21 @@ interface RouteHandler {
 }
 
 const ROUTES: RouteHandler[] = [
+  // 🆕 手机远程访问：根路径与 /m 都返回 H5 页面
+  { method: 'GET', path: /^\/$/, handler: handleMobilePage },
+  { method: 'GET', path: /^\/m$/, handler: handleMobilePage },
+  { method: 'GET', path: /^\/m\/$/, handler: handleMobilePage },
+  { method: 'GET', path: /^\/mobile$/, handler: handleMobilePage },
+  { method: 'GET', path: /^\/mobile\/$/, handler: handleMobilePage },
+
   // 健康检查
   { method: 'GET', path: /^\/api\/health$/, handler: handleHealthRoute },
   { method: 'GET', path: /^\/api\/health\/?$/, handler: handleHealthRoute },
+
+  // 🆕 审批队列（手机端可批准/拒绝）
+  { method: 'GET', path: /^\/api\/approvals$/, handler: handleApprovalsRoute },
+  { method: 'GET', path: /^\/api\/approvals\/?$/, handler: handleApprovalsRoute },
+  { method: 'POST', path: /^\/api\/approvals\/([^/]+)\/(approve|deny)$/, handler: handleApprovalsRoute },
 
   // 聊天
   { method: 'POST', path: /^\/api\/chat$/, handler: handleChatRoute },
@@ -152,6 +167,39 @@ const ROUTES: RouteHandler[] = [
 ]
 
 // ═══════════════════════════════════════════════════════════
+// 手机远程访问：H5 页面处理器 + 局域网地址探测
+// ═══════════════════════════════════════════════════════════
+
+/** 返回内联的手机端 H5 页面（同源，无跨域问题） */
+async function handleMobilePage(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+  _match: RegExpExecArray,
+  _body: unknown,
+): Promise<void> {
+  const html = renderMobilePage({ version: '0.1.0' })
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+  })
+  res.end(html)
+}
+
+/** 列出本机可被局域网访问的 IPv4 地址（供手机端使用） */
+function getLanIPv4(): string[] {
+  const out: string[] = []
+  const ifaces = os.networkInterfaces()
+  for (const name of Object.keys(ifaces)) {
+    for (const info of ifaces[name] || []) {
+      if (info.family === 'IPv4' && !info.internal) {
+        out.push(info.address)
+      }
+    }
+  }
+  return out
+}
+
+// ═══════════════════════════════════════════════════════════
 // API Server
 // ═══════════════════════════════════════════════════════════
 
@@ -194,6 +242,19 @@ export class ApiServer {
         console.log(`[api] 🌐 REST API 已启动: http://${this.config.host}:${this.config.port}`)
         if (this.config.apiKey) {
           console.log(`[api] 🔑 API Key 认证已启用`)
+        }
+        // 🆕 手机远程访问提示（合并为单条输出，减少日志噪音）
+        if (this.config.host === '0.0.0.0' || this.config.host === '::') {
+          const lans = getLanIPv4()
+          const lines = lans.length > 0
+            ? [`[api] 📱 手机远程访问（同一局域网打开）:`, ...lans.map(ip => `[api]     http://${ip}:${this.config.port}/m`)]
+            : [`[api] 📱 未探测到局域网 IPv4 地址，手机可能无法访问`]
+          console.log(lines.join('\n'))
+        } else {
+          console.log(
+            `[api] 📱 手机远程访问未开启（当前仅监听 ${this.config.host}）。\n` +
+            `[api]    如需手机访问，请把 API host 设为 0.0.0.0，然后访问 http://<电脑局域网IP>:${this.config.port}/m`,
+          )
         }
         resolve()
       })

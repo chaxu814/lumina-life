@@ -11,6 +11,9 @@ export default [
       'out/',
       'dist/',
       'coverage/',
+      '.cache/',             // ⚠️ 临时缓存目录（.gitignore 已忽略）。曾出现「一个落在这里的
+                             //    .ts 临时文件贡献 211 条 warning，把 lint 棘轮打红」——
+                             //    eslint 之前没忽略它，现补上，与 .gitignore 对齐。
       '.cowork-temp/',       // 临时工作区（评测/调试脚本），不属于产品代码
       'electron/pet/assets/',   // esbuild 构建产物
       '**/*.js',

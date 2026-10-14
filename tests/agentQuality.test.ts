@@ -35,7 +35,9 @@ function stripComments(src: string): string {
     .join('\n')
 }
 
-const agentRunner = read('electron/agentRunner.ts')
+// ⚠️ 2026-10-11：失败原因分类等纯函数辅助块已抽到 agentRunner.text.ts。
+//    断言「源码里存在某符号」时把两个文件合并读，避免被文件布局绑死。
+const agentRunner = read('electron/agentRunner.ts') + '\n' + read('electron/agentRunner.text.ts')
 const registry = read('electron/tools/registry.ts')
 const souls = stripComments(read('src/data/agentSouls.ts'))
 const compactor = read('electron/agentCompactor.ts')

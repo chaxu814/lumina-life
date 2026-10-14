@@ -37,7 +37,24 @@ export default function GroupChatHistorySidebar() {
     return () => window.removeEventListener('gc:load-session', handler as any)
   }, [])
 
-  const persistSessions = (updated: GCSession[]) => {
+  /**
+   * 保存会话列表。
+   *
+   * 🐛 2026-10-13 修复（「会话列表突然只剩一两个」的根因之一）
+   *
+   *   旧签名接收**算好的完整列表**，调用方都是基于组件内的 `sessions` state 算的。
+   *   但同一个 localStorage key（`lumina_gc_sessions`）有**两个持有者**：
+   *   本侧边栏和 `GroupChatView`（各自 useState 一份副本）。
+   *   任何一方在 state 过期时保存，都会把另一方新增的会话**整体覆盖掉** ——
+   *   用户看到的就是「聊过的会话凭空消失」。
+   *   （实测：leveldb 里能看到 5 个已消失会话键的痕迹。）
+   *
+   *   现在改成接收**变更函数**：每次都先读最新值再改，
+   *   从根上消除"用过期副本覆盖"的可能。
+   */
+  const persistSessions = (mutate: (latest: GCSession[]) => GCSession[]) => {
+    const latest = loadGCSessions()
+    const updated = mutate(latest)
     setSessions(updated)
     saveGCSessions(updated)
     window.dispatchEvent(new Event('gc:sessions-updated'))
@@ -50,17 +67,17 @@ export default function GroupChatHistorySidebar() {
 
   const handleNew = () => {
     const newId = newGCSessionId()
-    // Auto-name: 团队群聊 #N
-    const num = sessions.length + 1
-    const newSession: GCSession = {
-      id: newId,
-      date: new Date().toLocaleDateString('zh-CN'),
-      preview: `团队群聊 #${num}`,
-      count: 0,
-    }
-    const updated = [newSession, ...sessions]
-    persistSessions(updated)
     setActiveId(newId)
+    persistSessions(latest => {
+      // Auto-name: 团队群聊 #N —— 基于**最新**列表算编号，避免重名
+      const newSession: GCSession = {
+        id: newId,
+        date: new Date().toLocaleDateString('zh-CN'),
+        preview: `团队群聊 #${latest.length + 1}`,
+        count: 0,
+      }
+      return [newSession, ...latest]
+    })
     window.dispatchEvent(new CustomEvent('gc:new-session', { detail: newId }))
   }
 
@@ -71,8 +88,7 @@ export default function GroupChatHistorySidebar() {
   }
 
   const commitRename = (s: GCSession) => {
-    const updated = sessions.map(x => x.id === s.id ? { ...x, preview: editTitle || x.preview } : x)
-    persistSessions(updated)
+    persistSessions(latest => latest.map(x => x.id === s.id ? { ...x, preview: editTitle || x.preview } : x))
     setEditingId(null)
     window.dispatchEvent(new CustomEvent('gc:rename-session', { detail: { id: s.id, preview: editTitle } }))
   }
@@ -80,8 +96,8 @@ export default function GroupChatHistorySidebar() {
   const handleDelete = (s: GCSession, e: React.MouseEvent) => {
     e.stopPropagation()
     localStorage.removeItem(`lumina_gc_${s.id}`)
-    const updated = sessions.filter(x => x.id !== s.id)
-    persistSessions(updated)
+    const updated = loadGCSessions().filter(x => x.id !== s.id)
+    persistSessions(() => updated)
     if (s.id === activeId) {
       const next = updated[0]
       if (next) {
@@ -94,8 +110,7 @@ export default function GroupChatHistorySidebar() {
 
   const handlePin = (s: GCSession, e: React.MouseEvent) => {
     e.stopPropagation()
-    const updated = sessions.map(x => x.id === s.id ? { ...x, pinned: !(x as any).pinned } : x)
-    persistSessions(updated)
+    persistSessions(latest => latest.map(x => x.id === s.id ? { ...x, pinned: !(x as any).pinned } : x))
   }
 
   // Format time like ChatPanel: 只显示日期（今天 / 昨天 / MM-DD / YYYY-MM-DD），不显示时分

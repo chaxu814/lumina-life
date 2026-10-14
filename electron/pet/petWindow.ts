@@ -347,7 +347,7 @@ html, body {
 }
 body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Microsoft YaHei', '微软雅黑', 'Segoe UI', system-ui, sans-serif;
   cursor: ${ctMode ? 'default' : 'pointer'};
   opacity: ${config.opacity};
 }
@@ -1726,12 +1726,31 @@ export function registerPetIpc(): void {
       target.webContents.send('pet:sync-message', { text: data.text, from: 'pet' })
     }
   })
+  // 🆕 2026-10-13：窗口可能处于「已创建、但页面尚未加载完」的中间态 ——
+  //   openPetChatWindow() 返回 ok 时 loadFile() 还在进行中（见该函数：它把
+  //   pet:chat-window-focus 放在 .then() 里，正是因为这个）。此时直接 send
+  //   会打到一个还没执行到 ipc.on 的页面 → 消息**静默丢失**。
+  //   实测场景：首次点击 Live2D 角色头顶搭话卡片的 A/B/C 选项时，聊天窗刚被
+  //   创建，用户既看不到自己选的那句话、也看不到"正在思考"动画。
+  //   修法：加载中就先挂到 did-finish-load 上，加载完再补发。
+  const sendWhenReady = (win: BrowserWindow, channel: string, payload: unknown) => {
+    if (win.isDestroyed()) {return}
+    const wc = win.webContents
+    if (wc.isLoading()) {
+      wc.once('did-finish-load', () => {
+        if (!win.isDestroyed()) {wc.send(channel, payload)}
+      })
+    } else {
+      wc.send(channel, payload)
+    }
+  }
+
   ipcMain.on('pet:sync-reply', (_e, data: { text: string; role: string }) => {
     // 主窗口 Agent 回复 → 独立聊天窗打开时只送独立窗；否则送桌宠窗（面板或气泡）
     if (petChatWindow && !petChatWindow.isDestroyed()) {
-      petChatWindow.webContents.send('pet:sync-reply', data)
+      sendWhenReady(petChatWindow, 'pet:sync-reply', data)
     } else if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('pet:sync-reply', data)
+      sendWhenReady(petWindow, 'pet:sync-reply', data)
     }
   })
   // 历史记录请求方（桌宠窗或独立聊天窗），回复时定向送回

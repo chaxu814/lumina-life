@@ -12,6 +12,7 @@ import {
   PetChatOrchestrator,
   messagesToForward,
   deriveLocalIntent,
+  isPlaceholderReply,
   PET_RETRY_MAX,
   type PetChatDeps,
 } from '../src/lib/petChatOrchestrator'
@@ -156,5 +157,51 @@ describe('deriveLocalIntent — 回复文本本地派生动作（不发 LLM）',
     expect(deriveLocalIntent('晚安，早点休息')).toMatchObject({ action: 'sleep' })
     expect(deriveLocalIntent('抱歉，这次没答上来')).toMatchObject({ action: 'sad' })
     expect(deriveLocalIntent('好的，没问题，交给我吧')).toMatchObject({ action: 'nod' })
+  })
+})
+
+// ============================================================
+// isPlaceholderReply — 占位回复识别（2026-10-10）
+//
+// 【问题】桌宠引导式 ABC 选项（"想了解群聊怎么发公告吗？"）走轻量 chat 模式，
+//   模型回 "我来帮你查一下群聊发公告的具体方法。" 就结束，从不调 web_search。
+//   用户看到的回复永远停在"我来查"，内容不完整。
+// 【本文件守的】
+//   强信号 / 弱信号识别准确；含具体答案（步骤/链接/示例）的不算占位。
+// ============================================================
+describe('isPlaceholderReply — 占位型回复识别', () => {
+  it('强信号：「我来查/看看/搜/找」开头 → 占位', () => {
+    expect(isPlaceholderReply('我来帮你查一下群聊发公告的具体方法。')).toBe(true)
+    expect(isPlaceholderReply('让我看看怎么操作。')).toBe(true)
+    expect(isPlaceholderReply('我来搜一下。')).toBe(true)
+    expect(isPlaceholderReply("I'll check that for you.")).toBe(true)
+    expect(isPlaceholderReply('Let me look that up.')).toBe(true)
+  })
+
+  it('弱信号 + 短回复：「等我/稍等/马上」 → 占位', () => {
+    expect(isPlaceholderReply('等我一下～')).toBe(true)
+    expect(isPlaceholderReply('稍等，我看看。')).toBe(true)
+  })
+
+  it('弱信号但长回复（>80 字）→ 不算占位（已经写了很多）', () => {
+    const long = '等我一下，让我把所有步骤都列出来：首先打开 Lumina 主界面，然后点击左侧的「群聊」标签，接着在右上角找到「群公告」按钮……'.padEnd(120, '。')
+    expect(isPlaceholderReply(long)).toBe(false)
+  })
+
+  it('含具体内容（步骤/链接/示例）→ 不算占位', () => {
+    expect(isPlaceholderReply('1. 打开 Lumina 主界面\n2. 点击群聊\n3. 找到公告按钮')).toBe(false)
+    expect(isPlaceholderReply('第一步：进入设置；第二步：选择群聊；第三步：点击公告')).toBe(false)
+    expect(isPlaceholderReply('你可以访问 https://example.com/help 查看教程。')).toBe(false)
+    expect(isPlaceholderReply('比如用 #announce 命令，或者在群设置里开启公告功能。')).toBe(false)
+  })
+
+  it('正常闲聊/陪伴型回复 → 不算占位', () => {
+    expect(isPlaceholderReply('好的，我会记住的！')).toBe(false)
+    expect(isPlaceholderReply('今天天气真好呢～')).toBe(false)
+    expect(isPlaceholderReply('喵～有什么想聊的？')).toBe(false)
+  })
+
+  it('空字符串 → false（不触发续轮）', () => {
+    expect(isPlaceholderReply('')).toBe(false)
   })
 })

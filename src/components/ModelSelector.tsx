@@ -5,7 +5,6 @@ import { switchAndPersist } from '../services/llmPersist'
 
 // 快速切换用的供应商列表
 const QUICK_PROVIDERS = [
-  { id: 'opencode-zen', label: '🎯 OpenCode Zen', nameCn: 'OpenCode Zen (免费)', url: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free' },
   { id: 'lmstudio', label: '🧠 LM Studio', nameCn: 'LM Studio (本地)', url: 'http://127.0.0.1:1234/v1', model: '' },
   { id: 'openai', label: '☁️ OpenAI', nameCn: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o' },
   { id: 'deepseek', label: '☁️ DeepSeek', nameCn: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
@@ -134,71 +133,11 @@ export default function ModelSelector() {
           padding: 4, maxHeight: 380, overflowY: 'auto',
           animation: 'fadeInUp 0.15s ease-out',
         }}>
-          {/* 🎯 免费 */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', letterSpacing: '0.5px', padding: '6px 10px 2px' }}>
-            🎯 免费
-          </div>
-          {QUICK_PROVIDERS.filter(p => p.id === 'opencode-zen').map(p => {
-            const active = p.id === llmConfig.provider || llmConfig.provider === p.nameCn
-            const isExpanded = expandedProvider === p.id
-            const FREE_MODELS: Record<string, Array<{ id: string; label: string }>> = {
-              'opencode-zen': [{ id: 'deepseek-v4-flash-free', label: 'DeepSeek V4 Flash Free' }],
-            }
-            const models = FREE_MODELS[p.id] || []
-            return (
-              <div key={p.id}>
-                <div onClick={() => setExpandedProvider(isExpanded ? null : p.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
-                    background: active ? '#f0fdf4' : 'transparent',
-                    color: active ? '#16a34a' : '#374151',
-                    fontWeight: active ? 600 : 400, fontSize: 12,
-                    transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={e => { if (!active) {e.currentTarget.style.background = '#f9fafb'} }}
-                  onMouseLeave={e => { if (!active) {e.currentTarget.style.background = 'transparent'} }}>
-                  <span style={{ flex: 1 }}>{plainLabel(p.label)}</span>
-                  <span style={{ fontSize: 8, fontWeight: 700, background: '#22c55e', color: '#fff', borderRadius: 3, padding: '1px 5px' }}>免费</span>
-                  <span style={{ fontSize: 8, opacity: 0.3, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'none' }}>▶</span>
-                </div>
-                {isExpanded && (
-                  <div style={{ paddingLeft: 20, paddingBottom: 4 }}>
-                    {models.map(m => (
-                      <div key={m.id} onClick={() => {
-                        const store = useStore.getState()
-              // 🔧 修复：原先只改内存不落盘 → 重启后复原，用户感知「切换不生效」
-              void switchAndPersist(store, p.id || p.nameCn || p.label, p.url, m.id,
-                p.id === 'opencode-zen' ? { apiKey: 'public' } : undefined)
-                        setShowProviderMenu(false)
-                        setExpandedProvider(null)
-                      }}
-                        style={{
-                          padding: '4px 8px', borderRadius: 4, cursor: 'pointer',
-                          fontSize: 11, color: 'var(--text-secondary)',
-                          background: active && llmConfig.model === m.id ? '#f0fdf4' : 'transparent',
-                          fontWeight: active && llmConfig.model === m.id ? 600 : 400,
-                          display: 'flex', alignItems: 'center', gap: 4,
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = active && llmConfig.model === m.id ? '#f0fdf4' : 'transparent' }}>
-                        {active && llmConfig.model === m.id && <span style={{ color: '#16a34a', fontSize: 7 }}>●</span>}
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          <div style={{ borderTop: '1px solid var(--border-light)', margin: '4px 8px' }} />
-
           {/* 其他 */}
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.5px', padding: '4px 10px 2px' }}>
             其他
           </div>
-          {QUICK_PROVIDERS.filter(p => p.id !== 'opencode-zen').map(p => {
+          {QUICK_PROVIDERS.map(p => {
             const active = p.id === llmConfig.provider || llmConfig.provider === p.nameCn
             const isExpanded = expandedProvider === p.id
             const models = providerModels[p.id]

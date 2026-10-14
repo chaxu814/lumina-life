@@ -7,6 +7,7 @@ import SettingsNotifications from '../panels/settings/SettingsNotifications'
 import SettingsAppearance from '../panels/settings/SettingsAppearance'
 import SettingsPush from '../panels/settings/SettingsPush'
 import SettingsPet from '../panels/settings/SettingsPet'
+import SettingsMemory from '../panels/settings/SettingsMemory'
 
 /* ── 侧边栏导航项（label 走 i18n） ── */
 const SIDEBAR_ITEMS = [
@@ -19,6 +20,7 @@ const SIDEBAR_ITEMS = [
   { id: 'security', icon: '🛡️', labelKey: 'settings.nav_security' },
   { id: 'tasks', icon: '⏰', labelKey: 'settings.nav_tasks' },
   { id: 'pet', icon: '🐱', labelKey: 'settings.nav_pet' },
+  { id: 'memory', icon: '🧠', labelKey: 'settings.nav_memory' },
 ] as const
 
 type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']
@@ -227,6 +229,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
             {activeSection === 'appearance' && <SettingsAppearance />}
             {activeSection === 'push' && <SettingsPush />}
             {activeSection === 'pet' && <SettingsPet />}
+            {activeSection === 'memory' && <SettingsMemory onClose={onClose} />}
             {(activeSection === 'channels' || activeSection === 'security' || activeSection === 'tasks') && (
               <SettingsPanel embedded activeTab={activeSection} onNotice={null} />
             )}

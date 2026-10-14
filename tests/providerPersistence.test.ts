@@ -19,7 +19,9 @@
 // 【本测试钉住的】
 // 1. applyLocal 必须落盘（不再只改内存）
 // 2. 落盘失败必须告知用户（不能假装成功）
-// 3. 启动时两源漂移要自愈，且以 agent 配置为准
+// 3. 启动时若全局激活供应商**缺配置**（缺 model/baseUrl），用 agent 配置补全
+//    —— 但「全局与 agent 只是不同」不算漂移（Team Agent 允许独立配置，
+//       见 tests/teamAgentSelfHealClobber.test.ts）
 // ============================================================
 
 import { describe, it, expect } from 'vitest'
@@ -65,8 +67,8 @@ describe('providerPersistence · applyLocal 必须落盘', () => {
     const bare = (src.match(/switchLLMProvider\(p\.id/g) || []).length
     expect(bare, '仍有 ProviderBtn 只改内存不落盘').toBe(0)
 
-    // 2026-10-04：移除「免费模型（OpenCode Zen）」入口后，主区供应商按钮组从 3 组变 2 组
-    // （本地：LM Studio / Ollama；云端：其余）。原先的 `>= 3` 把「按钮数量」当成了
+    // 主区供应商按钮组为 2 组（本地：LM Studio / Ollama；云端：其余）。
+    // 原先的 `>= 3` 把「按钮数量」当成了
     // 「落盘覆盖」的代理指标 —— 但真正的不变式是「每个按钮组都走落盘入口」，
     // 而上面那条零裸调用才是它的硬保证。这里改为精确断言，不再随按钮增删而失效。
     const mainPersist = (src.match(/switchAndPersist\(useStore\.getState\(\)/g) || []).length
@@ -91,10 +93,14 @@ describe('providerPersistence · 启动自愈', () => {
     expect(src).toMatch(/agentLlmGetAllConfigs/)
   })
 
-  it('检测漂移（baseUrl 或 model 不同）', () => {
-    expect(src).toMatch(/drifted/)
-    expect(src).toMatch(/curActive\.baseUrl\s*!==\s*agentLumina\.endpoint/)
-    expect(src).toMatch(/curActive\.model\s*!==\s*agentLumina\.model/)
+  it('只在全局激活项**缺配置**时自愈（而非只要与 agent 不同就修）', () => {
+    // 🔧 2026-10-10 收窄：旧实现把「全局与 agent 不同」当漂移，每次启动都触发，
+    //   叠加 setProviderConfig 的无条件同步会把用户自己配的 Team Agent 覆盖掉。
+    //   现在只修「全局激活项真的用不了」的情况。
+    expect(src).toMatch(/globalBroken/)
+    expect(src).toMatch(/!\s*curActive\.model\s*\|\|\s*!\s*curActive\.baseUrl/)
+    // 不应再有旧的「差异即漂移」判定
+    expect(src).not.toMatch(/const drifted =/)
   })
 
   it('以 agent 配置为准修正 provider（agent 才是真正发请求的那份）', () => {

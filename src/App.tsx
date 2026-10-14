@@ -104,6 +104,13 @@ async function buildPetLifeData(target: string): Promise<PetLifeItem[]> {
   return []
 }
 
+/**
+ * 空消息列表的**稳定引用**。
+ * 用于 Zustand selector 兜底：绝不能在内联 selector 里写 `|| []` ——
+ * 那会在每次渲染返回新数组，触发无限重渲染（React #185 → 白屏）。
+ */
+const EMPTY_MESSAGES: any[] = []
+
 const panelMap: Record<string, React.FC> = {
   chat: ChatPanel,
   mail: MailPanel,
@@ -135,12 +142,28 @@ export default function App() {
   const activePanel = useStore((s) => s.activePanel)
   const setActivePanel = useStore((s) => s.setActivePanel)
   const [settingsTab, setSettingsTab] = useState<string>('llm')
+
+  // 🆕 任意组件请求打开设置页的指定分区（如侧栏用户面板的「记忆与进化」）
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const tab = (e as CustomEvent).detail?.tab
+      if (tab) {setSettingsTab(tab)}
+      setActivePanel('settings')
+    }
+    window.addEventListener('lumina:open-settings', onOpen as EventListener)
+    return () => window.removeEventListener('lumina:open-settings', onOpen as EventListener)
+  }, [])
   const activeConversationId = useStore((s) => s.activeConversationId)
   const clearMessages = useStore((s) => s.clearCurrentMessages)
   const addMessage = useStore((s) => s.addMessage)
+  // ⚠️ 关键修复（白屏根因）：selector 必须返回**稳定引用**。
+  //   Zustand v5 用 Object.is 比较快照 —— 旧写法 `return conv?.messages || []`
+  //   在没有活跃对话时**每次渲染都新建一个 []**，React 认为状态一直在变 →
+  //   无限重渲染 → React #185「Maximum update depth exceeded」→ 整页白屏。
+  //   用一个模块级常量兜底，空态永远返回同一个引用。
   const messages = useStore((s) => {
     const conv = s.conversations.find((c) => c.id === s.activeConversationId)
-    return conv?.messages || []
+    return conv?.messages ?? EMPTY_MESSAGES
   })
   const cronTasks = useStore((s) => s.cronTasks)
   const addAuditLog = useStore((s) => s.addAuditLog)
@@ -300,12 +323,18 @@ export default function App() {
     // 🌸 桌宠"生活"入口：唤起主窗口的 朋友圈 / 剧场 / 日报（均在团队群聊对应 tab）
     cleanups.push(window.luminaAPI?.onMenuEvent('life:open', (data: { target: 'moments' | 'theater' | 'daily' | 'news' }) => {
       if (data?.target === 'news') { setActivePanel('news'); return }
+      // 🆕 剧场/日报已迁入「Lumina团队社区」弹窗，改道到该弹窗的对应分区
+      if (data?.target === 'theater' || data?.target === 'daily') {
+        setActivePanel('teamcommunity')
+        const section = data.target
+        setTimeout(() => window.dispatchEvent(new CustomEvent('lumina:team-community-tab', { detail: { section } })), 160)
+        return
+      }
       setActivePanel('chat')
       const store = useStore.getState()
       const team = store.conversations.find((c: any) => c.id === '__team_group_chat__')
       if (team) {store.switchConversation(team.id)}
-      const tab = data?.target === 'theater' ? 'theater' : data?.target === 'daily' ? 'daily' : 'moments'
-      setTimeout(() => window.dispatchEvent(new CustomEvent('lumina:team-tab', { detail: { tab } })), 160)
+      setTimeout(() => window.dispatchEvent(new CustomEvent('lumina:team-tab', { detail: { tab: 'moments' } })), 160)
     }))
     // 🌸 桌宠聊天框内生活视图请求：从主界面同一数据源取数后回传
     cleanups.push(window.luminaAPI?.onMenuEvent('life:data-request', async (data: { reqId: string; target: string }) => {

@@ -336,12 +336,103 @@ export function activeRulesFor(platform: string = process.platform): SandboxRule
 }
 
 // ──────────────────────────────────────────────────────────
+// 命令归一化（2026-10-08 新增）：堵住「编码伪装」绕过面
+// ──────────────────────────────────────────────────────────
+//
+// 【为什么需要】
+// 规则库此前直接对**原始命令串**做正则匹配。攻击者/被注入的模型只要把命令
+// 编码一次，就能整条绕过：
+//     bash -c "$(echo cm0gLXJmIC8= | base64 -d)"     # rm -rf / 的 base64 形态
+//     r\m -rf /                                      # 反斜杠转义
+//     %72%6d%20%2D%72%66%20%2F                        # 百分号编码
+// 以上三条在旧实现里全部命中 0 条规则（severity=SAFE，直接放行）。
+//
+// 【怎么做】
+// 纯字符串归一化（**不执行任何东西**），把可疑命令展开成"候选形态集合"，
+// 让规则库对每一个候选形态都跑一遍，取最高严重度。候选包括：
+//   ① 原文  ② 百分号解码  ③ 反斜杠去转义  ④ 去空字节  ⑤ 折叠空白
+//   ⑥ 显式 base64 载荷解出的明文（仅当解出的文本像 shell 命令时才采纳）
+//
+// 【误报取向】归一化只会让 severity **变大或不变**（取 max），
+// 即"宁严勿松"——沙箱场景下漏放比误拦危险得多。解码失败一律静默保留原文。
+
+/** 显式 base64 解码器标记（出现这些才高置信地解 base64） */
+const B64_MARKER_RE = /(?:base64\s+(?:-d|-D|--decode)|FromBase64String|openssl\s+base64\s+-d|\batob\b|\[convert\]::frombase64string)/i
+/** 严格 base64 片段（长度 ≥ 8：`cm0gLXJmIC8=`（=rm -rf /）仅 11 个非填充字符，
+ *  阈值设 16 会漏掉短危险命令。误报由下方 SHELLISH/RISKY_VERB 双重门控兜住） */
+const B64_TOKEN_RE = /[A-Za-z0-9+/]{8,}={0,2}/g
+/** 解出的明文要"像 shell 命令"才采纳：可打印 + 含空白 + 含已知危险动词 */
+const SHELLISH_RE = /^[\x09\x0a\x0d\x20-\x7e]+$/
+const RISKY_VERB_RE = /\b(rm|del|erase|rmdir|rd|format|mkfs|fdisk|diskpart|dd|shutdown|reboot|curl|wget|chmod|chown|reg|net|powershell|pwsh|bash|sh|zsh|cmd|python|node|sudo|runas|diskutil|csrutil)\b/i
+
+function safeDecodeURI(s: string): string | null {
+  try {
+    const d = decodeURIComponent(s)
+    return d !== s ? d : null
+  } catch { return null }
+}
+
+/** 去掉非路径分隔用途的反斜杠转义：`r\m` → `rm`、`\/` → `/` */
+function unescapeBackslashes(s: string): string | null {
+  const d = s.replace(/\\([A-Za-z0-9/._\-])/g, '$1')
+  return d !== s ? d : null
+}
+
+/** 解出命令里 base64 载荷的明文（仅采纳"像 shell 命令"的），供二次匹配 */
+function decodeBase64Payloads(s: string): string[] {
+  const out: string[] = []
+  const hasMarker = B64_MARKER_RE.test(s)
+  B64_TOKEN_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = B64_TOKEN_RE.exec(s))) {
+    try {
+      const dec = Buffer.from(m[0], 'base64').toString('utf8')
+      if (!dec) {continue}
+      const looksShell = SHELLISH_RE.test(dec) && /\s/.test(dec) && RISKY_VERB_RE.test(dec)
+      // 有显式解码标记时放宽（只要可打印）；否则要求"像命令"
+      if (looksShell || (hasMarker && SHELLISH_RE.test(dec))) {out.push(dec)}
+    } catch { /* 解码失败忽略 */ }
+  }
+  return out
+}
+
+/**
+ * 把一条命令展开成"语义等价"的候选形态集合（纯函数、无 I/O、可单测）。
+ * 规则库会对集合里每个形态各跑一遍，取最高严重度。
+ */
+export function normalizeCommand(cmd: string): string[] {
+  const forms = new Set<string>([cmd])
+  const add = (v: string | null | undefined): void => { if (v) {forms.add(v)} }
+
+  const uri = safeDecodeURI(cmd); add(uri)
+  const unesc = unescapeBackslashes(cmd); add(unesc)
+  const noNull = cmd.replace(/\x00/g, ''); add(noNull)
+  add(noNull.replace(/\s+/g, ' '))
+
+  // base64 载荷：解出的明文本身也再做一遍 URI/转义归一化
+  for (const dec of decodeBase64Payloads(cmd)) {
+    add(dec)
+    add(safeDecodeURI(dec))
+    add(unescapeBackslashes(dec))
+  }
+  // 若原文是百分号/转义形态，其 base64 载荷也要覆盖
+  for (const base of [uri, unesc]) {
+    if (!base) {continue}
+    for (const dec of decodeBase64Payloads(base)) {add(dec)}
+  }
+  return [...forms]
+}
+
+// ──────────────────────────────────────────────────────────
 // 纯函数：评估一条命令
 // ──────────────────────────────────────────────────────────
 
 /**
  * 评估一条 shell 命令 / 待键入文本的安全风险。
  * 纯函数，无 I/O，可直接单测。
+ *
+ * 2026-10-08：先对命令做归一化（见 normalizeCommand），再对每个候选形态
+ * 逐一匹配规则，取最高严重度 —— 修复 base64 / 百分号 / 反斜杠 伪装的绕过面。
  *
  * @param cmd 原始命令或待键入文本
  * @returns 最高 severity + 全部命中规则 + 处置建议
@@ -356,15 +447,22 @@ export function evaluateCommand(cmd: string | undefined | null): CommandEvaluati
     summary: '安全',
   }
   if (!cmd) {return empty}
-  const s = String(cmd)
+  const raw = String(cmd)
   const active = activeRulesFor(process.platform)
+  // 候选形态：原文 + 各类归一化/解码结果（去重）
+  const forms = normalizeCommand(raw)
 
   const hits: RuleHit[] = []
+  const seen = new Set<string>()
   let max: Severity = Severity.SAFE
   for (const rule of active) {
-    // 重置 lastIndex（全局/粘性正则有状态；这里不用 g 标志，但保险起见每次重测前重置）
-    rule.pattern.lastIndex = 0
-    if (rule.pattern.test(s)) {
+    let matched = false
+    for (const form of forms) {
+      rule.pattern.lastIndex = 0
+      if (rule.pattern.test(form)) {matched = true; break}
+    }
+    if (matched && !seen.has(rule.id)) {
+      seen.add(rule.id)
       hits.push({
         id: rule.id,
         severity: rule.severity,

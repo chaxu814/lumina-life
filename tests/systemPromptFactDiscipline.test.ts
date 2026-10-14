@@ -203,10 +203,12 @@ describe('后台成员降级文案（角色统一）', () => {
   it('热茶的降级文案是审查员，不含"代码工程师/写代码"', async () => {
     for (const socialMode of [false, true]) {
       const prompt = await buildFallback('recha', socialMode)
-      expect(prompt).toContain('热茶')
-      expect(prompt).toContain('审查员')
-      expect(prompt, `热茶降级文案不应出现"代码工程师"（socialMode=${socialMode}）`).not.toContain('代码工程师')
-      expect(prompt, `热茶降级文案不应出现"写代码"（socialMode=${socialMode}）`).not.toContain('写代码')
+      // 只断言"角色文案"部分——共享的「自我认知」块会合法地提到团队里有代码工程师 Yak
+      const rolePart = prompt.split('## 🪞 自我认知')[0]
+      expect(rolePart).toContain('热茶')
+      expect(rolePart).toContain('审查员')
+      expect(rolePart, `热茶降级文案不应出现"代码工程师"（socialMode=${socialMode}）`).not.toContain('代码工程师')
+      expect(rolePart, `热茶降级文案不应出现"写代码"（socialMode=${socialMode}）`).not.toContain('写代码')
     }
   })
 })

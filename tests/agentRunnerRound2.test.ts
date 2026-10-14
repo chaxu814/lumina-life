@@ -21,7 +21,9 @@ import { join } from 'path'
 const root = join(__dirname, '..')
 const read = (p: string) => readFileSync(join(root, p), 'utf-8')
 
-const runner = read('electron/agentRunner.ts')
+// ⚠️ 2026-10-11：notExecutedNote 等纯函数辅助块已抽到 agentRunner.text.ts。
+//    合并两文件读取，断言不因文件拆分而失效。
+const runner = read('electron/agentRunner.ts') + '\n' + read('electron/agentRunner.text.ts')
 const provider = read('electron/core/llmProvider.ts')
 const personas = read('electron/agentTeamPersonas.ts')
 const souls = read('src/data/agentSouls.ts')
@@ -206,7 +208,9 @@ describe('⑤ 所有"没执行"路径统一措辞', () => {
   })
 
   it('并行情形的三条失败路径都改用 notExecutedNote', () => {
-    expect(runner).toContain('notExecutedNote(`工具 "${tc.function.name}" 已被安全门临时封禁')
+    // ⚠️ 2026-10-11：封禁文案改为中性措辞（不再把"封禁"和真实工具名写进给模型看的串里，
+    //    否则模型会原样复述给用户，实测出现过「搜索工具被临时封禁了」）。
+    expect(runner).toContain('notExecutedNote(`该能力本轮已暂停使用')
     expect(runner).toContain('notExecutedNote(`安全审查阻止了 ${tc.function.name}')
     expect(runner).toContain('notExecutedNote(`${tc.function.name} 需要审批但未获批准')
   })

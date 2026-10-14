@@ -61,19 +61,14 @@ const TEAM_MEMBERS = [
 ]
 
 // ─── 预设 LLM 配置 ─────────────────────────────────────
+// logo：复用 public/providers/ 下已打包的厂商 logo（与设置页 SettingsLLM 同一套资源）。
+//   没有 logo 的退回 icon 里的 emoji。
 const PRESET_LLMS = [
-  {
-    id: 'opencode-zen',
-    name: 'OpenCode Zen（免费在线）',
-    icon: '🎯',
-    desc: '无需注册、无需 Key，点击即可开始（推荐新用户）',
-    badge: '免费·开箱即用',
-    config: { provider: 'opencode-zen', baseUrl: 'https://opencode.ai/zen/v1', model: 'deepseek-v4-flash-free', apiKey: 'public' },
-  },
   {
     id: 'lmstudio',
     name: 'LM Studio',
     icon: '🖥️',
+    logo: 'providers/lmstudio.ico',
     desc: '本地运行，完全免费，保护隐私',
     badge: '离线·免费',
     config: { provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: 'local-model' },
@@ -82,6 +77,7 @@ const PRESET_LLMS = [
     id: 'ollama',
     name: 'Ollama',
     icon: '🦙',
+    logo: 'providers/ollama.svg',
     desc: '本地运行，完全免费，可「自动检测」已装模型',
     badge: '离线·免费',
     config: { provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' },
@@ -90,6 +86,7 @@ const PRESET_LLMS = [
     id: 'deepseek',
     name: 'DeepSeek',
     icon: '🌊',
+    logo: 'providers/deepseek.svg',
     desc: '超低价，中文理解能力强，速度快',
     badge: '云端·超低价',
     config: { provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
@@ -99,6 +96,7 @@ const PRESET_LLMS = [
     id: 'siliconflow',
     name: '硅基流动',
     icon: '💎',
+    logo: 'providers/siliconflow.ico',
     desc: '多模型聚合平台，送免费额度',
     badge: '云端·有免费额度',
     config: { provider: 'siliconflow', baseUrl: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-7B-Instruct' },
@@ -108,12 +106,49 @@ const PRESET_LLMS = [
     id: 'openai',
     name: 'OpenAI',
     icon: '🤖',
-    desc: 'GPT-4o 最强模型，适合所有场景',
+    logo: 'providers/openai.svg',
+    desc: 'OpenAI 最强模型，适合所有场景',
     badge: '云端·最强',
     config: { provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
     needApiKey: true,
   },
+  {
+    id: 'custom',
+    name: '自定义',
+    icon: '⚙️',
+    desc: '自填服务地址、模型名（兼容 OpenAI /chat/completions 协议）',
+    badge: '自定义',
+    config: { provider: 'custom', baseUrl: '', model: '' },
+    needApiKey: true,
+  },
 ]
+
+/* ── 厂商 logo 缩略图 ──
+ * 与设置页 SettingsLLM.ProviderLogo 同一套做法：logo 多为黑色单色图形，
+ * 放白底小方块里，浅色/深色主题下都清晰；图裂了（缺文件/格式不支持）
+ * 自动退回 emoji，不留破图。
+ */
+function PresetLogo({ logo, icon, size = 26 }: { logo?: string; icon: string; size?: number }) {
+  const [broken, setBroken] = useState(false)
+  if (logo && !broken) {
+    return (
+      <img
+        src={logo}
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+        onError={() => setBroken(true)}
+        style={{
+          width: size, height: size, objectFit: 'contain', flexShrink: 0,
+          background: '#fff', borderRadius: 6, padding: 2,
+          border: '1px solid var(--border-light)',
+        }}
+      />
+    )
+  }
+  return <span style={{ fontSize: 24, lineHeight: 1 }} aria-hidden>{icon}</span>
+}
 
 // ─── 性格选项 ──────────────────────────────────────────
 const PERSONALITIES = [
@@ -170,9 +205,11 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
   )
 }
 
-function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
-  const [selected, setSelected] = useState<string>('opencode-zen')
+function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () => void; onBack: () => void }) {
+  const [selected, setSelected] = useState<string>('lmstudio')
   const [apiKey, setApiKey] = useState('')
+  const [customBaseUrl, setCustomBaseUrl] = useState('')
+  const [customModel, setCustomModel] = useState('')
   const [detecting, setDetecting] = useState(false)
   const [found, setFound] = useState<any[]>([])
   const [detectMsg, setDetectMsg] = useState('')
@@ -196,8 +233,20 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
   const handleConfirm = async () => {
     const preset = PRESET_LLMS.find(p => p.id === selected)
     if (preset) {
+      let baseUrl = preset.config.baseUrl
+      let model = preset.config.model
+      if (selected === 'custom') {
+        const trimmedUrl = customBaseUrl.trim()
+        const trimmedModel = customModel.trim()
+        if (!trimmedUrl || !trimmedModel) {
+          setDetectMsg('⚠️ 请填写「服务地址」和「模型名」后再继续。')
+          return
+        }
+        baseUrl = trimmedUrl
+        model = trimmedModel
+      }
       const key = (preset as any).config.apiKey || (preset.needApiKey ? apiKey : '')
-      await persist(preset.config.provider, preset.config.baseUrl, preset.config.model, key)
+      await persist(preset.config.provider, baseUrl, model, key)
     }
     onNext()
   }
@@ -252,7 +301,7 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
               background: selected === p.id ? 'var(--accent-50)' : 'var(--surface-0)',
               transition: 'all 0.15s',
             }}>
-            <span style={{ fontSize: 24 }}>{p.icon}</span>
+            <PresetLogo logo={(p as any).logo} icon={p.icon} />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{p.name}</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.desc}</div>
@@ -295,13 +344,39 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
         </div>
       )}
 
+      {selected === 'custom' && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+            服务地址（Base URL）
+          </div>
+          <input value={customBaseUrl} onChange={e => setCustomBaseUrl(e.target.value)}
+            placeholder="https://your-endpoint.com/v1"
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
+              fontSize: 13, outline: 'none', background: 'var(--surface-0)',
+            }} />
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, marginTop: 8 }}>
+            模型名
+          </div>
+          <input value={customModel} onChange={e => setCustomModel(e.target.value)}
+            placeholder="your-model-name"
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
+              fontSize: 13, outline: 'none', background: 'var(--surface-0)',
+            }} />
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.5 }}>
+            需兼容 OpenAI /chat/completions 协议。填写后可在设置页继续微调。
+          </div>
+        </div>
+      )}
+
       {PRESET_LLMS.find(p => p.id === selected)?.needApiKey && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
             输入 API Key（可在设置页面随时修改）
           </div>
           <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-            placeholder="sk-..."
+            placeholder={selected === 'custom' ? '可留空（部分自建端点无需 Key）' : 'sk-...'}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
               fontSize: 13, outline: 'none', background: 'var(--surface-0)',
@@ -310,9 +385,10 @@ function LLMStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <button onClick={onBack} className="onboarding-btn-secondary">← 上一步</button>
         <button onClick={onSkip} className="onboarding-btn-secondary">跳过</button>
         <button onClick={handleConfirm} className="onboarding-btn-primary" style={{ flex: 1 }}>
-          {selected === 'opencode-zen' ? '免费开始（无需 Key）' : '确认并继续'}
+          {PRESET_LLMS.find(p => p.id === selected)?.needApiKey ? '确认并继续' : '免费开始（无需 Key）'}
         </button>
       </div>
     </div>
@@ -614,14 +690,18 @@ export default function OnboardingWizard() {
         }}>
           {current.id === 'welcome' && <WelcomeStep onNext={goNext} />}
           {current.id === 'llm' && (
-            <LLMStep onNext={goNext} onSkip={skipAll} />
+            <LLMStep
+              onNext={goNext}
+              onSkip={skipAll}
+              onBack={() => setStepIndex(i => Math.max(0, i - 1))}
+            />
           )}
           {current.id === 'personality' && <PersonalityStep onNext={goNext} />}
           {current.id === 'team' && <TeamStep onNext={goNext} />}
           {current.id === 'done' && (
             <DoneStep
               onFinish={handleFinish}
-              onBack={() => setStepIndex(i => Math.max(0, i - 2))}
+              onBack={() => setStepIndex(i => Math.max(0, i - 3))}
             />
           )}
         </div>

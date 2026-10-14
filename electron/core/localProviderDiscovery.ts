@@ -291,6 +291,65 @@ export async function probeCandidateDetailed(
   }
 }
 
+/**
+ * 严格探测一个 Agent 实际使用的本地端点与 API Key。
+ * 与 discoverLocalProvidersDetailed（发现任意可用本地服务）不同，此函数：
+ *   - 只请求传入的 baseUrl；
+ *   - 只使用传入的 apiKey；
+ *   - 不尝试其它 Agent 的 key，也不回写/切换全局 Provider。
+ * 因而它的「就绪」结果可以对应实际发送配置，不会由别的候选/key 假阳性。
+ */
+export async function probeConfiguredLocalProviderDetailed(
+  baseUrl: string,
+  providerId: string | undefined,
+  apiKey: string | undefined,
+  timeoutMs = 3000,
+): Promise<CandidateProbe> {
+  const normalizedBase = String(baseUrl || '').trim().replace(/\/+$/, '')
+  const normalizedProvider = String(providerId || '').toLowerCase()
+  const isOllama = normalizedProvider === 'ollama'
+    || /\/api\/tags$/i.test(normalizedBase)
+    || (!normalizedProvider && /:11434(?:\/|$)/i.test(normalizedBase))
+
+  let candidateBase = normalizedBase
+  let modelsPath: string
+  if (isOllama) {
+    if (/\/api\/tags$/i.test(candidateBase)) {
+      candidateBase = candidateBase.replace(/\/api\/tags$/i, '')
+    }
+    modelsPath = '/api/tags'
+  } else if (/\/v1\/models$/i.test(candidateBase)) {
+    candidateBase = candidateBase.replace(/\/models$/i, '')
+    modelsPath = '/models'
+  } else if (/\/models$/i.test(candidateBase)) {
+    candidateBase = candidateBase.replace(/\/models$/i, '')
+    modelsPath = '/models'
+  } else {
+    modelsPath = /\/v1$/i.test(candidateBase) ? '/models' : '/v1/models'
+  }
+
+  const candidate: LocalCandidate = {
+    id: normalizedProvider || 'configured-local',
+    label: '当前 Agent 配置的本地服务',
+    baseUrl: candidateBase,
+    modelsPath,
+    format: isOllama ? 'ollama' : 'openai',
+    preferKeywords: [],
+  }
+  if (!candidateBase || !/^https?:\/\//i.test(candidateBase)) {
+    return {
+      candidate,
+      provider: null,
+      failure: {
+        kind: 'unreachable',
+        baseUrl: normalizedBase,
+        advice: '当前 Agent 的本地服务地址为空或格式无效，请检查 Lumina Team 供应商配置。',
+      },
+    }
+  }
+  return probeCandidateDetailed(candidate, timeoutMs, apiKey)
+}
+
 /** 探测单个候选（网络），失败返回 null（向后兼容的薄包装） */
 export async function probeCandidate(
   c: LocalCandidate,

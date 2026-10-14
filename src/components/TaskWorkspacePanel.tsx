@@ -12,6 +12,7 @@
 // ============================================================
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { isImeComposing } from '../lib/ime'
 import { useTaskWorkspace, mapAgentEventToTimeline, getPanelWrapperClass } from '../stores/taskWorkspaceStore'
 import { useAgentRuntime } from '../stores/agentRuntimeStore'
 import { useLoopStore } from '../stores/loopStore'
@@ -152,6 +153,15 @@ const TaskWorkspacePanel: React.FC = () => {
             <span>🌐 浏览器</span>
           </button>
 
+          {/* 🆕 一键派人：从工作区直接打开任务派发中心（不切回聊天框） */}
+          <button
+            className="tw-tab"
+            title="派人：打开任务派发中心"
+            onClick={() => { window.dispatchEvent(new CustomEvent('lumina:open-dispatcher')) }}
+          >
+            <span>📋 派人</span>
+          </button>
+
           {/* 主视图切换：对话摘要（默认）/ 详情（时间线·工具·产物） */}
           <button
             className={`tw-tab tw-tab-view ${panelView === 'summary' ? 'active' : ''}`}
@@ -214,6 +224,7 @@ const TaskWorkspacePanel: React.FC = () => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
+              if (isImeComposing(e)) {return}
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleSend()

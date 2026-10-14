@@ -28,6 +28,9 @@
 
 import type { TeamMemberId } from '../agentTeamTypes'
 import { analyzeClarity } from './clarifyScope'
+// 🎯 任务类型识别：纯推理 / 知识 / 闲聊类问题，Lumina 自己就能答，
+//   不必外派，也不必为此多调一次 LLM 仲裁（省一次调用 + 避免误派）。
+import { profileTask } from './taskProfiler'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -288,6 +291,23 @@ export function classifyByRules(input: RouteInput): RuleVerdict {
     }
   }
 
+  // ── ①.5 任务类型先行：纯推理 / 闲聊 → Lumina 自己答 ──
+  //   这些类型的答案是「推导出来的」或「随口聊的」，既不该派给 Yak/热茶，
+  //   也不该触发 LLM 仲裁（仲裁只为「该谁干」服务，对这类问题纯属多余的一次调用）。
+  //   例：「集合 C={...} 子集 N 个元素 不含五个连续整数 概率」——
+  //   判为 reasoning → 直接 lumina/high，零额外 LLM 调用，也杜绝了误派。
+  //   ⚠️ 只放 reasoning/chat：knowledge 里含「是什么」，会让「优缺点是什么」
+  //      这类本该给热茶的审查请求被误抢，所以 knowledge 放到 yak/recha 之后判。
+  const profile = profileTask(text)
+  if (profile.kind === 'reasoning' || profile.kind === 'chat') {
+    return {
+      target: 'lumina',
+      confidence: 'high',
+      signals: [profile.kind, ...profile.signals.slice(0, 2)],
+      reason: `任务类型为「${profile.kind}」（${profile.signals.slice(0, 3).join('、') || '自含问题'}），Lumina 直接作答`,
+    }
+  }
+
   const yakHits = matchAll(text, YAK_STRONG)
   const rechaHits = matchAll(text, RECHA_STRONG)
 
@@ -322,7 +342,19 @@ export function classifyByRules(input: RouteInput): RuleVerdict {
     }
   }
 
-  // ── ④ 一个都没命中：歧义，交给 LLM 仲裁 ──
+  // ── ④ 一个都没命中：先看是不是「知识解释」类 ──
+  //   放到这里（yak/recha 之后）是为了让明确的代码/审查请求优先；
+  //   只有确实没人接的知识类问题，才由 Lumina 直接用自身知识作答。
+  if (profile.kind === 'knowledge') {
+    return {
+      target: 'lumina',
+      confidence: 'high',
+      signals: [profile.kind, ...profile.signals.slice(0, 2)],
+      reason: `知识解释类问题（${profile.signals.slice(0, 3).join('、')}），Lumina 直接用自身知识作答`,
+    }
+  }
+
+  // ── ⑤ 一个都没命中：歧义，交给 LLM 仲裁 ──
   //   这正是旧正则的盲区：「这玩意跑起来就崩，你帮我看看」之类。
   return {
     target: null,

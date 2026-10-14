@@ -4,6 +4,10 @@
 // 核心架构: 多 Agent 协作 · 记忆系统 · 安全审查 · Session 管理 · 审批流
 // ============================================================
 
+// ⚠️ 必须第一个 import：在任何其它模块碰 app.getPath('userData') 之前
+// 锁定应用名（否则 dev 与打包版会各用一个 userData 目录，配置互相漂移）。
+import './appName'
+
 // 必须在最顶部加载环境变量，否则 process.env 不生效
 import 'dotenv/config'
 
@@ -38,6 +42,8 @@ import { join } from 'path'
 //
 // setName 必须在最顶部执行 —— 一旦有模块先调了 getPath('userData')，
 // 目录就已经被定死了，之后再改名也来不及。
+// 注：真正生效的 setName 已上移到文件第一行的 `import './appName'`。
+// 这里再调一次是幂等兜底（防止将来有人误删那个 import 导致目录又漂）。
 app.setName('Lumina Life')
 
 // 旧目录数据并入：必须在任何模块读 userData 之前。
@@ -247,10 +253,39 @@ function createWindow(): BrowserWindow {
     show: false,
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  // ── 渲染页加载（带兜底）─────────────────────────────────
+  // 【为什么需要兜底】开发模式下渲染页由 Vite dev server 提供（ELECTRON_RENDERER_URL）。
+  //   一旦 dev server 未就绪 / 中途挂掉，loadURL 会失败，窗口就是**一片白**，
+  //   而用户完全不知道发生了什么（实测踩过：构建失败 → dev server 没起来 → 白屏，
+  //   桌宠窗口走 file:// 却正常，症状很迷惑）。
+  //   这里：失败自动重试几次；仍失败则回退到已构建的 out/renderer/index.html，
+  //   并打印清晰日志 —— 宁可显示"稍旧的 UI"，也不要一片白。
+  const rendererUrl = process.env.ELECTRON_RENDERER_URL
+  const builtRenderer = join(__dirname, '../renderer/index.html')
+  if (rendererUrl) {
+    let devRetries = 0
+    let fellBack = false
+    const MAX_DEV_RETRIES = 6
+    const loadDev = () => { win.loadURL(rendererUrl).catch(() => { /* 失败由 did-fail-load 兜底 */ }) }
+    win.webContents.on('did-fail-load', (_e, code, desc, _url, isMainFrame) => {
+      // -3 = ERR_ABORTED（正常导航被中断），忽略；只处理主框架
+      if (isMainFrame === false || code === -3) { return }
+      if (fellBack) { return }
+      if (devRetries < MAX_DEV_RETRIES) {
+        devRetries++
+        console.warn(`[main] ⚠️ 渲染页加载失败(${code} ${desc})，重试 ${devRetries}/${MAX_DEV_RETRIES}…`)
+        setTimeout(loadDev, 400 * devRetries)
+      } else {
+        fellBack = true
+        console.error(`[main] ❌ 开发服务器连续不可用(${code} ${desc})，回退到已构建的渲染页：${builtRenderer}`)
+        win.loadFile(builtRenderer).catch((err) => {
+          console.error('[main] 回退渲染页也加载失败:', err)
+        })
+      }
+    })
+    loadDev()
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(builtRenderer)
   }
 
   createAppMenu(win)
@@ -538,7 +573,11 @@ app.whenReady().then(async () => {
   }
 
   // ── 🔒 安全策略 ─────────────────────────────────────
-  // 安全已通过 webPreferences 保障（contextIsolation + nodeIntegration:false + sandbox），
+  // 渲染进程安全基线：contextIsolation:true + nodeIntegration:false。
+  // ⚠️ 注意：webPreferences 里 Chromium sandbox 实际为 **false**（见 createWindow）。
+  //    因此"安全"由**应用层**承担：rolePolicy 角色闸门 + securityGuard +
+  //    sandboxRules 命令规则库（含编码归一化）+ 审批流 + shell 四层沙箱。
+  //    不要再声称"已通过 sandbox 保障"，以免安全审计时被指声明与实现不符。
   // 不在 Response Header 层加 CSP（会误伤 dev server HMR / file:// 协议加载）??  // 如需对外部加载的 webview ??CSP，在 webview 标签??partition 上单独设置??
   // ── v6.0: 初始??Agent 独立 LLM 配置 + 委托管理??──
   const agentConfig = initAgentConfig()
@@ -939,23 +978,42 @@ const gamificationData = loadGamificationData()
     console.warn('[main] ⚠️ 游戏化初始化失败:', e)
   }
 
+  /**
+   * 安全的 webContents.send —— 捕获「结构化克隆失败」并给出可定位的告警。
+   *
+   * 【为什么需要】Electron IPC 使用**结构化克隆**算法，函数 / Symbol /
+   *   class 实例的方法等都无法克隆。一旦某个事件载荷带了这类值，`send` 会抛
+   *   `Error: Failed to serialize arguments`；而它发生在事件回调里，
+   *   于是变成 dev 控制台一行看不出出处的红字
+   *   （2026-10-10 实测踩过：成就事件把带 `condition` 函数的定义对象整个发了出去）。
+   *   这里降级为一条**带 channel 名**的告警：既不再刷红，又能一眼定位是哪个通道。
+   */
+  const safeSendToRenderer = (win: typeof mainWindow, channel: string, payload?: unknown): void => {
+    try {
+      if (!win || win.isDestroyed()) {return}
+      win.webContents.send(channel, payload)
+    } catch (e: any) {
+      console.warn(`[main] ⚠️ 向渲染进程发送 "${channel}" 失败（载荷可能含函数等不可克隆值）:`, e?.message || e)
+    }
+  }
+
   // 🎮 成就/等级事件 ??转发到渲染进??+ 自动保存
   try {
     globalEventBus.on(BusEvents.ACHIEVEMENT_UNLOCKED, (achievement: any) => {
-      mainWindow?.webContents.send('gamification:achievement', achievement)
+      safeSendToRenderer(mainWindow, 'gamification:achievement', achievement)
       saveGamificationData()
     })
     globalEventBus.on(BusEvents.LEVEL_UP, (data: any) => {
-      mainWindow?.webContents.send('gamification:level-up', data)
+      safeSendToRenderer(mainWindow, 'gamification:level-up', data)
       saveGamificationData()
     })
     globalEventBus.on(BusEvents.XP_GAINED, (data: any) => {
-      mainWindow?.webContents.send('gamification:xp', data)
+      safeSendToRenderer(mainWindow, 'gamification:xp', data)
       saveGamificationData()
     })
     // 任务更新 -> 转发到渲染进程
     globalEventBus.on(BusEvents.QUEST_UPDATED, (data: any) => {
-      mainWindow?.webContents.send('gamification:quests-updated', data)
+      safeSendToRenderer(mainWindow, 'gamification:quests-updated', data)
     })
     // 每 30 秒定期保存（防崩溃丢数据）
     setInterval(() => { saveGamificationData() }, 30_000)
@@ -1457,23 +1515,33 @@ const sessionManager = getSessionManager()
       return { success: true, message: `## ${workspaceId} ??Skills\n\n${list}` }
     },
     agents: async () => {
+      // ⚠️ 角色口径已统一（v6.0 起）：Lumina 是唯一对用户入口，Yak/热茶 是后台工作者。
+      //    这里曾长期残留旧多角色模型的名字（luna/ray/sora），已更正。
       const agents = [
-        { name: 'luna', emoji: '🐱', desc: '温暖猫娘: 陪伴、聊天、情感支持' },
-        { name: 'ray', emoji: '💻', desc: '毒舌程序员: 写代码、Debug、技术问题' },
-        { name: 'sora', emoji: '📊', desc: '冷静分析师: 搜索、研究、数据分析' },
-        { name: 'assistant', emoji: '🤖', desc: '通用助手 ??综合任务处理' },
+        { name: 'lumina', emoji: '🐱', desc: '团队老大 · 唯一对用户入口：对话、情绪、派活、整理结果' },
+        { name: 'yak', emoji: '💻', desc: '代码工程师（后台）：写代码、调 bug、重构、跑测试' },
+        { name: 'recha', emoji: '🍵', desc: '审查员（后台）：代码审查、挑错、风险评估' },
       ]
-      const list = agents.map(a => `${a.emoji} **${a.name}** ??${a.desc}`).join('\n')
-      return { success: true, message: `## 可用 Agent 角色\n\n${list}\n\n使用 \`/switch <name>\` 切换。` }
+      const list = agents.map(a => `${a.emoji} **${a.name}** — ${a.desc}`).join('\n')
+      return {
+        success: true,
+        message: `## 团队角色\n\n${list}\n\n> 你平时只需要跟 Lumina 说话；想跳过自动路由、指定谁干活时，用 \`/yak <任务>\` 或 \`/recha <任务>\`。`,
+      }
     },
     switch: async (p) => {
-      const validRoles = ['luna', 'ray', 'sora', 'assistant']
+      // ⚠️ 旧实现校验的是 luna/ray/sora（早已废弃的名字），且 webContents.send
+      //    的 command:switch-agent 在渲染进程**没有任何消费方** —— 等于无效命令。
+      //    现按新模型更正为 lumina/yak/recha，并在文案里引导到确定性派活命令。
+      const validRoles = ['lumina', 'yak', 'recha']
       const target = p.args[0]?.toLowerCase()
-      if (!validRoles.includes(target)) {
-        return { success: false, message: `无效角色。可?? ${validRoles.join(', ')}` }
+      if (!target || !validRoles.includes(target)) {
+        return { success: false, message: `无效角色。可选: ${validRoles.join(', ')}` }
       }
       mainWindow?.webContents.send('command:switch-agent', target)
-      return { success: true, message: `已切换到 ${target}。` }
+      const hint = target === 'lumina'
+        ? '（Lumina 本来就是默认入口）'
+        : `（一次性指定请用 \`/${target} <任务>\`，更直接）`
+      return { success: true, message: `已切换到 ${target}。${hint}` }
     },
     approve: async (p) => {
       const result = getApprovalService().approve(p.args[0])

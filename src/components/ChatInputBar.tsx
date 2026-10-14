@@ -13,6 +13,7 @@ import LuckyModeSettings from './LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
 import type { LuckySettingsConfig } from './LuckyModeSettings'
 import { sttService, type STTStatus } from '../services/sttService'
+import { handlePasteInsert } from '../lib/pasteInsert'
 
 interface ChatInputBarProps {
   input: string
@@ -151,6 +152,7 @@ export default function ChatInputBar({
             ref={textareaRef}
             value={input}
             onChange={e => { setInput(e.target.value); autoResize() }}
+            onPaste={e => handlePasteInsert(e, input, setInput)}
             onKeyDown={handleKeyDown}
             aria-label="消息输入框"
             placeholder={isProcessing ? t('chat.replying') : (placeholder || t('chat.placeholder'))}

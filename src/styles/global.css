@@ -86,7 +86,7 @@
   --font-size-xs:  11px;   /* sidebar label, secondary info */
   --font-size-sm:  12px;   /* small text / timestamps */
   --font-size-base:13px;   /* sidebar items, most UI text (← 比 14px 更适合面板密集场景) */
-  --font-size-md:  14px;   /* chat content, body text (← global 默认) */
+  --font-size-md:  15px;   /* chat content, body text (← global 默认；中文雅黑舒适阅读下限 15px) */
   --font-size-lg:  16px;   /* panel title / agent name */
   --font-size-xl:  18px;   /* topbar / heading */
   --font-size-2xl: 24px;   /* modal large heading */

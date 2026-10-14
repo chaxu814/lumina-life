@@ -141,6 +141,85 @@ export class AgentDialogManager {
     return messages.sort((a, b) => a.timestamp - b.timestamp)
   }
 
+  /**
+   * 列出该 Agent 的所有会话（从 dialog 日志聚合）。
+   *
+   * 🆕 2026-10-13：为「换了运行模式后前端看不到历史」兜底。
+   *
+   *   前端的会话存在 **localStorage**，而 localStorage **按 origin 隔离** ——
+   *   开发模式是 `http://localhost:5173`、打包模式是 `file://`，
+   *   两边互不可见（实测落盘里确实存在两个 origin 的数据）。
+   *   用户切换运行方式后会发现「历史全没了」。
+   *
+   *   而 dialog 日志是**主进程的文件**，不受 origin 影响 —— 所以可以从它重建。
+   *
+   * 只返回「至少有一条真实用户发言」的会话（过滤掉纯工具/系统残留），
+   * 按最后活跃时间倒序；每个会话最多带 `maxMessagesPerSession` 条消息，
+   * 避免一次 IPC 传几十 MB（实测单个 session 可有 7791 条）。
+   */
+  listSessions(agentId: string, maxMessagesPerSession = 200): Array<{
+    id: string
+    lastAt: number
+    count: number
+    preview: string
+    messages: Array<{ from: string; content: string; time: string }>
+  }> {
+    const dialogDir = this._getDialogDir(agentId)
+    if (!fs.existsSync(dialogDir)) {return []}
+
+    const byId = new Map<string, DialogMessage[]>()
+    const files = fs.readdirSync(dialogDir).filter(f => f.endsWith('.jsonl')).sort()
+    for (const file of files) {
+      const filePath = path.join(dialogDir, file)
+      try {
+        const raw = fs.readFileSync(filePath, 'utf-8')
+        for (const line of raw.split('\n')) {
+          if (!line.trim()) {continue}
+          let msg: DialogMessage
+          try { msg = JSON.parse(line) as DialogMessage } catch { continue }
+          if (!msg.sessionId || msg.role === 'system') {continue}
+          const arr = byId.get(msg.sessionId)
+          if (arr) {arr.push(msg)} else {byId.set(msg.sessionId, [msg])}
+        }
+      } catch (e) {
+        console.warn(`[AgentDialog] 聚合会话时读取 ${filePath} 失败:`, e)
+      }
+    }
+
+    const out: Array<{
+      id: string
+      lastAt: number
+      count: number
+      preview: string
+      messages: Array<{ from: string; content: string; time: string }>
+    }> = []
+
+    for (const [id, msgs] of byId) {
+      msgs.sort((a, b) => a.timestamp - b.timestamp)
+      const users = msgs.filter(
+        m => m.role === 'user' && typeof m.content === 'string' && m.content.trim(),
+      )
+      // 没有真实用户发言的（纯工具调用残留）不算会话
+      if (users.length === 0) {continue}
+      const tail = msgs.slice(-maxMessagesPerSession)
+      out.push({
+        id,
+        lastAt: msgs[msgs.length - 1]?.timestamp || 0,
+        count: msgs.length,
+        preview: String(users[users.length - 1].content).slice(0, 30),
+        messages: tail.map(m => ({
+          from: m.role === 'user' ? 'user' : (m.agentId || 'lumina'),
+          content: typeof m.content === 'string' ? m.content : '',
+          time: new Date(m.timestamp).toLocaleTimeString('zh-CN', {
+            hour: '2-digit', minute: '2-digit',
+          }),
+        })),
+      })
+    }
+
+    return out.sort((a, b) => b.lastAt - a.lastAt)
+  }
+
   /** 读取指定日期范围的对话 */
   readByDateRange(agentId: string, startDate: string, endDate: string, sessionId?: string): DialogMessage[] {
     const messages: DialogMessage[] = []

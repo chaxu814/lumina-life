@@ -139,6 +139,8 @@ export async function autoExtractFacts(
     if (!jsonMatch) {return}
 
     const parsed = JSON.parse(jsonMatch[0])
+    // 🔗 记忆与进化 ·「对话记忆」开关：关掉后不再把对话自动提取成事实
+    if (!isEnabled('memory.conversation')) {return}
     const store = getMemoryStore()
     for (const fact of (parsed.facts || [])) {
       // 为什么丢掉 fact.confidence：LLM 说「这条有 0.95 的把握」是自我评价，不是证据。
@@ -261,6 +263,8 @@ export async function autoGenerateReflections(
     if (!jsonMatch) {return}
 
     const parsed = JSON.parse(jsonMatch[0])
+    // 🔗 记忆与进化 ·「对话记忆」开关：关掉后不再自动生成反思
+    if (!isEnabled('memory.conversation')) {return}
     const store = getMemoryStore()
     for (const ref of (parsed.reflections || [])) {
       store.addReflection({

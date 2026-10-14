@@ -14,6 +14,7 @@
 // ============================================================
 
 import { AgentRunner } from '../agentRunner'
+import { buildSelfKnowledgeBlock } from '../selfKnowledge'
 import { registerTeamMember, unregisterTeamMember, listTeamMembers } from '../core/teamRegistry'
 import { getTeamMailbox } from './teamMailbox'
 import {
@@ -54,6 +55,11 @@ export interface RoleSpec {
 //   留下的 web_search 仍是本名单的第一条，因此模型若幻觉出这些名字，
 //   registry 的别名重定向会把它改成 web_search，随后在这里被拦下
 //   （执行层的 deniedTools 检查，见 registry.executeToolWithRetry）。
+/** 自我认知（compact）——临时工种也需要知道项目与团队；构建失败不影响主流程 */
+function safeSelfKnowledge(): string {
+  try { return buildSelfKnowledgeBlock(undefined, { compact: true }) } catch { return '' }
+}
+
 const BASE_BLOCKED = [
   'browser', 'web_fetch', 'web_search', 'web_search_multi',
   'screenshot', 'ocr',
@@ -308,6 +314,8 @@ export async function hireWorker(opts: HireOptions = {}): Promise<DynamicWorker>
     : ''
   const systemPrompt = [
     commonWorkerPrompt(role, name, spec, workdir),
+    // 自我认知：临时工种也要知道自己在什么项目、团队有谁（compact 版，避免 prompt 过长）
+    safeSelfKnowledge(),
     statsHint,
     budget.hint,
     scopeRule,

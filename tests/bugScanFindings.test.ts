@@ -63,7 +63,7 @@ describe('bugScan · 供应商按钮落盘', () => {
   })
 
   it('每个供应商按钮组都落盘（主区走 switchAndPersist，Team Agent 走 handleAgentProvider）', () => {
-    // 2026-10-04：移除「免费模型（OpenCode Zen）」入口后，供应商按钮组从 3 组变 4 组中的 2 组主区 + 2 组 Team Agent。
+    // 供应商按钮组现为：2 组主区（本地 / 云端）+ 2 组 Team Agent。
     // 原先断言 `switchAndPersist >= 3` 只是把「按钮数量」当成了「落盘覆盖」的代理指标；
     // 且它没覆盖 Team Agent 区（那里按设计走 handleAgentProvider，不是 switchAndPersist）。
     // 真正的不变式是：没有任何供应商按钮绕开落盘入口。上面那条「零裸调用」是这个不变式的硬保证，

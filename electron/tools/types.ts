@@ -116,9 +116,18 @@ export interface AgentRunConfig {
   noAutoSearch?: boolean
   /** v3.30 团队成本分级：动态 worker 用小模型干杂活时，覆盖 persona 配置中的模型名（baseUrl/apiKey 仍跟随 persona） */
   modelOverride?: string
+  /** 🆕 2026-10-10: 后台任务（自主刷新面板 / 朋友圈 / 定时轮询）标记。
+   *  与用户对话共用 agent:chat 通道，但**不得打断**在途的用户请求，
+   *  也不占用 activeAgent / activeAgentRunning；前台在跑时直接跳过。
+   *  详见 electron/ipc/agentIpc.ts 的并发控制注释。 */
+  background?: boolean
+  /** 🆕 2026-10-10（P2-1）：本次请求的唯一 id。主进程会把它原样回显在每条
+   *  `agent:event` 上，前端据此丢弃「不属于本次请求」的事件（防思考面板串台）。 */
+  requestId?: string
 }
 
-export type AgentEvent =
+/** Agent 事件的本体（不含请求归属字段） */
+type AgentEventBody =
   | { type: 'thinking'; text?: string }
   | { type: 'thinking_stream'; text?: string; isFirst?: boolean; isLast?: boolean }
   | { type: 'text_stream'; content?: string }
@@ -132,3 +141,12 @@ export type AgentEvent =
   | { type: 'memory_summary'; summary: string }
   | { type: 'token_update'; totalTokens: number; delta: number; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }; promptTokens?: number; contextWindow?: number }
   | { type: 'incremental_tool'; toolCall: LLMToolCall }
+
+/**
+ * 主进程 → 渲染进程的 Agent 事件。
+ *
+ * 🆕 2026-10-10（P2-1）：附带 `requestId`（主进程按请求回显）。
+ *   前端订阅时应丢弃 `requestId` 与本次请求不符的事件，
+ *   避免在途的后台任务把 thinking_stream / tool_* 串进当前回复的思考面板。
+ */
+export type AgentEvent = AgentEventBody & { requestId?: string }

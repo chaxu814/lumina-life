@@ -7,6 +7,7 @@ import { ipcMain, app } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import { getMemoryStore, MemoryVectorStore, normalizeFactSource } from '../memory/memoryStore'
+import { isEnabled } from '../core/featureFlags'
 import { getSessionManager, type SessionData } from '../sessionManager'
 import { MessageHistory, isMultimodalMessage, extractMultimodalText, type MultimodalContentItem } from '../msgHistory'
 import { ScrollContext } from '../memory/scrollContext'
@@ -121,6 +122,20 @@ export function registerMemoryIpc(): void {
   // ─── Memory ──────────────────────────────────────
 
   ipcMain.handle('memory:save', (_event, params: { category: string; content: string; source?: string }) => {
+    // 🆕 会话级「生成记忆」总闸（对标 MiniMax Code）：
+    //    关掉后一律不写新记忆 —— 且如实告知，不假装存了。
+    if (!isEnabled('memory.write')) {
+      return { ok: false, error: '「生成记忆」已关闭（设置 → 记忆与进化），本次未记录。可在会话中随时重新打开。' }
+    }
+    // 🔗 记忆与进化开关：关掉后直接拒绝并如实告知（不假装存了）
+    if (['preference', 'habit', 'fact', 'reflection'].includes(params.category)
+        && !isEnabled('memory.conversation')) {
+      return { ok: false, error: '「对话记忆」已在 设置 → 记忆与进化 中关闭，本次未记录。' }
+    }
+    if (['lesson', 'convention', 'system'].includes(params.category)
+        && !isEnabled('memory.localSkills')) {
+      return { ok: false, error: '「本地记忆与技能」已在 设置 → 记忆与进化 中关闭，本次未记录。' }
+    }
     const store = getMemoryStore(memoryPath)
     switch (params.category) {
       case 'preference': store.saveUserProfile({ preferences: [params.content] }); break
@@ -147,14 +162,27 @@ export function registerMemoryIpc(): void {
     return store.getStructuredMemory()
   })
 
-  ipcMain.handle('memory:all', () => getMemoryStore(memoryPath).getMemoryInjectionText())
-  ipcMain.handle('memory:profile', () => getMemoryStore(memoryPath).getStructuredMemory())
+  // 🆕 会话级「使用记忆」闸门：关闭后不再把长期记忆注入对话上下文。
+  //    读取类接口返回「空 + 说明」，而不是抛错 —— 关掉记忆是正常设置，不是故障。
+  const recallDisabled = () => !isEnabled('memory.recall')
+
+  ipcMain.handle('memory:all', () => {
+    if (recallDisabled()) {return ''}
+    return getMemoryStore(memoryPath).getMemoryInjectionText()
+  })
+  ipcMain.handle('memory:profile', () => {
+    if (recallDisabled()) {return {}}
+    return getMemoryStore(memoryPath).getStructuredMemory()
+  })
 
   // ─── Vector Search ───────────────────────────────
 
   ipcMain.handle('memory:vector-search', async (_event, params: {
     query: string; topK?: number; minScore?: number
   }) => {
+    if (recallDisabled()) {
+      return { ok: true, results: [], disabled: true, reason: '「使用记忆」已关闭（设置 → 记忆与进化），本次未检索长期记忆。' }
+    }
     const store = getMemoryStore(memoryPath)
     const structured = store.getStructuredMemory()
 

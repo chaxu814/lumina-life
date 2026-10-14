@@ -31,7 +31,6 @@ describe('isLocalEndpoint', () => {
     'https://api.openai.com/v1',
     'https://api.deepseek.com/v1',
     'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    'https://opencode.ai/zen/v1',
     '',
     undefined,
     null,

@@ -4,14 +4,30 @@
   "description": "Lumina Life — 有生命的 AI 桌宠：Electron 多 Agent 团队协作 · 开源（AGPL-3.0 OR Apache-2.0）",
   "author": "Lumina Life Team <dev@lumina-life.app>",
   "license": "(AGPL-3.0 OR Apache-2.0)",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0",
+    "pnpm": ">=8.0.0",
+    "yarn": ">=1.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chaxu814/lumina-life.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chaxu814/lumina-life/issues"
+  },
+  "homepage": "https://github.com/chaxu814/lumina-life#readme",
   "main": "out/main/index.js",
   "bin": {
     "lumina": "./lumina.js"
   },
   "scripts": {
+    "predev": "node scripts/prebuild-clean.cjs",
     "dev": "electron-vite dev",
     "build:pet-life": "esbuild electron/pet/life/runtime.ts --bundle --format=iife --global-name=LuminaLife --charset=utf8 --outfile=electron/pet/assets/pet-life.js",
     "build:pet-voice": "esbuild electron/pet/lifeSpeech/voiceClient.ts --bundle --format=iife --global-name=LuminaVoice --charset=utf8 --external:electron --outfile=electron/pet/assets/pet-voice.js",
+    "prebuild": "node scripts/prebuild-clean.cjs",
     "build": "npm run build:pet-life && npm run build:pet-voice && npm run build:pet-vrm && electron-vite build",
     "preview": "electron-vite preview",
     "pack:win": "electron-vite build && electron-builder --win --x64",
@@ -161,10 +177,21 @@
     "dmg": {
       "title": "${productName} ${version}",
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ],
-      "window": { "width": 540, "height": 380 }
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "linux": {
       "target": [
@@ -216,7 +243,6 @@
     "electron-builder": "^26.8.1",
     "electron-vite": "^3.1.0",
     "eslint": "^9.10.0",
-    "mineflayer": "^4.20.0",
     "typescript": "^5.7.0",
     "unocss": "^66.7.5",
     "@unocss/preset-uno": "^66.7.5",
@@ -242,6 +268,9 @@
     "react-i18next": "^17.0.8",
     "screenshot-desktop": "^1.15.4",
     "three": "^0.169.0",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "mineflayer": "^4.20.0",
+    "ws": "^8.18.0",
+    "@babel/parser": "^7.23.0"
   }
 }

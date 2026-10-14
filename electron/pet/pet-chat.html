@@ -290,6 +290,17 @@ function addChatMsg(role, text) {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 function showTyping(show) { typingEl.classList.toggle('show', show); if (show) chatLog.scrollTop = chatLog.scrollHeight; }
+// 🆕 2026-10-13：等待态改为**计数**而不是布尔开关。
+//   桌宠侧是串行排队处理消息的（见 src/lib/petChatOrchestrator.ts：处理中到达的
+//   新消息排队而非丢弃）。排队时存在「前一条的回复先到、后一条仍在处理」的中间态，
+//   布尔开关会在第一条回复到达时就把动画关掉，后一条全程没有任何反馈。
+//   计数保证动画一直持续到**最后一个**请求回来为止。
+let _pendingReplies = 0;
+function beginWait() { _pendingReplies++; showTyping(true); }
+function endWait() {
+  _pendingReplies = Math.max(0, _pendingReplies - 1);
+  if (_pendingReplies === 0) showTyping(false);
+}
 // 当前显示中的选项组。
 // 【为什么要记下来，而不是每次各自 append】
 // 旧实现每次都新建一个 wrap 追加到聊天记录末尾，**从不清理上一组**。
@@ -369,14 +380,14 @@ function sendText(text) {
   if (!t) return;
   addChatMsg('user', t);
   if (chatInput) chatInput.value = '';
-  showTyping(true);
+  beginWait();
   if (HAS_IPC) {
     // 完整回复统一走 pet:sync 主 Agent 路径（串行排队 + 退避重试在主窗 PetChatSync 编排）。
     // 不再并发打 pet:chat 意图 LLM——避免与完整回复抢同一个本地模型导致冷启动失败。
     // 动作/表情等主 Agent 回复回来后，由回复文本本地派生（见 pet:sync-reply 处理）。
     try { ipc.send('pet:sync-send', { text: t }); } catch (e) {}
   } else {
-    showTyping(false);
+    endWait();
     addChatMsg('pet', '喵~');
   }
 }
@@ -414,7 +425,20 @@ document.querySelectorAll('.cp-quick-btn').forEach(btn => {
 // 主 Agent 回复
 if (HAS_IPC) {
   ipc.on('pet:sync-reply', (_e, data) => {
-    showTyping(false);
+    // 🆕 2026-10-13：收到「用户消息」回显 = 用户刚从**别处**发来一条消息 ——
+    //   具体是 Live2D 角色头顶的主动搭话卡片 A/B/C 选项（pet-live2d.html 的
+    //   replyProactive：它自己不在聊天窗里，只能靠 ipc 把用户气泡推过来）。
+    //   此时主 Agent 刚开始处理 → 必须进入「正在思考」三点动画。
+    //   旧实现这里无条件 showTyping(false)：输入框路径看不出来（sendText 自己
+    //   已经 showTyping(true)），但卡片选项路径**全程没有任何加载反馈** ——
+    //   用户点完 A/B/C 只看到一句自己的话，然后界面一动不动，以为程序卡死了。
+    //   输入框与聊天窗内选项走 sendText()，且主窗不会回推自己注入的 user 消息，
+    //   所以这里判断 role==='user' 不会给它们带来副作用。
+    if (data && data.role === 'user') {
+      beginWait();
+    } else {
+      endWait();
+    }
     if (data && data.text) {
       addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
       if (data.role !== 'user' && Array.isArray(data.options) && data.options.length) addChatOptions(data.options);

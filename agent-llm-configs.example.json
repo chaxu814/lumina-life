@@ -1,0 +1,35 @@
+{
+  "lumina": {
+    "enabled": true,
+    "provider": "deepseek",
+    "model": "deepseek-chat",
+    "endpoint": "https://api.deepseek.com/v1",
+    "apiKey": "在此填入你的 API Key（例如 sk-xxxxxxxx）",
+    "maxContextTokens": 131072,
+    "timeout": 600,
+    "configuredAt": 0,
+    "agentId": "lumina"
+  },
+  "yak": {
+    "enabled": true,
+    "provider": "deepseek",
+    "model": "deepseek-chat",
+    "endpoint": "https://api.deepseek.com/v1",
+    "apiKey": "在此填入你的 API Key（留空则降级使用 Lumina 的模型）",
+    "maxContextTokens": 131072,
+    "timeout": 600,
+    "configuredAt": 0,
+    "agentId": "yak"
+  },
+  "recha": {
+    "enabled": true,
+    "provider": "deepseek",
+    "model": "deepseek-chat",
+    "endpoint": "https://api.deepseek.com/v1",
+    "apiKey": "在此填入你的 API Key（留空则降级使用 Lumina 的模型）",
+    "maxContextTokens": 131072,
+    "timeout": 600,
+    "configuredAt": 0,
+    "agentId": "recha"
+  }
+}

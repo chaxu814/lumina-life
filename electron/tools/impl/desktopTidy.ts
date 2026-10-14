@@ -228,11 +228,31 @@ function isHiddenName(name: string): boolean {
  * 生成不冲突的文件名：已存在就在扩展名前加 ` (n)`。
  * taken 是本批次内已占用的文件名（小写），避免同一批里两个文件抢同一个名字。
  */
-async function resolveUniqueName(dir: string, fileName: string, taken: Set<string>): Promise<string> {
+/** 读取目录内已有文件名（小写集合）；目录不存在返回空集。
+ *  用于把"逐个 pathExists"降为"一次 readdir + 集合查找"，避免 200 次串行 fs 调用。 */
+async function listDirNames(dir: string): Promise<Set<string>> {
+  try {
+    const names = await fs.promises.readdir(dir)
+    return new Set(names.map(n => n.toLowerCase()))
+  } catch { return new Set() }
+}
+
+async function resolveUniqueName(
+  dir: string,
+  fileName: string,
+  taken: Set<string>,
+  /** 目录内已有名字的预加载集合；提供时不再逐个 pathExists（性能） */
+  existing?: Set<string>,
+): Promise<string> {
   const parsed = path.parse(fileName)
   let candidate = fileName
   let n = 1
-  while (taken.has(candidate.toLowerCase()) || await pathExists(path.join(dir, candidate))) {
+  const conflicts = async (name: string): Promise<boolean> => {
+    if (taken.has(name.toLowerCase())) {return true}
+    if (existing) {return existing.has(name.toLowerCase())}
+    return await pathExists(path.join(dir, name))
+  }
+  while (await conflicts(candidate)) {
     candidate = `${parsed.name} (${n})${parsed.ext}`
     n += 1
     if (n > 999) {break}   // 兜底：999 次还撞上就放弃改名，由调用方再复查一次
@@ -319,6 +339,8 @@ async function scanDesktop(
   // 目标目录 + 去重命名
   const entries: DesktopEntry[] = []
   const takenByDir = new Map<string, Set<string>>()
+  // 每个目标目录只 readdir 一次，避免 200 次串行 fs 调用（负载下会拖慢到超时）
+  const dirListingCache = new Map<string, Set<string>>()
   for (const item of limited) {
     const targetDir = path.join(desktopRoot, item.folder)
     // 安全不变量 2：目标路径同样必须落在桌面内（folder 来自白名单，这里是纵深防御）
@@ -327,8 +349,14 @@ async function scanDesktop(
       continue
     }
     const taken = takenByDir.get(targetDir) ?? new Set<string>()
-    const finalName = await resolveUniqueName(targetDir, item.name, taken)
+    let existing = dirListingCache.get(targetDir)
+    if (!existing) {
+      existing = await listDirNames(targetDir)
+      dirListingCache.set(targetDir, existing)
+    }
+    const finalName = await resolveUniqueName(targetDir, item.name, taken, existing)
     taken.add(finalName.toLowerCase())
+    existing.add(finalName.toLowerCase())
     takenByDir.set(targetDir, taken)
 
     entries.push({

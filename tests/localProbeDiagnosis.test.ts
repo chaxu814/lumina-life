@@ -19,6 +19,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   discoverLocalProvidersDetailed,
   probeCandidateDetailed,
+  probeConfiguredLocalProviderDetailed,
   type LocalCandidate,
 } from '../electron/core/localProviderDiscovery'
 
@@ -178,5 +179,54 @@ describe('本地探测 · 失败原因分类', () => {
     expect(r.provider).toBeNull()
     expect(r.failure).not.toBeNull()
     expect(r.failure!.kind).toBe('auth')
+  })
+
+  it('Team Agent 就绪探测只测指定端点与指定 Key，不用其它 Agent 的可用 Key 冒充', async () => {
+    const spy = vi.fn(async (input: any) => {
+      const url = String(input)
+      if (url !== 'http://192.168.1.20:1234/v1/models') {
+        return jsonResponse({ data: [{ id: 'wrong-endpoint-model' }] })
+      }
+      return new Response('Unauthorized', { status: 401 })
+    })
+    ;(globalThis as any).fetch = spy
+
+    const r = await probeConfiguredLocalProviderDetailed(
+      'http://192.168.1.20:1234/v1', 'lmstudio', 'lumina-wrong-key', 1000,
+    )
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0][0]).toBe('http://192.168.1.20:1234/v1/models')
+    expect(r.provider).toBeNull()
+    expect(r.failure?.kind).toBe('auth')
+  })
+
+  it('Team Agent 就绪探测用传入的准确 API Key 验证本地端点', async () => {
+    const spy = vi.fn(async (_input: any, init: any) => {
+      expect(init.headers.Authorization).toBe('Bearer exact-lumina-key')
+      return jsonResponse({ data: [{ id: 'qwen2.5-7b-instruct' }] })
+    })
+    ;(globalThis as any).fetch = spy
+
+    const r = await probeConfiguredLocalProviderDetailed(
+      'http://192.168.1.20:1234/v1', 'lmstudio', 'exact-lumina-key', 1000,
+    )
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(r.provider?.models).toEqual(['qwen2.5-7b-instruct'])
+    expect(r.failure).toBeNull()
+  })
+
+  it('指定 Ollama Agent 时只探测 /api/tags，并按 Ollama 格式解析模型', async () => {
+    const spy = vi.fn(async (input: any) => {
+      expect(String(input)).toBe('http://127.0.0.1:11434/api/tags')
+      return jsonResponse({ models: [{ name: 'qwen3:8b' }] })
+    })
+    ;(globalThis as any).fetch = spy
+
+    const r = await probeConfiguredLocalProviderDetailed(
+      'http://127.0.0.1:11434', 'ollama', '', 1000,
+    )
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(r.provider?.models).toEqual(['qwen3:8b'])
+    expect(r.failure).toBeNull()
   })
 })

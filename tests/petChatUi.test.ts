@@ -138,3 +138,53 @@ describe('思考过程 · 去轮次噪音', () => {
     expect(tsx).toMatch(/isError/)
   })
 })
+
+// ─────────────────────────────────────────────────────────────
+// petChatUi.test.ts — 2026-10-13 新增
+//
+// 【锁定的真实问题】点 Live2D 角色头顶搭话卡片的 A/B/C 选项后，
+// 聊天小窗里没有任何"正在思考"动画，用户以为程序卡死。
+//
+// 【根因】聊天窗的 `pet:sync-reply` 处理**无条件** showTyping(false)。
+//   · 输入框 / 聊天窗内选项走 sendText()，它自己已 showTyping(true)，看不出问题；
+//   · 但卡片选项在 Live2D 渲染页（pet-live2d.html 的 replyProactive），
+//     它只能靠 ipc 把用户气泡推给聊天窗 → 收到 role:'user' 时反被关掉动画，
+//     于是整轮对话从头到尾都是"静止"的。
+//
+// 【为什么断言写在源码上】pet-chat.html 是单文件内联页面，不参与打包，
+// 无法 import 逻辑做 DOM 测试 —— 与本文档其它用例保持同一口径。
+// ⚠️ 定位串必须选**注释里不会出现**的结构（我在注释里提到了 showTyping(false)），
+//    所以下面用带 if/else 结构的整段正则，而不是裸的字符串包含判断。
+// ─────────────────────────────────────────────────────────────
+
+describe('Live2D 聊天窗 · 从角色头顶卡片选项发起对话时的加载反馈', () => {
+  const html = read(PET_HTML)
+  const petWindowSrc = read(path.join(process.cwd(), 'electron', 'pet', 'petWindow.ts'))
+
+  it('收到「用户消息」回显时进入等待态（而不是把动画关掉）', () => {
+    expect(html).toMatch(/if \(data && data\.role === 'user'\)\s*\{\s*beginWait\(\)/)
+  })
+
+  it('助手回复到达时才结束等待态', () => {
+    expect(html).toMatch(/\}\s*else\s*\{\s*endWait\(\);\s*\}/)
+  })
+
+  it('等待态用计数而非布尔（排队时不会提前收掉动画）', () => {
+    // 桌宠侧串行排队：前一条回复到达时若直接关动画，排队中的后一条就全程没反馈
+    expect(html).toMatch(/let _pendingReplies = 0/)
+    expect(html).toMatch(/function beginWait\(\) \{ _pendingReplies\+\+; showTyping\(true\); \}/)
+    expect(html).toMatch(/if \(_pendingReplies === 0\) showTyping\(false\)/)
+  })
+
+  it('输入框 / 聊天窗内选项路径不受影响（sendText 仍自行开动画）', () => {
+    expect(html).toMatch(/function sendText[\s\S]{0,400}beginWait\(\)/)
+  })
+
+  it('聊天窗页面未加载完时，回复延迟到 did-finish-load 再发（不静默丢失）', () => {
+    // 首次点卡片选项时聊天窗可能刚被 openPetChatWindow() 创建，
+    // loadFile 还没跑完 → 直接 send 会打到一个没注册 ipc.on 的页面。
+    expect(petWindowSrc).toMatch(/const sendWhenReady = \(win: BrowserWindow/)
+    expect(petWindowSrc).toMatch(/wc\.isLoading\(\)[\s\S]{0,200}did-finish-load/)
+    expect(petWindowSrc).toMatch(/sendWhenReady\(petChatWindow, 'pet:sync-reply'/)
+  })
+})

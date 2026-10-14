@@ -5,6 +5,7 @@ import {
   IconZap, IconGlobe, IconUser, IconStar, IconHeart, IconShield,
 } from './Icons'
 import TeamLiveFeed from './TeamLiveFeed'  // 🆕 v1.0: 团队直播小窗
+import SidebarUserPanel from './SidebarUserPanel'  // 🆕 用户面板（仿 chaxu814 风格）
 import { loadFlags } from '../services/featureFlagsClient'  // I7 精简模式
 
 // Sidebar XP 游戏化进度条组件
@@ -19,7 +20,11 @@ function GamificationProgressBar() {
         const api = (window as any).luminaAPI
         if (!api?.gamificationStats) {return}
         const s = await api.gamificationStats()
-        if (s) {setStats(s)}
+        // 🔧 2026-10-09 修复：后端返回 { ok, data: {...} }，必须解包 .data。
+        //   之前直接 setStats(s) → level/totalXp/currentXp 全 undefined，
+        //   侧栏只剩 "Lv." / "XP" / "0 / 100" 的兜底值（而个人中心弹窗解包了，所以显示正常）。
+        const st = s?.data ?? s
+        if (st) {setStats(st)}
       } catch {}
     }
     load()
@@ -183,9 +188,6 @@ const sections: { label: string; items: NavItem[] }[] = [
     { id: 'mail', label: '邮件', Icon: IconMail },
     { id: 'news', label: '📡 新闻', Icon: IconStar },
     { id: 'profile', label: '个性化', Icon: IconUser },
-    { id: 'teamcommunity', label: 'Lumina团队社区', Icon: IconUser },
-    { id: 'settings', label: '设置', Icon: IconSettings },
-    { id: 'more', label: '更多设置', Icon: IconSettings },
     { id: 'deepresearch', label: '深度调研', Icon: IconGlobe },
     { id: 'skillmarket', label: '技能商店', Icon: IconZap },
     { id: 'sandbox', label: '沙箱玻璃房', Icon: IconShield },  // I5
@@ -292,43 +294,7 @@ export default function Sidebar() {
       {/* 🆕 v3.1: XP 进度条（游戏化青铜档） */}
       {!compact && <GamificationProgressBar />}
 
-      {!compact && <div className="sidebar-footer">
-        <div className="sidebar-footer-box">
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Lumina Life 1.0</span>
-        </div>
-
-        {/* ═══ 系统入口 ═══ */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-light, #e5e7eb)' }}>
-          <button
-            onClick={() => (window as any).luminaAPI?.showAbout()}
-            title="关于 Lumina"
-            style={{
-              background: 'transparent', border: 'none',
-              color: 'var(--text-disabled, #9ca3af)', cursor: 'pointer',
-              fontSize: 10, padding: '2px 6px', borderRadius: 3,
-              fontWeight: 400,
-            }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary, #6b7280)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-disabled, #9ca3af)'}
-          >
-            关于 Lumina
-          </button>
-          <button
-            onClick={() => (window as any).luminaAPI?.toggleDevTools()}
-            title="开发者工具 (F12)"
-            style={{
-              background: 'transparent', border: 'none',
-              color: 'var(--text-disabled, #9ca3af)', cursor: 'pointer',
-              fontSize: 10, padding: '2px 6px', borderRadius: 3,
-              fontWeight: 400,
-            }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary, #6b7280)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-disabled, #9ca3af)'}
-          >
-            开发者工具
-          </button>
-        </div>
-      </div>}
+      {!compact && <SidebarUserPanel />}
     </nav>
   )
 }

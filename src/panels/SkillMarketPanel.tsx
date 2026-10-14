@@ -406,7 +406,7 @@ export default function SkillMarketPanel() {
 // ═══════════════════════════════════════════════════════════
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { padding: 16, height: '100%', overflow: 'auto', background: 'var(--surface-0)', color: 'var(--text-primary)', fontFamily: 'system-ui' },
+  container: { padding: 16, height: '100%', overflow: 'auto', background: 'var(--surface-0)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' },
   header: { marginBottom: 16 },
   title: { fontSize: 20, margin: 0, fontWeight: 700 },
   subtitle: { fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 12px' },

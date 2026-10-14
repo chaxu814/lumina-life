@@ -3,6 +3,7 @@
 // ============================================================
 
 import React, { useState } from 'react'
+import { isImeComposing } from '../lib/ime'
 
 export default function DeepResearchPanel() {
   const [question, setQuestion] = useState('')
@@ -49,6 +50,7 @@ export default function DeepResearchPanel() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
+            if (isImeComposing(e)) {return}
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startResearch() }
           }}
           rows={3}
@@ -175,7 +177,7 @@ export default function DeepResearchPanel() {
 // ═══════════════════════════════════════════════════════════
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { padding: 16, height: '100%', overflow: 'auto', background: 'var(--surface-0)', color: 'var(--text-primary)', fontFamily: 'system-ui' },
+  container: { padding: 16, height: '100%', overflow: 'auto', background: 'var(--surface-0)', color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' },
   header: { marginBottom: 16 },
   title: { fontSize: 20, margin: 0, fontWeight: 700 },
   subtitle: { fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0' },

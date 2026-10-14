@@ -20,7 +20,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import { registerAllTools, getToolDef, resolveToolset, toOpenAIFunctions } from '../electron/tools/index'
 import {
-  routeTools, matchGroups, resetToolRouting, _resetAllToolRouting,
+  routeTools, matchGroups, resetToolRouting, _resetAllToolRouting, getActiveGroups,
   CORE_TOOLS, DEVELOPER_CORE_TOOLS, CAPABILITY_GROUPS,
   looksLikeActionRequest, buildGroupSelectorPrompt, parseGroupAnswer,
 } from '../electron/tools/toolRouter'
@@ -122,6 +122,36 @@ describe('③ 粘性：上一轮能用，下一轮还在', () => {
     resetToolRouting('sess-C')
     const after = routeTools(agentTools(), 'agent', '你好', 'sess-C')
     expect(after.groups).not.toContain('desktop_tidy')
+  })
+
+  it('粘性组数量有上限（防止长会话工具面无限膨胀）', () => {
+    // 依次激活超过上限的不同组，验证最终激活组数被夹在 6 以内。
+    const inputs = [
+      '帮我整理桌面', '明天有什么日程安排', '每天下午三点提醒我喝水',
+      '帮我截个图', '你还记得我之前说过什么吗', '今天天气怎么样',
+      '帮我看看有没有新邮件', '帮我发条朋友圈', '接一个 MCP 服务',
+    ]
+    for (const i of inputs) {routeTools(agentTools(), 'agent', i, 'cap-sess')}
+    const active = getActiveGroups('cap-sess')
+    expect(
+      active.length,
+      `粘性组已膨胀到 ${active.length} 个（${active.join(', ')}）—— 长会话里工具会越堆越多，` +
+      `模型容易挑到不相关的工具。上限应为 6。`,
+    ).toBeLessThanOrEqual(6)
+  })
+
+  it('超出上限时淘汰最早激活的组，保留最近的', () => {
+    const inputs = [
+      '帮我整理桌面', '明天有什么日程安排', '每天下午三点提醒我喝水',
+      '帮我截个图', '你还记得我之前说过什么吗', '今天天气怎么样',
+      '帮我看看有没有新邮件',
+    ]
+    for (const i of inputs) {routeTools(agentTools(), 'agent', i, 'evict-sess')}
+    const active = getActiveGroups('evict-sess')
+    // 最后一个请求（邮件）对应的组必须还在
+    expect(active).toContain('mail')
+    // 最早那个（桌面整理）应已被淘汰
+    expect(active).not.toContain('desktop_tidy')
   })
 })
 

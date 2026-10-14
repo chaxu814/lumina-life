@@ -12,7 +12,10 @@
 //   /stop          — 停止当前 Agent
 //   /skills        — 列出已安装 skills
 //   /agents        — 列出可用 Agent
-//   /switch <name> — 切换角色 (luna/ray/sora)
+//   /switch <name> — 切换角色 (lumina/yak/recha)
+//   /yak <task>    — 🆕 强制派活给 Yak（跳过路由仲裁，确定性）
+//   /recha <task>  — 🆕 强制派活给 热茶（跳过路由仲裁，确定性）
+//   /lumina <task> — 🆕 强制由 Lumina 自己答（跳过路由仲裁）
 //   /approve <id>  — 审批操作
 //   /deny <id>     — 拒绝操作
 //   /plan <desc>   — 创建执行计划
@@ -104,9 +107,37 @@ const COMMANDS: CommandDef[] = [
   {
     name: 'switch',
     aliases: ['切换', 'use'],
-    description: '切换当前 Agent 角色',
-    usage: '/switch <luna|ray|sora|assistant>',
+    description: '切换当前 Agent 角色（lumina / yak / recha）',
+    usage: '/switch <lumina|yak|recha>',
     minArgs: 1,
+  },
+  // 🆕 确定性派活命令 —— 给专业用户的「逃生舱」
+  //   背景：默认路由由模型裁量（routingDecider 只注入提示语），同一问题两次
+  //   可能派活不同。专业用户最在意确定性，这三条命令跳过路由仲裁，直接把
+  //   这一条消息强制交给指定角色（一次性，不影响后续消息）。
+  {
+    name: 'yak',
+    aliases: ['码', 'code'],
+    description: '强制把这条任务派给 Yak（代码工程师），跳过自动路由',
+    usage: '/yak <任务描述>',
+    minArgs: 1,
+    requiresAgent: true,
+  },
+  {
+    name: 'recha',
+    aliases: ['茶', 'review'],
+    description: '强制把这条任务派给 热茶（审查员），跳过自动路由',
+    usage: '/recha <任务描述>',
+    minArgs: 1,
+    requiresAgent: true,
+  },
+  {
+    name: 'lumina',
+    aliases: ['自己答', 'self'],
+    description: '强制由 Lumina 自己作答，不外派',
+    usage: '/lumina <任务描述>',
+    minArgs: 1,
+    requiresAgent: true,
   },
   {
     name: 'approve',
@@ -295,15 +326,29 @@ export class CommandRouter {
     // 按类别分组
     const categories: Record<string, CommandDef[]> = {
       '对话控制': COMMANDS.filter(c => ['compact', 'new', 'stop', 'clear'].includes(c.name)),
-      'Agent 管理': COMMANDS.filter(c => ['switch', 'agents', 'skills'].includes(c.name)),
+      '强制派活': COMMANDS.filter(c => ['yak', 'recha', 'lumina'].includes(c.name)),
+      'Agent 管理': COMMANDS.filter(c => ['switch', 'agents', 'skills', 'mission'].includes(c.name)),
       '审批': COMMANDS.filter(c => ['approve', 'deny'].includes(c.name)),
       '工具': COMMANDS.filter(c => ['plan', 'stats', 'export', 'help'].includes(c.name)),
+      '运行状态': COMMANDS.filter(c => ['model', 'context', 'retry', 'hooks'].includes(c.name)),
     }
 
+    const shown = new Set<string>()
     for (const [category, cmds] of Object.entries(categories)) {
       if (cmds.length === 0) {continue}
       lines.push(`### ${category}`)
       for (const cmd of cmds) {
+        lines.push(`- \`${cmd.usage}\` — ${cmd.description}`)
+        shown.add(cmd.name)
+      }
+      lines.push('')
+    }
+
+    // 兜底：任何没被归类的命令也列出来，避免「新增了命令但 /help 看不到」
+    const unlisted = COMMANDS.filter(c => !shown.has(c.name))
+    if (unlisted.length > 0) {
+      lines.push('### 其他')
+      for (const cmd of unlisted) {
         lines.push(`- \`${cmd.usage}\` — ${cmd.description}`)
       }
       lines.push('')

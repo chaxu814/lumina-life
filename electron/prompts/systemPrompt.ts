@@ -12,6 +12,7 @@ import { getMemoryStore } from '../memory/memoryStore'
 import { getSkillsKnowledgeContext } from '../skillInstaller'
 import { getDynamicSkillLoader } from '../skillLoader'
 import { getTeamStatusTable, TEAM_MEMBERS } from '../agentTeamPersonas'
+import { buildSelfKnowledgeBlock } from '../selfKnowledge'
 // 🔧 2026-10-04：原为 `require('../orchestration/routingDecider')`。
 //   打包器把模块压平后该相对路径必然解析失败并抛错 —— 而这里的 catch 会把它
 //   当成「没有路由提示」而静默跳过，导致**意图路由在打包版里整体失效**（所有消息走 Lumina）。
@@ -23,6 +24,8 @@ import { peekRouteHint, classifyByRules } from '../orchestration/routingDecider'
 // 工具是给模型「可以调」的；而模糊判定必须在**首字响应之前**发生——
 // 模型一旦开始输出，就已经在猜了。写进 prompt 才能拦住「先想再答」的那个瞬间。
 import { assessVagueness, renderClarificationRule, hasSpecificTarget } from '../orchestration/vagueTaskGuard'
+// 🎯 任务类型识别 · 术有专攻 —— 按问题类型匹配能力，避免"什么都先搜一下"
+import { profileTask, renderCapabilityMatching } from '../orchestration/taskProfiler'
 // 💻 Coding 纪律注入（v1.1 接线）—— 原 coding-mode-injector.ts 是死代码，
 //   8 套场景纪律（三步闭环 / 先复现再修复 / 跑测试验证）从未进入模型。
 import { buildCodingDisciplinePrompt, detectCodingScenario } from './coding-mode-injector'
@@ -419,6 +422,13 @@ export function buildSystemPrompt(
     parts.push(`\n## 💭 当前模式人格\n${agentFiles.soul}`)
   }
 
+  // 4.5 自我认知（所有 Agent 共享）
+  //   —— 让 Lumina/Yak/热茶/自定义 Agent 都知道：项目是什么、团队有谁、
+  //   自己能做什么、边界在哪、Lucky 模式是什么。修复"Agent 不了解自己"的问题。
+  try {
+    parts.push('\n' + buildSelfKnowledgeBlock(agentId))
+  } catch { /* 自我认知构建失败不应影响主流程 */ }
+
   // 5. MEMORY 记忆注入（后续自动维护）
 
   // 3. Skill 上下文
@@ -546,6 +556,31 @@ export function buildSystemPrompt(
     }
   } catch { /* 路由提示失败绝不能影响主流程 */ }
 
+  // ═══════════════════════════════════════════════════════════
+  // 🎯 能力匹配（术有专攻）
+  //
+  // 【要解决的问题（用户实测）】用户问一道纯组合概率题：
+  //   「集合 C={1,2,3,...,13} 子集 N 个元素 不含五个连续整数 概率」
+  //   Lumina 第一反应是 web_search 搜题目原文 → 返回一堆无关百科页。
+  //   根因：prompt 里没有一句"哪类问题别联网"的规则，模型习惯性"先搜一下"。
+  //
+  // 【注入什么】一张能力匹配速查表（推理/实时/知识/编程/审查…）
+  //   + 本轮针对性的类型指引（由纯函数 taskProfiler 判定）。
+  //   闲聊不注入（保持轻松，也不啰嗦）。
+  //
+  // 【只对主 Agent 生效】Yak/热茶角色窄、工具已被 rolePolicy 收死，
+  //   不需要这张表；注入反而挤占它们的专业 prompt。
+  // ═══════════════════════════════════════════════════════════
+  try {
+    const userText = options?.userInput
+    if (agentId === 'lumina' && userText && userText.trim()) {
+      const profile = profileTask(userText)
+      if (profile.kind !== 'chat') {
+        parts.push('\n' + renderCapabilityMatching(profile))
+      }
+    }
+  } catch { /* 能力匹配注入失败绝不能影响主流程 */ }
+
   // 💻 Coding 纪律注入（v1.1 接线）
   //
   // 【要解决的问题】用户反馈「agent 不会写代码」。根因不是缺工具 ——
@@ -630,10 +665,15 @@ ${styleGuides.map(s => `- ${s}`).join('\n')}
 }
 
 /** v6.1: Yak 的 system prompt（从 SOUL_YAK.md 加载）— 群聊时跳过角色设定 */
+/** 给降级/群聊 prompt 补上自我认知（正常路径已在 buildSystemPrompt 的 4.5 步注入） */
+function withSelfKnowledge(prompt: string, agentId: string): string {
+  try { return `${prompt}\n\n${buildSelfKnowledgeBlock(agentId, { compact: true })}` } catch { return prompt }
+}
+
 function buildYakPrompt(config: AgentRunConfig, _options?: BuildPromptOptions): string {
   const root = getLuminaRoot()
   if (_options?.skipSoul) {
-    return buildGroupChatAgentPrompt('yak')
+    return withSelfKnowledge(buildGroupChatAgentPrompt('yak'), 'yak')
   }
   const md = loadMdFile(root, 'SOUL_YAK.md')
   if (md) {
@@ -647,14 +687,14 @@ function buildYakPrompt(config: AgentRunConfig, _options?: BuildPromptOptions): 
   // 降级
   // 角色统一（产品已确认）：Yak = 程序员，热茶 = 数据分析师/审查员。
   // 这里的文案只在 SOUL_YAK.md 加载失败时兜底，写反了模型会拿到相反的角色。
-  return `你是 Yak 📊，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。`
+  return withSelfKnowledge(`你是 Yak 📊，专业的后台代码工程师。只写代码、修 bug、重构，并负责验证；不负责审查。`, 'yak')
 }
 
 /** v6.1: 热茶的 system prompt（从 SOUL_RECHA.md 加载）— 群聊时跳过角色设定 */
 function buildRechaPrompt(config: AgentRunConfig, _options?: BuildPromptOptions): string {
   const root = getLuminaRoot()
   if (_options?.skipSoul) {
-    return buildGroupChatAgentPrompt('recha')
+    return withSelfKnowledge(buildGroupChatAgentPrompt('recha'), 'recha')
   }
   const md = loadMdFile(root, 'SOUL_RECHA.md')
   if (md) {
@@ -666,7 +706,7 @@ function buildRechaPrompt(config: AgentRunConfig, _options?: BuildPromptOptions)
     return md.replace('{{SKILL_LIST}}', skillList || '（无可用技能）')
   }
   // 降级（角色统一：Yak = 程序员，热茶 = 数据分析师/审查员）
-  return `你是热茶 🍵，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。`
+  return withSelfKnowledge(`你是热茶 🍵，专业的数据分析师兼审查员。只做分析、审阅、挑错和风险评估，不负责编码与实现。`, 'recha')
 }
 
 /**

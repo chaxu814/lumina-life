@@ -127,7 +127,7 @@ export async function chatComplete(opts: ChatCompleteOptions): Promise<string> {
   const transport = isHttps ? https : http
   const timeoutMs = opts.timeoutMs ?? 60_000 // 本地模型加载慢，60s
 
-  const body = JSON.stringify({
+  const bodyObj: Record<string, any> = {
     model: process.env.LLM_SMALL_MODEL || cfg.model,
     messages: [
       { role: 'system', content: opts.system },
@@ -135,36 +135,60 @@ export async function chatComplete(opts: ChatCompleteOptions): Promise<string> {
     ],
     max_tokens: opts.maxTokens ?? 200,
     temperature: opts.temperature ?? 0.8,
-    ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
-  })
+  }
+  // ⚠️ `response_format.type='json_object'` 并非所有 OpenAI 兼容服务端都支持：
+  //   实测 LM Studio 直接 400 `'response_format.type' must be 'json_schema' or 'text'`
+  //   （同类问题在 tools/impl/cuCore.ts 的视觉调用上也让截图识别 100% 失败）。
+  //   这里先按需带上；若服务端明确拒绝，则**去掉该字段重试一次** —— 提示词里
+  //   已经要求输出 JSON，上层解析也容错，所以降级安全。
+  if (opts.json) {bodyObj.response_format = { type: 'json_object' }}
 
-  return new Promise<string>((resolve) => {
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${cfg.apiKey}`,
-        'Content-Length': Buffer.byteLength(body).toString(),
-      },
-      timeout: timeoutMs,
-    }, (res) => {
-      let data = ''
-      res.on('data', (c) => (data += c))
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data)
-          resolve(json.choices?.[0]?.message?.content || '')
-        } catch {
-          resolve('')
-        }
+  /** 发一次请求；返回 { content } 或 { error }（不抛错，失败由调用方决定） */
+  const sendOnce = (bodyStr: string): Promise<{ content: string; error: string }> =>
+    new Promise((resolve) => {
+      const req = transport.request({
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${cfg.apiKey}`,
+          'Content-Length': Buffer.byteLength(bodyStr).toString(),
+        },
+        timeout: timeoutMs,
+      }, (res) => {
+        let data = ''
+        res.on('data', (c) => (data += c))
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data)
+            if (json?.error) {
+              resolve({ content: '', error: String(json.error.message || json.error) })
+              return
+            }
+            resolve({ content: json.choices?.[0]?.message?.content || '', error: '' })
+          } catch {
+            resolve({ content: '', error: `bad_json:${String(data).slice(0, 120)}` })
+          }
+        })
       })
+      req.on('error', (e: any) => resolve({ content: '', error: String(e?.message || e) }))
+      req.on('timeout', () => { req.destroy(); resolve({ content: '', error: 'timeout' }) })
+      req.write(bodyStr)
+      req.end()
     })
-    req.on('error', () => resolve(''))
-    req.on('timeout', () => { req.destroy(); resolve('') })
-    req.write(body)
-    req.end()
-  })
+
+  const first = await sendOnce(JSON.stringify(bodyObj))
+  if (first.content || !opts.json) {return first.content}
+
+  // 仅在「明确因 response_format 被拒」时降级重试，其余错误照旧返回空串
+  if (/response_format|json_schema|json_object/i.test(first.error)) {
+    console.warn('[proactiveLLM] 服务端不支持 response_format=json_object，已去掉该字段重试')
+    const retryBodyObj: Record<string, any> = { ...bodyObj }
+    delete retryBodyObj.response_format
+    const second = await sendOnce(JSON.stringify(retryBodyObj))
+    return second.content
+  }
+  return ''
 }

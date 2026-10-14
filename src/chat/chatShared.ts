@@ -81,7 +81,13 @@ export function loadGCSessions(): GCSession[] {
 }
 
 export function saveGCSessions(ss: GCSession[]) {
-  localStorage.setItem('lumina_gc_sessions', JSON.stringify(ss))
+  try {
+    localStorage.setItem('lumina_gc_sessions', JSON.stringify(ss))
+  } catch (e) {
+    // 🐛 2026-10-13：会话列表本身很小（每条几十字节），但同样不能静默失败 ——
+    //   写不进去 = 重启后侧边栏会话列表回退到旧版本，用户会以为"会话丢了"。
+    console.error('[chatShared] ❌ 保存会话列表失败（localStorage 容量超限？）：', e)
+  }
 }
 
 export function loadGCMessages(sid: string): GCMsg[] {
@@ -109,7 +115,36 @@ export function saveGCMessages(sid: string, msgs: GCMsg[]) {
     m.from === 'system' || m.content || !m._animDone ||
     (m.thinkingSteps && m.thinkingSteps.length > 0)
   )
-  localStorage.setItem(`lumina_gc_${sid}`, JSON.stringify(clean))
+  const key = `lumina_gc_${sid}`
+
+  try {
+    localStorage.setItem(key, JSON.stringify(clean))
+    return
+  } catch (e) {
+    // 🐛 2026-10-13：容量超限时旧实现**静默失败** —— 用户重启后发现
+    //   "最近聊的都没了"，而控制台之外没有任何线索。localStorage 上限约 5MB，
+    //   长会话（本仓实测已有 7791 条的会话）很容易撞上。
+    console.warn(
+      `[chatShared] ⚠️ 保存会话 ${sid} 失败（localStorage 容量超限？），` +
+      `将降级为只保留最近的消息：`, e,
+    )
+  }
+
+  // 降级：逐步丢弃最老的消息，保证**最近的对话**一定存得下。
+  //   宁可少留历史，也不能整段丢失 —— 用户最在意的是"刚才说的话还在不在"。
+  for (const keep of [200, 100, 50, 20]) {
+    if (clean.length <= keep) {continue}
+    try {
+      localStorage.setItem(key, JSON.stringify(clean.slice(-keep)))
+      console.warn(`[chatShared] ↩️ 已降级保存：${clean.length} → 最近 ${keep} 条`)
+      return
+    } catch { /* 继续尝试更小的保留量 */ }
+  }
+
+  console.error(
+    `[chatShared] ❌ 会话 ${sid} 保存失败（连最近 20 条都写不进去）。` +
+    `本轮对话重启后将不可见 —— 建议清理旧会话释放 localStorage 空间。`,
+  )
 }
 
 export function newGCSessionId(): string {

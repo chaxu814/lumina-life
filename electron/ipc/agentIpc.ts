@@ -28,6 +28,7 @@ import { xpManager, XP_RULES } from '../gamification/levels'
 import { achievementManager } from '../gamification/achievements'
 import * as emotionBridge from '../gamification/emotionBridge'
 import { probeEndpoint, buildUnreachableGuidance } from '../onboarding/llmReachability'
+import { getAgentDialogManager } from '../agentDialogManager'
 import { isLocalEndpoint } from '../core/modelCompat'
 
 // ═══════════════════════════════════════════════════════════
@@ -41,6 +42,23 @@ interface ChatCompletionResponse { choices?: ChatChoice[] }
 
 let activeAgent: AgentRunner | null = null
 let activeAgentRunning = false  // 🆕 v5.4: 追踪当前 agent 是否仍在执行
+// 🆕 2026-10-10（P1-6）：本地端点可达性探测缓存。
+//   旧行为是**每条**本地消息前都探测一次（2000ms 超时），两个后果：
+//     ① 每条消息最多 +2s 延迟；
+//     ② 单卡模型正在推理时 /models 会排队 >2s → 被误判「不可达」，
+//        返回「我连不上本地模型服务」引导 —— 即使聊天其实能用。
+//   现在：探通一次后 TTL 内直接放行；失败则每次都探（保证能自愈）。
+const LOCAL_PROBE_TTL_MS = 60_000
+const localProbeOkAt = new Map<string, number>()
+
+function localEndpointRecentlyReachable(baseUrl: string): boolean {
+  const at = localProbeOkAt.get(baseUrl)
+  return typeof at === 'number' && Date.now() - at < LOCAL_PROBE_TTL_MS
+}
+// 🆕 2026-10-10: 请求序号 —— 用于「只有最新一次前台请求才有权清 running 标记」。
+//   旧实现里，A 请求被 B 打断后 A 的 finally 会把 B 的 running 清掉，
+//   于是 C 到来时以为「没人在跑」→ 不再打断 → B、C 并发 → 事件串台、回复断续。
+let activeAgentRunToken = 0
 let lastConfigSig: string = ''  // 🔧 v2.10.x: 检测配置变化，防止串台
 let teamSocialInitialized = false  // 🆕 v2.6
 let agentIpcHandlersRegistered = false  // 🔧 v6.4: 防止 IPC handler 重复注册
@@ -74,6 +92,52 @@ function normalizeAgentText(text: unknown): string {
   }
   if (text == null) {return ''}
   return String(text)
+}
+
+// ═══════════════════════════════════════════════════════════
+// 并发决策（纯函数，导出供回归测试）
+//
+// 背景：`agent:chat` 上混跑两类请求 —— 用户对话（前台）与自主刷新/朋友圈
+//   （后台）。两者共用模块级 `activeAgent` / `activeAgentRunning`，
+//   旧实现有两处簿记缺陷，合起来造成「聊天断断续续」：
+//     ① 被打断的旧请求在 finally 里无条件清 running → 后来者的标记被清掉
+//        → 后续请求以为「没人在跑」→ 不再打断 → 多路并发、事件串台；
+//     ② 后台刷新（一次 Promise.all 并发 6 路）会打断用户正在生成的回复。
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 本次请求结束时，是否有权释放 `activeAgentRunning` 标记。
+ * 只有「前台请求」且「自己仍是最新一次请求」才有权释放。
+ */
+export function shouldReleaseRunningFlag(
+  isBackground: boolean,
+  runToken: number,
+  latestToken: number,
+): boolean {
+  return !isBackground && runToken === latestToken
+}
+
+/**
+ * 后台请求是否应让路。
+ * 前台请求正在跑时后台直接跳过 —— 不打断用户，也不抢本地单卡模型的算力。
+ */
+export function shouldSkipBackgroundRun(
+  isBackground: boolean,
+  foregroundRunning: boolean,
+): boolean {
+  return isBackground && foregroundRunning
+}
+
+/**
+ * 新请求到达时是否应中止在途的 Agent。
+ * 后台请求**永不**打断；前台请求仅在有在途运行时打断（用户连发两条 = 后者打断前者）。
+ */
+export function shouldAbortInFlight(
+  isBackground: boolean,
+  hasActiveAgent: boolean,
+  foregroundRunning: boolean,
+): boolean {
+  return !isBackground && hasActiveAgent && foregroundRunning
 }
 
 /**
@@ -144,14 +208,56 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
     try { mainWindow.webContents.send('subtask:event', ev) } catch { /* 窗口已关 */ }
   })
 
+  // ─── 群聊历史：从主进程日志恢复（跨 origin 兜底）────────────
+  //
+  // 🆕 2026-10-13：前端的群聊会话存在 localStorage，而 localStorage
+  //   **按 origin 隔离** —— 开发模式（`http://localhost:5173`）与打包模式
+  //   （`file://`）各有一份，互相看不见（实测落盘里两个 origin 都有数据）。
+  //   用户切换运行方式后会发现「历史全没了」。
+  //
+  //   `dialog/` 日志是**主进程的文件**，不受 origin 影响，所以可以从它重建。
+  //   前端**只在 localStorage 为空时**调用（见 GroupChatView 的启动逻辑），
+  //   绝不会覆盖已有数据。
+  ipcMain.handle('gc:restore-from-logs', (_e, agentId?: string) => {
+    try {
+      const sessions = getAgentDialogManager().listSessions(agentId || 'lumina')
+      return { ok: true, sessions }
+    } catch (e: any) {
+      console.warn('[gc:restore-from-logs] 恢复失败:', e)
+      return { ok: false, error: String(e?.message || e), sessions: [] }
+    }
+  })
+
   // ─── Agent ──────────────────────────────────────────
 
   ipcMain.handle('agent:chat', async (event, params: {
     text: string; config: AgentRunConfig; sessionId?: string; compactedContext?: string
     conversationHistory?: Array<{ role: string; content: string }>
   }) => {
-    // 标记用户活跃，暂停后台 LLM 调用
-    llmCoordinator.markUserActive()
+    // ── 并发控制（2026-10-10 修复「聊天断断续续」）────────────────────────
+    //
+    // 背景：所有 agent:chat 共用模块级 `activeAgent` / `activeAgentRunning`，
+    //   且「新请求到达 → abort 在途请求」。但有两类请求混在同一条通道上：
+    //     · 前台：用户在聊天框发的消息（**应该**打断上一条）
+    //     · 后台：自主刷新面板 / 朋友圈（`GroupChatView.refreshLLMPanels`
+    //             一次 `Promise.all` 并发 6 路）、定时任务等（**不该**打断用户）
+    //
+    //   旧行为下后台刷新会打断用户正在生成的回复，6 路之间也互相打断
+    //   （只有最后一路能跑完），表现就是「聊着聊着断了 / 回复空 / 面板时有时无」。
+    //
+    //   现在：`config.background === true` 的请求
+    //     ① 不打断在途请求；② 不占用 running 标记；③ 前台在跑时直接跳过。
+    //   前台请求仍按原语义打断上一条，并用 runToken 保证「只有最新一条」能清标记。
+    const runToken = ++activeAgentRunToken
+    const isBackground = !!(params.config as any)?.background
+    if (shouldSkipBackgroundRun(isBackground, activeAgentRunning)) {
+      // 用户正在生成回复 —— 后台任务让路，避免本地单卡模型被抢算力
+      return { success: false, content: '', error: 'BACKGROUND_SKIPPED_FOREGROUND_RUNNING', skipped: true }
+    }
+    if (!isBackground) {
+      // 标记用户活跃，暂停后台 LLM 调用
+      llmCoordinator.markUserActive()
+    }
     try {
       // 斜杠命令拦截 — 先检查是否为命令，路由到 CommandRouter
       // 🔧 2026-08-11: 防御 — 前端多模态附件会把 text 传成 OpenAI content 数组，
@@ -175,11 +281,14 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
       // fix: 只在 agent 真正活跃时才中止，避免链式协作中误伤已完成 agent
       //   问题：v2.11 无条件 abort → 链式 Phase 切换时误中止已完成 agent → "(已取消)"
       //   修复：加 isRunning 守卫 + 记录活跃状态
-      if (activeAgent && activeAgentRunning) {
+      //   2026-10-10: 再加 `!isBackground` —— 后台任务无权打断用户对话。
+      if (shouldAbortInFlight(isBackground, !!activeAgent, activeAgentRunning)) {
         console.log('[AgentIPC] ⏹ 中止正在运行的 Agent（新请求到达）')
-        try { activeAgent.abort() } catch {}
+        try { activeAgent!.abort() } catch {}
       }
-      activeAgentRunning = true  // 🆕 标记新 agent 开始运行
+      if (!isBackground) {
+        activeAgentRunning = true  // 🆕 标记新 agent 开始运行
+      }
 
       // v6.0.5: 区分群聊模式 vs 普通模式
       const isGroupChat = !!params.config.isGroupChat
@@ -299,12 +408,18 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
 
       // 🛰️ 运行时可达性预检：仅对本地端点（LM Studio/Ollama/局域网）探测，
       //   防止"本地模型没启动 → 静默空回复"。云端端点不加此预检以避免每条消息的延迟。
-      if (runConfig.baseUrl && isLocalEndpoint(runConfig.baseUrl)) {
+      //
+      //   P1-6：探通一次后 60s 内跳过（避免每条消息 +2s 与单卡排队误判）。
+      if (runConfig.baseUrl && isLocalEndpoint(runConfig.baseUrl)
+          && !localEndpointRecentlyReachable(runConfig.baseUrl)) {
         const probe = await probeEndpoint(runConfig.baseUrl, runConfig.apiKey || undefined, 2000)
-        if (!probe.reachable) {
+        if (probe.reachable) {
+          localProbeOkAt.set(runConfig.baseUrl, Date.now())
+        } else {
           const kind = probe.errorKind || 'unknown'
           console.warn(`[agent:chat] LLM 端点不可达（${kind}）: ${runConfig.baseUrl} — ${probe.message || ''}`)
-          activeAgentRunning = false
+          // 只清自己的标记：后台请求从不清（它压根没占），前台请求也要是最新的那条
+          if (shouldReleaseRunningFlag(isBackground, runToken, activeAgentRunToken)) {activeAgentRunning = false}
           return {
             success: false,
             content: buildUnreachableGuidance(runConfig.baseUrl, kind),
@@ -325,33 +440,56 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
         text: params.text?.slice(0, 40),
       }))
 
-      activeAgent = new AgentRunner(runConfig, { sessionId: params.sessionId })
+      const runner = new AgentRunner(runConfig, { sessionId: params.sessionId })
+      // 后台任务不占用 activeAgent 引用：它服务于「用户点中断 / 切模式 / 委派」，
+      // 应始终指向用户自己的那一次请求，否则用户点「中断」会打断到后台刷新。
+      if (!isBackground) {activeAgent = runner}
       lastConfigSig = JSON.stringify({
         model: runConfig.model,
         baseUrl: runConfig.baseUrl,
       })
 
-      const agent = activeAgent
+      const agent = runner
       // 同步传入的对话历史
       if (params.conversationHistory) {
         agent.setHistory(params.conversationHistory, params.compactedContext)
       }
-      agent.setEventCallback((ev: AgentEvent) => {
-        event.sender.send('agent:event', ev)
-      })
+      // 🆕 2026-10-10（P2-1）：事件按请求归属，避免串台。
+      //   ① 后台任务（自主刷新/朋友圈/Loop）的 event 对渲染进程**纯属噪音** ——
+      //      它们没有订阅方（调用方只 await 结果），却会让主窗口的思考面板
+      //      显示到后台任务的 thinking_stream / tool_*。直接从源头不发。
+      //   ② 前台请求若带了 config.requestId，则原样回显在每条事件上，
+      //      前端可据此丢弃「非本次请求」的事件（纵深防御）。
+      const reqId = (params.config as any)?.requestId as string | undefined
+      if (!isBackground) {
+        agent.setEventCallback((ev: AgentEvent) => {
+          event.sender.send('agent:event', reqId ? { ...ev, requestId: reqId } : ev)
+        })
+      } else {
+        // 后台任务：不订阅事件回调（省掉无用的 IPC 序列化开销）
+        agent.setEventCallback(() => { /* 后台任务事件不外发 */ })
+      }
       let result: string
       try {
         result = await agent.sendMessage(safeText)
       } finally {
-        activeAgentRunning = false  // 🆕 v5.4: 确保无论成功或失败都重置状态
+        // 🆕 v5.4 / 2026-10-10: 只有「最新一次前台请求」才有权清 running 标记。
+        //   否则被打断的旧请求会清掉后来者的标记 → 后续请求不再打断在途请求 → 并发串台。
+        if (shouldReleaseRunningFlag(isBackground, runToken, activeAgentRunToken)) {
+          activeAgentRunning = false
+        }
       }
 
       // 🔔 Agent 回复完成 → 后台 Windows 通知（前台不打扰，多条自动合并）
-      notifyAgentReply(mainWindow, {
-        personaId: isGroupChat ? (params.config.personaId as string) : undefined,
-        isGroupChat,
-        body: result,
-      })
+      //    ⚠️ 后台任务（自主刷新面板 / 朋友圈）**不算**「新回复」：
+      //       窗口在后台时它们会每轮弹「等 6 条新回复」，纯属噪音。
+      if (!isBackground) {
+        notifyAgentReply(mainWindow, {
+          personaId: isGroupChat ? (params.config.personaId as string) : undefined,
+          isGroupChat,
+          body: result,
+        })
+      }
 
       // v6.0: 群聊模式下首次成功对话后，三 Agent 全配 LLM → 初始化社交引擎
       if (isGroupChat && !teamSocialInitialized) {
@@ -370,22 +508,33 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
       }
 
       // 对话获得 XP
-      try {
-        const xpResult = xpManager.addXp(XP_RULES.PER_MESSAGE, '对话')
-        const currentStats = achievementManager.getStats()
-        achievementManager.updateStats({
-          totalChats: currentStats.totalChats + 1,
-          totalMessages: currentStats.totalMessages + 1,
-        })
-        achievementManager.checkAchievements()
-        console.log(`[Gamification] +${xpResult.baseXp} XP (${xpResult.multiplier}x) → total ${xpManager.totalXp} XP (Lv.${xpManager.level})`)
-      } catch (e) {
-        console.error('[Gamification] XP 累积失败:', e)
+      //   ⚠️ 只给**用户对话**发 XP：后台任务（自主刷新 6 路/轮）不该刷经验，
+      //      否则等级会虚高，与「聊了多少」脱钩。
+      if (!isBackground) {
+        try {
+          const xpResult = xpManager.addXp(XP_RULES.PER_MESSAGE, '对话')
+          const currentStats = achievementManager.getStats()
+          achievementManager.updateStats({
+            totalChats: currentStats.totalChats + 1,
+            totalMessages: currentStats.totalMessages + 1,
+          })
+          achievementManager.checkAchievements()
+          console.log(`[Gamification] +${xpResult.baseXp} XP (${xpResult.multiplier}x) → total ${xpManager.totalXp} XP (Lv.${xpManager.level})`)
+        } catch (e) {
+          console.error('[Gamification] XP 累积失败:', e)
+        }
       }
 
       return { success: true, content: result, totalTokens: agent.getTotalTokens(), compactedContext: agent.getCompactedSummary(), contextWindow: (agent as any).config?.contextWindow || 0 }
     } catch (err: any) {
       return { success: false, error: err.message }
+    } finally {
+      // 🆕 2026-10-10 兜底：无论从哪条路径返回（含「未配置 LLM」「端点不可达」
+      //   等提前 return），都保证前台请求的 running 标记被清掉。
+      //   否则标记一旦卡在 true，后台刷新会被永久判为「前台在跑」而跳过。
+      if (shouldReleaseRunningFlag(isBackground, runToken, activeAgentRunToken)) {
+        activeAgentRunning = false
+      }
     }
   })
 
@@ -617,6 +766,7 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
     model: string
     endpoint: string
     apiKey?: string
+    /** ⚠️ 语义是**上下文窗口**（不是输出上限）—— 见 agentConfig.AgentLlmConfig 注释 */
     maxContextTokens?: number
     timeout?: number
   }) => {

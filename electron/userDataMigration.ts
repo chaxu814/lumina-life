@@ -19,9 +19,14 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
+import { LEGACY_DIR_NAMES } from './core/userDataPath'
 
-/** dev 模式下 Electron 用的默认目录名 */
-const LEGACY_DIR_NAMES = ['Electron']
+/** 旧目录名（**按优先级排序**：靠前的先搬，先搬者赢）。
+ *  · lumina-life —— 打包版/旧版跑出来的目录（通常含用户真正填过的 API Key）
+ *  · Electron    —— dev 模式默认目录（key 常为空）
+ *  两者都存在时，先搬 lumina-life，Electron 只用来补缺口，避免用空 key 覆盖有效 key。
+ *  ⚠️ 口径与 core/userDataPath.ts 的 LEGACY_DIR_NAMES 共用同一份，避免两处漂移。 */
+// （LEGACY_DIR_NAMES 见顶部 import）
 
 /** 只搬这些 —— 避免把 Electron 自己的缓存/代码缓存也拖过来 */
 const MIGRATE_FILES = [
@@ -70,12 +75,15 @@ function safeCopyDir(src: string, dst: string): number {
 
 /**
  * 把旧目录里的 Lumina 数据并入当前 userData。
- * 必须在 app.setName() 之后、任何模块读取 userData 之前调用。
+ * 必须在 app.setName() / setPath() 之后、任何模块读取 userData 之前调用。
+ *
+ * @param currentUserData 当前规范 userData 目录
+ * @param appDataRoot     可选：Roaming 根目录（便于单测注入）
  */
-export function migrateLegacyUserData(currentUserData: string): MigrationResult {
+export function migrateLegacyUserData(currentUserData: string, appDataRoot?: string): MigrationResult {
   const res: MigrationResult = { ran: false, copiedFiles: [], copiedDirs: [], skipped: 0 }
   try {
-    const appData = path.join(os.homedir(), 'AppData', 'Roaming')
+    const appData = appDataRoot || path.join(os.homedir(), 'AppData', 'Roaming')
     const legacyDirs = LEGACY_DIR_NAMES
       .map(n => path.join(appData, n))
       .filter(d => path.resolve(d) !== path.resolve(currentUserData))
@@ -86,10 +94,10 @@ export function migrateLegacyUserData(currentUserData: string): MigrationResult 
     fs.mkdirSync(currentUserData, { recursive: true })
 
     for (const legacy of legacyDirs) {
-      const marker = path.join(legacy, MARKER)
-      if (fs.existsSync(marker)) continue
-      res.ran = true
-
+      // ⚠️ 不再用 `.lumina-migrated` 标记跳过整个目录（2026-10-10 修）：
+      //   旧标记会让某个旧目录被**永久跳过**，一旦它里面有当前目录缺失的文件
+      //   （例如只有 Electron 目录里配过 LM Studio），就再也搬不过来。
+      //   搬运本身是幂等的（目标存在则跳过），所以每次启动重新补缺口是安全的、廉价的。
       for (const f of MIGRATE_FILES) {
         const s = path.join(legacy, f)
         if (!fs.existsSync(s)) continue
@@ -107,10 +115,12 @@ export function migrateLegacyUserData(currentUserData: string): MigrationResult 
         } catch { res.skipped++ }
       }
 
-      try { fs.writeFileSync(marker, new Date().toISOString(), 'utf8') } catch { /* 标记失败无所谓，下次再搬一遍也是幂等的 */ }
+      try { fs.writeFileSync(path.join(legacy, MARKER), new Date().toISOString(), 'utf8') } catch { /* 标记失败无所谓，下次再搬一遍也是幂等的 */ }
     }
 
-    if (res.ran) {
+    // 只有真的搬了东西才置 ran（否则每次启动都会打一行无意义的日志）
+    if (res.copiedFiles.length > 0 || res.copiedDirs.length > 0) {
+      res.ran = true
       console.log(
         `[Migration] ✅ 已从旧目录并入用户数据: ` +
         `文件 ${res.copiedFiles.length} 个、目录 ${res.copiedDirs.length} 个` +

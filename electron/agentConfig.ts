@@ -11,6 +11,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
+import { decryptProviderApiKey } from './core/providerKeyCrypto'
 import type { AgentProfile } from './agentProfileManager'
 
 // ═══════════════════════════════════════════════════════════
@@ -30,7 +31,17 @@ export interface AgentLlmConfig {
   endpoint: string
   /** API Key (内存中解密，不入日志) */
   apiKey?: string
-  /** 上下文窗口 token 数 */
+  /**
+   * **上下文窗口 token 数**（0 / 未设 = 交给能力画像与 provider profile 推断）。
+   *
+   * ⚠️ 命名坑（2026-10-10 运行时验证查明）：字段名带 "max" 又像 "maxTokens"，
+   *   导致历史上被误当成**输出上限**：
+   *     · UI 标成「最大输出 (tokens)」；
+   *     · buildRunConfig / cli / api 把它映射成 `maxTokens`。
+   *   但它的**值语义明确是上下文窗口**：默认 262144/256000（输出上限不可能这么大），
+   *   且 `_applyAgentLlmConfig()` 正是用 `resolveCapabilities({explicitContextWindow: maxContextTokens})`
+   *   来推导上下文窗口的。**输出上限由能力画像单独推导，不要用它。**
+   */
   maxContextTokens?: number
   /** 请求超时 (秒) */
   timeout?: number
@@ -202,16 +213,27 @@ class AgentConfigManager {
       path.join(require('electron').app?.getPath('userData') || process.cwd())
     const configPathResolved = path.join(userData, 'agent-llm-configs.json')
 
-    // 检测 legacy 目录（旧版 Electron 使用 'Electron' 作为 appName）
+    // 检测 legacy 目录（旧版用过 'Electron' / 'lumina-life' 作为 appName）。
+    //
+    // ⚠️ 关键不变式（2026-10-10 修）：legacy 只作为**数据来源**，
+    //   写入目标**永远是当前 userData**。
+    //   旧实现 `return { configPath: legacy }` 会把 legacy 当作写入目标 ——
+    //   于是「这次写 Electron、下次写 Lumina Life」双轨漂移，
+    //   用户感知就是「每次打开都要重新配一遍模型」。这里改为：读 legacy、写当前。
+    const appData = process.env.APPDATA || path.join(userData, '..')
     const legacyCandidates = [
-      path.join(process.cwd(), 'agent-llm-configs.json'),  // 开发模式 cwd
-      path.join(userData, '..', 'Electron', 'agent-llm-configs.json'),  // legacy Electron dir
-      path.join(process.env.APPDATA || '', 'Electron', 'agent-llm-configs.json'),  // Windows legacy
+      path.join(appData, 'lumina-life', 'agent-llm-configs.json'), // 打包版/旧版（通常含真实 key）
+      path.join(appData, 'Electron', 'agent-llm-configs.json'),    // dev 模式默认目录
+      path.join(process.cwd(), 'agent-llm-configs.json'),          // 开发态 cwd（兜底）
     ]
 
     for (const legacy of legacyCandidates) {
+      if (!legacy) {continue}
+      // 与当前路径相同则无需"搬运"，避免自我覆盖
+      if (path.resolve(legacy) === path.resolve(configPathResolved)) {continue}
+      // 仅当「当前目录没有、legacy 有」时才用 legacy 做数据源；写入仍走当前目录
       if (fs.existsSync(legacy) && !fs.existsSync(configPathResolved)) {
-        return { configPath: legacy, legacyPath: legacy }
+        return { configPath: configPathResolved, legacyPath: legacy }
       }
     }
 
@@ -255,13 +277,20 @@ class AgentConfigManager {
   load(): AgentConfigMap {
     if (this._loaded) {return this._configs}
     this._loaded = true
+    let recoveredGlobalProviderKeys = false
     try {
       if (fs.existsSync(this._configPath)) {
         const raw = fs.readFileSync(this._configPath, 'utf-8')
         const saved = JSON.parse(raw)
         for (const id of ['lumina', 'yak', 'recha'] as AgentId[]) {
           if (saved[id]) {
-            this._configs[id] = { ...DEFAULT_CONFIG, ...saved[id], apiKey: saved[id].apiKey ? decrypt(saved[id].apiKey) : '' }
+            const agentKey = saved[id].apiKey ? decrypt(saved[id].apiKey) : ''
+            // 兼容修复：旧版 syncFromGlobalProvider 曾把 lumina-providers.json 中的
+            // v1:... 磁盘密文直接当明文转存，再由 AgentConfig 再加密一层。
+            // 先解 AgentConfig 自己的外层，再识别并解开遗留的 Provider 层，避免重启后继续 401。
+            const apiKey = decryptProviderApiKey(agentKey)
+            if (apiKey !== agentKey) { recoveredGlobalProviderKeys = true }
+            this._configs[id] = { ...DEFAULT_CONFIG, ...saved[id], apiKey }
           }
         }
       }
@@ -315,6 +344,11 @@ class AgentConfigManager {
       console.warn('[AgentConfig] 加载失败:', err)
     }
     this._syncToTeamMembers()
+    // 修复历史双重加密后立即以 AgentConfig 的正常格式重写一次，避免下一次启动仍需兼容修复。
+    if (recoveredGlobalProviderKeys) {
+      console.warn('[AgentConfig] 🔧 已恢复旧版全局 Provider 同步造成的重复加密 API Key，正在规范化保存')
+      this._save()
+    }
     return this._configs
   }
 
@@ -368,7 +402,10 @@ class AgentConfigManager {
             model: cfg.model,
             endpoint: cfg.endpoint,
             apiKey: cfg.apiKey || '',
-            maxTokens: cfg.maxContextTokens || 256000,
+            // 🐛 2026-10-10 修复：maxContextTokens 是**上下文窗口**，不是输出上限。
+            //   输出上限由 AgentRunner 的能力画像（resolveCapabilities）推导，
+            //   这里不再拿它冒充 maxTokens。
+            maxContextTokens: cfg.maxContextTokens || 0,
             timeout: cfg.timeout || 300,
           }
         }
@@ -393,7 +430,11 @@ class AgentConfigManager {
 
       const endpoint = providerCfg.baseUrl || ''
       const model = providerCfg.model || ''
-      const apiKey = providerCfg.apiKey || ''
+      // lumina-providers.json stores global keys encrypted (v1:...); this manager must
+      // hand plaintext to the per-agent store, which applies its own encryption on save.
+      // Passing the disk ciphertext through directly double-encrypts it and causes 401
+      // every time the active global provider is synced to Team Agents.
+      const apiKey = decryptProviderApiKey(String(providerCfg.apiKey || ''))
 
       if (!endpoint || !model) {return false}
 
@@ -561,7 +602,10 @@ class AgentConfigManager {
       baseUrl: cfg.endpoint,
       apiKey: cfg.apiKey || '',
       temperature: agentProfile.llm.temperature ?? 0.7,
-      maxTokens: cfg.maxContextTokens || 256000,
+      // 🐛 2026-10-10 修复：原来写 `maxTokens: cfg.maxContextTokens` ——
+      //   把「上下文窗口」当成了「输出上限」（输出上限由能力画像另行推导）。
+      //   现在映射到正确的字段；maxTokens 交给 AgentRunner 的能力画像决定。
+      contextWindow: cfg.maxContextTokens || 0,
       timeout: (cfg.timeout || 600) * 1000,
       disabledTools: AgentConfigManager._resolveDisabledTools(agentId, agentProfile),
       skipApproval: agentProfile.tools.approvalLevel === 'none',

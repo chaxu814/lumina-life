@@ -89,7 +89,8 @@ describe('isLocalEndpoint：局域网 IP 也要认得出', () => {
 
   it('GroupChatView 已改用共用判定，不再自己拼字符串', () => {
     const gc = fs.readFileSync('src/panels/GroupChatView.tsx', 'utf-8')
-    expect(gc).toMatch(/isLocalInferenceRuntime\(llmConfig\.baseUrl\)/)
-    expect(gc).not.toMatch(/llmConfig\.baseUrl\?\.includes\('127\.0\.0\.1'\)/)
+    // 变量名随就绪配置重构从 llmConfig 改为 readinessConfig，这里只锁「调用了共用判定」
+    expect(gc).toMatch(/isLocalInferenceRuntime\(\s*[A-Za-z_$][\w$]*\.baseUrl\s*\)/)
+    expect(gc).not.toMatch(/baseUrl\?\.includes\('127\.0\.0\.1'\)/)
   })
 })

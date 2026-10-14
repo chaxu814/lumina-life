@@ -28,6 +28,7 @@ import { type NewsItem } from '../tools/impl/newsCollector'
 import { sendMail } from '../mailStore'
 import { getProviderManager, ProviderManager } from '../core/providerManager'
 import { LLMProvider } from '../core/llmProvider'
+import { buildPromptEnhancementMessages, trimToBudget } from '../core/promptEnhancer'
 import { getNewsDigestScheduler } from '../newsDigestScheduler'
 import { getSystemNotifier } from '../proactive/systemNotifier'
 
@@ -415,6 +416,54 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
       const data = await response.json()
       return { content: data.choices?.[0]?.message?.content || '' }
     } catch (err: any) { return { error: err.message } }
+  })
+
+  // ── 增强群聊草稿提示词（只改写草稿，不执行/发送用户任务）──
+  //
+  // v2：加入「输出长度预算」并把预算写进提示词；返回后按预算做兜底裁剪，
+  //     确保弱模型/不听话的模型也不会返回一大坨。
+  ipcMain.handle('llm:enhance-prompt', async (_event, params: {
+    baseUrl: string; apiKey?: string; model: string; text: string
+  }) => {
+    const baseUrl = String(params?.baseUrl || '').trim().replace(/\/+$/, '')
+    const model = String(params?.model || '').trim()
+    if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) {return { error: '模型服务地址无效，请检查当前供应商配置。' }}
+    if (!model) {return { error: '请先选择一个模型。' }}
+    const built = buildPromptEnhancementMessages(params?.text)
+    if (!built.ok) {return { error: built.error }}
+
+    try {
+      const provider = new LLMProvider({
+        baseUrl,
+        apiKey: String(params.apiKey || ''),
+        model,
+        maxContextTokens: 16384,
+      })
+      const result = await provider.call({
+        messages: built.messages,
+        // 改写任务要"忠于原文"，温度调低减少发挥；上限按预算给，避免长输出被截断
+        temperature: 0.3,
+        maxTokens: Math.min(4096, Math.max(512, built.budget)),
+        signal: AbortSignal.timeout(90_000),
+      })
+      if (result.error) {return { error: result.error }}
+      const raw = String(result.text || '').trim()
+      if (!raw) {return { error: '模型没有返回增强后的提示词，请稍后重试。' }}
+      const content = trimToBudget(raw, built.budget)
+      return {
+        content,
+        budget: built.budget,
+        originalChars: built.messages[1].content.length,
+        enhancedChars: content.length,
+        // 供 UI 提示：模型超预算被裁剪过
+        trimmed: content.length < raw.length,
+      }
+    } catch (err) {
+      const e = err as { name?: string; message?: string }
+      return { error: e?.name === 'TimeoutError' || e?.name === 'AbortError'
+        ? '提示词增强等待超时；草稿未更改，请稍后重试。'
+        : (e?.message || '提示词增强失败，草稿未更改。') }
+    }
   })
 
   // ─── 🔧 v2.18: 增强的LLM模型列表获取 ─────────────────
@@ -839,6 +888,18 @@ export function registerSystemIpc(mainWindow: BrowserWindow): void {
         sttProcess = null
       }
       const serverPath = join(__dirname, '..', '..', 'stt-server', 'stt_server.py')
+      // 🆕 启动前先检测：stt-server/ 在 .gitignore 中但运行时被引用，
+      // 用户没拉全（含 Python 依赖、Whisper 模型）就直接 spawn 必然 ENOENT。
+      // 这里前置 existsSync + 友好降级，避免静默崩溃。
+      if (!fs.existsSync(serverPath)) {
+        return {
+          ok: false,
+          detail:
+            `STT 服务脚本不存在: ${serverPath}。` +
+            `语音听写需要 Python + Whisper/Vosk 环境，请参考 docs/INSTALL.md 装好后重试。` +
+            `未启动时仍可使用打字输入/键盘快捷键。`,
+        }
+      }
       sttProcess = spawn(resolvePython(), [serverPath, '--port', String(STT_PORT)], {
         cwd: join(__dirname, '..', '..', 'stt-server'),
         stdio: 'pipe',

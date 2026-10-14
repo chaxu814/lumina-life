@@ -80,6 +80,10 @@ export const CORE_TOOLS: readonly string[] = [
   'delegate_to', 'delegate_chain', 'team_context', 'team_message', 'team_mailbox',
   'team_tasks', 'hire_worker', 'workflow', 'adversarial_review', 'git_worktree',
   'write_notice', 'read_notices', 'save_context', 'load_context',
+  // 🆕 2026-10-08：五阶段门控（Research→Plan→Execute→Verify→Review）此前
+  //   只在按需组、且人格提示词没教 → 模型几乎不会主动调用（真代码却不可达）。
+  //   现移入常驻核心，并在 agentTeamPersonas 里教模型何时用它。
+  'phase_gate_delegate',
 ]
 
 /** developer 档额外常驻：写代码真正天天用的那批 */
@@ -101,9 +105,9 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
   //   实测：TEAM_LUMINA.systemPrompt 教过 delegate_to / delegate_chain /
   //   team_message / team_mailbox / team_tasks / hire_worker / workflow /
   //   adversarial_review / git_worktree / write_notice / read_notices /
-  //   save_context / load_context —— 那 13 个已全部放进 CORE_TOOLS。
-  //   剩下这 9 个（任务板检查点/绩效统计/五阶段门控/并行派生/worker 控制/
-  //   自治/日志/角色/教学）提示词里没提，模型不会主动去调，因此可以按需。
+  //   save_context / load_context / phase_gate_delegate —— 那 14 个已全部放进 CORE_TOOLS。
+  //   剩下这些（任务板检查点/绩效统计/并行派生/worker 控制/自治/日志/角色/教学）
+  //   提示词里没提，模型不会主动去调，因此可以按需。
   team_advanced: {
     label: '团队进阶',
     keywords: [
@@ -117,7 +121,7 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
       'team', 'worker', 'workflow', 'review', 'delegate', 'subagent',
     ],
     tools: [
-      'teach', 'team_checkpoint', 'team_stats', 'phase_gate_delegate',
+      'teach', 'team_checkpoint', 'team_stats',
       'run_subagents', 'worker_control', 'team_autonomy', 'team_log', 'team_roles',
     ],
   },
@@ -128,6 +132,22 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
       '工作状态', '现在是', 'mode',
     ],
     tools: ['mode_switch', 'mode_status'],
+  },
+  // 自我认知：用户问"你是谁/你能做什么/团队有谁/Lucky 是什么"时按需加载 about_lumina
+  self_info: {
+    label: '自我信息',
+    keywords: [
+      '你是谁', '你叫什么', '你是什么', '介绍一下你', '介绍你', '自我介绍', '自我',
+      '你能做什么', '你会什么', '你有什么功能', '你有什么能力', '你的功能', '你的能力',
+      '你的版本', '什么版本', '支持什么平台', '支持什么系统', '你的团队', '团队有谁',
+      '队友有谁', '成员有谁', 'lucky', 'about_lumina',
+      // 🆕 优势 / 使用方法类提问（实测会漏）
+      '有什么用', '有什么用处', '能干嘛', '能干什么', '可以干嘛', '有什么用吗',
+      '怎么用', '如何使用', '使用方法', '怎么开始', '怎么上手', '怎么玩',
+      '你的优势', '优势是什么', '有什么好处', '为什么用你', '有什么特色', '有什么不同',
+      '教程', '使用指南', '帮助', '怎么设置',
+    ],
+    tools: ['about_lumina'],
   },
 
   // ── 日程与效率 ──
@@ -332,6 +352,17 @@ export const CAPABILITY_GROUPS: Record<string, CapabilityGroup> = {
 
 /** 会话级粘性：已激活的能力组（避免「上一轮能用下一轮没了」） */
 const sessionActiveGroups = new Map<string, Set<string>>()
+
+/**
+ * 粘性组数量上限。
+ *
+ * 【为什么要有上限】粘性本身是对的（不能「上一轮能用下一轮没了」），但**无上限**
+ * 的粘性会让长会话里激活的组越攒越多 —— 每一组都会往 function list 里塞一批工具，
+ * 于是模型手里的工具从"当前的 30 个"膨胀成"几十上百个杂项"，
+ * 表现就是「它总在挑不相关的工具用」。
+ * 超限时淘汰**最早激活**的组（Set 保持插入序），保证工具面始终贴合最近的话题。
+ */
+const MAX_STICKY_GROUPS = 6
 
 /** 清空某会话的粘性（新建会话 / 清空历史时调用） */
 export function resetToolRouting(sessionId: string): void {
@@ -539,7 +570,17 @@ export function routeTools(
   const toStick = [...newlyMatched, ...semantic]
   if (sessionId && toStick.length > 0) {
     const set = sessionActiveGroups.get(sessionId) || new Set<string>()
-    for (const g of toStick) {set.add(g)}
+    for (const g of toStick) {
+      // 重新插入以把它挪到"最新"，让淘汰顺序反映最近使用情况
+      if (set.has(g)) {set.delete(g)}
+      set.add(g)
+    }
+    // 上限保护：超出则淘汰最早激活的组，避免长会话工具面无限膨胀
+    while (set.size > MAX_STICKY_GROUPS) {
+      const oldest = set.values().next().value
+      if (oldest === undefined) {break}
+      set.delete(oldest)
+    }
     sessionActiveGroups.set(sessionId, set)
   }
 

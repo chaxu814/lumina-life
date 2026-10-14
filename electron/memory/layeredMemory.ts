@@ -18,6 +18,8 @@
 // 纯 TS、通过适配器接口注入（不直接 import better-sqlite3），便于单测。
 // ============================================================
 
+import { dictMatch } from './cjkDict'
+
 export type LayerName = 'working' | 'recent' | 'facts' | 'reflection' | 'persona'
 
 export interface LayeredItem {
@@ -75,7 +77,15 @@ export interface LayeredRecallOptions {
 /** 拉丁/数字词 */
 const LATIN_RE = /[a-z0-9][a-z0-9'_.\-]*/gi
 
-/** 分词：拉丁词 + 中文 unigram/bigram（bigram 显著提升中文短词召回） */
+// 🆕 中文词表分词增强开关（默认开；由存储层按 feature flag 设置）。
+//    关闭后回到纯 unigram+bigram，行为与历史版本完全一致。
+let _cjkDictEnabled = true
+export function setCjkDictEnabled(v: boolean): void { _cjkDictEnabled = !!v }
+export function isCjkDictEnabled(): boolean { return _cjkDictEnabled }
+
+/** 分词：拉丁词 + 中文 unigram/bigram（bigram 显著提升中文短词召回）
+ *  🆕 词表命中时**额外**加入完整词（「苹果手机」→ 苹果/手机），
+ *     属于严格增量：只增加匹配机会，不降低召回。 */
 export function tokenize(text: string): string[] {
   if (!text) {return []}
   const lower = text.toLowerCase()
@@ -90,6 +100,11 @@ export function tokenize(text: string): string[] {
       const chars = Array.from(run)
       for (const ch of chars) {tokens.push(ch)}
       for (let i = 0; i < chars.length - 1; i++) {tokens.push(chars[i] + chars[i + 1])}
+      // 🆕 词表最长匹配：额外补充完整词（严格增量）
+      if (_cjkDictEnabled) {
+        const words = dictMatch(run)
+        for (const w of words) {tokens.push(w)}
+      }
     }
   }
   return tokens

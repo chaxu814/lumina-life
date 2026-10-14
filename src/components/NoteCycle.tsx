@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { showToast } from '../components/Toast'
+import { isImeComposing } from '../lib/ime'
 import { useStore } from '../stores/appStore'
 
 // ═════════════════════════════════════════════════════════════
@@ -145,7 +146,10 @@ function NotesSection() {
           ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote() } }}
+          onKeyDown={e => {
+            if (isImeComposing(e)) {return}
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote() }
+          }}
           placeholder="📝 随手记… (Enter 保存, Shift+Enter 换行)"
           rows={2}
           style={{

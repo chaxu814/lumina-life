@@ -9,6 +9,8 @@
 // 纯函数、零重依赖，便于单元测试。
 // ============================================================
 
+import { buildSelfKnowledgeBlock } from '../selfKnowledge'
+
 /** 传给 Worker 的完整委托上下文 */
 export interface WorkerPromptContext {
   /** 目标 Worker ID（'yak' | 'recha' | 自定义 agent id） */
@@ -92,6 +94,14 @@ export function buildWorkerSystemPrompt(ctx: WorkerPromptContext): string {
   parts.push('这是一个独立上下文子任务：你看不到与用户的完整聊天窗，所以下面已把任务背景完整交给你。')
   parts.push('不要反问"对话历史在哪"——背景就在本提示里。')
   parts.push('')
+
+  // ── 自我认知（让 Worker 知道自己所在的项目与团队）──
+  //   修复实测问题：用户问「团队有谁」「Lucky agent 是什么」时，
+  //   Worker 因为 prompt 里没有任何自我描述而答不上来 / 说"没听过"。
+  try {
+    parts.push(buildSelfKnowledgeBlock(ctx.to, { compact: true }))
+    parts.push('')
+  } catch { /* 自我认知构建失败不影响委托 */ }
 
   // ── 任务目标 ──
   parts.push('## 🎯 任务目标')
