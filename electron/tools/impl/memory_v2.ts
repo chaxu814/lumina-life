@@ -73,9 +73,9 @@ export async function memorySave(args: Record<string, any>): Promise<ToolResult>
         : ''
       const missingNote = res.ok ? '' : `\n   ⚠️ ${res.reason}`
       // v3.34: 纠正 = 旧内容被证伪。同步把证据链里对应旧条目标为 contradicted，
-      // 否则召回排序仍会把一条已被用户否认的记忆排在前面。
+      // 否则 memory_search 的证据重排仍会把一条已被用户否认的记忆排在前面。
       const contradicted = res.ok ? contradictEvidence(content) : false
-      const evNote = contradicted ? `\n   🚫 证据链已把被取代的旧条目标为 contradicted（不再优先召回）` : ''
+      const evNote = contradicted ? `\n   🚫 证据链已把被取代的旧条目标为 contradicted（memory_search 重排时沉底）` : ''
       return {
         callId: '',
         ok: true,

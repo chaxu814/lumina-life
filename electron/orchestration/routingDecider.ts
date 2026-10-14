@@ -2,7 +2,8 @@
 // orchestration/routingDecider.ts — 任务路由决策（规则预筛 + LLM 仲裁）v1.0
 //
 // 【要解决的问题】
-// 旧路由 `shouldDelegateToYak()` / `shouldDelegateToRecha()` 是纯正则：
+// 旧的纯正则路由已移除（原 systemPrompt.ts 中的双实现已删除），路由建议由本模块生成。
+// 早年纯正则路由的形态大致是：
 //   /写.*代码/ /审查.*逻辑/ /重构|优化.*代码/ ...
 // 正则的本质是「字面命中」，于是两类任务必然出错：
 //

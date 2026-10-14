@@ -39,3 +39,9 @@ electron/agents/
 1. 按 `electron/agents/<agentId>/` 加载四件套
 2. 降级到项目根目录的 `SOUL_*.md` 旧格式
 3. 缓存结果避免重复 I/O
+
+## 工具权限
+
+- 角色的硬边界在 `electron/rolePolicy.ts`（唯一事实源：yak 可写可跑 / recha 只读 / lumina 全量）。
+- `agent.json` 里的 `tools.whitelist` 默认不生效，仅在 `tools.enforceWhitelist=true` 时额外收窄，不可能放宽权限；想放宽只能改 `rolePolicy.ts`。
+- `tools.blacklist` 始终生效，用于在硬边界之内再显式禁用个别工具。

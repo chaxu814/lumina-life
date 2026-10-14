@@ -1211,7 +1211,34 @@ ${lastError.slice(0, 1000)}
 
     if (effectiveLevel === 'simple' && !luckyControl.usePhaseGate) {
       console.log(`[DelegationManager] ⚡ ${emotionForcesSimple ? '情绪驱动 ' : ''}简单任务，直派 Yak`)
-      return this.delegate(request.from, {
+
+      // P1-5: 简单委托也写任务看板 —— 否则普通「帮我修 bug」不建项目，桌宠看不到工作状态。
+      // 看板失败不得影响委托本身（与复杂分支一致的「看板不可用降级」风格）。
+      let board: ReturnType<typeof getTaskBoard> | null = null
+      let projectId: string | null = null
+      let taskId: string | null = null
+      try {
+        board = getTaskBoard()
+        const project = board.createProject(
+          `项目 ${request.task.slice(0, 60)}`,
+          request.task,
+          'simple',
+        )
+        projectId = project.id
+        board.setProjectStatus(project.id, 'executing')
+        const task = board.addTask(project.id, request.task.slice(0, 80), request.task, { assignTo: 'yak' })
+        if (task) {
+          taskId = task.id
+          board.updateTaskStatus(task.id, 'running')
+        }
+      } catch (err: any) {
+        console.warn(`[DelegationManager] ⚠️ 简单委托写看板失败（不影响委托）: ${err?.message}`)
+        board = null
+        projectId = null
+        taskId = null
+      }
+
+      const result = await this.delegate(request.from, {
         to: 'yak',
         task: request.task,
         taskType: request.taskType as any,
@@ -1219,6 +1246,25 @@ ${lastError.slice(0, 1000)}
         loopConfig: request.loopConfig,
         approvalGates: request.approvalGates,
       })
+
+      // 看板收尾：同样包在 try 里，看板坏了委托结果照常返回。
+      if (board && projectId) {
+        try {
+          if (taskId) {
+            board.updateTaskStatus(taskId, result.success ? 'done' : 'failed', {
+              result: result.content,
+              error: result.error,
+              elapsedMs: result.elapsedMs,
+            })
+          }
+          board.setFinalResult(projectId, result.content)
+          board.setProjectStatus(projectId, result.success ? 'done' : 'failed')
+        } catch (err: any) {
+          console.warn(`[DelegationManager] ⚠️ 简单委托写看板收尾失败: ${err?.message}`)
+        }
+      }
+
+      return result
     }
 
     // 复杂任务 → 分阶段执行

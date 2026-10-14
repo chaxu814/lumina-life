@@ -757,37 +757,6 @@ function buildGroupChatAgentPrompt(agentId: 'yak' | 'recha'): string {
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 判断 Lumina 是否应该委托任务给 Yak
- */
-export function shouldDelegateToYak(userInput: string): boolean {
-  const codePatterns = [
-    /写.*(?:代码|脚本|函数|类|组件|爬虫|API|接口|程序)/,
-    /(?:帮我|给我|来)\s*(?:写|改|修|做).*(?:代码|程序|脚本)/,
-    /(?:debug|调试|修复).*(?:bug|错误|报错|问题)/,
-    /(?:解释|分析).*(?:这段代码|这个函数|这个类)/,
-    /(?:重构|优化).*(?:代码|函数|类)/,
-    /(?:实现|开发).*(?:功能|模块|页面)/,
-    /(?:帮我).*(?:写|改|修).*(?:爬虫|脚本|bot)/,
-  ]
-  return codePatterns.some(p => p.test(userInput))
-}
-
-/**
- * 判断 Lumina 是否应该委托任务给热茶
- */
-export function shouldDelegateToRecha(userInput: string): boolean {
-  const reviewPatterns = [
-    /(?:审查|review|检查).*(?:代码|逻辑|安全)/,
-    /(?:挑|找).*(?:错|bug|漏洞|问题)/,
-    /(?:评估|分析).*(?:风险|安全|利弊)/,
-    /(?:帮我).*(?:看看|检查|审查).*(?:这段代码|这个方案|这个设计)/,
-    /(?:从反面|反向).*(?:论证|思考|分析)/,
-    /(?:有什么|哪些).*(?:问题|风险|漏洞|隐患)/,
-  ]
-  return reviewPatterns.some(p => p.test(userInput))
-}
-
-/**
  * 获取可用委托目标列表（已配置 LLM 的成员）
  */
 export function getAvailableDelegateTargets(): { id: TeamMemberId; name: string; configured: boolean }[] {

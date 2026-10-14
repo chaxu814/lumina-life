@@ -50,23 +50,22 @@ describe('缺口1: intern 路由到 buildRunConfig 不崩', () => {
     expect(cfg.isChildAgent).toBe(true)
   })
 
-  it('recha intern 的工具集是只读（无 file_write/shell_exec）', () => {
+  it('recha intern 的模板 whitelist 默认留空（真实边界由 rolePolicy 硬隔离：recha 只读）', () => {
     const mgr = freshManager()
     const profile = (mgr as any)._buildDefaultProfile('intern_recha_小李')
     expect(profile.role).toBe('worker')
-    expect(profile.tools.whitelist).toContain('file_read')
-    expect(profile.tools.whitelist).not.toContain('file_write')
-    expect(profile.tools.whitelist).not.toContain('shell_exec')
-    expect(profile.tools.whitelist).not.toContain('git_commit')
+    // P2-9: 模板白名单不再写装饰性条目 —— 默认不生效（enforceWhitelist 未开），
+    // 真实权限边界由 rolePolicy.ts 硬隔离（recha 只读：禁 file_write/shell_exec/git_commit）决定；
+    // 如需进一步收窄，在 agent.json 配 tools.whitelist 并显式设 tools.enforceWhitelist=true。
+    expect(profile.tools.whitelist).toEqual([])
   })
 
-  it('yak intern 的工具集可写可跑（含 file_write/shell_exec）', () => {
+  it('yak intern 的模板 whitelist 默认留空（真实边界由 rolePolicy 硬隔离：yak 可写可跑）', () => {
     const mgr = freshManager()
     const profile = (mgr as any)._buildDefaultProfile('intern_yak_小陈')
     expect(profile.role).toBe('worker')
-    expect(profile.tools.whitelist).toContain('file_write')
-    expect(profile.tools.whitelist).toContain('shell_exec')
-    expect(profile.tools.whitelist).toContain('git_commit')
+    // P2-9: 同上 —— 白名单默认留空，真实边界在 rolePolicy（yak 放行 file_write/shell_exec/git_commit）。
+    expect(profile.tools.whitelist).toEqual([])
   })
 
   it('普通 owner ID 行为不受影响（回归）', () => {

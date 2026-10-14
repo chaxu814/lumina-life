@@ -13,7 +13,9 @@
 // 综合评分 = confidence × 0.3 + recency × 0.15 + frequency × 0.15
 //           + corroboration × 0.1 + importance × 0.3
 //
-// 评分 > 0.6: 高度可信 → 可注入 System Prompt
+// 评分 > 0.6: 高度可信（注入 System Prompt 的阈值设计；当前证据评分只在
+//             memory_search 工具结果与记忆剧场 UI 生效，自动召回走 hybridRecall，
+//             未经此评分注入 prompt —— 见 memory/evidenceBridge.ts 头部口径说明）
 // 评分 0.3-0.6: 中等 → 保留但需要更多确认
 // 评分 < 0.3: 低 → 可能过时或错误，可清理
 // ============================================================

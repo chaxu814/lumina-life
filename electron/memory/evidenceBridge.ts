@@ -22,10 +22,15 @@
 // 【这个文件做什么】
 // 作为适配层把两套接起来，而不是改写任何一套：
 //   · 写入时：用第 1 套算出的 confidence 当 sourceReliability 喂给第 2 套
-//   · 读取时：第 2 套的 compositeScore 给召回结果排序，并标出 pending/contradicted
-//   · 提示词：只有 confirmed 级别的记忆才允许进 system prompt
+//     （仅在 memory_save 工具写 fact / 纠正旧记忆时触发）
+//   · 读取时：第 2 套的 compositeScore 给 memory_search 工具的返回结果重排，
+//     并标出 pending/contradicted
+//   · 面板：getEvidenceStats 供「记忆剧场」UI 展示证据分布
 //
-// 结果：README 的「证据链」从口号变成可验证的行为。
+// 【当前生效边界（P2-14 口径收敛）】
+// 证据评分只在「记忆工具（memory_search）检索结果」与「记忆剧场」UI 生效；
+// 回复前的自动召回走 memoryStore.searchHybrid → hybridRecall（BM25+TF-IDF+RRF
+// 混合排序），不经过证据评分。getVerifiedContext 尚未接线进 prompt 路径。
 // ============================================================
 
 import { getMemoryEvidence, type ScoredMemory } from '../memoryEvidence'
@@ -105,8 +110,9 @@ export function contradictEvidence(content: string): boolean {
 }
 
 /**
- * 给召回结果排序：已确认的排前面，被证伪的沉底。
- * 这是证据链对用户**可感知**的第一个作用 —— 记错的事不会再被当成事实讲出来。
+ * 给 memory_search 工具的返回结果重排：已确认的排前面，被证伪的沉底。
+ * 注意：这是记忆工具内的重排；回复前的自动召回走 hybridRecall（BM25+TF-IDF+RRF），
+ * 不经此函数。
  */
 export function rankByEvidence<T>(
   results: T[],
@@ -132,9 +138,9 @@ export function rankByEvidence<T>(
 }
 
 /**
- * 只有高置信（confirmed）的记忆才允许进 system prompt。
- * 这是证据链对**防幻觉**的实际贡献：模型看不到自己拿不准的东西，
- * 就不会拿它当权威事实去回答用户。
+ * 【尚未接线】设计意图：只有高置信（confirmed）的记忆才允许进 system prompt，
+ * 模型看不到自己拿不准的东西，就不会拿它当权威事实去回答用户。
+ * 当前生产路径的自动召回走 hybridRecall（BM25+TF-IDF+RRF），本函数暂无调用方。
  */
 export function getVerifiedContext(maxMemories = 8): string {
   if (!ensureReady()) {return ''}

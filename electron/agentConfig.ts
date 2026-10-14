@@ -740,7 +740,10 @@ class AgentConfigManager {
           temperature: 0.3,
           topP: 0.9,
         },
-        tools: { whitelist: ['file_read', 'file_write', 'file_edit', 'file_list', 'shell_exec', 'git_commit'], blacklist: [], approvalLevel: 'none' as const },
+        // P2-9: whitelist 默认留空 —— 真实权限边界由 rolePolicy 硬隔离决定（见 electron/rolePolicy.ts）；
+        // 如需进一步收窄，在 agent.json 配 tools.whitelist 并显式设 tools.enforceWhitelist=true
+        // —— whitelist 只收窄、永不放宽（见 _resolveDisabledTools）。
+        tools: { whitelist: [], blacklist: [], approvalLevel: 'none' as const },
         social: { ttsVoice: 'zh-CN-YunjianNeural', mood: 0.5, energy: 0.8, affinity: 0.6 },
         paths: { chats: 'chats.json', jobs: 'jobs.json', memory: 'memory', dialog: 'dialog' },
       },
@@ -759,7 +762,10 @@ class AgentConfigManager {
           temperature: 0.2,
           topP: 0.9,
         },
-        tools: { whitelist: ['file_read', 'file_list', 'file_search', 'git_diff'], blacklist: [], approvalLevel: 'none' as const },
+        // P2-9: whitelist 默认留空（同 yak）——真实权限边界由 rolePolicy 硬隔离决定（见 electron/rolePolicy.ts）；
+        // 如需进一步收窄，在 agent.json 配 tools.whitelist 并显式设 tools.enforceWhitelist=true
+        // —— whitelist 只收窄、永不放宽（见 _resolveDisabledTools）。
+        tools: { whitelist: [], blacklist: [], approvalLevel: 'none' as const },
         social: { ttsVoice: 'zh-CN-YunxiNeural', mood: 0.4, energy: 0.6, affinity: 0.7 },
         paths: { chats: 'chats.json', jobs: 'jobs.json', memory: 'memory', dialog: 'dialog' },
       },
