@@ -586,6 +586,21 @@ export class AgentSocialEngine {
   // ═══════════════════════════════════════════════════════
 
   private async runConversation(ctx: ConversationContext): Promise<void> {
+    // 💰 Budget Guardian：预算 ≥95% 时社交引擎整体暂停（非必要 LLM 调用）。
+    // 用户主动对话不经过这里，永远不被砍。账单查不到就照常（失败开放）。
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getBudgetGuardian } = require('./billing/budgetGuardian')
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getUsageLedger } = require('./billing/usageLedger')
+      const guardian = getBudgetGuardian()
+      guardian.evaluate(getUsageLedger().today().cost)
+      if (!guardian.allowNonEssentialCall().allowed) {
+        console.log('[SocialEngine] 💰 预算已达降级线，本轮社交对话暂停')
+        return
+      }
+    } catch { /* 账单不可查就照常 */ }
+
     const isCodeTrack = ctx.track?.type === 'coding'
 
     if (isCodeTrack) {

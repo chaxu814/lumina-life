@@ -81,6 +81,7 @@ import { classifyApproval, formatDenyFeedback } from './tools/impl/approvalUI'
 import { updateEmotion } from './gamification/emotionBridge'
 // 诊断埋点
 import { getDiagnosticsStore } from './ipc/diagnosticsIpc'
+import { getUsageLedger, providerFromBaseUrl } from './billing/usageLedger'
 // Provider 档案 + 连接心跳
 import { matchProfile, isReasoningModel, getRecommendedTimeout } from './providerProfiles'
 import { checkConnectionAlive, isSlowModeActive, getSlowModeTimeout } from './llmRetry'
@@ -3703,6 +3704,19 @@ private summarizer: ConversationSummarizer | null = null
       model: this.config.model,
       durationMs: 0,
     })
+
+    // 统一记账（billing/usageLedger）：主 ReAct 循环的唯一收口。
+    // 与上面 diagnosticsStore 并存——diagnostics 是内存环形缓冲，这里才是持久账本。
+    try {
+      getUsageLedger().recordCall({
+        provider: providerFromBaseUrl(this.config.baseUrl),
+        model: this.config.model,
+        purpose: this.config.socialMode ? 'social' : 'chat',
+        promptTokens: streamUsage?.prompt_tokens ?? null,
+        completionTokens: streamUsage?.completion_tokens ?? null,
+        success: true,
+      })
+    } catch { /* 记账失败静默 */ }
 
     // 附加增量预执行结果
     const earlyResultsObj: Record<string, { content: string; error?: string }> = {}

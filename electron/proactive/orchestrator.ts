@@ -146,6 +146,21 @@ export class ProactiveOrchestrator {
       return { shouldSpeak: false, reason: `gate:${gateResult.reason}` }
     }
 
+    // 💰 Budget Guardian：预算 ≥95% 时暂停主动搭话（这是非必要 LLM 调用）。
+    // 用户主动发起的对话不走这条路径，永远不受影响。
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getBudgetGuardian } = require('../billing/budgetGuardian')
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getUsageLedger } = require('../billing/usageLedger')
+      const guardian = getBudgetGuardian()
+      guardian.evaluate(getUsageLedger().today().cost)
+      if (!guardian.allowNonEssentialCall().allowed) {
+        globalEventBus.emit(BusEvents.PROACTIVE_SILENT, { event: event.source, reason: 'budget:limited' })
+        return { shouldSpeak: false, reason: 'budget:limited' }
+      }
+    } catch { /* 账单不可查就照常（失败开放） */ }
+
     // ── 精力过低：只做睡觉动作，不说话 ──────────
     if (gateResult.fallbackToSleep || shouldSleepMode(drives)) {
       dispatchIntent({ action: 'sleep', mood: '疲惫 😩' })

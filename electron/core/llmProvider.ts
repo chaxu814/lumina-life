@@ -27,6 +27,8 @@ import {
   type NativeKind,
 } from './nativeBridge'
 import { getModelCapabilityCache } from '../modelCapabilityCache'
+// 统一记账账本（唯一收口；记账失败在账本内部已兜住，不影响调用）
+import { getUsageLedger, providerFromBaseUrl, type LlmPurpose } from '../billing/usageLedger'
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -41,6 +43,8 @@ export interface LLMProviderConfig {
   personaId?: string
   /** 显式指定原生协议（openai|anthropic|gemini|azure）；缺省按 baseUrl 自动识别 */
   protocol?: string
+  /** 用途标签（记账账本用：对话/主动/社交/审查…），缺省按 socialMode 推断 */
+  purpose?: LlmPurpose
 }
 
 export interface LLMResponse {
@@ -551,6 +555,8 @@ export class LLMProvider {
           `[LLMProvider] 🐢 流式中断：${reason}，已收 ${partialText.length} 字 / ${partialToolCalls?.length ?? 0} 个工具调用`,
         )
         if (partialText.length > 0 || partialToolCalls) {
+          // 统一记账：中断但已产生 token，照实记（success=true：内容确实产出了一部分）
+          this.recordUsage(streamUsage, true, opts)
           return {
             text: partialText || undefined,
             toolCalls: partialToolCalls,
@@ -616,11 +622,39 @@ export class LLMProvider {
       }
     }
 
+    // 统一记账：流式成功返回时汇总 usage（账本内部兜住一切异常）
+    this.recordUsage(streamUsage, true, opts)
+
     return {
       text: streamText,
       toolCalls: streamToolCalls,
       usage: streamUsage,
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 统一记账（billing/usageLedger）
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 把这一次调用的 usage 记进统一账本。
+   * usage 缺失时账本按文本长度估算并标 estimated=true（诚实标注）。
+   */
+  private recordUsage(usage: LLMResponse['usage'], success: boolean, opts: LLMRequestOptions): void {
+    try {
+      const purpose: LlmPurpose = this.config.purpose
+        || (this.config.socialMode ? 'social' : 'chat')
+      getUsageLedger().recordCall({
+        provider: providerFromBaseUrl(this.config.baseUrl),
+        model: this.config.model || 'unknown',
+        purpose,
+        agentId: this.config.personaId || '',
+        promptTokens: usage?.prompt_tokens ?? null,
+        completionTokens: usage?.completion_tokens ?? null,
+        inputText: opts.messages.map(m => String(m.content || '')).join('\n'),
+        success,
+      })
+    } catch { /* 宁可少一笔账，不可崩一轮对话 */ }
   }
 
   // ═══════════════════════════════════════════════════════
