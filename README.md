@@ -3,13 +3,13 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion-3%20continuous%20values%20%C2%B7%205%20expressions-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-138%20registered%20%2F%2031--45%20per%20turn-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="138 tools registered, 31-45 exposed per turn">
+  <img src="https://img.shields.io/badge/Tools-139%20registered%20%2F%20~32--50%20per%20turn-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="139 tools registered, ~32-50 exposed per turn">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
 
 <p align="center">
-  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-3811%20passing%20%2F%20269%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="3811 tests passing across 269 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4040%20passing%20%2F%20281%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4040 tests passing across 281 test files"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
@@ -53,9 +53,9 @@
 | 🟠 | **IM 渠道未经端到端真机验证** | 7 个适配器已接线，**仅 Telegram 默认开启**，其余需自配凭据 | v1.0 |
 | 🟡 | **测试套件对负载敏感（flaky）** | 已修复一批「源码重构后测试未同步」的确定性失败（5 条，见下方 Quality Gates）；剩余个别时序测试在**慢机/并发下**仍可能间歇失败——套件不再声称「永远全绿」 | 持续收敛 |
 | 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
-| 🟡 | **无第三方技能生态** | 技能市场通道已通、`skills/` 有 **8 个内置示例技能**，但**没有第三方技能可装** | 待社区 |
-| 🟡 | **`agentRunner.ts` 单文件 4117 行** | LLM 调用 / ReAct 循环 / 工具执行耦合在一起，外部贡献者可读性差 | 发布后重构 |
-| 🔵 | **约 5100 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
+| 🟡 | **无第三方技能生态** | 技能市场通道已通；`electron/skills/` 有 **13 个示例技能**、根 `skills/` 有 **7 个智能技能**，但**没有第三方技能可装** | 待社区 |
+| 🟡 | **`agentRunner.ts` 单文件 4135 行** | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
+| 🔵 | **5351 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
 | 🔵 | **Chromium sandbox 为 `false`** | 渲染进程安全由**应用层**承担（rolePolicy + securityGuard + sandboxRules + 审批流），**不是**浏览器沙箱；文档已按此更正 | 已澄清 |
 
 > 💡 **在 Windows + LM Studio 上遇到「很卡 / 首 token 很慢」？先跑 `lumina health`（或界面「更多设置 → 诊断工具 → 🩺 模型体检」）。**
@@ -284,21 +284,25 @@ Live2D / VRM 需要会 Blender、会绑 3D 模型 —— 这把绝大多数想�
 
 ---
 
-### 🔧 138 Built-in Tools · 按需筛选（另可经 MCP / 技能市场扩展）
+### 🔧 139 Built-in Tools · 按需筛选（另可经 MCP / 技能市场扩展）
 
-<sub>**三个口径都给你，不合并**：注册表实际注册并通过校验 **138** 个；
-`agent`（日常）档候选 **132** 个、`developer` 档候选 **136** 个、`chat` 档 0 个。
+<sub>**三个口径都给你，不合并**：注册表实际注册并通过校验 **139** 个。
+按模式分档：`developer` 档候选 **139** 个（全开）、`agent`（日常）档候选 **135** 个、
+`chat` 档静态 TOOLSETS 表为 0，但实际经 `CHAT_MODE_TOOLS` 注入 **11** 个（文件只读 / 记忆 / 搜索 / 委托）。
 
-但**每一轮真正发给模型的只有 31–45 个** —— `electron/tools/toolRouter.ts` 会按
-你这一句在说什么，从候选集里挑出相关的子集：核心 31 个常驻（文件 / 终端 / 搜索 /
-记忆 / 时间 / 待办 / 技能 / 团队），其余按 22 个能力组的关键词按需附加
+但**每一轮真正发给模型的只有一小撮** —— `electron/tools/toolRouter.ts` 会按
+你这一句在说什么，从候选集里挑出相关的子集：**常驻核心 `CORE_TOOLS` 约 32 个**
+（文件 / 终端 / 搜索 / 记忆 / 时间 / 待办 / 技能 / 团队基础），其余按能力组的关键词按需附加
 （电脑操控 / 浏览器 / 日程 / 定时 / 桌面整理 / 系统 / 记忆深化 / 团队进阶 /
 MCP / 语音 / 天气 / 邮件 / 社交 / 创作 / 资讯 / 游戏 / 番茄钟 / 深研 / 版本控制 …）。
+`developer` 档再叠加约 15 个写代码专用常驻（git 系列 / LSP / 浏览器细操作）。
+经验区间：chat 档 11 个；agent 档无按需命中时约 32 个，命中 1–2 个能力组后通常 **30–50 个**。
+裁剪后若少于 8 个会自动退回全量（失败开放，宁可多花 token 也不让模型没工具用）。
 
 **为什么这么做**：修复前每轮把整档工具**全量**塞进 function list ——
-agent 档 9,710 tokens、developer 档 12,075 tokens，**每一次模型调用都重发一遍**
+agent 档近万 tokens、developer 档 1.2 万 tokens，**每一次模型调用都重发一遍**
 （包括「现在几点」）。实测 601 次真实工具调用里，只有 22 个工具被用过，
-前 7 个占 95%。现在每轮 **5,495 tokens 起**，且工具能力一个没少。
+前 7 个占 95%。现在每轮只发相关子集，且工具能力一个没少。
 
 启动日志会打印实际注册数与各档可达数，并对「任何 toolset 都够不到的工具」告警
 （当前 **0** 个）。
@@ -384,19 +388,19 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 ## 🔬 Quality Gates · 工程底座
 
 我们不靠 star 数说话，靠能跑的东西说话。**下面每一项都是我们本机实测跑出来的，
-不是 CI 徽章上的转述。**（数据采样：2026-10-11 · commit `52d16de`）
+不是 CI 徽章上的转述。**（数据采样：2026-10-14）
 
 | 闸门 | 命令 | 实测结果 |
 |---|---|---|
-| 测试套件 | `npm test` | **269 个测试文件 · 3811 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
+| 测试套件 | `npm test` | **281 个测试文件 · 4040 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
 | 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
-| 代码规范 | `npm run lint` | **0 error**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
+| 代码规范 | `npm run lint` | **0 error / 5351 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
 | CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
 | 打包 | `.github/workflows/release.yml` | Windows / macOS / Linux 三平台；**无签名证书时降级出包而不失败** |
 
 > ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
 > 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
-> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 269 文件 / 3811 通过 / 0 失败。
+> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 281 文件 / 4040 通过 / 0 失败。
 > 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
 > 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
 
@@ -419,7 +423,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 因为他们搜不到任何 issue、discussion 或第三方评测。如果你正在考虑用 Lumina
 跑真任务，这张表应该比功能列表更能帮你做决定。
 
-**我们也如实说明短板**：`tsc --strict` 是绿的，但 `eslint` 仍有约 5100 条
+**我们也如实说明短板**：`tsc --strict` 是绿的，但 `eslint` 仍有 5351 条
 `no-explicit-any` warning（集中在测试与 LLM 消息边界）。它不阻塞发布——
 因为有棘轮机制管着只会减少；但我们不假装它是零。
 
@@ -443,11 +447,11 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「优化一下这个项目」（模糊） | ⚠️ 尽力，可能过度编排 |
 | 「顺便在浏览器里点两下」 | ✅ 能（developer 模式）|
 | 「发封邮件」 | ✅ 能（v3.34 起 `mail_*` 已进入 agent 模式）|
-| 「帮我装个第三方技能」 | ❌ 没有第三方技能可装（`skills/` 里有 8 个内置示例） |
+| 「帮我装个第三方技能」 | ❌ 没有第三方技能可装（`electron/skills/` 有 13 个示例技能，根 `skills/` 有 7 个智能技能） |
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：269 文件 · 3811 用例通过 / 1 skipped / 0 失败**（本机实测；
+Linux 为 roadmap。**测试规模：281 文件 · 4040 用例通过 / 1 skipped / 0 失败**（本机实测；
 ⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
 `tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
@@ -456,7 +460,7 @@ Linux 为 roadmap。**测试规模：269 文件 · 3811 用例通过 / 1 skipped
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：269 文件 / 3811 passed / 1 skipped
+npx vitest run             # 预期：281 文件 / 4040 passed / 1 skipped
 node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
 ```</sub>
 
@@ -464,10 +468,9 @@ node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠
 > 我们没有做过可用性测试，没有留存数据，团队单人格开发。
 > 这是「工程上做得扎实」与「产品上被验证过」的区别——我们只做到了前者。
 
-> 📋 **想看完整的能力审计？** [docs/Lumina-发布前评测与复评-20261003.md](docs/Lumina-发布前评测与复评-20261003.md)
-> 里面记了发布前查出的 47 个不可达工具、五阶段门控零调用方、证据链死代码等问题，
-> 以及它们是怎么被修的（附修复前后实测对照）。**也记了我自己的一处误判**——
-> 我曾把 `accessControl.ts` 判为死代码建议删除，实际它接着 8 个 IPC 端点和一个 UI 面板。
+> 📋 **想看完整的能力审计？** 见 [docs/Lumina-发布前全方位测评-20261013.md](docs/Lumina-发布前全方位测评-20261013.md)
+> —— 发布前查出的问题（不可达工具、五阶段门控零调用方、证据链死代码等）以及它们是怎么被修的，
+> 都在里面附了修复前后实测对照。
 
 ---
 
@@ -530,6 +533,45 @@ Ollama（`127.0.0.1:11434`）；探到就自动推荐一个合适尺寸的模型
 
 > 🔒 **Key 安全**：`.env` 已在 `.gitignore` 中；仓库内的密钥扫描是 0 真实命中
 > （扫 833 文件的 `sk-*` / `Bearer` / `ghp_` / `AKIA` 等模式）。
+
+### 💰 持续运行的 token 成本（诚实披露）
+
+Lumina 不是「开了就不花钱」的工具：**主动搭话、桌宠情绪、团队社交在后台会定期调 LLM**。
+下面按 2026-10 DeepSeek 官方计价给出估算（[官方计价页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)，最终以官方为准）：
+
+| 模型 | 输入（缓存未命中） | 输出 |
+|---|---|---|
+| `deepseek-v4-flash` | ¥1 / 百万 tokens | ¥2 / 百万 tokens |
+| `deepseek-v4-pro` | ¥12 / 百万（非高峰 2.5 折 = ¥3） | ¥24 / 百万（非高峰 ¥6） |
+
+**token 假设**（读代码后估算，非实测账单）：
+- 一次主动搭话 = 2 次 LLM 调用（内心独白 + 现场生成台词），约 **8k input / 300 output**；
+- 一次团队社交轮次（早安/午后/晚间回顾）= 1 次调用，约 **2.5k input / 150 output**；每个仪式 3 轮；
+- 纯对话一轮 ≈ **13k input**（系统人格 + 约 30 个工具 schema + 记忆注入 + 上下文）/ **400 output**。
+
+**三档每日估算（按 flash 档 ¥1/¥2 计）：**
+
+| 用法 | 每日事件量假设 | 估算日费 |
+|---|---|---|
+| **仅主动陪伴**（早安/久坐/屏幕感知/健康提醒，社交关） | 5–20 次搭话 + 1 次日报 + 若干次屏幕/热搜评估 | **¥0.08 – 0.25 / 天** |
+| **主动 + 社交全开**（加早安/午后/晚间仪式 + 朋友圈后台群聊） | 上述 + 9–15 次社交轮次 | **¥0.15 – 0.40 / 天** |
+| **纯对话对照**（30–50 轮/天，不主动打扰） | 40 轮 × 13k input | **¥0.4 – 0.9 / 天** |
+
+> 也就是说：**就算把主动与社交全部开满，flash 档一天也不到 4 毛钱**；真正吃 token 的是你和她的对话本身。
+> 若用 `deepseek-v4-pro`，上表乘 12–24 倍（非高峰可压到 3–6 倍）。建议在 DeepSeek 后台设**余额告警 / 预算上限**，避免忘记关时账单失控。
+
+**想把持续消耗降到 0？** 全部开关路径：
+
+| 想关的 | 在哪里关 |
+|---|---|
+| 主动搭话整体 | 设置 → 主动陪伴 / Proactive 侧栏，关掉主动引擎（`proactive`）；或环境变量 `LUMINA_FF_MODE_MINIMAL=1` 进精简模式 |
+| 团队社交（早安/午后/晚间/朋友圈后台群聊） | 设置 → 团队社交；feature flag `social.deepTeam`、`team.relationshipDrama`（环境变量 `LUMINA_FF_SOCIAL_DEEPTEAM=0`） |
+| 梦境日记 LLM 生成 | feature flag `dream.llmGeneration`（`LUMINA_FF_DREAM_LLM_GENERATION=0`） |
+| 屏幕感知（截图→VLM） | 设置 → 屏幕感知 / `screenWatchEnabled`；健康提醒（喝水/眼/坐姿）各有独立开关 |
+| 桌宠状态灯 | `LUMINA_PET_AGENT_STATE=0`（这只是状态映射，不省 LLM） |
+| 记忆读写 | 设置 → 记忆与进化：「使用记忆」「生成记忆」可分别关 |
+
+> 关掉主动/社交后，只剩你主动发消息时才产生 token，成本就和普通聊天机器人一样。
 
 ---
 
@@ -726,7 +768,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  138 tools · MCP          │  Plugin SDK · Skill Store      │ │
+│  │  139 tools · MCP          │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -773,7 +815,7 @@ lumina-life/
 | 自动更新 Auto Update | electron-updater (GitHub Releases) |
 | 协议支持 Protocols | MCP (Model Context Protocol) |
 | 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **269 文件 / 3811 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| 测试规模 Tests | **281 文件 / 4040 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
 
 ---
 
@@ -782,7 +824,7 @@ lumina-life/
 完整版见 **[docs/ROADMAP.md](docs/ROADMAP.md)**（含已知缺口表与认领指引）。
 
 **✅ 当前开发版（v0.1.0-preview）**
-三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 主要表现 + 亲密度 + 昼/夜两档，底层 9 标签）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 138 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
+三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 主要表现 + 亲密度 + 昼/夜两档，底层 9 标签）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 139 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
 
 **✅ 已完成的发布加固**
 - [x] 原生模块 ABI 与 Electron 对齐（CI 有门禁，不再出现「测试绿、真机炸」）
