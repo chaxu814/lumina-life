@@ -28,7 +28,7 @@
     "build:pet-life": "esbuild electron/pet/life/runtime.ts --bundle --format=iife --global-name=LuminaLife --charset=utf8 --outfile=electron/pet/assets/pet-life.js",
     "build:pet-voice": "esbuild electron/pet/lifeSpeech/voiceClient.ts --bundle --format=iife --global-name=LuminaVoice --charset=utf8 --external:electron --outfile=electron/pet/assets/pet-voice.js",
     "prebuild": "node scripts/prebuild-clean.cjs",
-    "build": "npm run build:pet-life && npm run build:pet-voice && npm run build:pet-vrm && electron-vite build",
+    "build": "npm run build:pet-life && npm run build:pet-voice && npm run build:pet-vrm && npm run build:pet-mmd && electron-vite build",
     "preview": "electron-vite preview",
     "pack:win": "electron-vite build && electron-builder --win --x64",
     "pack:mac": "electron-vite build && electron-builder --mac --x64 --arm64",
@@ -50,7 +50,8 @@
     "doctor": "electron . --cli doctor",
     "chat": "electron . --cli chat",
     "postinstall": "node scripts/electron-postinstall.cjs",
-    "build:pet-vrm": "esbuild electron/pet/vrm/vrmRenderer.ts --bundle --format=iife --global-name=LuminaVRM --charset=utf8 --outfile=electron/pet/assets/pet-vrm.js"
+    "build:pet-vrm": "esbuild electron/pet/vrm/vrmRenderer.ts --bundle --format=iife --global-name=LuminaVRM --charset=utf8 --outfile=electron/pet/assets/pet-vrm.js",
+    "build:pet-mmd": "esbuild electron/pet/mmd/mmdRenderer.ts --bundle --format=iife --global-name=LuminaMMD --charset=utf8 --outfile=electron/pet/assets/pet-mmd.js"
   },
   "build": {
     "appId": "com.lumina.desktop-pet",

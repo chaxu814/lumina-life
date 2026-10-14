@@ -16,10 +16,10 @@
 // 纯逻辑均可在 lifeServices 之外单测；此处仅做薄接线，任何失败都安全降级、不阻塞桌宠。
 // ============================================================
 
-import { app, ipcMain, dialog, BrowserWindow, type NativeImage } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow, shell, type NativeImage } from 'electron'
 import { promises as fsp, readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs'
 import path from 'path'
-import { pathToFileURL } from 'url'
+import { pathToFileURL, fileURLToPath } from 'url'
 
 import { ModelLibrary, type ModelEntry } from './modelLibrary'
 import { importLive2dModel, type ModelImporterFs } from './modelImporter'
@@ -207,6 +207,28 @@ export function registerLifeServicesIpc(): void {
     catch (e: any) { // 任何异常都回退保底形象（程序化小猫），保证桌宠永远能加载
       return { id: 'Cat', name: '小猫', kind: 'cat', entryRel: '__cat__', builtin: true, url: '__cat__' }
     }
+  })
+
+  // 安全加固 P1-4：MMD 渲染页不再直接 require('fs')，改由主进程代查文件大小。
+  // 只接受 file: 协议 URL，任何异常都安全降级（返回 ok:false，不阻断模型加载）。
+  ipcMain.handle('pet:models:stat', async (_e, url: string) => {
+    try {
+      const raw = String(url || '')
+      if (!raw.startsWith('file:')) {return { ok: false, error: 'not a file url' }}
+      const stats = await fsp.stat(fileURLToPath(raw))
+      return { ok: true, size: stats.size }
+    } catch (e: any) { return { ok: false, error: String(e?.message || e) } }
+  })
+
+  // 受控外部链接打开（onboarding 等桌宠页面经 petAPI.openExternal 调用）。
+  // 只放行 http/https/mailto，杜绝 javascript: 等协议被交给系统 shell。
+  ipcMain.handle('pet:open-external', async (_e, url: string) => {
+    try {
+      const raw = String(url || '').trim()
+      if (!/^(https?:|mailto:)/i.test(raw)) {return false}
+      await shell.openExternal(raw)
+      return true
+    } catch { return false }
   })
 
   ipcMain.handle('pet:models:select', (_e, params: { id: string }) => {

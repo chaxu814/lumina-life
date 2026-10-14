@@ -13,8 +13,10 @@
 
 import { FullDuplexController } from './fullDuplexController'
 
-// nodeIntegration=true，pet 页可直接 require
-const electron = (typeof require === 'function' ? require('electron') : (window as any).electron) || {}
+// 安全加固 P1-4：桌宠窗口已 nodeIntegration:false + contextIsolation:true，
+// 页面里没有 require；electron 能力只来自 petPreload 暴露的 window.electron
+// （白名单 ipcRenderer 桥）。取不到时 ipc=null，语音功能安全降级。
+const electron = (typeof window !== 'undefined' && (window as any).electron) || {}
 const ipc = electron.ipcRenderer || null
 
 export interface VoiceStartOptions {

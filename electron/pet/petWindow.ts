@@ -1147,6 +1147,20 @@ function resolvePreloadPath(): string {
   return path.join(__dirname, '..', 'preload', 'index.js')
 }
 
+/**
+ * 桌宠窗口专用受控 preload（out/preload/pet.js）。
+ * 与主 preload 隔离：只暴露白名单 IPC 桥，绝不给桌宠页面 Node 集成。
+ */
+function resolvePetPreloadPath(): string {
+  const candidates = [
+    path.join(__dirname, '..', 'preload', 'pet.js'),
+    path.join(__dirname, '..', '..', 'preload', 'pet.js'),
+    path.join(__dirname, 'preload', 'pet.js'),
+  ]
+  for (const c of candidates) {if (fs.existsSync(c)) {return c}}
+  return path.join(__dirname, '..', 'preload', 'pet.js')
+}
+
 function setWindowClickThrough(enable: boolean): void {
   if (!petWindow || petWindow.isDestroyed()) {return}
   // 全屏舞台始终保持「穿透+转发」：桌面永远可操作；
@@ -1386,10 +1400,12 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
     icon: getAppIconPath(256),
     backgroundColor: petCaps.backgroundColor,
     webPreferences: {
-      preload: resolvePreloadPath(),
+      preload: resolvePetPreloadPath(),
       sandbox: false,
-      contextIsolation: false,
-      nodeIntegration: true,
+      // 🛡️ 安全加固 P1-4：桌宠页面渲染 LLM 生成内容，关闭 Node 集成、
+      // 开启上下文隔离，只经 petPreload 的白名单桥通信。
+      contextIsolation: true,
+      nodeIntegration: false,
       backgroundThrottling: true, // 窗口隐藏/被遮挡时暂停 RAF 与定时器，省 CPU/内存
       spellcheck: false,
     },
@@ -1862,10 +1878,10 @@ export function registerPetIpc(): void {
         maximizable: false,
         fullscreenable: false,
         webPreferences: {
-          preload: resolvePreloadPath(),
+          preload: resolvePetPreloadPath(),
           sandbox: false,
-          contextIsolation: false,
-          nodeIntegration: true,
+          contextIsolation: true,
+          nodeIntegration: false,
         },
       })
       settingsWin.loadFile(settingsPath)
@@ -2432,10 +2448,10 @@ export function openPetChatWindow(): { ok: boolean; error?: string } {
       icon: getAppIconPath(256),
       backgroundColor: petCaps.backgroundColor,
       webPreferences: {
-        preload: resolvePreloadPath(),
+        preload: resolvePetPreloadPath(),
         sandbox: false,
-        contextIsolation: false,
-        nodeIntegration: true,
+        contextIsolation: true,
+        nodeIntegration: false,
         backgroundThrottling: true,
         spellcheck: false,
       },
@@ -2505,10 +2521,10 @@ export function openOnboarding(): { ok: boolean } {
     alwaysOnTop: true,
     resizable: false,
     webPreferences: {
-      preload: resolvePreloadPath(),
+      preload: resolvePetPreloadPath(),
       sandbox: false,
-      contextIsolation: false,
-      nodeIntegration: true,
+      contextIsolation: true,
+      nodeIntegration: false,
       backgroundThrottling: true, // 窗口隐藏/被遮挡时暂停 RAF 与定时器，省 CPU/内存
       spellcheck: false,
     },

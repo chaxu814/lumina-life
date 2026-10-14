@@ -98,6 +98,8 @@ export default defineConfig({
           index: resolve(__dirname, 'electron/preload.ts'),
           trayMenu: resolve(__dirname, 'electron/tray/trayMenuPreload.ts'),
           browser: resolve(__dirname, 'electron/browser/browserPreload.ts'),
+          // 桌宠窗口专用受控 preload（contextIsolation:true + 白名单 IPC 桥）
+          pet: resolve(__dirname, 'electron/pet/petPreload.ts'),
         }
       }
     }

@@ -4,12 +4,6 @@ var LuminaVoice = (() => {
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-  }) : x)(function(x) {
-    if (typeof require !== "undefined") return require.apply(this, arguments);
-    throw Error('Dynamic require of "' + x + '" is not supported');
-  });
   var __copyProps = (to, from, except, desc) => {
     if (from && typeof from === "object" || typeof from === "function") {
       for (let key of __getOwnPropNames(from))
@@ -192,7 +186,7 @@ var LuminaVoice = (() => {
   };
 
   // electron/pet/lifeSpeech/voiceClient.ts
-  var electron = (typeof __require === "function" ? __require("electron") : window.electron) || {};
+  var electron = typeof window !== "undefined" && window.electron || {};
   var ipc = electron.ipcRenderer || null;
   function downsampleTo16k(input, inRate) {
     if (inRate === 16e3) {

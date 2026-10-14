@@ -179,7 +179,7 @@
   <div class="wm">LUMINA</div>
 
 <script>
-  const ipc = require('electron').ipcRenderer;
+  const ipc = (window.petAPI && window.petAPI.ipc) || null;
   const TOTAL = 6;
   const state = {
     step: 0,
@@ -262,7 +262,7 @@
       zhipu: 'https://open.bigmodel.cn/usercenter/apikeys',
       siliconflow: 'https://cloud.siliconflow.cn/account/ak',
     };
-    require('electron').shell.openExternal(urls[provider] || 'https://platform.deepseek.com/');
+    try { if (window.petAPI && window.petAPI.openExternal) window.petAPI.openExternal(urls[provider] || 'https://platform.deepseek.com/'); } catch (e) {}
   });
 
   // 本地：自动检测

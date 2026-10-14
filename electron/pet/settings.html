@@ -203,7 +203,7 @@
 <script>
   const $ = id => document.getElementById(id);
   let ipc = null;
-  try { ipc = require('electron').ipcRenderer; } catch (e) {}
+  try { ipc = (window.petAPI && window.petAPI.ipc) || null; } catch (e) {}
 
   const PERSONA_NAMES = { '': '默认猫娘', bingruo: '病弱妹妹', zhixin: '知心姐姐', dushe: '毒舌学妹', shadiao: '沙雕网友' };
 

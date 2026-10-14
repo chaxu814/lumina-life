@@ -387,10 +387,7 @@
 
 /* ── IPC 探测 ────────────────────────────────────────────── */
 let ipc = null;
-try { ipc = require('electron').ipcRenderer; } catch (e) {}
-if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer; } catch (e) {} }
-if (!ipc && window.ipcRenderer) ipc = window.ipcRenderer;
-if (!ipc && window.electron) ipc = window.electron.ipcRenderer;
+try { ipc = (window.petAPI && window.petAPI.ipc) || null; } catch (e) {}
 const HAS_IPC = !!ipc;
 
 function sendEvent(type, data) { if (HAS_IPC) try { ipc.send('pet:event', { type, timestamp: Date.now(), data }); } catch (e) {} }

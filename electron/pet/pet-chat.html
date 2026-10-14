@@ -264,10 +264,7 @@
    - 消息收发复用桌宠既有通道：pet:sync-send / pet:chat / pet:sync-reply
    ════════════════════════════════════════════════════════════ */
 let ipc = null;
-try { ipc = require('electron').ipcRenderer; } catch (e) {}
-if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer; } catch (e) {} }
-if (!ipc && window.ipcRenderer) ipc = window.ipcRenderer;
-if (!ipc && window.electron) ipc = window.electron.ipcRenderer;
+try { ipc = (window.petAPI && window.petAPI.ipc) || null; } catch (e) {}
 const HAS_IPC = !!ipc;
 
 const chatLog = document.getElementById('chat-log');

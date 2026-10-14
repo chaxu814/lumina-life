@@ -49,8 +49,7 @@
 // ============================================================
 (function () {
   var ipc = null
-  try { ipc = require('electron').ipcRenderer } catch (e) {}
-  if (!ipc && window.require) { try { ipc = window.require('electron').ipcRenderer } catch (e) {} }
+  try { ipc = (window.petAPI && window.petAPI.ipc) || null } catch (e) {}
 
   var canvas = document.getElementById('stage')
   var ctx = canvas.getContext('2d')

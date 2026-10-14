@@ -51,9 +51,9 @@
   <script>
   (function () {
     'use strict'
-    const HAS_IPC = (typeof require === 'function')
+    const HAS_IPC = !!(window.petAPI && window.petAPI.ipc)
     let ipc = null
-    try { ipc = HAS_IPC ? require('electron').ipcRenderer : null } catch (e) { ipc = null }
+    try { ipc = HAS_IPC ? window.petAPI.ipc : null } catch (e) { ipc = null }
 
     const bubbleEl = document.getElementById('bubble')
     const statusEl = document.getElementById('status')
