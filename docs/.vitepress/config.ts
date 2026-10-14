@@ -5,6 +5,8 @@ export default defineConfig({
   description: '基于 Electron + React 的 AI Agent 多模态桌宠',
   lang: 'zh-CN',
   base: '/LuminaLife/',
+  // internal/ 下是历史自评/修复日志，不编入 VitePress 路由
+  srcExclude: ['internal/**', '**/_*.md'],
   themeConfig: {
     logo: '/icon.png',
     siteTitle: 'LuminaLife',
