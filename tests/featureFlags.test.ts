@@ -49,7 +49,9 @@ describe('featureFlags · 三处判据一致（防止幽灵状态）', () => {
   })
 
   it('主进程运行时：情绪门控走单一开关入口', () => {
-    const src = readSrc('electron/agentRunner.ts')
+    // P2-10：工具选择流水线已从 agentRunner.ts 纯搬移到 agentRunner.toolSelection.ts，
+    // 门控开关读取随流水线一起搬走；拼两个文件守住「单一入口、无第二判据」。
+    const src = readSrc('electron/agentRunner.ts') + '\n' + readSrc('electron/agentRunner.toolSelection.ts')
     expect(src).toMatch(/readFeatureFlag\(\s*'emotionGating'/)
     expect(src).not.toMatch(/features\?\.emotionGating/)
   })

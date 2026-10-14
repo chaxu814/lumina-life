@@ -137,8 +137,13 @@ describe('可观测性 · ③ 面板真的被挂载了（这是之前漏掉的�
 })
 
 describe('可观测性 · ④ 情绪因果链真的被生产代码调用', () => {
+  // P2-10：工具选择流水线已从 agentRunner.ts 纯搬移到 agentRunner.toolSelection.ts，
+  // 守卫的是「因果链仍被生产代码调用」这一事实 —— 两个文件都属于生产接线，拼起来读。
+  const toolSelectionSrc = (): string =>
+    code('electron/agentRunner.ts') + '\n' + code('electron/agentRunner.toolSelection.ts')
+
   it('agentRunner 调了 getCausalFrontendThree 与 getCausalGatingHints', () => {
-    const src = code('electron/agentRunner.ts')
+    const src = toolSelectionSrc()
     expect(src, 'getCausalFrontendThree 仍是死函数').toMatch(/getCausalFrontendThree\(\)/)
     expect(src, 'getCausalGatingHints 仍是死函数').toMatch(/getCausalGatingHints\(\)/)
   })
@@ -147,13 +152,13 @@ describe('可观测性 · ④ 情绪因果链真的被生产代码调用', () =>
     // 【为什么这条重要】若用因果值直接覆盖表情值，
     // 某次 worker 失败带来的低 confidence 可能在下一轮被桌宠表情抹平，
     // 门控就又松回去了 —— 那等于「情绪可以放松」，违反只收紧不放松的不变量。
-    const src = code('electron/agentRunner.ts')
+    const src = toolSelectionSrc()
     expect(src).toMatch(/mood:\s*Math\.min\(/)
     expect(src).toMatch(/energy:\s*Math\.min\(/)
   })
 
   it('因果链自身出错时不阻断主流程', () => {
-    const src = code('electron/agentRunner.ts')
+    const src = toolSelectionSrc()
     const m = src.match(/try\s*\{[\s\S]{0,800}?getCausalGatingHints\(\)[\s\S]{0,400}?catch\s*\{/)
     expect(m, '未找到因果链的 try/catch 保护').not.toBeNull()
   })
