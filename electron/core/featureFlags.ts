@@ -50,7 +50,14 @@ export type FeatureKey =
   // I7 精简模式（v0.1 公开版只露三件事）
   | 'mode.minimal'
   // P2-8 阶段1：命令策略审批层（REJECT 层无 flag 默认开；APPROVAL 层灰度）
-  | 'security.commandApproval';
+  | 'security.commandApproval'
+  // 🆕 集成阶段挂载的六大功能（实验，默认全关）
+  | 'dayreplay.enabled'
+  | 'moodstats.enabled'
+  | 'rituals.nightReview'
+  | 'rituals.morningBriefing'
+  | 'decision.enabled'
+  | 'handover.enabled';
 
 const DEFAULTS: Record<FeatureKey, boolean> = {
   // F1：7×8 威胁分类规则库——随代码落地即开（规则库是纯增量，不改旧路径）
@@ -93,6 +100,21 @@ const DEFAULTS: Record<FeatureKey, boolean> = {
   // REJECT 层是纯增量拒绝（与既有黑名单叠加），不需要 flag；
   // 审批层会改变命令执行节奏（先不执行、等人 /approve），先灰度观察。
   'security.commandApproval': false,
+
+  // ── 集成阶段挂载的六大功能（全部实验，默认关）──
+  // Day Replay：时间线聚合回放。关闭时 IPC 直接回 disabledReply。
+  'dayreplay.enabled': false,
+  // Mood×Productivity 情绪看板：整个快照采集总开关。
+  // 关闭时不做任何方法包裹（主链路行为与接线前完全一致）；
+  // A/B 对照开关走 abGroup 自身持久化（moodstats:ab:setEnabled），不在这里。
+  'moodstats.enabled': false,
+  // 仪式感：睡前复盘 / 晨间简报的定时触发开关（手动触发不受此限）。
+  'rituals.nightReview': false,
+  'rituals.morningBriefing': false,
+  // 生活决策三栏辩论（/decide）：关闭时命令明确提示未开启。
+  'decision.enabled': false,
+  // 交班模式（加密卡片+二维码+局域网 H5）：关闭时 generate/save 回 disabled。
+  'handover.enabled': false,
 };
 
 const overrides: Partial<Record<FeatureKey, boolean>> = {};

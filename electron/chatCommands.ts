@@ -223,6 +223,14 @@ const COMMANDS: CommandDef[] = [
     minArgs: 0,
     requiresAgent: true,
   },
+  {
+    name: 'decide',
+    aliases: ['决定', '定'],
+    description: '生活决策三栏辩论：执行者拆可行性、审查员挑风险、Lumina 给最终建议',
+    usage: '/decide <问题，如：买电动车还是油车>',
+    minArgs: 1,
+    requiresAgent: false,
+  },
 ]
 
 // ═══════════════════════════════════════════════════════════

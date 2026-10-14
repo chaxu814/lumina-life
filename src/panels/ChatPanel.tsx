@@ -20,6 +20,7 @@ import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
 import { getDisabledToolNames } from '../stores/appStore'
 import PersonalityConflictAlert from '../components/PersonalityConflictAlert'
+import DecisionDebateCard from './DecisionCard'
 import { IconPlus, IconSend } from '../components/Icons'
 import ModelSelector from '../components/ModelSelector'
 import { DEFAULT_PERSONAS, getPersona, getPersonaPrompt } from '../data/personas'
@@ -700,9 +701,16 @@ export default function ChatPanel() {
     // ── v2.7: 命令拦截 ──────────────────────────
     if (text.startsWith('/')) {
       try {
-        const result = await window.luminaAPI.commandExecute(text)
-        const displayText = result?.content || result?.error || `命令已执行: ${text}`
-        useStore.getState().addMessage(activeConversationId, 'system', displayText)
+        const result: any = await window.luminaAPI.commandExecute(text)
+        const debate = result?.debateResult || result?.data
+        if (debate && debate.columns) {
+          // ⚖️ /decide：文本走 assistant 消息，结构化三栏由 debateResult 挂卡渲染
+          const displayText = result?.content || result?.message || '生活决策三栏辩论已完成。'
+          useStore.getState().addMessage(activeConversationId, 'assistant', displayText, { debateResult: debate })
+        } else {
+          const displayText = result?.content || result?.error || `命令已执行: ${text}`
+          useStore.getState().addMessage(activeConversationId, 'system', displayText)
+        }
       } catch (err: any) {
         useStore.getState().addMessage(activeConversationId, 'system', `命令执行失败: ${err.message}`)
       }
@@ -2020,6 +2028,8 @@ export default function ChatPanel() {
                   fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word', userSelect: 'text',
                 }}><LinkifiedText text={msg.content.replace(/^\n+/, '')} /></div>
+                {/* ⚖️ /decide：生活决策三栏辩论卡片（有 debateResult 才渲染） */}
+                {msg.debateResult && (<DecisionDebateCard result={msg.debateResult} />)}
                 {/* ═══ v2.14: 内联操作按钮 ═══ */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 2, marginTop: 6,

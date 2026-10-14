@@ -113,11 +113,15 @@ export function registerDecisionCommand(): {
         return { success: false, message: '用法：/decide <你要决定的问题>' }
       }
       const result = await runDecisionDebate(question, [], createDefaultDecisionDeps())
-      // 结果原样交给渲染层挂 DecisionDebateCard；message 给文本兜底
+      // message/content 给文本兜底（渲染层 command 分支读 result.content）；
+      // debateResult 给渲染层挂 DecisionDebateCard；data 保留原始契约。
+      const text = `${result.lumina.summary}\n\n我的建议：${result.lumina.recommendation}`
       return {
         success: true,
-        message: `${result.lumina.summary}\n\n我的建议：${result.lumina.recommendation}`,
+        message: text,
+        content: text,
         data: result,
+        debateResult: result,
       }
     },
   }
@@ -130,7 +134,9 @@ export function registerDecisionCommand(): {
 export function buildDecisionCommandHandler(): (parsed: { args: string[] }) => Promise<{
   success: boolean
   message: string
+  content?: string
   data?: DecisionDebateResult
+  debateResult?: DecisionDebateResult
 }> {
   const binding = registerDecisionCommand()
   return async (parsed: { args: string[] }) => binding.handler(parsed.args)

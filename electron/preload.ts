@@ -1698,6 +1698,35 @@ const api = {
     ipcRenderer.invoke('skill-runtime:list') as Promise<{ ok: boolean; skills?: any[]; error?: string }>,
   skillRuntimeUninstall: (name: string) =>
     ipcRenderer.invoke('skill-runtime:uninstall', name) as Promise<{ ok: boolean; error?: string }>,
+
+  // ── 🕰 Day Replay（时间线回放；实验 flag: dayreplay.enabled）──
+  dayreplayToday: () => ipcRenderer.invoke('dayreplay:today') as Promise<any>,
+  dayreplayGet: (date?: string) => ipcRenderer.invoke('dayreplay:get', date) as Promise<any>,
+  dayreplayExport: (opts?: { date?: string; format?: 'markdown' | 'text' }) =>
+    ipcRenderer.invoke('dayreplay:export', opts) as Promise<any>,
+
+  // ── 📊 Mood×Productivity 情绪看板（实验 flag: moodstats.enabled）──
+  moodstatsReport: () => ipcRenderer.invoke('moodstats:report') as Promise<any>,
+  moodstatsSnapshots: (n?: number) => ipcRenderer.invoke('moodstats:snapshots', n) as Promise<any>,
+  moodstatsAbGet: () => ipcRenderer.invoke('moodstats:ab:get') as Promise<any>,
+  moodstatsAbSetEnabled: (on: boolean) => ipcRenderer.invoke('moodstats:ab:setEnabled', on) as Promise<any>,
+  moodstatsAbOptOut: () => ipcRenderer.invoke('moodstats:ab:optOut') as Promise<any>,
+  moodstatsAbRejoin: () => ipcRenderer.invoke('moodstats:ab:rejoin') as Promise<any>,
+  moodstatsExport: () => ipcRenderer.invoke('moodstats:export') as Promise<any>,
+
+  // ── 🌙☀️ 仪式感（睡前复盘 / 晨间简报）──
+  ritualsGetStatus: () => ipcRenderer.invoke('rituals:getStatus') as Promise<any>,
+  ritualsSetConfig: (patch: Record<string, any>) => ipcRenderer.invoke('rituals:setConfig', patch) as Promise<any>,
+  ritualsRunNight: () => ipcRenderer.invoke('rituals:runNight') as Promise<any>,
+  ritualsRunMorning: () => ipcRenderer.invoke('rituals:runMorning') as Promise<any>,
+
+  // ── 🔁 交班模式（加密卡片 + 二维码 + 局域网 H5；实验 flag: handover.enabled）──
+  handoverGenerate: (opts: { ttlMinutes?: number; mode?: 'password' | 'machine'; password?: string }) =>
+    ipcRenderer.invoke('handover:generate', opts) as Promise<any>,
+  handoverSave: (container: string, suggestedName?: string) =>
+    ipcRenderer.invoke('handover:save', { container, suggestedName }) as Promise<any>,
+  handoverRevoke: (code: string) => ipcRenderer.invoke('handover:revoke', { code }) as Promise<any>,
+  handoverStatus: () => ipcRenderer.invoke('handover:status') as Promise<any>,
 }
 
 contextBridge.exposeInMainWorld('luminaAPI', api)

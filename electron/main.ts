@@ -162,9 +162,14 @@ import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'
 import { registerPermissionIpc } from './ipc/permissionIpc'
 import { registerEmotionAuditIpc, registerVisibilityIpc } from './ipc/emotionAuditIpc'
 import { registerBillingIpc } from './billing/billingIpc'
+import { registerDayReplayIpc } from './dayreplay/ipc'
+import { registerMoodStatsIpc } from './moodstats/ipc'
+import { registerRituals } from './rituals/register'
+import { registerDecisionIpc } from './decision/ipc'
+import { registerHandoverIpc } from './handover/handoverIpc'
 import { registerPlatformIpc } from './ipc/platformIpc'
 import { registerPushIpc } from './ipc/pushIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
-import { allFlags, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
+import { allFlags, isEnabled, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
 import { exportDataToZip, importDataFromZip, getDataLocations, defaultExportFileName } from './utils/dataExport'  // I6: 数据导出/导入
 import { registerDramaLLM } from './team/relationshipDrama'  // I1: 团队关系剧本
 import { registerLuckyModeIpc } from './ipc/luckyModeIpc'
@@ -759,6 +764,29 @@ for (const { id } of orch.listRunners()) {
   registerPermissionIpc()                              // 🔒 三档权限（仅可查看/工作区内修改/完全权限）
   registerEmotionAuditIpc()                            // 🔍 情绪收紧审计（「她为什么不帮我」的可解释层）
   registerBillingIpc()                                  // 💰 Budget Guardian：统一 LLM 账本 + 预算守护
+
+  // ── 🧩 集成阶段挂载的六大功能（默认全关；注册均为幂等/自降级设计）──
+  registerDayReplayIpc()                                // 🕰 Day Replay：时间线回放（模块内按 flag 自降级）
+  registerMoodStatsIpc()                                // 📊 Mood×Productivity 看板 IPC（未注册采集时面板显示"未接线"）
+  try {
+    // 采集包裹是唯一会动主链路的点 —— 严格受 moodstats.enabled 总开关控制；
+    // 默认关时整段跳过，executeToolWithRetry / delegate 完全不被包裹，行为与接线前一致。
+    if (isEnabled('moodstats.enabled')) {
+      const { registerMoodStats } = require('./moodstats/register') as typeof import('./moodstats/register')
+      const registryMod = require('./tools/registry') as Record<string, any>
+      const dm = require('./delegationManager').getDelegationManager()
+      registerMoodStats({
+        wrapTargets: [
+          { obj: registryMod, method: 'executeToolWithRetry', kind: 'tool', agentId: 'lumina' },
+          { obj: dm, method: 'delegate', kind: 'delegate', agentId: 'lumina', action: 'delegate',
+            extractResult: (r: any) => ({ ok: !!r?.success, errorSummary: r?.error ?? null }) },
+        ],
+      })
+    }
+  } catch (e: any) { console.warn('[main] ⚠️ moodstats 采集钩子接线失败（不影响主链路）:', e?.message) }
+  registerDecisionIpc()                                 // ⚖️ 生活决策三栏 IPC（/decide 命令链路由 commandIpc 包 flag）
+  registerHandoverIpc(() => mainWindow)                // 🔁 交班模式（模块内按 handover.enabled 自降级）
+
   registerVisibilityIpc()                              // 👁 可见性分档（陪伴 / 协作 / 审计）
   registerPlatformIpc()
   registerPushIpc()
@@ -885,6 +913,11 @@ try {
   } catch (e: any) {
     console.warn('[main] ⚠️ 桌宠模块加载失败（降级运行）:', e.message)
   }
+
+  // 🌙☀️ 仪式感：睡前复盘 + 晨间简报。放在桌宠/预算初始化之后（呈现链依赖
+  // 桌宠气泡 / TTS / 预算守卫，全部懒加载）。调度器按 rituals.nightReview /
+  // rituals.morningBriefing 两个 flag 自静默，默认关时不触发任何 LLM/TTS 调用。
+  try { registerRituals() } catch (e: any) { console.warn('[main] ⚠️ rituals 注册失败（降级运行）:', e?.message) }
 
   // ──  Phase 1 Week 1: 桌宠意图调度器（LLM → 动作标签 → Live2D）──
   try {

@@ -10,6 +10,8 @@ export type PanelType = "chat" | "mail" | "settings" | "agent" | "security" | "s
 
 export interface ChatMessage {
   id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: number
+  /** ⚖️ /decide 三栏辩论结构化结果（有则渲染 DecisionDebateCard） */
+  debateResult?: any
 }
 
 export interface Conversation {
@@ -160,7 +162,7 @@ interface AppStore {
   updateConversation: (id: string, updates: Partial<Conversation>) => void
   renameConversation: (id: string, name: string) => void
   togglePinConversation: (id: string) => void
-  addMessage: (convId: string, role: ChatMessage['role'], content: string) => void
+  addMessage: (convId: string, role: ChatMessage['role'], content: string, meta?: { debateResult?: any }) => void
   clearCurrentMessages: () => void
   deleteMessage: (convId: string, msgId: string) => void
 
@@ -464,10 +466,11 @@ export const useStore = create<AppStore>()(
       togglePinConversation: (id) => set((s) => ({
         conversations: s.conversations.map((c) => c.id === id ? { ...c, pinned: !c.pinned } : c),
       })),
-      addMessage: (convId, role, content) => set((s) => {
+      addMessage: (convId, role, content, meta) => set((s) => {
         const msg: ChatMessage = {
           id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           role, content, timestamp: Date.now(),
+          ...(meta?.debateResult ? { debateResult: meta.debateResult } : {}),
         }
         return {
           conversations: s.conversations.map((c) =>

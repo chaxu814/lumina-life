@@ -35,6 +35,32 @@ declare global {
       budgetPriceTable: () => Promise<{ ok: boolean; prices?: any[]; overrides?: any[]; error?: string }>
       budgetSetPriceOverrides: (entries: any[]) => Promise<{ ok: boolean; error?: string }>
 
+      // 🕰 Day Replay（2026-10-14 集成挂载；实验 flag: dayreplay.enabled）
+      dayreplayToday: () => Promise<any>
+      dayreplayGet: (date?: string) => Promise<any>
+      dayreplayExport: (opts?: { date?: string; format?: 'markdown' | 'text' }) => Promise<any>
+
+      // 📊 Mood×Productivity 情绪看板（实验 flag: moodstats.enabled）
+      moodstatsReport: () => Promise<any>
+      moodstatsSnapshots: (n?: number) => Promise<any>
+      moodstatsAbGet: () => Promise<any>
+      moodstatsAbSetEnabled: (on: boolean) => Promise<any>
+      moodstatsAbOptOut: () => Promise<any>
+      moodstatsAbRejoin: () => Promise<any>
+      moodstatsExport: () => Promise<any>
+
+      // 🌙☀️ 仪式感（睡前复盘 / 晨间简报）
+      ritualsGetStatus: () => Promise<any>
+      ritualsSetConfig: (patch: Record<string, any>) => Promise<any>
+      ritualsRunNight: () => Promise<any>
+      ritualsRunMorning: () => Promise<any>
+
+      // 🔁 交班模式（加密卡片 + 二维码 + 局域网 H5；实验 flag: handover.enabled）
+      handoverGenerate: (opts: { ttlMinutes?: number; mode?: 'password' | 'machine'; password?: string }) => Promise<any>
+      handoverSave: (container: string, suggestedName?: string) => Promise<any>
+      handoverRevoke: (code: string) => Promise<any>
+      handoverStatus: () => Promise<any>
+
       // 📦 Skill 市场（2026-10-04 补齐）
       // 【为什么这一组之前是空的】主进程 skillMarketIpc.ts 注册了 17 个通道，
       //   但 preload 一个都没暴露，SkillMarketPanel 于是绕道不存在的

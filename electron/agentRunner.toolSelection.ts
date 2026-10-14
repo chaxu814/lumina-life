@@ -258,6 +258,14 @@ export async function selectToolsForTurn(ctx: ToolSelectionContext): Promise<Too
     //   后果是用户在设置里关了「情绪门控」，工具仍被收紧，且无任何提示。
     //   现统一走主配置单一入口。详见 electron/core/appConfig.ts。
     emotionGatingOn = readFeatureFlag('emotionGating', true)
+    // 🧠 moodstats A/B 对照干预点：只有「采集已注册 + 实验在跑 + 当前是对照组」
+    // 时才可能把门控改写为 false；其余一切情况（默认配置）原样透传，
+    // 表达式与 readFeatureFlag('emotionGating', true) 完全等价。
+    try {
+      const msReg = require('./moodstats/register') as typeof import('./moodstats/register')
+      const msHandle = msReg.__getMoodStatsHandle?.()
+      if (msHandle) {emotionGatingOn = msHandle.ab.resolveGateFeature(emotionGatingOn)}
+    } catch { /* moodstats 未接线 → 原样透传 */ }
   } catch { /* 读不到就用默认 */ }
 
   // ── 🔗 情绪因果链接入（2026-10-04）──

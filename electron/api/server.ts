@@ -34,6 +34,8 @@ import { handleHealthRoute } from './routes/health'
 // 🆕 手机远程访问：H5 页面 + 审批端点
 import { renderMobilePage } from './mobilePage'
 import { handleApprovalsRoute } from './routes/approvals'
+// 🔁 交班模式：手机端加密交班卡片 H5（与 /m 同源，复用 /api/approvals）
+import { getHandoverRoutes } from '../handover/h5'
 // 🆕 Phase C: 深度调研 API
 import { handleDeepResearchRoute, handleDeepResearchStatusRoute } from './routes/deepResearch'
 // 🆕 Phase C: 渠道 Webhook API
@@ -91,6 +93,8 @@ const ROUTES: RouteHandler[] = [
   { method: 'GET', path: /^\/m\/$/, handler: handleMobilePage },
   { method: 'GET', path: /^\/mobile$/, handler: handleMobilePage },
   { method: 'GET', path: /^\/mobile\/$/, handler: handleMobilePage },
+  // 🔁 交班 H5：GET /m/handover?k=<交换码>（手机端凭码取加密卡片）
+  ...getHandoverRoutes(),
 
   // 健康检查
   { method: 'GET', path: /^\/api\/health$/, handler: handleHealthRoute },

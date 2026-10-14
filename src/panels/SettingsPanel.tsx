@@ -10,6 +10,10 @@ import SettingsAppearance from './settings/SettingsAppearance'
 import SettingsPush from './settings/SettingsPush'
 import SettingsPet from './settings/SettingsPet'
 import BudgetPanel from './features/BudgetPanel'
+import DayReplayPanel from './features/DayReplayPanel'
+import MoodProductivityPanel from './features/MoodProductivityPanel'
+import RitualsPanel from './features/RitualsPanel'
+import HandoverPanel from './features/HandoverPanel'
 import SecurityPanel from './SecurityPanel'
 import TasksPanel from './TasksPanel'
 import ModelPickerModal from './settings/ModelPickerModal'
@@ -177,7 +181,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     try { return localStorage.getItem('lumina_proactive_notify') !== 'false' } catch { return true }
   })
   const [notice, setNotice] = useState<string | null>(null)
-  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy' | 'budget'>(
+  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy' | 'budget' | 'dayreplay' | 'moodstats' | 'rituals' | 'handover'>(
     (activeTab as any) || 'llm'
   )
   // 当 embedded + activeTab 变化时同步内部状态
@@ -884,6 +888,10 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
           { key: 'workflow' as const, label: '工作流模板', icon: '📋' },
           { key: 'security' as const, label: '安全中心', icon: '🛡️' },
           { key: 'budget' as const, label: '预算守护', icon: '💰' },
+          { key: 'dayreplay' as const, label: 'Day Replay', icon: '🕰️' },
+          { key: 'moodstats' as const, label: '情绪看板', icon: '📊' },
+          { key: 'rituals' as const, label: '仪式感', icon: '🌙' },
+          { key: 'handover' as const, label: '交班', icon: '🔁' },
           { key: 'tasks' as const, label: '定时任务', icon: '⏰' },
           { key: 'pet' as const, label: '桌宠模式', icon: '💻' },
           { key: 'privacy' as const, label: '隐私与开关', icon: '🔐' },
@@ -908,6 +916,10 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
 
       {settingsTab === 'llm' && <SettingsLLM />}
       {settingsTab === 'budget' && <BudgetPanel />}
+      {settingsTab === 'dayreplay' && <DayReplayPanel />}
+      {settingsTab === 'moodstats' && <MoodProductivityPanel />}
+      {settingsTab === 'rituals' && <RitualsPanel />}
+      {settingsTab === 'handover' && <HandoverPanel />}
       {/* ════════════════════════════════════════════════
           ② TTS 语音
           ════════════════════════════════════════════════ */}
