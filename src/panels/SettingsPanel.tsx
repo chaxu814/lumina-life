@@ -62,6 +62,93 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box', fontFamily: '"Microsoft YaHei", "微软雅黑", sans-serif',
 }
 
+// ── 🧪 实验功能开关：每个开关真实控制对应模块门控（写 featureFlags 体系） ──
+function LabToggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={() => { if (!disabled) {onChange(!checked)} }}
+      style={{
+        width: 40, height: 22, borderRadius: 11, border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+        background: checked ? '#22c55e' : 'var(--surface-100)',
+        position: 'relative', transition: 'background 0.15s', flexShrink: 0,
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 3, left: checked ? 21 : 3,
+        width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.15s',
+      }} />
+    </button>
+  )
+}
+
+function LabsPanel() {
+  const [flags, setFlags] = useState<Record<string, boolean>>({})
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const all = await window.luminaAPI?.featureFlagsGetAll?.()
+        if (all && typeof all === 'object') {setFlags(all)}
+      } catch { /* 读不到开关状态时面板仍可展示默认值 */ }
+      setLoaded(true)
+    })()
+  }, [])
+
+  const setFlag = async (key: string, v: boolean, apply?: (on: boolean) => Promise<unknown>) => {
+    setBusyKey(key)
+    try {
+      if (apply) {await apply(v)} else {await window.luminaAPI?.featureFlagsSet?.(key, v)}
+      setFlags(f => ({ ...f, [key]: v }))
+    } finally {setBusyKey(null)}
+  }
+
+  const row = (
+    key: string, icon: string, name: string, hint: string,
+    opts: { readOnly?: boolean; value?: boolean; apply?: (on: boolean) => Promise<unknown> } = {},
+  ) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px',
+      borderBottom: '1px solid var(--border-light)',
+    }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{hint}</div>
+      </div>
+      <LabToggle
+        checked={opts.readOnly ? true : !!flags[key]}
+        disabled={!!opts.readOnly || busyKey === key}
+        onChange={(v) => { void setFlag(key, v, opts.apply) }}
+      />
+    </div>
+  )
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 14 }}>
+        这里的每个开关都真实生效：打开后对应功能立即开始采集/响应，关闭后立即静默。
+        实验功能默认关闭，出问题随时拨回。
+      </div>
+      {!loaded && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>读取开关状态…</div>}
+      {loaded && (
+        <>
+          {row('budget', '💰', '预算守护者', '常驻开启（统一 LLM 账本 + 预算守护）。详细配置见「预算守护」tab。', { readOnly: true })}
+          {row('dayreplay.enabled', '🕰️', 'Day Replay', '聚合一天的时间线（LLM 调用/命令/委托/文件改动），可导出回放。', {})}
+          {row('moodstats.enabled', '📊', '情绪看板（采集）', '采集情绪×成功率快照；A/B 二级实验在「情绪看板」面板里开启。',
+            { apply: (v) => window.luminaAPI?.moodstatsSetMaster?.(v) })}
+          {row('rituals.nightReview', '🌙', '睡前复盘', '每晚定时口播当日复盘（时间设置见「仪式感」tab）。', {})}
+          {row('rituals.morningBriefing', '🌅', '晨间简报', '每早定时口播天气/待办/日历简报。', {})}
+          {row('decision.enabled', '⚖️', '生活决策三栏', '触发方式：聊天框输入 /decide <你的问题>，三栏辩论后给建议。', {})}
+          {row('handover.enabled', '🔁', '交班模式', '生成加密交班卡片 + 二维码，手机局域网查看/审批。', {})}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice }: {
   embedded?: boolean
   activeTab?: string
@@ -181,7 +268,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     try { return localStorage.getItem('lumina_proactive_notify') !== 'false' } catch { return true }
   })
   const [notice, setNotice] = useState<string | null>(null)
-  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy' | 'budget' | 'dayreplay' | 'moodstats' | 'rituals' | 'handover'>(
+  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy' | 'budget' | 'dayreplay' | 'moodstats' | 'rituals' | 'handover' | 'labs'>(
     (activeTab as any) || 'llm'
   )
   // 当 embedded + activeTab 变化时同步内部状态
@@ -892,6 +979,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
           { key: 'moodstats' as const, label: '情绪看板', icon: '📊' },
           { key: 'rituals' as const, label: '仪式感', icon: '🌙' },
           { key: 'handover' as const, label: '交班', icon: '🔁' },
+          { key: 'labs' as const, label: '实验功能', icon: '🧪' },
           { key: 'tasks' as const, label: '定时任务', icon: '⏰' },
           { key: 'pet' as const, label: '桌宠模式', icon: '💻' },
           { key: 'privacy' as const, label: '隐私与开关', icon: '🔐' },
@@ -920,6 +1008,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
       {settingsTab === 'moodstats' && <MoodProductivityPanel />}
       {settingsTab === 'rituals' && <RitualsPanel />}
       {settingsTab === 'handover' && <HandoverPanel />}
+      {settingsTab === 'labs' && <LabsPanel />}
       {/* ════════════════════════════════════════════════
           ② TTS 语音
           ════════════════════════════════════════════════ */}

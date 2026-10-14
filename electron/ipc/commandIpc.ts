@@ -10,6 +10,8 @@ import { getCommandRouter, CommandRouter } from '../chatCommands'
 import { getHooksSummary } from '../hooks/hookManager'
 import { getModelCapabilityCache } from '../modelCapabilityCache'
 import type { AgentRunner } from '../agentRunner'
+import { isEnabled } from '../core/featureFlags'
+import { buildDecisionCommandHandler } from '../decision/ipc'
 
 let _getActiveAgent: (() => AgentRunner | null) | null = null
 
@@ -222,18 +224,12 @@ export function registerCommandHandlers(): void {
   // 关闭时明确提示功能未开启，不触发任何 LLM 派活；
   // 开启后结果带 debateResult 结构化数据，渲染层据此挂 DecisionDebateCard。
   router.register('decide', async (parsed: { args: string[] }) => {
-    try {
-      const { isEnabled } = require('../core/featureFlags') as typeof import('../core/featureFlags')
-      if (!isEnabled('decision.enabled')) {
-        return {
-          success: false,
-          message: '生活决策（三栏辩论）是实验功能，当前未开启。需要在 feature flag「decision.enabled」打开后才能使用。',
-        }
+    if (!isEnabled('decision.enabled')) {
+      return {
+        success: false,
+        message: '生活决策（三栏辩论）是实验功能，当前未开启。需要在 feature flag「decision.enabled」打开后才能使用。',
       }
-    } catch {
-      return { success: false, message: '生活决策功能暂时不可用（开关读取失败）。' }
     }
-    const { buildDecisionCommandHandler } = require('../decision/ipc') as typeof import('../decision/ipc')
     return await buildDecisionCommandHandler()(parsed)
   })
 

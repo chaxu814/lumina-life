@@ -25,6 +25,7 @@ import type { SnapshotStore } from './snapshotStore'
 import type { AbGroup } from './abGroup'
 import { buildReport } from './stats'
 import { snapshotsToCsv, buildExportJson } from './exporter'
+import { applyMoodStatsMaster } from './masterSwitch'
 
 /**
  * 取已注册的 handle。未注册时返回 null —— 面板要能在「未接线」状态下
@@ -102,6 +103,16 @@ export function registerMoodStatsIpc(): void {
       if (!h) {return { ok: false, error: 'moodstats 未注册' }}
       h.ab.rejoin()
       return { ok: true, state: h.ab.snapshot(), currentGroup: h.ab.currentGroup() }
+    } catch (err) {
+      return { ok: false, error: String((err as Error)?.message || err) }
+    }
+  })
+
+  // 🧪 总开关（moodstats.enabled）：写 flag 持久化 + 立即撤销/重挂采集包裹
+  ipcMain.handle('moodstats:setMaster', async (_e, on?: unknown) => {
+    try {
+      applyMoodStatsMaster(on === true)
+      return { ok: true, enabled: on === true }
     } catch (err) {
       return { ok: false, error: String((err as Error)?.message || err) }
     }

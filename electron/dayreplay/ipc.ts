@@ -22,6 +22,7 @@
 
 import { getDayReplay, DayReplayError } from './dayReplay'
 import type { DayReplayService } from './dayReplay'
+import { isEnabled } from '../core/featureFlags'
 
 /** 最小 ipcMain 形状（测试注入 fake；生产用 electron.ipcMain） */
 export interface IpcBus {
@@ -41,10 +42,11 @@ function getDefaultBus(): IpcBus | null {
   }
 }
 
-/** 实验功能默认关；运行时未注册的键按 false 处理 */
+/** 实验功能默认关；运行时未注册的键按 false 处理。
+ *  统一读 featureFlags 体系（与设置面板「实验功能」开关同构，开关写 setFlag 后立即生效）。 */
 function dayreplayEnabled(): boolean {
   try {
-    return require('../core/appConfig').readFeatureFlag('dayreplay.enabled', false)
+    return isEnabled('dayreplay.enabled')
   } catch {
     return false
   }

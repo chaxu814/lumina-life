@@ -47,6 +47,7 @@ declare global {
       moodstatsAbSetEnabled: (on: boolean) => Promise<any>
       moodstatsAbOptOut: () => Promise<any>
       moodstatsAbRejoin: () => Promise<any>
+      moodstatsSetMaster: (on: boolean) => Promise<any>
       moodstatsExport: () => Promise<any>
 
       // 🌙☀️ 仪式感（睡前复盘 / 晨间简报）

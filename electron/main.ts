@@ -167,6 +167,10 @@ import { registerMoodStatsIpc } from './moodstats/ipc'
 import { registerRituals } from './rituals/register'
 import { registerDecisionIpc } from './decision/ipc'
 import { registerHandoverIpc } from './handover/handoverIpc'
+import * as registryModule from './tools/registry'
+import { getDelegationManager } from './delegationManager'
+import { registerMoodStats } from './moodstats/register'
+import { configureMoodStatsCollection } from './moodstats/masterSwitch'
 import { registerPlatformIpc } from './ipc/platformIpc'
 import { registerPushIpc } from './ipc/pushIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
 import { allFlags, isEnabled, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
@@ -769,20 +773,20 @@ for (const { id } of orch.listRunners()) {
   registerDayReplayIpc()                                // 🕰 Day Replay：时间线回放（模块内按 flag 自降级）
   registerMoodStatsIpc()                                // 📊 Mood×Productivity 看板 IPC（未注册采集时面板显示"未接线"）
   try {
-    // 采集包裹是唯一会动主链路的点 —— 严格受 moodstats.enabled 总开关控制；
-    // 默认关时整段跳过，executeToolWithRetry / delegate 完全不被包裹，行为与接线前一致。
-    if (isEnabled('moodstats.enabled')) {
-      const { registerMoodStats } = require('./moodstats/register') as typeof import('./moodstats/register')
-      const registryMod = require('./tools/registry') as Record<string, any>
-      const dm = require('./delegationManager').getDelegationManager()
+    // 采集包裹是唯一会动主链路的点 —— 默认关时整段不执行。
+    // 重建器注入 masterSwitch：面板总开关从 关→开 时立即重新包裹。
+    const buildCollection = () => {
+      const dm = getDelegationManager()
       registerMoodStats({
         wrapTargets: [
-          { obj: registryMod, method: 'executeToolWithRetry', kind: 'tool', agentId: 'lumina' },
+          { obj: registryModule, method: 'executeToolWithRetry', kind: 'tool', agentId: 'lumina' },
           { obj: dm, method: 'delegate', kind: 'delegate', agentId: 'lumina', action: 'delegate',
             extractResult: (r: any) => ({ ok: !!r?.success, errorSummary: r?.error ?? null }) },
         ],
       })
     }
+    configureMoodStatsCollection(buildCollection)
+    if (isEnabled('moodstats.enabled')) {buildCollection()}
   } catch (e: any) { console.warn('[main] ⚠️ moodstats 采集钩子接线失败（不影响主链路）:', e?.message) }
   registerDecisionIpc()                                 // ⚖️ 生活决策三栏 IPC（/decide 命令链路由 commandIpc 包 flag）
   registerHandoverIpc(() => mainWindow)                // 🔁 交班模式（模块内按 handover.enabled 自降级）

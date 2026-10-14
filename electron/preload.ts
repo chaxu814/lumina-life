@@ -1712,6 +1712,7 @@ const api = {
   moodstatsAbSetEnabled: (on: boolean) => ipcRenderer.invoke('moodstats:ab:setEnabled', on) as Promise<any>,
   moodstatsAbOptOut: () => ipcRenderer.invoke('moodstats:ab:optOut') as Promise<any>,
   moodstatsAbRejoin: () => ipcRenderer.invoke('moodstats:ab:rejoin') as Promise<any>,
+  moodstatsSetMaster: (on: boolean) => ipcRenderer.invoke('moodstats:setMaster', on) as Promise<any>,
   moodstatsExport: () => ipcRenderer.invoke('moodstats:export') as Promise<any>,
 
   // ── 🌙☀️ 仪式感（睡前复盘 / 晨间简报）──
