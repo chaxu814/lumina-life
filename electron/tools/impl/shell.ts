@@ -86,6 +86,10 @@ import { getProcessManager, killProcessTree } from '../../processSandbox'
 import { getShellMonitor } from './shellMonitor'
 import { getNetCage } from './shellNetCage'
 import { ensureFileWallSandbox, wrapLowIntegrity, stripExitMarker, markRunasUnavailable, probeRunasAvailability, decideLowIL } from './shellFileWall'
+// P2-8 阶段1：命令策略接线（security/commandPolicy.ts）
+import { evaluateCommand } from '../../security/commandPolicy'
+import { isEnabled } from '../../core/featureFlags'
+import { getApprovalService, ApprovalService } from '../../approvalService'
 
 export const shellExecDef: ToolDef = {
   name: 'shell_exec',
@@ -485,6 +489,51 @@ export async function shellExec(args: Record<string, any>): Promise<ToolResult> 
         `检测到可能具有破坏性的命令模式。如需执行此类操作，请在 Lumina 的安全配置中\n` +
         `手动解除限制，或通过文件管理工具逐个操作。`,
     }
+  }
+
+  // ── 命令策略审查（security/commandPolicy.ts，P2-8 阶段1 接线） ──
+  // ① REJECT 层：默认开，与上方 DANGEROUS_PATTERNS 黑名单叠加（纯增量拦截）。
+  // ② APPROVAL 层：灰度 flag `security.commandApproval`（默认关）。
+  //    命中即创建审批请求、本轮不执行；用户 /approve 后由既有审批流处理。
+  //    requestApproval 返回 null（执行级别 OFF / SMART 免批）→ 按既有行为放行。
+  try {
+    const verdict = evaluateCommand(command, { enabledApproval: isEnabled('security.commandApproval') })
+
+    if (verdict.decision === 'reject') {
+      return {
+        callId: '', ok: true,
+        content:
+          `❌ 命令被安全策略拒绝（${verdict.matchedRule || 'REJECT'}）\n\n` +
+          `原因：${(verdict.reasons || []).join('；') || '命中拒绝规则'}\n` +
+          `这条与内置危险命令黑名单是两层独立防线，均不可绕开。`,
+      }
+    }
+
+    if (verdict.decision === 'require_approval') {
+      const svc = getApprovalService()
+      const req = svc.requestApproval({
+        sessionId: 'main',
+        agentId: 'shell',
+        toolName: 'shell_exec',
+        toolArgs: { command },
+        description: ApprovalService.describeToolCall('shell_exec', { command }),
+        riskLevel: 'high',
+        threatCategories: verdict.matchedRule ? [verdict.matchedRule] : [],
+        securityFindings: verdict.reasons || [],
+      })
+      if (req) {
+        return {
+          callId: '', ok: true,
+          content:
+            `🔐 该命令命中安全策略（${verdict.matchedRule}），需要审批。\n` +
+            `原因：${(verdict.reasons || []).join('；')}\n` +
+            `本轮暂不执行——请回复 /approve ${req.id} 放行，或直接拒绝（不回复即视为取消）。`,
+        }
+      }
+      // 返回 null：执行级别当前免批（OFF/SMART）→ 落到既有行为，继续执行
+    }
+  } catch {
+    // 策略/审批服务本身故障 → 不阻塞既有执行路径（失败开放，与四层沙箱并存）
   }
 
   // 拦截 explorer 命令

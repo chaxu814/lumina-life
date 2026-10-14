@@ -231,7 +231,7 @@ tool result 的形式回传给 Lumina，再由 Lumina 用自己的话转述。
 局限：黑名单是"已知坏模式"的枚举，覆盖面靠人补；"漏网但高危"的命令
 （如写注册表、关防火墙、全局装包）过去没有统一收口。
 
-### 阶段 1：高危命令显式清单 + 强制审批　**[框架已落地，未接线]**
+### 阶段 1：高危命令显式清单 + 强制审批　**[已接线]**
 
 新增 `electron/security/commandPolicy.ts` 作为单一事实源：
 
@@ -244,11 +244,18 @@ tool result 的形式回传给 Lumina，再由 Lumina 用自己的话转述。
   dimensions }`；dimensions 给出 `irreversible / touchesSystem /
   networkOutbound / writesOutsideWorkspace` 四个可审计维度。
 
-**当前不接线到默认拦截路径**，避免改变现有行为。接线条件：
-在 reactEngine 里 `securityGuard.checkToolCall` 之后追加一次
-`evaluateCommand()`，把 `reject` 映射为拦截、`require_approval` 映射为
-审批；APPROVAL 层留 `enabledApproval` 开关，可先灰度一周只看 REJECT、
-确认无误报后再开启强制审批。
+**已接线到 `shell_exec` 执行路径**（`electron/tools/impl/shell.ts`，
+紧随既有 `DANGEROUS_PATTERNS` 拦截之后）：
+
+- **REJECT 层默认开**：命中即拦截，返回与既有黑名单风格一致的明确错误，
+  命令不执行。与四层沙箱叠加，零行为回退。
+- **APPROVAL 层灰度 flag**：`security.commandApproval`（feature-flags.json /
+  环境变量 `LUMINA_FF_SECURITY_COMMANDAPPROVAL`），**默认关**。
+  命中即经 `approvalService.requestApproval()` 创建审批请求，本轮不执行、
+  返回 `/approve <id>` 提示；用户拒绝/超时则不执行。先灰度观察误报，
+  确认无误后再开默认。
+- 接线测试见 `tests/commandPolicyWiring.test.ts`（拦截 / 审批创建 /
+  flag 关闭行为不变 / 边界判定）。
 
 ### 阶段 2：默认拒绝（default-deny）　**[未实现]**
 

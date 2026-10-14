@@ -48,7 +48,9 @@ export type FeatureKey =
   // I6 隐私引导/自托管叙事
   | 'onboarding.privacy'
   // I7 精简模式（v0.1 公开版只露三件事）
-  | 'mode.minimal';
+  | 'mode.minimal'
+  // P2-8 阶段1：命令策略审批层（REJECT 层无 flag 默认开；APPROVAL 层灰度）
+  | 'security.commandApproval';
 
 const DEFAULTS: Record<FeatureKey, boolean> = {
   // F1：7×8 威胁分类规则库——随代码落地即开（规则库是纯增量，不改旧路径）
@@ -87,6 +89,10 @@ const DEFAULTS: Record<FeatureKey, boolean> = {
   'onboarding.privacy': true,
   // I7：精简模式——默认关，公开版打包时通过环境变量打开
   'mode.minimal': false,
+  // P2-8 阶段1：命令策略「审批」层——灰度默认关。
+  // REJECT 层是纯增量拒绝（与既有黑名单叠加），不需要 flag；
+  // 审批层会改变命令执行节奏（先不执行、等人 /approve），先灰度观察。
+  'security.commandApproval': false,
 };
 
 const overrides: Partial<Record<FeatureKey, boolean>> = {};
