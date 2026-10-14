@@ -18,9 +18,16 @@ import { MOOD_COORDS } from '../electron/pet/life/emotionCore'
 
 const PET_DIR = path.join(__dirname, '..', 'electron', 'pet')
 const html = fs.readFileSync(path.join(PET_DIR, 'pet-live2d.html'), 'utf8')
-const modelJson = JSON.parse(
-  fs.readFileSync(path.join(PET_DIR, 'assets', 'Mao', 'mao_pro.model3.json'), 'utf8'),
-)
+// Mao 是 Live2D Cubism 官方示例模型，受 SDK 再分发条款约束，
+// 不随公开仓库分发（.gitignore 已排除，公开克隆/CI 里不存在）。
+// 模型相关的契约断言在缺少模型时跳过；与模型无关的渲染层接线契约始终执行。
+const maoModelPath = path.join(PET_DIR, 'assets', 'Mao', 'mao_pro.model3.json')
+const maoAvailable = fs.existsSync(maoModelPath)
+const modelJson: any = maoAvailable
+  ? JSON.parse(fs.readFileSync(maoModelPath, 'utf8'))
+  : null
+/** 模型依赖用例：模型缺失时自动跳过，不判失败 */
+const itModel = maoAvailable ? it : it.skip
 
 /** 提取 execIntent 函数体内的所有 case 动作名 */
 function execIntentCases(): Set<string> {
@@ -60,7 +67,7 @@ describe('Live2D AI 驱动身体 · 端到端接线契约', () => {
   const cases = execIntentCases()
   const faceMap = faceExprMap()
 
-  it('1. 模型 json 至少声明 8 个表情文件（Mao 实测 8 个）', () => {
+  itModel('1. 模型 json 至少声明 8 个表情文件（Mao 实测 8 个）', () => {
     const exprs: Array<{ Name: string; File: string }> = modelJson.FileReferences.Expressions
     expect(Array.isArray(exprs)).toBe(true)
     expect(exprs.length).toBeGreaterThanOrEqual(8)
@@ -71,7 +78,7 @@ describe('Live2D AI 驱动身体 · 端到端接线契约', () => {
     }
   })
 
-  it('2. FACE_EXPR_MAP 引用的每个表情，模型 json 都真实存在', () => {
+  itModel('2. FACE_EXPR_MAP 引用的每个表情，模型 json 都真实存在', () => {
     const modelExprs = new Set(modelJson.FileReferences.Expressions.map((e: any) => e.Name))
     const required = ['happy', 'sad', 'angry', 'joy', 'blush', 'surprise', 'calm', 'shy', 'sleepy']
     for (const key of required) {
@@ -106,7 +113,7 @@ describe('Live2D AI 驱动身体 · 端到端接线契约', () => {
     }
   })
 
-  it('7. 模型声明了 Idle 与无名组动作（空闲动作循环有素材可用）', () => {
+  itModel('7. 模型声明了 Idle 与无名组动作（空闲动作循环有素材可用）', () => {
     const groups = Object.keys(modelJson.FileReferences.Motions)
     expect(groups).toContain('Idle')
     const idleCount = modelJson.FileReferences.Motions.Idle.length
@@ -116,7 +123,7 @@ describe('Live2D AI 驱动身体 · 端到端接线契约', () => {
     expect(free.length).toBeGreaterThanOrEqual(6)
   })
 
-  it('9. AI 情绪动作在缺少 TapBody 组时回退到模型自带 special 动作（真的会抬手/带特效）', () => {
+  itModel('9. AI 情绪动作在缺少 TapBody 组时回退到模型自带 special 动作（真的会抬手/带特效）', () => {
     const fnBody = (name: string): string => {
       const m = html.match(new RegExp(`function ${name}\\s*\\([\\s\\S]*?\\n}`))
       expect(m, `应找到函数 ${name}`).toBeTruthy()

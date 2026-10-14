@@ -29,10 +29,18 @@ function read(p: string): string {
   return fs.readFileSync(path.join(ROOT, p), 'utf-8')
 }
 
-// 角色各自的 SOUL 文件（产品侧根目录）
-const YAK_SOUL = read('SOUL_YAK.md')
-const RECHA_SOUL = read('SOUL_RECHA.md')
-const LUMINA_SOUL = read('SOUL_LUMINA.md')
+// 角色各自的 SOUL 文件。
+// 根目录 SOUL_*.md 是用户本地覆盖文件（.gitignore 已排除，公开克隆/CI 里不存在）；
+// 缺失时回退到随仓库分发的出厂版本 electron/agents/<id>/SOUL.md，
+// 保证在干净克隆上断言的是真正会随产品发布的出厂人格。
+function readWithFallback(rootFile: string, shipped: string): string {
+  const p = path.join(ROOT, rootFile)
+  if (fs.existsSync(p)) {return fs.readFileSync(p, 'utf-8')}
+  return read(shipped)
+}
+const YAK_SOUL = readWithFallback('SOUL_YAK.md', 'electron/agents/yak/SOUL.md')
+const RECHA_SOUL = readWithFallback('SOUL_RECHA.md', 'electron/agents/recha/SOUL.md')
+const LUMINA_SOUL = readWithFallback('SOUL_LUMINA.md', 'electron/agents/lumina/SOUL.md')
 
 // 我负责改的文件（反向断言扫描范围）。
 // 注意：这里同时覆盖 electron 与前端 persona/roles 两份入口，保证它们不互相打架。

@@ -38,7 +38,11 @@ const runner = read('electron/agentRunner.ts')
 const runnerCode = codeOnly(runner)
 const guardSrc = read('electron/agent/toolLoopGuard.ts')
 const textSrc = read('electron/agentRunner.text.ts')
-const rootAgents = read('AGENTS.md')
+// 根 AGENTS.md 是用户本地行为准则（.gitignore 已排除，公开克隆/CI 里不存在）；
+// 缺失时回退到随仓库分发的出厂版本 electron/agents/lumina/AGENTS.md。
+const rootAgents = fs.existsSync(path.join(root, 'AGENTS.md'))
+  ? read('AGENTS.md')
+  : read('electron/agents/lumina/AGENTS.md')
 const luminaAgents = read('electron/agents/lumina/AGENTS.md')
 const yakAgents = read('electron/agents/yak/AGENTS.md')
 const personas = read('electron/agentTeamPersonas.ts')

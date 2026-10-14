@@ -127,6 +127,12 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # 打包流程已把 better-sqlite3 对齐到 Electron ABI（@electron/rebuild）。
+      # 此时本守卫从「跳过（Node 构建态）」变为强制：Electron 真实加载 SQL 失败则中断发布，
+      # 杜绝「测试全绿但安装包启动后记忆系统静默降级」（2026-10-03 真实事故）。
+      - name: Verify native module ABI for Electron
+        run: npx vitest run tests/nativeAbi.test.ts
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

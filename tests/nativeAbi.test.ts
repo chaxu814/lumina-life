@@ -110,6 +110,23 @@ function probeUnderElectron(): ProbeResult {
   }
 }
 
+/** 在当前 Node 进程内直接 require better-sqlite3（验证 Node ABI 构建态） */
+function probeUnderNode(): { ok: boolean; output: string } {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const D = require('better-sqlite3')
+    const d = new D(':memory:')
+    d.exec('CREATE TABLE t(x INTEGER)')
+    d.prepare('INSERT INTO t VALUES (?)').run(42)
+    const r = d.prepare('SELECT x FROM t').get()
+    d.close()
+    if (r.x !== 42) {throw new Error('unexpected value')}
+    return { ok: true, output: 'NODE_ABI_OK' }
+  } catch (err: any) {
+    return { ok: false, output: String(err?.message || err) }
+  }
+}
+
 describe('原生模块 ABI 一致性', () => {
   it('better-sqlite3 能在 Electron ABI 下真实加载并执行 SQL', () => {
     const ver = electronVersion()
@@ -118,6 +135,22 @@ describe('原生模块 ABI 一致性', () => {
       return
     }
 
+    // ① 当前 node_modules 是 Node ABI 构建（npm install 的预编译产物）——
+    //    这是「干净克隆后、尚未 rebuild」的正常状态。此时 Electron 探针必然失败，
+    //    但那不是缺陷：打包流程（electron-builder / npm run rebuild:electron）
+    //    会先把原生模块对齐到 Electron ABI。跳过并明确告知，避免
+    //    「按 README 跑 npm ci → npm test 直接红」的误报。
+    if (probeUnderNode().ok) {
+      console.warn(
+        '[ABI] better-sqlite3 当前为 Node ABI 构建（npm install 后、rebuild 前的正常状态），\n' +
+        '  跳过 Electron ABI 校验。打包/运行桌面端前执行：npm run rebuild:electron。\n' +
+        '  release 工作流会在 rebuild 之后再跑本测试，真正强制校验打包 ABI。',
+      )
+      return
+    }
+
+    // ② Node 已加载失败 → 说明 node_modules 已经过 Electron 对齐（或处于异常构建态）。
+    //    此时 Electron 探针必须成功：这才是本守卫真正强制的场景。
     const res = probeUnderElectron()
     if (res.status === 'ok') {return}
 
