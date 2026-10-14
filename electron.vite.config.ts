@@ -28,7 +28,21 @@ function copyPetAssets() {
           copyFileSync(resolve(srcDir, 'pet-chat.html'), resolve(destDir, 'pet-chat.html'))
         }
         if (existsSync(resolve(srcDir, 'assets'))) {
-          cpSync(resolve(srcDir, 'assets'), resolve(destDir, 'assets'), { recursive: true })
+          // Mao 等 Live2D Cubism 示例模型受 SDK 再分发条款约束，不得随安装包分发
+          // （modelLibrary 已将内置保底形象切换为零素材的程序化小猫 Cat）。
+          // 这些模型目录在源码树里被 .gitignore 排除，这里再加一道过滤，
+          // 防止作者本机残留的模型文件被打包进公开安装包。
+          cpSync(resolve(srcDir, 'assets'), resolve(destDir, 'assets'), {
+            recursive: true,
+            filter: (p) => !/[\\/]Mao[\\/]|[\\/]Hiyori[\\/]/.test(p)
+          })
+        }
+        // 内置示例技能（13 个 SKILL.md）：skillsLoader 的 SKILLS_DIR 解析为
+        // 打包后 __dirname/../skills，即 app.asar/out/skills。不拷贝则安装包
+        // 里所有内置技能（git/shell/memory/…）静默消失。
+        const builtinSkills = resolve(__dirname, 'electron', 'skills')
+        if (existsSync(builtinSkills)) {
+          cpSync(builtinSkills, resolve(destDir, '..', 'skills'), { recursive: true })
         }
         if (existsSync(resolve(srcDir, 'plugins'))) {
           cpSync(resolve(srcDir, 'plugins'), resolve(destDir, 'plugins'), { recursive: true })

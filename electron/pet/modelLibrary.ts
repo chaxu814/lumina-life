@@ -174,7 +174,9 @@ export class ModelLibrary {
 //   - 清单文件：<userData>/pet-model-library.json（与 lifeServices 持久化同一份，
 //     不另建 active.json，避免「两处激活状态打架」）；
 //   - 模型目录：<userData>/pet-models/<消毒后模型名>/
-// 内置 Mao 不落在磁盘目录里（打包在 extraResources），不可卸载。
+// 内置保底形象为程序化小猫 Cat（entryRel='__cat__'，无磁盘文件），不落在磁盘目录、
+// 不可卸载。曾内置的 Live2D 示例模型 Mao 因 Cubism SDK 再分发条款已退役（见
+// petWindow.loadPersistedPetModel 的 RETIRED 迁移），不随仓库/安装包分发。
 // ═══════════════════════════════════════════════════════════
 
 /** 磁盘上的已安装模型条目（含在库内注册的元数据 + 磁盘存在性） */

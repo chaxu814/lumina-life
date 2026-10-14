@@ -923,7 +923,7 @@ function getPetHtmlPath(): string {
   return petHtmlPath
 }
 
-/** 读取当前选中模型的形态（内置 Mao=live2d / Cat=cat；其余从库记录推断） */
+/** 读取当前选中模型的形态（内置保底 Cat=cat；其余从库记录推断） */
 function currentModelKind(): AvatarKind {
   try {
     const id = getActiveModel(app.getPath('userData'))
@@ -981,7 +981,7 @@ function getRendererHtmlFilePath(): string {
   return live2d
 }
 
-/** 当前模型的 entryRel（live2d 渲染页通过 query 读取，如 Mao/mao_pro.model3.json） */
+/** 当前模型的 entryRel（live2d 渲染页通过 query 读取，如「用户导入的模型名/xxx.model3.json」） */
 function getRendererModelParam(): string {
   return currentModelEntryRel()
 }
@@ -990,7 +990,7 @@ function getRendererModelParam(): string {
  * 正确地把渲染页加载进 petWindow。
  *
  * Electron 的 loadFile(filePath, options) 会自己把 options.query 拼成
- * `file:///.../pet.html?model=Mao%2Fmao_pro.model3.json`（正确编码 `/`），
+ * `file:///.../pet.html?model=MyModel%2Fxxx.model3.json`（正确编码 `/`），
  * 而不是把整个带 `?` 的字符串当路径再二次编码成 %3F。
  *
  * 只有 live2d 渲染页（文件名 pet.html）需要 model query；

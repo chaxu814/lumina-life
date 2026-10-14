@@ -257,3 +257,6 @@ docs/gaming-autoplay-evidence/
 !examples/sprites/**/*.png
 !docs/images/**/*.png
 !resources/*.png
+
+# 本地打包日志（Tee 临时输出）
+/pack-win-log*.txt

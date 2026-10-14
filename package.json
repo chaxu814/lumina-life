@@ -99,12 +99,30 @@
       },
       {
         "from": "electron/pet/assets",
-        "to": "pet/assets"
+        "to": "pet/assets",
+        "filter": [
+          "**/*",
+          "!Mao/**",
+          "!Hiyori/**"
+        ]
+      },
+      {
+        "from": "electron/agents",
+        "to": "electron/agents",
+        "filter": [
+          "**/*",
+          "!**/*.ts"
+        ]
+      },
+      {
+        "from": "electron/agents/lumina/AGENTS.md",
+        "to": "AGENTS.md"
       }
     ],
     "files": [
       "out/**/*",
       "public/**/*",
+      "skills/**/*",
       "!dist/**",
       "!build/**",
       "!**/node_modules/onnxruntime-web/**",

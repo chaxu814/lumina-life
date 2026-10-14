@@ -478,7 +478,14 @@ node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠
 
 ### 方式一：下载安装包（推荐）
 
-> 首个公开版本（v0.1）即将发布；发布后可从 [Releases](https://github.com/chaxu814/lumina-life/releases) 下载安装包，双击安装、3 分钟上手。在此之前请用下方「开发者模式」运行。
+> 首个公开版本（v0.1）即将发布；发布后可从 [Releases](https://github.com/chaxu814/lumina-life/releases) 下载 Windows NSIS 安装包，双击安装。
+>
+> **安装前请注意（实测状态，2026-10-14）：**
+> - 安装包已在本机通过构建与解包完整性验证（electron-builder 出包、7z 校验 269 个文件 CRC 无误），但**尚未在干净 Windows 上完成"安装→向导→填 key→聊天→派活→桌宠态"全流程真机验证**，欢迎在 Issue 反馈。
+> - 首发安装包**未做代码签名**，首次运行会出现 SmartScreen「Windows 已保护你的电脑」提示，点「更多信息 → 仍要运行」即可；签名在 v0.1.0 计划内。
+> - 安装后不是开箱即用：需要按向导配置一个可用模型（DeepSeek 等云端 API key，或本地 LM Studio / Ollama），向导会校验"至少一个可用模型"才放行。
+>
+> 正式发布前可用下方「开发者模式」运行。
 
 ### 方式二：开发者模式
 
