@@ -161,6 +161,7 @@ import { registerDiagnosticsIpc } from './ipc/diagnosticsIpc'
 import { registerSandboxAuditIpc } from './ipc/sandboxAuditIpc'
 import { registerPermissionIpc } from './ipc/permissionIpc'
 import { registerEmotionAuditIpc, registerVisibilityIpc } from './ipc/emotionAuditIpc'
+import { registerBillingIpc } from './billing/billingIpc'
 import { registerPlatformIpc } from './ipc/platformIpc'
 import { registerPushIpc } from './ipc/pushIpc'  // cross-platform feature matrix  // 🔍 I5: 沙箱透明审计
 import { allFlags, setFlag as setFeatureFlag } from './core/featureFlags'  // I7: 功能开关
@@ -757,6 +758,7 @@ for (const { id } of orch.listRunners()) {
   registerSandboxAuditIpc()                            // 🔍 I5: 沙箱审计/玻璃房 IPC
   registerPermissionIpc()                              // 🔒 三档权限（仅可查看/工作区内修改/完全权限）
   registerEmotionAuditIpc()                            // 🔍 情绪收紧审计（「她为什么不帮我」的可解释层）
+  registerBillingIpc()                                  // 💰 Budget Guardian：统一 LLM 账本 + 预算守护
   registerVisibilityIpc()                              // 👁 可见性分档（陪伴 / 协作 / 审计）
   registerPlatformIpc()
   registerPushIpc()

@@ -27,6 +27,14 @@ declare global {
       getConfig: () => Promise<Record<string, any>>
       setConfig: (updates: Record<string, any>) => Promise<Record<string, any>>
 
+      // 💰 Budget Guardian（2026-10-14）统一 LLM 账本 + 预算守护
+      budgetSummary: () => Promise<{ ok: boolean; summary?: any; error?: string }>
+      budgetAudit: () => Promise<{ ok: boolean; audit?: any[]; error?: string }>
+      budgetSetConfig: (patch: Record<string, any>) => Promise<{ ok: boolean; summary?: any; error?: string }>
+      budgetOverride: (reason: string) => Promise<{ ok: boolean; record?: any; summary?: any; error?: string }>
+      budgetPriceTable: () => Promise<{ ok: boolean; prices?: any[]; overrides?: any[]; error?: string }>
+      budgetSetPriceOverrides: (entries: any[]) => Promise<{ ok: boolean; error?: string }>
+
       // 📦 Skill 市场（2026-10-04 补齐）
       // 【为什么这一组之前是空的】主进程 skillMarketIpc.ts 注册了 17 个通道，
       //   但 preload 一个都没暴露，SkillMarketPanel 于是绕道不存在的

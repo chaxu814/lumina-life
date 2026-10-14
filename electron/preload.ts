@@ -1583,6 +1583,46 @@ const api = {
     return () => { ipcRenderer.removeListener('emotionAudit:changed', h) }
   },
 
+  // ── 💰 Budget Guardian（预算守护者） ──────────────────────────
+  // 统一 LLM 账本 + 三级预算收紧。语义同 emotionAudit：override 只是「本轮放行」。
+  budgetSummary: () =>
+    ipcRenderer.invoke('budget:summary') as Promise<{
+      ok: boolean
+      summary?: any
+      error?: string
+    }>,
+  budgetAudit: () =>
+    ipcRenderer.invoke('budget:audit') as Promise<{
+      ok: boolean
+      audit?: any[]
+      error?: string
+    }>,
+  budgetSetConfig: (patch: Record<string, unknown>) =>
+    ipcRenderer.invoke('budget:setConfig', patch) as Promise<{
+      ok: boolean
+      summary?: any
+      error?: string
+    }>,
+  budgetOverride: (reason: string) =>
+    ipcRenderer.invoke('budget:override', reason) as Promise<{
+      ok: boolean
+      record?: any
+      summary?: any
+      error?: string
+    }>,
+  budgetPriceTable: () =>
+    ipcRenderer.invoke('budget:priceTable') as Promise<{
+      ok: boolean
+      prices?: any[]
+      overrides?: any[]
+      error?: string
+    }>,
+  budgetSetPriceOverrides: (entries: any[]) =>
+    ipcRenderer.invoke('budget:setPriceOverrides', entries) as Promise<{
+      ok: boolean
+      error?: string
+    }>,
+
   permGet: () =>
     ipcRenderer.invoke('perm:get') as Promise<{
       ok: boolean

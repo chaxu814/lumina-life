@@ -9,6 +9,7 @@ import SettingsNotifications from './settings/SettingsNotifications'
 import SettingsAppearance from './settings/SettingsAppearance'
 import SettingsPush from './settings/SettingsPush'
 import SettingsPet from './settings/SettingsPet'
+import BudgetPanel from './features/BudgetPanel'
 import SecurityPanel from './SecurityPanel'
 import TasksPanel from './TasksPanel'
 import ModelPickerModal from './settings/ModelPickerModal'
@@ -176,7 +177,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
     try { return localStorage.getItem('lumina_proactive_notify') !== 'false' } catch { return true }
   })
   const [notice, setNotice] = useState<string | null>(null)
-  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy'>(
+  const [settingsTab, setSettingsTab] = useState<'llm' | 'tts' | 'notifications' | 'appearance' | 'push' | 'channels' | 'agentPool' | 'pet' | 'routing' | 'access' | 'modes' | 'workflow' | 'security' | 'tasks' | 'privacy' | 'budget'>(
     (activeTab as any) || 'llm'
   )
   // 当 embedded + activeTab 变化时同步内部状态
@@ -882,6 +883,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
           { key: 'modes' as const, label: '场景模式', icon: '🎯' },
           { key: 'workflow' as const, label: '工作流模板', icon: '📋' },
           { key: 'security' as const, label: '安全中心', icon: '🛡️' },
+          { key: 'budget' as const, label: '预算守护', icon: '💰' },
           { key: 'tasks' as const, label: '定时任务', icon: '⏰' },
           { key: 'pet' as const, label: '桌宠模式', icon: '💻' },
           { key: 'privacy' as const, label: '隐私与开关', icon: '🔐' },
@@ -905,6 +907,7 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
       </>)}
 
       {settingsTab === 'llm' && <SettingsLLM />}
+      {settingsTab === 'budget' && <BudgetPanel />}
       {/* ════════════════════════════════════════════════
           ② TTS 语音
           ════════════════════════════════════════════════ */}

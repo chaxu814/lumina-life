@@ -32,6 +32,7 @@ export type AgentRunState =
   | 'waiting'     // 在等人处理 —— 踱步
   | 'attention'   // 出错了/需要关注 —— 捂脸
   | 'celebrating' // 刚完成 —— 挥手
+  | 'frugal'      // 预算 ≥80%：捂钱包精打细算（Budget Guardian，零 LLM）
 
 export interface AgentStateSnapshot {
   state: AgentRunState
@@ -122,7 +123,14 @@ export function deriveAgentState(now = Date.now()): AgentStateSnapshot {
       _lastSnapshotAt = now
       return snap
     }
-    snap = idleSnapshot(now)
+    // 💰 Budget Guardian：空闲态时，预算 ≥80% 就切「精打细算」表情。
+    // 零 LLM、零事件——每 tick 顺手查一次账本，比维护一条推送链简单可靠。
+    // 只覆盖 idle：任务在跑时（working/failed…）真实执行状态优先，不被预算表情盖掉。
+    if (isBudgetFrugal()) {
+      snap = { state: 'frugal', actor: null, taskTitle: '今日预算已用到 80%，精打细算中', sinceMs: 0, detail: 'budget' }
+    } else {
+      snap = idleSnapshot(now)
+    }
   }
 
   // 状态未变则继承 sinceMs（防止动画每 tick 重启而抖动）
@@ -143,6 +151,24 @@ function knownProjectIds(): string[] {
     if (Array.isArray(projects)) {return projects.map((p: any) => p.id).filter(Boolean)}
   } catch { /* 私有字段不可访问是预期内的 */ }
   return []
+}
+
+/**
+ * 💰 是否处于「预算精打细算」状态。
+ * 直接查账本今日累计 → 问 guardian 级别。任何一步拿不到就当 false
+ * （桌宠状态永远不该因为账单查不到而卡住）。
+ */
+function isBudgetFrugal(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getBudgetGuardian } = require('../billing/budgetGuardian')
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getUsageLedger } = require('../billing/usageLedger')
+    const level = getBudgetGuardian().evaluate(getUsageLedger().today().cost).level
+    return level === 'warn' || level === 'degrade' || level === 'hard'
+  } catch {
+    return false
+  }
 }
 
 function idleSnapshot(now: number): AgentStateSnapshot {
@@ -173,6 +199,7 @@ export function agentStateToMotion(state: AgentRunState): string {
     case 'waiting': return 'wait'
     case 'attention': return 'fail'
     case 'celebrating': return 'wave'
+    case 'frugal': return 'idle' // 精打细算：没新动作，靠表情区分（不扩精灵表）
     case 'idle':
     default: return 'idle'
   }
@@ -186,6 +213,7 @@ export function agentStateToExpression(state: AgentRunState): string {
     case 'waiting': return 'bored'      // 无聊等待
     case 'attention': return 'worried'   // 担心
     case 'celebrating': return 'happy'
+    case 'frugal': return 'frugal'      // 精打细算：捂钱包
     case 'idle':
     default: return 'neutral'
   }
@@ -207,8 +235,10 @@ export function shouldDrivePetFromAgent(
   enabled = true,
 ): boolean {
   if (!enabled) {return false}
-  // 空闲时不接管：空闲时让原有情绪系统自由表现，否则会显得呆板
+  // 空闲时不接管：空闲时让原有情绪系统自由表现，否则会显得呆板。
+  // 例外：frugal（预算提示）是用户需要看见的信号，要接管。
   if (snapshot.state === 'idle') {return false}
+  if (snapshot.state === 'frugal') {return true}
   // 状态刚变还不足最小驻留时间：等一等
   return snapshot.sinceMs >= AGENT_STATE_MIN_DWELL_MS
 }
