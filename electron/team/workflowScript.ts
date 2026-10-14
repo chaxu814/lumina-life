@@ -1,7 +1,7 @@
 // ============================================================
-// workflowScript.ts — v3.30 模型现写 Workflow 脚本引擎（P2，对标 cc-haha #9）
+// workflowScript.ts — v3.30 模型现写 Workflow 脚本引擎（P2，同类工程实践）
 //
-// cc-haha 让 Team Lead 直接写 Python workflow 脚本编排多步任务。
+// 同类项目让 Team Lead 直接写 Python workflow 脚本编排多步任务。
 // Lumina 不在 Electron 主进程 eval 任意 JS（安全红线），改为让模型写
 // 声明式 JSON DSL，由确定性调度器执行：
 //

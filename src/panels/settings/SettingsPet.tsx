@@ -174,7 +174,7 @@ export default function SettingsPet() {
         </div>
       </SettingRow>
 
-      <SettingRow label="完整设置面板" desc="对话/动画/声音/猫爪模式等 N.E.K.O 风格设置">
+      <SettingRow label="完整设置面板" desc="对话/动画/声音/猫爪模式等完整桌宠设置">
         <SettingBtn variant="primary" onClick={() => { try { api()?.petOpenSettings?.() } catch {} }}>打开</SettingBtn>
       </SettingRow>
 

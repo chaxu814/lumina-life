@@ -1,7 +1,7 @@
 // ============================================================
-// gitWorktree.ts — 任务隔离工作区 (v3.20, 对标 cc-haha git worktree 隔离)
+// gitWorktree.ts — 任务隔离工作区 (v3.20, 同类工程实践：git worktree 隔离)
 //
-// cc-haha 给每个 Code worker 开独立 git worktree：
+// 同类项目给每个 Code worker 开独立 git worktree：
 //   并行改代码互不踩文件、不污染主工作区，验收通过后再合并。
 //
 // Lumina 落地：

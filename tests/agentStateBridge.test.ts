@@ -2,7 +2,7 @@
 // tests/agentStateBridge.test.ts — 桌宠绑定真实 Agent 运行状态
 // ============================================================
 // 验证差异化能力（P2）：桌宠动作反映真实执行状态，而不只是随机情绪。
-// 这是 cc-haha 明确放弃的边界（"只是个状态提示"），也是 AIRI 没做的。
+// 这是同类桌宠明确放弃的边界（"只是个状态提示"），业界普遍未做。
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   agentStateToMotion,

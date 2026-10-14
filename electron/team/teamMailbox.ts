@@ -1,7 +1,7 @@
 // ============================================================
-// teamMailbox.ts — 团队文件信箱 (v3.20, 对标 cc-haha inboxes/{name}.json)
+// teamMailbox.ts — 团队文件信箱 (v3.20, 同类工程实践：inboxes/{name}.json)
 //
-// cc-haha 的 agent 团队不共享内存，成员间靠「文件信箱」异步通信：
+// 同类项目的 agent 团队不共享内存，成员间靠「文件信箱」异步通信：
 //   每个成员一个 inbox 文件 + 文件锁，发送即追加，收件人轮询拉取。
 //
 // Lumina 落地版（单进程 + 持久化，跨重启不丢消息）：
@@ -274,7 +274,7 @@ export class MailboxStore {
 
   /**
    * 轮询等待新消息（worker 可 await）。
-   * @param intervalMs 轮询间隔（cc-haha 为 1s）
+   * @param intervalMs 轮询间隔（同类项目为 1s）
    * @param timeoutMs  超时返回空数组
    */
   async poll(member: string, timeoutMs = 30_000, intervalMs = 1000): Promise<MailMessage[]> {

@@ -76,7 +76,7 @@ let agentStateTimer: ReturnType<typeof setInterval> | null = null
 /**
  * 🧭 把桌宠绑定到真实 Agent 运行状态（v0.1）
  *
- * 这是我们越过 cc-haha 天花板的那条线：它的桌宠只是任务三态指示灯，
+ * 这是我们越过同类桌宠天花板的那条线：常见桌宠只是任务三态指示灯，
  * 作者明写「不能替你批准权限」。我们让**干活的人自己被看见** ——
  * Yak 在写代码时敲键盘、热茶在审查时皱眉、验证失败时捂脸。
  *
@@ -496,7 +496,7 @@ export async function petChat(userText: string): Promise<PetChatResult> {
 // 由渲染层 FullDuplexController 经 pet:voice-chat 调用，回复直接交给 TTS 逐句播放。
 // ═══════════════════════════════════════════════════════════
 
-const VOICE_SYSTEM_PROMPT = `你是 Lumina，住在用户电脑桌面上的可爱猫娘，正在和用户进行【实时语音对话】（像 N.E.K.O 那样的全双工陪聊）。
+const VOICE_SYSTEM_PROMPT = `你是 Lumina，住在用户电脑桌面上的可爱猫娘，正在和用户进行【实时语音对话】（全双工实时语音陪聊）。
 硬性要求：
 - 只说口语，像真人聊天，简短自然（通常一到三句、每句不超过 20 字），适合语音朗读。
 - 绝不输出 JSON、动作标签、markdown、列表符号或（动作）这类舞台提示，不要解释你在做什么。
@@ -558,7 +558,7 @@ export async function petVoiceChat(userText: string): Promise<PetVoiceResult> {
   }
 }
 
-// 🫀 LLM 自主思考心跳（借鉴 N.E.K.O 主动陪伴 / AIRI 自主循环）
+// 🫀 LLM 自主思考心跳（业界主动陪伴 / 自主循环设计）
 // 渲染页按自主级别定时调用：LLM 结合 时间 + 屏幕 + 互动历史
 // 自主决定下一个行为，而不是随机抽签。
 // ═══════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 // ============================================================
-// proactive/orchestrator.ts — 🧭 统一主动编排器（N.E.K.O 对齐 v6.1）
+// proactive/orchestrator.ts — 🧭 统一主动编排器（主动编排 v6.1）
 //
 // 把两套割裂的主动系统（渲染页 autonomy tick / 主进程触发器）统一成一条管线：
 //   触发器(任意来源) ─▶ onTrigger(ProactiveEvent)
@@ -60,7 +60,7 @@ function buildMemorySnippet(query?: string): string {
 }
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
-  // v6.2 体感升级（N.E.K.O 对齐）：原来的 10 分钟/20 次过于保守，
+  // v6.2 体感升级：原来的 10 分钟/20 次过于保守，
   // 一局 30 分钟游戏她理论上只说 3 次、还要过 50% 概率闸门。
   // 现在主动间隔 2 分钟、日上限 80 次，配合 gate 的场景概率，体感从"木"变"活"。
   maxDaily: 80,

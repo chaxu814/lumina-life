@@ -5,7 +5,7 @@
 // README 从 v0.1 起就写着「BM25 词法 + TF-IDF 向量余弦双路召回，RRF 融合」，
 // 但仓库里从来没有过 RRF：`memoryStore.search()` 是纯 TF-IDF 余弦，
 // `layeredMemory.bm25Scores()` 是纯 BM25，两套实现各走各的，互不相干。
-// 对比 N.E.K.O 的 `memory/hybrid_recall.py`（BM25 + 余弦 + RRF 真融合），
+// 对比业界混合召回实现（BM25 + 余弦 + RRF 真融合），
 // 声明与实现不符 —— 社区一旦提 issue 指出，会连带质疑其他所有数字。
 // 这个文件把「双路召回 + RRF 融合」从口号变成可测的实现。
 //

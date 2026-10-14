@@ -271,7 +271,7 @@ nomic-embed-text 或外部 embedding 服务）为**可选且默认关闭**。
 - [API.md](API.md) —— REST API
 - [custom-agent-guide.md](custom-agent-guide.md) —— 自定义 Agent
 - [skill-tutorial.md](skill-tutorial.md) —— 技能开发
-- [BENCHMARKS.md](BENCHMARKS.md) —— 与 N.E.K.O / AIRI / openclaw / cc-haha / MiniMax Code 的对比
+- [BENCHMARKS.md](BENCHMARKS.md) —— 质量基准与自测口径（三道门禁、代码与测试规模、核心机制自核）
 - [Lumina-发布前评测与复评-20261003.md](Lumina-发布前评测与复评-20261003.md) —— 发布前审计发现、修复结果与复评评分
 - [ROADMAP.md](ROADMAP.md) —— 路线图与已知缺口认领
 - [gaming-overview.md](gaming-overview.md) —— 游戏陪伴

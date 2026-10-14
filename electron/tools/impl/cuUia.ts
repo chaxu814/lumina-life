@@ -1,7 +1,7 @@
 // ============================================================
-// cuUia.ts — v3.31 Windows UI Automation 元素树（P2，对标 cc-haha #11）
+// cuUia.ts — v3.31 Windows UI Automation 元素树（P2，同类工程实践）
 //
-// cc-haha 在截图之外还给模型「可交互元素树」（名字/控件类型/位置），
+// 同类项目在截图之外还给模型「可交互元素树」（名字/控件类型/位置），
 // 点击不依赖坐标猜测。Lumina：
 //   - PowerShell 加载 UIAutomationClient/UIAutomationTypes，
 //     取前台窗口 FindAll(Descendants)，cap 200 个元素，输出 JSON；

@@ -106,7 +106,7 @@ export function isNightTime(now?: Date): boolean {
 }
 
 /** 场景放行概率表（g~j）：0 = 一律不打扰
- * v6.2 体感升级：N.E.K.O 对齐——打游戏/看视频正是她该凑过来的时候，
+ * v6.2 体感升级——打游戏/看视频正是她该凑过来的时候，
  * 概率从保守的 0.5 整体上调；隐私场景仍恒为 0，绝不打扰。 */
 function scenePassRate(scene: string): number {
   switch (scene) {

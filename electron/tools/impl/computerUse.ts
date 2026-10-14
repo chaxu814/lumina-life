@@ -236,7 +236,7 @@ export async function desktopAct(args: Record<string, any>): Promise<ToolResult>
   const view: View = { kind: 'full' }
   resetCuAbort()
 
-  // v3.20: 会话锁——同一时刻只允许一个操控者驱动键鼠（对标 cc-haha ForegroundLease）
+  // v3.20: 会话锁——同一时刻只允许一个操控者驱动键鼠（同类工程实践 ForegroundLease）
   const sessionId = `desktop_act_${Date.now()}`
   let locked = false
   try {
@@ -359,7 +359,7 @@ async function desktopActLoop(
 }
 
 // ═══════════════════════════════════════════════════════════
-// v3.30 UIA 元素树工具（对标 cc-haha 可交互元素）
+// v3.30 UIA 元素树工具（同类工程实践：可交互元素）
 // ═══════════════════════════════════════════════════════════
 
 /** desktop_elements：列出前台窗口可交互元素（名字/控件类型/坐标） */

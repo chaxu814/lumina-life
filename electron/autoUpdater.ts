@@ -2,7 +2,7 @@
 // autoUpdater.ts — Electron 自动更新 (P2.3)
 //
 // 使用 electron-updater 检查并安装更新
-// 借鉴 N.E.K.O 的 Steam 自动更新思路，但用 electron-updater
+// Steam 式自动更新思路，但用 electron-updater
 //
 // 配置要求:
 //   1. 在 package.json 添加 "build.publish" 配置

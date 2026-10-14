@@ -8,7 +8,7 @@ const h = React.createElement
 const board = {
   lanes: {
     pending: [],
-    claimed: [{ id: 't2', title: '调研 cc-haha 信箱实现细节', status: 'claimed', owner: 'tmp_research_1', blockedBy: [] }],
+    claimed: [{ id: 't2', title: '调研同类文件信箱实现细节', status: 'claimed', owner: 'tmp_research_1', blockedBy: [] }],
     running: [
       { id: 't4', title: 'QA 阶段二：端到端验证与缺陷汇报，内容比较长需要两行显示', status: 'running', owner: 'tmp_test_1', blockedBy: ['t1', 't3'] },
       { id: 't6', title: '评审：代码质量与安全', status: 'running', owner: 'recha', blockedBy: ['t1', 't2'] },

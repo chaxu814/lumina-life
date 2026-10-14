@@ -1,7 +1,7 @@
 // ============================================================
 // teamCheckpoint.ts — 团队任务整轮 Diff 检查点 / 一键回滚 (v3.33)
 //
-// cc-haha 有「分支/Worktree 启动会话 + 整轮 Diff 可撤销」。
+// 同类项目有「分支/Worktree 启动会话 + 整轮 Diff 可撤销」。
 // Lumina 的 code worker 已在独立 worktree 干活、成功后合并回原分支；
 // 本模块在「合并前」给主仓库拍一个 git 检查点（分支 + HEAD），
 // 合并后若不满意，可一键回到建队前（需要显式 force，git reset --hard）。

@@ -104,7 +104,7 @@ export default function SettingsMemory({ onClose }: Props) {
         </div>
       </div>
 
-      {/* 🆕 会话级双开关（对标 MiniMax Code） */}
+      {/* 🆕 会话级双开关（业界实践） */}
       <div style={card}>
         <div style={{ fontSize: 12, color: 'var(--text-tertiary, #888)', marginBottom: 6 }}>
           会话级记忆控制 · 把「读」和「写」分开管

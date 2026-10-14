@@ -13,7 +13,7 @@
 //   每个 Agent 只能"回忆"自己知识领域内的东西
 //   查询时过滤掉不在知识领域内的记忆
 //
-// 借鉴: N.E.K.O 的 evidence.py + Stanford Generative Agents 的记忆流
+// 借鉴: 业界证据链记忆设计 + Stanford Generative Agents 的记忆流
 // ============================================================
 
 import type { KnowledgeDomain, AgentPersona } from './agentTeamTypes'

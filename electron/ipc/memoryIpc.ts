@@ -122,7 +122,7 @@ export function registerMemoryIpc(): void {
   // ─── Memory ──────────────────────────────────────
 
   ipcMain.handle('memory:save', (_event, params: { category: string; content: string; source?: string }) => {
-    // 🆕 会话级「生成记忆」总闸（对标 MiniMax Code）：
+    // 🆕 会话级「生成记忆」总闸（业界实践）：
     //    关掉后一律不写新记忆 —— 且如实告知，不假装存了。
     if (!isEnabled('memory.write')) {
       return { ok: false, error: '「生成记忆」已关闭（设置 → 记忆与进化），本次未记录。可在会话中随时重新打开。' }

@@ -1,6 +1,6 @@
-﻿## [Unreleased] — 发布前阻断项修复 + 5 项创新功能落地 (2026-10-05)
+## [Unreleased] — 发布前阻断项修复 + 5 项创新功能落地 (2026-10-05)
 
-> 对应 `docs/Lumina-竞品深度评测与发布建议-20261005.md` 第七节的 P0~P2 清单。
+> 对应已归档的旧评测文档第七节的 P0~P2 清单。
 > 测试基线：3252 → **3324** 用例（+72），`tsc --strict` 0 error，eslint 0 error。
 
 ### 发布阻断项（P0）
@@ -26,11 +26,11 @@
 
 ### 事实校正（P1）
 
-- README 对比表：AIRI 的 Computer Use 不再写「看屏幕」——
+- README 能力口径修正：Computer Use 不再写「看屏幕」——
   其 `services/computer-use-mcp` 已有 macOS 桌面编排、审批队列、审计日志、trace 与 15 个 browser_dom 工具
-- openclaw 渠道数 27 → **32**（旧快照）
-- 统一 AIRI WebGPU 结论：官方 Roadmap 仍为 `[ ]` 未勾选（此前 BENCHMARKS 与竞品文档自相矛盾）
-- 对比表数据日期改为 **2026-10-04/05**，并加注「会过时，我们选择标注日期而不是假装它不会变」
+- IM 渠道登记数修正：27 → **32**（旧快照）
+- 统一应用内本地推理结论：官方路线图仍为 `[ ]` 未勾选（此前 BENCHMARKS 与对比文档自相矛盾）
+- 能力对照表数据日期改为 **2026-10-04/05**，并加注「会过时，我们选择标注日期而不是假装它不会变」
 
 ### 渠道诚实度闸门
 
@@ -81,7 +81,7 @@
 > **口径说明**：本文件记录**面向用户的真实变化**。发布前的审计过程、发现的问题与修复对照，
 > 见 [`docs/Lumina-发布前评测与复评-20261003.md`](docs/Lumina-发布前评测与复评-20261003.md)
 > 与 [`docs/Lumina-发布前深度评测-20261002.md`](docs/Lumina-发布前深度评测-20261002.md)。
-> 能力与竞品对比见 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)。
+> 质量基准与自测口径见 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)。
 
 ---
 
@@ -302,9 +302,9 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 - onboarding 探测器已优化：401 时给出"关闭 API Key 认证或填入 Key"的友好提示
 - Minecraft 已安装（26.1.2-Fabric，PCL2 启动器，LittleSkin 认证），但 VLM HTTP API 因认证阻断，完整视觉路线待用户关闭 LM Studio 认证后实测
 
-### 🔬 6 项目对比新增（v0.2 追加）
-- **LobsterAI**（网易有道，6068★）：Electron 桌面办公 Agent，外包 OpenClaw runtime，11 渠道 IM 远程控制，28 技能含 skin-creator 桌宠皮肤生成；无游戏/无 VLM 桌面操控/无社交引擎
-- **minimax-code**（MiniMax，1815★）：纯终端 TUI coding agent，fork pi-mono，沙箱执行+BYOK 三协议+ACP；桌面 App 不开源，外部 PR 通道关闭
+### 🔬 赛道扫描补充（v0.2 追加）
+- 桌面办公类 Agent 参照：Electron 桌面办公 Agent，外包通用 Agent runtime，11 渠道 IM 远程控制，28 技能含桌宠皮肤生成；无游戏/无 VLM 桌面操控/无社交引擎
+- 终端 TUI coding agent 参照：fork pi-mono，沙箱执行+BYOK 三协议+ACP；桌面 App 不开源，外部 PR 通道关闭
 
 ### 📊 验证
 - tsc 0 错误 / 108 文件 1297 测试通过
@@ -400,7 +400,7 @@ esolvePetLoadTarget() 传 ?solid=1，HTML 内 JS 才施加 #15101f 兜底
 - **测试**：平台相关 178 例全过（含新增 Mac 19例 / Linux 14例）
 - **文档**：`docs/cross-platform-status.md`、`docs/INSTALL.md`
 
-### 🎮 Minecraft 游戏能力（对标 AIRI）
+### 🎮 Minecraft 游戏能力（游戏能力补齐）
 - **双路线**：视觉路线（截图+VLM+CU 操作）+ 程序化路线（Mineflayer bot，可选动态 import）
 - **4 个新工具**：`game_status` / `game_action`（14种动作）/ `game_look` / `game_chat`
 - **安全双保险**：游戏护栏拦截危险命令 + SecurityGuard + cuCore 权限门

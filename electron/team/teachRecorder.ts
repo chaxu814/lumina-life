@@ -1,7 +1,7 @@
 // ============================================================
-// teachRecorder.ts — v3.31 Teach 录制回放（P2，对标 cc-haha #10）
+// teachRecorder.ts — v3.31 Teach 录制回放（P2，同类工程实践）
 //
-// cc-haha 可「演示一次 → 自动沉淀成技能」。Lumina 落地（Windows）：
+// 同类项目可「演示一次 → 自动沉淀成技能」。Lumina 落地（Windows）：
 //   1. 低级钩子 WH_MOUSE_LL / WH_KEYBOARD_LL 录制（v3.31 升级，替代 50ms 轮询）：
 //      左/右键点击、拖拽、滚轮（含方向与格数）、组合键、功能键、连续打字；
 //      注入事件过滤（不录自己回放的动作）、SetProcessDPIAware 坐标物理像素；

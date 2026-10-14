@@ -1,7 +1,7 @@
 // ============================================================
 // realtimeClient.ts — Realtime API 客户端 (v2.5)
 //
-// 借鉴 N.E.K.O.: WebSocket 连接 OpenAI Realtime API，
+// WebSocket 连接 OpenAI Realtime API，
 // 支持实时语音对话 + 打断逻辑
 //
 // 依赖: 兼容 OpenAI Realtime API 的服务 (如阿里云百炼)

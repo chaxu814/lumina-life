@@ -131,7 +131,7 @@ function writePersistedPetState(next: { config?: Partial<PetConfig>; model?: str
   }
 }
 
-// ── N.E.K.O 风格偏好（对话/动画/声音/Pet Handling/人格）──────
+// ── 桌宠风格偏好（对话/动画/声音/Pet Handling/人格）──────
 export interface PetPrefs {
   persona?: string            // 人格 id（'' = 默认猫娘）
   onboardingDone?: boolean    // 新手引导已完成
@@ -170,7 +170,7 @@ export interface PetPrefs {
     master?: boolean; kbm?: boolean; browser?: boolean; perception?: boolean; hud?: boolean
     desktop?: boolean; plugins?: boolean
   }
-  secretary?: {               // 主动秘书（N.E.K.O 式主动搭话：观察用户在做什么并主动评价/建议/问话）
+  secretary?: {               // 主动秘书（业界式主动搭话：观察用户在做什么并主动评价/建议/问话）
     enabled?: boolean         // 主动搭话总开关
     minIntervalSec?: number   // 两次主动搭话的最低间隔（秒）
     sources?: {               // 触发源（对应主动搭话设置面板的勾选项）
@@ -878,7 +878,7 @@ ipcRenderer.on('pet:command', (_event, command) => {
     showSpeech(command.text);
   }
   // 🧭 桌宠反映真实 Agent 运行状态（v0.1）
-  // cc-haha 的桌宠只做三态指示灯；我们让干活的人自己被看见：
+  // 同类桌宠只做三态指示灯；我们让干活的人自己被看见：
   // 写代码敲键盘、审查时皱眉、出错捂脸、刚完成挥手。
   if (command.type === 'agent-state') {
     window.__luminaAgentState = command;
@@ -1173,7 +1173,7 @@ function setWindowClickThrough(enable: boolean): void {
 /**
  * 创建桌宠窗口
  */
-// ── v6.4 compact 物理小窗口（AIRI 式）：根治 Windows 全屏透明置顶窗压制 MPO 导致后方视频黑屏 ──
+// ── v6.4 compact 物理小窗口（业界式小窗形态）：根治 Windows 全屏透明置顶窗压制 MPO 导致后方视频黑屏 ──
 // 旧模式是覆盖整屏的 layered 透明舞台，其全屏合成表面会让 DWM 退出硬件叠加（MPO），
 // 浏览器/播放器的硬件加速视频因此黑屏；SetWindowRgn(setShape) 对 Electron 的
 // DirectComposition 透明窗不可靠。新模式把窗口物理尺寸收缩到只包住角色，移动由主进程
@@ -1956,7 +1956,7 @@ export function registerPetIpc(): void {
   // 与主动秘书 secretary（45s 工作卡片）/ runScreenWatch（120s 编排表演）分工：
   //   本条路径复用统一视觉模块 describeScreenViaVlm（截图→dHash 节流→VLM 看懂→安全降级），
   //   只在她真看清画面、且 VLM 判定"很精彩"（worthComment≥0.7：游戏翻车/搞笑视频/报错卡住）
-  //   时立刻插一句带动作的即时反应，形成 N.E.K.O 式"哎？！这个！"的实时感；
+  //   时立刻插一句带动作的即时反应，形成"哎？！这个！"的实时感；
   //   普通画面交给另两条路径，不重复花 token、不抢话。
   ipcMain.handle('pet:perception:tick', async () => {
     try {
@@ -2073,7 +2073,7 @@ export function registerPetIpc(): void {
     }
   })
 
-  // ── N.E.K.O 风格偏好读写 ─────────────
+  // ── 桌宠风格偏好读写 ─────────────
   ipcMain.handle('pet:prefs', () => getPetPrefs())
   ipcMain.handle('pet:update-prefs', (_e, patch: Partial<PetPrefs>) => {
     try {
@@ -2486,7 +2486,7 @@ export function closePetChatWindow(): void {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 新手引导（N.E.K.O 风格初始人格选择）
+// 新手引导（完整桌宠风格初始人格选择）
 // ═══════════════════════════════════════════════════════════
 
 let onboardingWin: BrowserWindow | null = null

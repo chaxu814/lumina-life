@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // tools/index.ts — 工具注册入口 (v3.6: 已注册 62+ 工具)
 // v3.6 新增: file_search（全盘递归搜索）+ disk_list（驱动器列表）
 // v3.0 新增: 团队协作工具 + 结构化记忆
@@ -194,7 +194,7 @@ import {
 // 🆕 v3.0: 主动并行派生子智能体
 import { runSubagentsDef, runSubagents } from './impl/runSubagents'
 
-// 🆕 v3.20: 文件信箱 / 共享任务板 / 动态 worker / 对抗评审 / worktree 隔离（对标 cc-haha）
+// 🆕 v3.20: 文件信箱 / 共享任务板 / 动态 worker / 对抗评审 / worktree 隔离（同类多 Agent 工程实践）
 // 🆕 v3.30: plan_approval / 待命中转 / 工作流 DSL / Teach 录制回放 / Markdown 工种
 import {
   teamMessageDef, teamMessage,

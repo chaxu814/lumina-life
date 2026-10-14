@@ -12,7 +12,7 @@ export type ChannelType = 'dingtalk' | 'wechat' | 'slack' | 'telegram' | 'qq' | 
  *   experimental 适配器已接线并能启动，但**未经端到端真机验证**
  *
  * 【为什么不直接全开】
- * 头部项目（openclaw 32 个 / cc-haha 8 个 / MiniMax Code 4 个）全部已跑通真机。
+ * 业界头部实现（数十个渠道适配器）已全部跑通真机。
  * 我们有 7 个适配器，其中只有 telegram 完成过端到端验证。把 7 个都标成
  * “已支持”是一种容易被社区拆穿的虚报；把没验证的那些默认关掉、明确标
  * experimental，则是「少而真 > 多而虚」。等真机验证过一项，就把它升到 verified。

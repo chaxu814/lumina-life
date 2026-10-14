@@ -36,7 +36,7 @@ export type FeatureKey =
   // 🆕 记忆与进化（设置页）
   | 'memory.conversation'
   | 'memory.localSkills'
-  // 🆕 记忆会话级双开关（对标 MiniMax Code）
+  // 🆕 记忆会话级双开关（业界会话级记忆实践）
   //   memory.recall  —— 「使用记忆」：是否把长期记忆注入对话上下文 / 允许检索
   //   memory.write   —— 「生成记忆」：是否把本轮对话沉淀为新记忆
   //   拆成两个独立开关，是因为「读」和「写」的风险不同：

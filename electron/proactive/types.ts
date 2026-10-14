@@ -1,5 +1,5 @@
 // ============================================================
-// proactive/types.ts — 🧭 统一主动管线类型 (N.E.K.O 对齐 v6.1)
+// proactive/types.ts — 🧭 统一主动管线类型 (主动管线 v6.1)
 //
 // 背景：Lumina 原本有两套割裂的主动系统——
 //   A) intentDispatcher.petAutonomyTick：渲染页每 8s tick，LLM 直出 {action,mood,speech}；

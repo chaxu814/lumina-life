@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -36,7 +36,7 @@
     border: 5px solid transparent; border-top-color: rgba(0,0,0,0.78); }
   .speech-bubble.show { opacity: 1; }
 
-  /* 🤵 主动秘书搭话卡片（N.E.K.O 风格：文本 + A/B/C 快捷回复） */
+  /* 🤵 主动秘书搭话卡片（完整桌宠风格：文本 + A/B/C 快捷回复） */
   #proactive-card {
     position: fixed; left: 0; top: 0; z-index: 58; width: 268px;
     background: rgba(255,255,255,0.97); backdrop-filter: blur(16px);
@@ -186,7 +186,7 @@
   .tb-play svg { width: 8px; height: 8px; fill: #fff; stroke: none; }
   .tb-collapse svg { width: 16px; height: 16px; }
 
-  /* ═══════ N.E.K.O 风格弹出面板 ═══════ */
+  /* ═══════ 完整桌宠风格弹出面板 ═══════ */
   .nk-panel {
     position: fixed; z-index: 57; min-width: 240px;
     background: rgba(200,215,240,0.88); backdrop-filter: blur(14px);
@@ -382,7 +382,7 @@
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   Lumina Live2D 桌宠渲染器 v3.0 (N.E.K.O 风格)
+   Lumina Live2D 桌宠渲染器 v3.0 (完整桌宠风格)
    ════════════════════════════════════════════════════════════ */
 
 /* ── IPC 探测 ────────────────────────────────────────────── */
@@ -395,7 +395,7 @@ const HAS_IPC = !!ipc;
 
 function sendEvent(type, data) { if (HAS_IPC) try { ipc.send('pet:event', { type, timestamp: Date.now(), data }); } catch (e) {} }
 
-/* ── N.E.K.O 风格偏好 ────────────────────────────────────── */
+/* ── 完整桌宠风格偏好 ────────────────────────────────────── */
 let prefs = {
   bubbles: true, nekoSounds: true, proactive: true, allowInterrupt: true, maxTokens: 300,
   mouseTrack: true, fullscreenTrack: false, fps: 30, quality: 'high',
@@ -618,11 +618,11 @@ function lifePerform(dsl) {
   } catch (e) {}
 }
 
-/* ── 👀 注视系统：回归 pixi-live2d-display 标准链路（对齐 N.E.K.O 的 model.focus 与 AIRI 的柔和幅度/空闲眼动）──
+/* ── 👀 注视系统：回归 pixi-live2d-display 标准链路（业界 model.focus 与柔和幅度/空闲眼动）──
    不再用 setParam 覆盖眼球和头，而是把鼠标方向交给 model.focus → FocusController 做带加减速、
    帧率无关的惯性插值 → Cubism InternalModel 每帧用 addParameterValueById 把“同一个焦点”叠加到
    眼球(EyeBallX/Y)、头(AngleX/Y/Z)、身体(BodyAngleX)。眼头身天然协同、与呼吸/待机动作叠加而不打架。 */
-const GAZE_AMP = 0.55;          // 注视幅度（AIRI 取 0.5；桌宠 0.5~0.6 最自然：看得出来又不会一直瞪眼/歪头）
+const GAZE_AMP = 0.55;          // 注视幅度（业界常用 0.5；桌宠 0.5~0.6 最自然：看得出来又不会一直瞪眼/歪头）
 const GAZE_IDLE_MS = 800;       // 鼠标静止多久后进入空闲（平滑回中 / 偶尔轻飘一眼）
 const gazeState = { lastMove: 0, nextIdle: 0 };
 function focusControllerOf() { return (model && model.internalModel) ? model.internalModel.focusController : null; }
@@ -2220,7 +2220,7 @@ if (chatHead) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   N.E.K.O 风格工具栏 & 弹出面板系统
+   完整桌宠风格工具栏 & 弹出面板系统
    ════════════════════════════════════════════════════════════ */
 
 function closeAllPanels() {
@@ -3057,7 +3057,7 @@ async function loadModelByUrl(url, displayName) {
     const m = await Live2DModel.from(url, { autoInteract: false, autoFocus: false })
     model = m
     state.name = displayName || 'Mao'
-    // N.E.K.O 遮罩修复
+    // Live2D 遮罩渲染修复
     if (model.internalModel && model.internalModel.renderer && model.internalModel.renderer._clippingManager) {
       model.internalModel.renderer._clippingManager._renderTextureCount = 3;
       if (typeof model.internalModel.renderer._clippingManager.initialize === 'function') {
@@ -3132,7 +3132,7 @@ async function boot() {
   }
   reportProgress(80, '正在初始化模型…');
 
-  // N.E.K.O 遮罩修复
+  // Live2D 遮罩渲染修复
   if (model.internalModel && model.internalModel.renderer && model.internalModel.renderer._clippingManager) {
     model.internalModel.renderer._clippingManager._renderTextureCount = 3;
     if (typeof model.internalModel.renderer._clippingManager.initialize === 'function') {

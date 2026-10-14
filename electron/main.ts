@@ -870,7 +870,7 @@ try {
   try {
     petModule = petWindowNs
     petModule.registerPetIpc()
-    petModule.maybeShowOnboarding()   // 首次使用：N.E.K.O 风格初始人格引导
+    petModule.maybeShowOnboarding()   // 首次使用：完整桌宠风格初始人格引导
     // 随 Lumina 启动：如果 autoRestart=true，自动开启桌宠
     try {
       const petCfg = petModule.getPetConfig()

@@ -1,7 +1,7 @@
 // ============================================================
-// teamSharedBoard.ts — 团队共享任务板 (v3.30, 对标 cc-haha shared task board)
+// teamSharedBoard.ts — 团队共享任务板 (v3.30, 同类工程实践：shared task board)
 //
-// cc-haha 的多 agent 协作不依赖「中心调度员派活」：任务挂在共享板上，
+// 同类项目的多 agent 协作不依赖「中心调度员派活」：任务挂在共享板上，
 // 每个 worker 自己拉取（claim）可做的任务、自己登记 blockedBy 依赖，
 // 完成/失败写回，避免重复劳动。
 //

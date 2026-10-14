@@ -1,7 +1,7 @@
 // ============================================================
-// teamCollab.ts — 团队协作新工具 (v3.20, 对标 cc-haha agent teams)
+// teamCollab.ts — 团队协作新工具 (v3.20, 同类工程实践：agent teams)
 //
-// 新增 6 个工具，把 cc-haha 的「文件信箱 / 共享任务板 / 动态工种 /
+// 新增 6 个工具，把同类项目的「文件信箱 / 共享任务板 / 动态工种 /
 // worktree 隔离 / 对抗评审团」能力暴露给 Lumina 团队（含后台 worker）：
 //
 //   team_message       发私信/广播（worker 私信自动抄送 Lumina）
@@ -423,7 +423,7 @@ export async function teamTasks(args: Record<string, any>): Promise<ToolResult> 
 
 export const hireWorkerDef: ToolDef = {
   name: 'hire_worker',
-  description: `临时雇佣后台 worker 并行干活，干完自动解散（对标 cc-haha TeamCreate）。
+  description: `临时雇佣后台 worker 并行干活，干完自动解散（同类工程实践：动态雇佣 worker）。
 工种 role：
 - research 研究员：多源调研、资料交叉验证（可联网）
 - search 检索员：多引擎网页搜集（可联网）
@@ -1125,7 +1125,7 @@ export async function teamLog(args: Record<string, any>): Promise<ToolResult> {
 
 export const teamCheckpointDef: ToolDef = {
   name: 'team_checkpoint',
-  description: `团队代码任务的整轮检查点（v3.33，对标 cc-haha 整轮 Diff 可撤销）。
+  description: `团队代码任务的整轮检查点（v3.33，同类工程实践：整轮 Diff 可撤销）。
 code worker 的 worktree 合并前会自动拍点，合并后不满意可回滚。
 - action=list：列出最近检查点（id / 时间 / 关联 / 分支 / 合并前 HEAD）。
 - action=create：手动给当前项目拍点（ref 说明）。

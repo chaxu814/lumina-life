@@ -682,7 +682,7 @@ export interface RetryConfig {
 // 于是超时不短路，直接进入重试循环 —— 这正是重复执行的主要入口。
 //
 // 【业界对照】
-//   · cc-haha 踩过同一个坑（issue #766），做法是「已 yield 的尝试永不重放」。
+//   · 业界踩过同一个坑（issue #766），做法是「已 yield 的尝试永不重放」。
 //   · OpenClaw 设了终止性错误码 PROVIDER_POST_DISPATCH_AMBIGUITY_ERROR_CODE，
 //     把「已投递但结果不明」明确判为不可重放。
 // 我们没有这两个机制，所以补了一个显式的声明层。
