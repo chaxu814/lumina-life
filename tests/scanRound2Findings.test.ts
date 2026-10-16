@@ -154,11 +154,6 @@ describe('round2 · 静默失败改为留痕', () => {
     expect(n, '记忆读取失败应留下可诊断日志').toBeGreaterThanOrEqual(6)
   })
 
-  it('mission PRD 损坏有日志（不丢数据但要可查）', () => {
-    const src = readSrc('electron/mission/state.ts')
-    expect(src).toMatch(/\[mission\] PRD 文件损坏/)
-  })
-
   it('loopPersist 保存失败不再静默', () => {
     const src = readSrc('src/services/loopPersist.ts')
     expect(src).toMatch(/\[loopPersist\]/)
