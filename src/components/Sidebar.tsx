@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useStore, type PanelType } from '../stores/appStore'
 import {
-  IconMessageCircle, IconMail, IconSettings,
+  IconMessageCircle, IconMail, IconSettings, IconSliders,
   IconZap, IconGlobe, IconUser, IconStar, IconHeart, IconShield,
 } from './Icons'
 import TeamLiveFeed from './TeamLiveFeed'  // 🆕 v1.0: 团队直播小窗
@@ -122,6 +123,7 @@ function GamificationProgressBar() {
 
 // ─── 桌宠快捷开关：放在左侧栏 ───
 function PetSidebarToggle() {
+  const { t } = useTranslation()
   const [petRunning, setPetRunning] = useState(false)
   useEffect(() => {
     ;(async () => {
@@ -146,7 +148,7 @@ function PetSidebarToggle() {
   return (
     <button
       onClick={toggle}
-      title={petRunning ? '关闭 Lumina Virtual Pet' : '开启 Lumina Virtual Pet'}
+      title={petRunning ? t('sidebar.pet_toggle_off') : t('sidebar.pet_toggle_on')}
       style={{
         display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px',
         margin: '0 6px 4px', background: 'var(--surface-100)',
@@ -157,7 +159,7 @@ function PetSidebarToggle() {
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>🐾 Lumina Virtual Pet</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 10, color: petRunning ? '#10b981' : 'var(--text-disabled, #9ca3af)' }}>
-            {petRunning ? '运行中' : '已关闭'}
+            {petRunning ? t('sidebar.pet_running') : t('sidebar.pet_off')}
           </span>
           <div style={{
             width: 32, height: 18, borderRadius: 9,
@@ -179,19 +181,28 @@ function PetSidebarToggle() {
 // ─── 导航项类型 ───
 
 interface NavItem {
-  id: PanelType; label: string; Icon: React.FC<{ size?: number }>
+  id: PanelType; labelKey: string; Icon: React.FC<{ size?: number }>
 }
 
-const sections: { label: string; items: NavItem[] }[] = [
-  { label: '主要', items: [
-    { id: 'chat', label: '聊天', Icon: IconMessageCircle },
-    { id: 'mail', label: '邮件', Icon: IconMail },
-    { id: 'news', label: '📡 新闻', Icon: IconStar },
-    { id: 'profile', label: '个性化', Icon: IconUser },
-    { id: 'deepresearch', label: '深度调研', Icon: IconGlobe },
-    { id: 'skillmarket', label: '技能商店', Icon: IconZap },
-    { id: 'sandbox', label: '沙箱玻璃房', Icon: IconShield },  // I5
+const sections: { labelKey: string; items: NavItem[] }[] = [
+  { labelKey: 'sidebar.section_main', items: [
+    { id: 'chat', labelKey: 'sidebar.nav_chat', Icon: IconMessageCircle },
+    { id: 'mail', labelKey: 'sidebar.nav_mail', Icon: IconMail },
+    { id: 'news', labelKey: 'sidebar.nav_news', Icon: IconStar },
+    { id: 'profile', labelKey: 'sidebar.nav_profile', Icon: IconUser },
+    { id: 'deepresearch', labelKey: 'sidebar.nav_deepresearch', Icon: IconGlobe },
+    { id: 'skillmarket', labelKey: 'sidebar.nav_skillmarket', Icon: IconZap },
+    { id: 'sandbox', labelKey: 'sidebar.nav_sandbox', Icon: IconShield },  // I5
 
+  ]},
+  // 🔧 2026-10-15：设置 / 更多设置提到侧栏常驻。
+  //   此前它们只存在于底部**可折叠**的用户面板里（SidebarUserPanel，默认收起），
+  //   于是「改主题」「换模型」这类高频操作要先点开用户头像、展开菜单、再点一项 ——
+  //   三步才能到。设置类入口藏在折叠区里，是「功能存在但等于不存在」的典型形态。
+  //   现在与聊天/邮件同级常驻可见，用户一眼就知道去哪配置。
+  { labelKey: 'sidebar.section_settings', items: [
+    { id: 'settings', labelKey: 'sidebar.nav_settings', Icon: IconSettings },
+    { id: 'more', labelKey: 'sidebar.nav_more', Icon: IconSliders },
   ]},
 ]
 
@@ -201,6 +212,7 @@ const sections: { label: string; items: NavItem[] }[] = [
 // 主组件
 // ═══════════════════════════════════════════════════════════
 export default function Sidebar() {
+  const { t } = useTranslation()
   const activePanel = useStore((s) => s.activePanel)
   const setActivePanel = useStore((s) => s.setActivePanel)
   const [mailUnread, setMailUnread] = useState(0)
@@ -233,10 +245,18 @@ export default function Sidebar() {
       <div className="sidebar-scroll">
       {/* 🆕 团队状态已移至 TopBar 顶部栏显示 */}
 
-      {sections.map((section) => (
-        <div key={section.label} className="sidebar-section">
-          {section.items.map((item) => {
-            if (minimal && item.id !== 'chat' && item.id !== 'settings') {return null}
+      {sections.map((section) => {
+        // 精简模式（mode.minimal）：只保留「聊天 / 设置 / 更多设置」。
+        // 这三项是产品的最小可用闭环 —— 能对话、能配置、能进高级设置。
+        // 其余（邮件/新闻/技能商店…）在精简模式下隐藏。
+        const visibleItems = section.items.filter(
+          (item) => !minimal || item.id === 'chat' || item.id === 'settings' || item.id === 'more',
+        )
+        // 整个分组被清空时不要留一个空的「设置」标题，否则侧栏会出现只有标题没有内容的怪区块
+        if (visibleItems.length === 0) {return null}
+        return (
+        <div key={section.labelKey} className="sidebar-section">
+          {visibleItems.map((item) => {
             const isActive = activePanel === item.id
             return (
               <button key={item.id}
@@ -244,7 +264,7 @@ export default function Sidebar() {
                 onClick={() => setActivePanel(item.id)}
                 style={{ position: 'relative' }}>
                 <item.Icon size={18} />
-                {!compact && <span>{item.label}</span>}
+                {!compact && <span>{t(item.labelKey)}</span>}
                 {/* 未读邮件角标 */}
                 {item.id === 'mail' && mailUnread > 0 && (
                   <span style={{
@@ -270,18 +290,19 @@ export default function Sidebar() {
             )
           })}
         </div>
-      ))}
+        )
+      })}
 
       {/* 🐱 桌宠快捷开关（左侧栏） */}
       <PetSidebarToggle />
       {/* I7 精简模式：唯一露出的「一键办事」入口 */}
       {minimal && !compact && (
-        <button onClick={organizeDownloads} title="让她安全地帮你整理下载文件夹（走审批）"
+        <button onClick={organizeDownloads} title={t('sidebar.organize_downloads_title')}
           style={{
             margin: '6px 8px', padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
             border: '1px solid var(--border-light)', background: 'var(--surface-1)',
             fontSize: 12, color: 'var(--text-primary)',
-          }}>整理下载文件夹</button>
+          }}>{t('sidebar.organize_downloads')}</button>
       )}
 
         {/* spacer pushes everything below to the bottom */}

@@ -14,8 +14,10 @@ i18n
       'en-US': { translation: enUS },
     },
     fallbackLng: 'zh-CN',
+    // 🌐 默认语言固定为简体中文：只读取用户显式选择（localStorage），
+    //    不再跟随 navigator.language，避免英文系统用户首次启动时界面变成英文。
     detection: {
-      order: ['localStorage', 'navigator'],
+      order: ['localStorage'],
       caches: ['localStorage'],
       lookupLocalStorage: 'lumina_lang',
     },

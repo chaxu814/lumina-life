@@ -11,10 +11,12 @@
 // ============================================================
 
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import { showToast } from './Toast'
 
 export default function SidebarUserPanel() {
+  const { t } = useTranslation()
   const profile = useStore(s => s.profile)
   const theme = useStore(s => s.theme)
   const setTheme = useStore(s => s.setTheme)
@@ -22,25 +24,26 @@ export default function SidebarUserPanel() {
 
   const [expanded, setExpanded] = useState(false)
 
-  const nickname = profile?.nickname || '用户'
+  const nickname = profile?.nickname || t('userpanel.default_nickname')
   const initial = nickname.trim().charAt(0).toUpperCase() || '?'
 
   const close = () => setExpanded(false)
 
-  const openSettings = () => { setActivePanel('settings'); close() }
-  const openMore = () => { setActivePanel('more'); close() }
-  // 记忆与进化 → 打开设置页的「记忆与进化」分区（不再只是跳到记忆浏览器）
+  // ⚠️ openSettings / openMore 已随「设置 / 更多设置」移至侧栏常驻项而移除。
+  //   这里刻意不保留转发：留一个没人调用的 setter 只会在下次重构时
+  //   被误当成「用户面板也能进设置」，把刚消除的重复入口又加回来。
+  // 记忆与进化 → 打开设置页的「记忆与进化」分区
   const openMemory = () => {
     close()
     window.dispatchEvent(new CustomEvent('lumina:open-settings', { detail: { tab: 'memory' } }))
   }
-  const onFeedback = () => { showToast('意见反馈：请通过 设置 → 意见反馈 提交', 'info'); close() }
+  const onFeedback = () => { showToast(t('userpanel.feedback_toast'), 'info'); close() }
   const onCheckUpdate = async () => {
     try {
       const r = await (window as any).luminaAPI?.updateCheck?.()
-      if (r?.available) { showToast(`🎉 发现新版本 ${r.version}，正在准备更新…`, 'success') }
-      else { showToast('已是最新版本 ✓', 'success') }
-    } catch { showToast('检查更新失败', 'warning') }
+      if (r?.available) { showToast(t('userpanel.update_available', { version: r.version }), 'success') }
+      else { showToast(t('userpanel.update_latest'), 'success') }
+    } catch { showToast(t('userpanel.update_failed'), 'warning') }
     close()
   }
   const onLogout = () => {
@@ -53,15 +56,15 @@ export default function SidebarUserPanel() {
       display: 'inline-flex', borderRadius: 6, overflow: 'hidden',
       border: '1px solid var(--border-light)', fontSize: 11,
     }}>
-      {(['light', 'dark'] as const).map(t => {
-        const active = (t === 'dark' ? theme === 'dark' : theme === 'light')
+      {(['light', 'dark'] as const).map(mode => {
+        const active = (mode === 'dark' ? theme === 'dark' : theme === 'light')
         return (
-          <button key={t} onClick={() => setTheme(t as 'light' | 'dark')} style={{
+          <button key={mode} onClick={() => setTheme(mode as 'light' | 'dark')} style={{
             padding: '3px 10px', border: 'none', cursor: 'pointer',
             background: active ? 'var(--surface-200, rgba(255,255,255,0.10))' : 'transparent',
             color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
             fontWeight: active ? 600 : 400,
-          }}>{t === 'dark' ? '深色' : '浅色'}</button>
+          }}>{mode === 'dark' ? t('userpanel.theme_dark') : t('userpanel.theme_light')}</button>
         )
       })}
     </div>
@@ -106,7 +109,7 @@ export default function SidebarUserPanel() {
         aria-expanded={expanded}
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setExpanded(v => !v) }}
-        title={expanded ? '收起' : '展开'}
+        title={expanded ? t('userpanel.collapse') : t('userpanel.expand')}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '4px 2px', borderRadius: 6, cursor: 'pointer', userSelect: 'none',
@@ -135,20 +138,22 @@ export default function SidebarUserPanel() {
       </div>
 
       {/* 展开：菜单列表（CSS 动画过渡） */}
+      {/* 🔧 2026-10-15：「设置 / 更多设置」已移出本菜单，改为侧栏常驻项（见 Sidebar.tsx）。
+          留在这里会造成同一个入口在侧栏与折叠区各出现一次 —— 用户改完主题再展开用户
+          面板看到另一个「外观」，会怀疑自己没保存成功。设置类入口应当只有一个位置。
+          本菜单只保留「侧栏放不下」的轻量项：快捷切换、反馈与账号操作。 */}
       <div style={{
-        maxHeight: expanded ? 300 : 0,
+        maxHeight: expanded ? 240 : 0,
         opacity: expanded ? 1 : 0,
         overflow: 'hidden',
         transition: 'max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease',
       }}>
         <div style={{ paddingTop: 4 }}>
-          {itemRow('⚙️', '设置', <span>Ctrl+,</span>, openSettings)}
-          {itemRow('⚙️', '更多设置', undefined, openMore)}
-          {itemRow('🎨', '外观', Segmented)}
-          {itemRow('💡', '记忆与进化', undefined, openMemory)}
-          {itemRow('💬', '意见反馈', undefined, onFeedback)}
-          {itemRow('🔄', '检查更新', undefined, onCheckUpdate)}
-          {itemRow('⏏️', '退出登录', undefined, onLogout)}
+          {itemRow('🎨', t('userpanel.appearance'), Segmented)}
+          {itemRow('💡', t('userpanel.memory'), undefined, openMemory)}
+          {itemRow('💬', t('userpanel.feedback'), undefined, onFeedback)}
+          {itemRow('🔄', t('userpanel.check_update'), undefined, onCheckUpdate)}
+          {itemRow('⏏️', t('userpanel.logout'), undefined, onLogout)}
         </div>
       </div>
 

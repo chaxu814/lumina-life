@@ -5,9 +5,19 @@ import SettingsLLM from '../panels/settings/SettingsLLM'
 import SettingsTTS from '../panels/settings/SettingsTTS'
 import SettingsNotifications from '../panels/settings/SettingsNotifications'
 import SettingsAppearance from '../panels/settings/SettingsAppearance'
+import SettingsLanguage from '../panels/settings/SettingsLanguage'
 import SettingsPush from '../panels/settings/SettingsPush'
 import SettingsPet from '../panels/settings/SettingsPet'
 import SettingsMemory from '../panels/settings/SettingsMemory'
+// 🔧 2026-10-15：外观 / 浏览器 从「更多设置」搬到这里。
+//   此前两个弹窗并存导致同一个「外观」有两套完全不同的实现：
+//     · 这里 → SettingsAppearance（浅色/深色/跟随系统 + 简约模式）
+//     · 更多设置 → AppearancePanel（主题卡片 / 导入 / 删除 / 可视化编辑器）
+//   用户在两个弹窗之间来回找同一个功能，是典型的「设置没有单一事实源」。
+//   现在合并到一处：主题切换与简约模式在上，主题卡片与编辑器在下，
+//   两套能力都在「设置 → 外观」里，浏览器同理。
+import AppearancePanel from '../panels/AppearancePanel'
+import BrowserLinksPanel from '../panels/settings/BrowserLinksPanel'
 
 /* ── 侧边栏导航项（label 走 i18n） ── */
 const SIDEBAR_ITEMS = [
@@ -15,8 +25,10 @@ const SIDEBAR_ITEMS = [
   { id: 'tts', icon: '🔊', labelKey: 'settings.nav_tts' },
   { id: 'notifications', icon: '🔔', labelKey: 'settings.nav_notifications' },
   { id: 'appearance', icon: '🎨', labelKey: 'settings.nav_appearance' },
+  { id: 'language', icon: '🌐', labelKey: 'settings.nav_language' },
   { id: 'push', icon: '📱', labelKey: 'settings.nav_push' },
   { id: 'channels', icon: '🔗', labelKey: 'settings.nav_channels' },
+  { id: 'browser', icon: '🌐', labelKey: 'settings.nav_browser' },
   { id: 'security', icon: '🛡️', labelKey: 'settings.nav_security' },
   { id: 'tasks', icon: '⏰', labelKey: 'settings.nav_tasks' },
   { id: 'pet', icon: '🐱', labelKey: 'settings.nav_pet' },
@@ -226,8 +238,18 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
             {activeSection === 'llm' && <SettingsLLM />}
             {activeSection === 'tts' && <SettingsTTS />}
             {activeSection === 'notifications' && <SettingsNotifications />}
-            {activeSection === 'appearance' && <SettingsAppearance />}
+            {activeSection === 'browser' && <BrowserLinksPanel />}
+            {/* 外观 = 主题切换 + 简约模式 + 主题卡片/导入/编辑器（两套能力合并到一处） */}
+            {activeSection === 'appearance' && (
+              <>
+                <SettingsAppearance />
+                <div style={{ marginTop: 20 }}>
+                  <AppearancePanel />
+                </div>
+              </>
+            )}
             {activeSection === 'push' && <SettingsPush />}
+            {activeSection === 'language' && <SettingsLanguage />}
             {activeSection === 'pet' && <SettingsPet />}
             {activeSection === 'memory' && <SettingsMemory onClose={onClose} />}
             {(activeSection === 'channels' || activeSection === 'security' || activeSection === 'tasks') && (

@@ -10,7 +10,7 @@ import {
 } from '../services/agentEmotion'
 
 export default function TopBar() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const conversations = useStore((s) => s.conversations)
   const activeConversationId = useStore((s) => s.activeConversationId)
   const activePanel = useStore((s) => s.activePanel)
@@ -157,19 +157,7 @@ export default function TopBar() {
       <div className="topbar-left">
         <span className="topbar-logo brand-logo"><span>✦</span> Lumina Life</span>
         <span className="topbar-version">1.0</span>
-        {/* 语言切换 */}
-        <button onClick={() => {
-          const next = i18n.language?.startsWith('zh') ? 'en-US' : 'zh-CN'
-          i18n.changeLanguage(next)
-        }} title={i18n.language?.startsWith('zh') ? t('topbar.lang_switch_to_en') : t('topbar.lang_switch_to_zh')}
-          aria-label={i18n.language?.startsWith('zh') ? t('topbar.lang_switch_to_en') : t('topbar.lang_switch_to_zh')}
-          style={{
-            background: 'none', border: '1px solid var(--border-light)', borderRadius: 4,
-            cursor: 'pointer', fontSize: 10, fontWeight: 600, padding: '1px 6px',
-            color: 'var(--text-secondary)', marginLeft: 6,
-          }}>
-          {i18n.language?.startsWith('zh') ? 'EN' : '中'}
-        </button>
+        {/* 语言切换已移至「设置 → 语言」，顶部不再显示 EN/中 徽章 */}
       </div>
 
       <div className="topbar-center">
