@@ -111,4 +111,4 @@ npm run dev
 ## 常见问题
 
 - 原生模块编译失败 → 见 [TROUBLESHOOTING.md §16](TROUBLESHOOTING.md)。
-- 各平台 Computer Use 实际能力差异 → 见 [internal/cross-platform-status.md](internal/cross-platform-status.md)。
+- 各平台 Computer Use 实际能力差异 → 见 [cross-platform-status.md](cross-platform-status.md)。

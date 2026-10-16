@@ -205,9 +205,18 @@ docs/_ref/
 /*交付说明*.md
 /*交付报告*.md
 # docs/ 下的内部评测 / 竞品调研报告（大写 Lumina- 前缀；小写的产品文档不在此列）
+#
+# 🔧 2026-10-15：原来只有 .md 一条，于是 `docs/Lumina-发布前全方位测评-20261013.html`
+#   被跟踪进了仓库（README 还指向它）。同一个前缀必须把所有导出格式都盖住，
+#   否则「忽略规则」只挡住了一种扩展名，等于没挡。
 /docs/Lumina-*.md
+/docs/Lumina-*.html
+/docs/Lumina-*.docx
 /docs/competitor-research-*.md
+/docs/competitor-research-*.html
 /docs/发布修复交付报告-*.md
+/docs/发布修复交付报告-*.html
+/docs/发布修复交付报告-*.docx
 # 内部历史日志归档目录（自评/修复记录，不面向用户、不进公开仓库）
 /docs/internal/
 # 本地归档（评测报告 / 内部交付说明 / 测试备份等已忽略文件的归集地；整目录不进仓库）

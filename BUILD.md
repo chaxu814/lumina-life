@@ -4,8 +4,8 @@
 
 | 组件 | 版本要求 | 说明 |
 |------|---------|------|
-| **Node.js** | ≥ 18.x | 运行时（已安装到 `C:\Program Files\nodejs\`） |
-| **npm** | ≥ 9.x | 随 Node.js 自带 |
+| **Node.js** | ≥ 20.x | 运行时（`package.json` 的 `engines.node` 要求 `>=20.0.0`，CI 测 20 / 22） |
+| **npm** | ≥ 10.x | 随 Node.js 自带 |
 | **Git** | 可选 | 版本管理 |
 
 ## ⚡ 快速开始

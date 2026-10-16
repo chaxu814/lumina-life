@@ -272,6 +272,9 @@ nomic-embed-text 或外部 embedding 服务）为**可选且默认关闭**。
 - [custom-agent-guide.md](custom-agent-guide.md) —— 自定义 Agent
 - [skill-tutorial.md](skill-tutorial.md) —— 技能开发
 - [BENCHMARKS.md](BENCHMARKS.md) —— 质量基准与自测口径（三道门禁、代码与测试规模、核心机制自核）
-- [archive/Lumina-发布前评测与复评-20261003.md](archive/Lumina-发布前评测与复评-20261003.md) —— 发布前审计发现、修复结果与复评评分
 - [ROADMAP.md](ROADMAP.md) —— 路线图与已知缺口认领
 - [gaming-overview.md](gaming-overview.md) —— 游戏陪伴
+
+> ℹ️ 发布前的历史审计报告收在本地 `archive/`（不随仓库分发），
+> 因此这里不再给出指向它的链接 —— 一个在 GitHub 上点不开的链接，
+> 比没有链接更伤信任。当前口径以本文件的「已知技术债」表与 [BENCHMARKS.md](BENCHMARKS.md) 为准。

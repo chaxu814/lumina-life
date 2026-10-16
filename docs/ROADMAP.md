@@ -1,7 +1,7 @@
 # Lumina Life · Roadmap
 
 > 这份路线图的目标是**诚实**：写清楚现在做不到什么、下一步打算做什么。
-> 欢迎认领其中任何一项，或提 PR 把你自己的方向加进来（见 [../CONTRIBUTING.md](../CONTRIBUTING.md)）。
+> 欢迎认领其中任何一项，或提 PR 把你自己的方向加进来（见 [CONTRIBUTING.md](https://github.com/chaxu814/lumina-life/blob/master/CONTRIBUTING.md)）。
 
 **当前版本**：v0.1.0-preview ｜ **实测验证平台**：Windows 10/11 x64
 

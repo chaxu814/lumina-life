@@ -1,0 +1,38 @@
+# CODEOWNERS — 代码归属
+# 语法参考：https://docs.github.com/zh/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# 说明：本文件让 GitHub 在 PR 上自动请求指定维护者审查。
+# 当前项目巴士系数为 1，任何路径被改动都需要 @chaxu814 过目。
+# 当出现第二位维护者时，请把对应目录的归属改到该成员名下。
+
+# ── 默认：全部文件 ──
+*                               @chaxu814
+
+# ── 核心引擎（改动影响面最大，必须主维护者审查）──
+/electron/agentRunner.ts        @chaxu814
+/electron/delegationManager.ts  @chaxu814
+/electron/rolePolicy.ts         @chaxu814
+/electron/core/                 @chaxu814
+/electron/orchestration/        @chaxu814
+/electron/memory/               @chaxu814
+/electron/tools/                @chaxu814
+
+# ── 安全相关（改动需格外谨慎）──
+/SECURITY.md                    @chaxu814
+/electron/security/             @chaxu814
+/electron/permission/           @chaxu814
+
+# ── 构建、CI 与发布 ──
+/.github/                       @chaxu814
+/package.json                   @chaxu814
+/electron.vite.config.ts        @chaxu814
+
+# ── 许可证与法律文本（任何改动都必须主维护者确认）──
+/LICENSE                        @chaxu814
+/LICENSE-APACHE                 @chaxu814
+/CLA.md                         @chaxu814
+/THIRD_PARTY_NOTICES.md         @chaxu814
+
+# ── 文档 ──
+/docs/                          @chaxu814
+/README.md                      @chaxu814

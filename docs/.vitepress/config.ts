@@ -4,9 +4,10 @@ export default defineConfig({
   title: 'LuminaLife',
   description: '基于 Electron + React 的 AI Agent 多模态桌宠',
   lang: 'zh-CN',
-  base: '/LuminaLife/',
-  // internal/ 下是历史自评/修复日志，不编入 VitePress 路由
-  srcExclude: ['internal/**', '**/_*.md'],
+  base: '/lumina-life/',
+  // internal/ 下是历史自评/修复日志，archive/ 下是更早的历史报告，两者都不编入
+  // VitePress 路由（archive/ 未随仓库分发，若纳入会导致本地构建出现死链而失败）。
+  srcExclude: ['internal/**', 'archive/**', '**/_*.md'],
   themeConfig: {
     logo: '/icon.png',
     siteTitle: 'LuminaLife',
@@ -17,7 +18,7 @@ export default defineConfig({
       { text: '故障排除', link: '/TROUBLESHOOTING' },
       {
         text: 'GitHub',
-        link: 'https://github.com/lumina-life/lumina-life',
+        link: 'https://github.com/chaxu814/lumina-life',
       },
     ],
     sidebar: [
@@ -25,7 +26,7 @@ export default defineConfig({
         text: '快速入门',
         items: [
           { text: '概述', link: '/' },
-          { text: '架构设计', link: '/architecture' },
+          { text: '架构设计', link: '/ARCHITECTURE' },
           { text: '实验功能说明', link: '/features' },
         ],
       },
@@ -45,10 +46,10 @@ export default defineConfig({
       },
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/lumina-life/lumina-life' },
+      { icon: 'github', link: 'https://github.com/chaxu814/lumina-life' },
     ],
     footer: {
-      message: '基于 MIT 协议开源',
+      message: '基于 AGPL-3.0 或 Apache-2.0 双许可开源',
       copyright: `Copyright © ${new Date().getFullYear()} LuminaLife`,
     },
     lastUpdated: false,

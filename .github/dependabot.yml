@@ -1,0 +1,81 @@
+# Dependabot — 依赖自动更新
+# 文档：https://docs.github.com/zh/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# 设计取向（针对本项目实际情况调整）：
+#   1. 本项目含原生模块（better-sqlite3 / sharp / onnxruntime），主版本跳跃极易
+#      造成 Electron ABI 不匹配 —— 因此对这类依赖忽略 major 更新，只收 patch/minor。
+#   2. 单人维护，PR 数量必须克制：npm 每周一次、其余每月一次，且按依赖组聚合。
+#   3. GitHub Actions 单独跟踪（安全更新不应被 npm 的节奏拖慢）。
+
+version: 2
+updates:
+  # ── 主工程 npm 依赖 ──
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    versioning-strategy: increase
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # 把同一生态的零散更新合并成一个 PR，避免 PR 洪水
+      dev-tooling:
+        patterns:
+          - "eslint*"
+          - "@typescript-eslint/*"
+          - "typescript"
+          - "vitest"
+          - "@vitest/*"
+          - "vite"
+          - "unocss"
+          - "@unocss/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+    ignore:
+      # 原生模块 / 运行时核心：major 更新会破坏 Electron ABI 或打包流程
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "better-sqlite3"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sharp"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "onnxruntime-node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@xenova/transformers"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "electron-builder"
+        update-types: ["version-update:semver-major"]
+
+  # ── 文档站（VitePress）依赖 ──
+  - package-ecosystem: npm
+    directory: "/docs"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - docs
+    commit-message:
+      prefix: "chore(docs-deps)"
+
+  # ── GitHub Actions ──
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "chore(ci)"

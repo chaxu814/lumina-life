@@ -151,4 +151,4 @@ Get-Process -Name electron | Select-Object Id, @{N='WS_MB';E={[math]::Round($_.W
 - **macOS：** 鼠标/键盘走 AppleScript(System Events)，单次注入的往返延迟略高于 Windows 的 user32 直调；截屏走 `screencapture`。需在「系统设置 → 隐私与安全性」授予辅助功能 + 屏幕录制权限后上述能力才可用，否则会在日志里看到 `osascript` / `screencapture` 权限错误。
 - **Linux (X11)：** 键鼠走 `xdotool`，截屏走 `scrot/import/gnome-screenshot`，命令经 bash 子进程，延迟与 macOS 同量级。**Wayland 会话下全局键鼠注入被合成器安全模型禁用**，仅截屏（grim）与打开应用可用——这是平台限制，非性能问题。
 - **原生模块内存：** `better-sqlite3` / `onnxruntime-node` / `sharp` 在三平台均以预编译或 NAPI 形式加载，内存开销与平台无关；未装预编译而回退源码编译时，首次启动会有短暂编译期 CPU 尖峰，之后无差异。
-- 各平台 Computer Use 能力的完整矩阵见 [internal/cross-platform-status.md](internal/cross-platform-status.md)，安装与依赖准备见 [INSTALL.md](INSTALL.md)。
+- 各平台 Computer Use 能力的完整矩阵见 [cross-platform-status.md](cross-platform-status.md)，安装与依赖准备见 [INSTALL.md](INSTALL.md)。
