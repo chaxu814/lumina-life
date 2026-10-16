@@ -2,27 +2,36 @@
 // OnboardingWizard.tsx — Lumina Life 首次运行引导向导 (v1.0)
 //
 // 只对第一次运行的新用户展示，完成后写入 firstRun=false
+//
+// 🌐 2026-10-16：语言选择提升为「第一步」。
+//    理由：向导本身有 6 屏文案，如果用户是英文用户，
+//    却要先读完 5 屏中文才知道哪里能改语言 —— 这是最典型的
+//    引导设计失误。先选语言，后面每一屏（以及整个界面）
+//    立刻用所选语言渲染。
+//    全部文案走 i18n（onboarding.* 命名空间），默认简体中文。
 // ============================================================
 
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import type { LLMConfig } from '../stores/appStore'
 import { persistLLMConfig } from '../services/llmPersist'
 
-type StepId = 'welcome' | 'llm' | 'personality' | 'team' | 'done'
+type StepId = 'language' | 'welcome' | 'llm' | 'personality' | 'team' | 'done'
 
 interface StepConfig {
   id: StepId
-  title: string
-  subtitle: string
+  titleKey: string
+  subtitleKey: string
 }
 
 const STEPS: StepConfig[] = [
-  { id: 'welcome',     title: '欢迎来到 Lumina Life 🌸',      subtitle: '你的桌面不再孤单' },
-  { id: 'llm',         title: '连接你的 AI 大脑 🧠',           subtitle: 'Lumina 需要一个大语言模型才能思考' },
-  { id: 'personality', title: '选择 Lumina 的性格 🎭',         subtitle: '你希望她以什么风格陪伴你？' },
-  { id: 'team',        title: 'Lumina 背后的团队 👥',           subtitle: '她不是一个人 —— 还有两位你看不见的同事' },
-  { id: 'done',        title: '一切就绪！✨',                   subtitle: '准备开始你和 Lumina 的故事' },
+  { id: 'language',    titleKey: 'onboarding.step_language_title',    subtitleKey: 'onboarding.step_language_subtitle' },
+  { id: 'welcome',     titleKey: 'onboarding.step_welcome_title',     subtitleKey: 'onboarding.step_welcome_subtitle' },
+  { id: 'llm',         titleKey: 'onboarding.step_llm_title',         subtitleKey: 'onboarding.step_llm_subtitle' },
+  { id: 'personality', titleKey: 'onboarding.step_personality_title', subtitleKey: 'onboarding.step_personality_subtitle' },
+  { id: 'team',        titleKey: 'onboarding.step_team_title',        subtitleKey: 'onboarding.step_team_subtitle' },
+  { id: 'done',        titleKey: 'onboarding.step_done_title',        subtitleKey: 'onboarding.step_done_subtitle' },
 ]
 
 // ─── 团队成员元数据 ──────────────────────────────────────
@@ -44,19 +53,19 @@ const STEPS: StepConfig[] = [
 const TEAM_MEMBERS = [
   {
     id: 'yak',
-    name: 'Yak',
+    nameKey: 'onboarding.agent_yak',
     icon: '🐍',
-    role: '代码工程师',
-    duties: ['写代码', '调试 bug', '重构', '跑测试验证'],
-    note: '可写文件、可跑命令、能提交 git',
+    roleKey: 'onboarding.team_yak_role',
+    dutiesKey: 'onboarding.team_yak_duties',
+    noteKey: 'onboarding.team_yak_note',
   },
   {
     id: 'recha',
-    name: '热茶',
+    nameKey: 'onboarding.agent_recha',
     icon: '🍵',
-    role: '审查员 / 反面论证',
-    duties: ['审阅代码', '挑逻辑漏洞', '风险评估'],
-    note: '只读：不能改文件、不能跑命令、不能提交',
+    roleKey: 'onboarding.team_recha_role',
+    dutiesKey: 'onboarding.team_recha_duties',
+    noteKey: 'onboarding.team_recha_note',
   },
 ]
 
@@ -69,8 +78,8 @@ const PRESET_LLMS = [
     name: 'LM Studio',
     icon: '🖥️',
     logo: 'providers/lmstudio.ico',
-    desc: '本地运行，完全免费，保护隐私',
-    badge: '离线·免费',
+    descKey: 'onboarding.llm_lmstudio_desc',
+    badgeKey: 'onboarding.llm_badge_offline',
     config: { provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: 'local-model' },
   },
   {
@@ -78,8 +87,8 @@ const PRESET_LLMS = [
     name: 'Ollama',
     icon: '🦙',
     logo: 'providers/ollama.svg',
-    desc: '本地运行，完全免费，可「自动检测」已装模型',
-    badge: '离线·免费',
+    descKey: 'onboarding.llm_ollama_desc',
+    badgeKey: 'onboarding.llm_badge_offline',
     config: { provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b' },
   },
   {
@@ -87,8 +96,8 @@ const PRESET_LLMS = [
     name: 'DeepSeek',
     icon: '🌊',
     logo: 'providers/deepseek.svg',
-    desc: '超低价，中文理解能力强，速度快',
-    badge: '云端·超低价',
+    descKey: 'onboarding.llm_deepseek_desc',
+    badgeKey: 'onboarding.llm_badge_cheap',
     config: { provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
     needApiKey: true,
   },
@@ -97,8 +106,8 @@ const PRESET_LLMS = [
     name: '硅基流动',
     icon: '💎',
     logo: 'providers/siliconflow.ico',
-    desc: '多模型聚合平台，送免费额度',
-    badge: '云端·有免费额度',
+    descKey: 'onboarding.llm_siliconflow_desc',
+    badgeKey: 'onboarding.llm_badge_free_tier',
     config: { provider: 'siliconflow', baseUrl: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen2.5-7B-Instruct' },
     needApiKey: true,
   },
@@ -107,8 +116,8 @@ const PRESET_LLMS = [
     name: 'OpenAI',
     icon: '🤖',
     logo: 'providers/openai.svg',
-    desc: 'OpenAI 最强模型，适合所有场景',
-    badge: '云端·最强',
+    descKey: 'onboarding.llm_openai_desc',
+    badgeKey: 'onboarding.llm_badge_strongest',
     config: { provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
     needApiKey: true,
   },
@@ -116,8 +125,8 @@ const PRESET_LLMS = [
     id: 'custom',
     name: '自定义',
     icon: '⚙️',
-    desc: '自填服务地址、模型名（兼容 OpenAI /chat/completions 协议）',
-    badge: '自定义',
+    descKey: 'onboarding.llm_custom_desc',
+    badgeKey: 'onboarding.llm_badge_custom',
     config: { provider: 'custom', baseUrl: '', model: '' },
     needApiKey: true,
   },
@@ -152,60 +161,125 @@ function PresetLogo({ logo, icon, size = 26 }: { logo?: string; icon: string; si
 
 // ─── 性格选项 ──────────────────────────────────────────
 const PERSONALITIES = [
-  {
-    id: 'default',
-    name: '🐱 活泼可爱',
-    desc: '温暖、活泼、偶尔犯迷糊的猫娘——默认的 Lumina',
-    systemPrompt: '你是 Lumina，温暖可爱、偶尔迷糊的陪伴型 AI 猫娘。活泼但不幼稚，温暖但不啰嗦。',
-  },
-  {
-    id: 'professional',
-    name: '💼 干练高效',
-    desc: '专业、高效、直奔主题的工作助手',
-    systemPrompt: '你是 Lumina，专业高效的 AI 工作助手。语言简洁直接，注重效率，少闲聊多做事。',
-  },
-  {
-    id: 'casual',
-    name: '☕ 温暖随和',
-    desc: '像老朋友一样随和亲切，适合日常闲聊放松',
-    systemPrompt: '你是 Lumina，温暖随和的聊天伙伴。像朋友一样自然交流，不给压力。',
-  },
-  {
-    id: 'creative',
-    name: '🎨 创意发散',
-    desc: '脑洞大开，适合头脑风暴和创意写作',
-    systemPrompt: '你是 Lumina，发散思维的创意助手。鼓励非常规思路，善于联想和类比。',
-  },
+  { id: 'default',      emoji: '🐱', nameKey: 'onboarding.personality_default_name',      descKey: 'onboarding.personality_default_desc',      spKey: 'onboarding.personality_default_sp' },
+  { id: 'professional', emoji: '💼', nameKey: 'onboarding.personality_professional_name', descKey: 'onboarding.personality_professional_desc', spKey: 'onboarding.personality_professional_sp' },
+  { id: 'casual',       emoji: '☕', nameKey: 'onboarding.personality_casual_name',       descKey: 'onboarding.personality_casual_desc',       spKey: 'onboarding.personality_casual_sp' },
+  { id: 'creative',     emoji: '🎨', nameKey: 'onboarding.personality_creative_name',     descKey: 'onboarding.personality_creative_desc',     spKey: 'onboarding.personality_creative_sp' },
 ]
 
 // ═══════════════════════════════════════════════════════════
 // 步骤组件
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * 🌐 第 1 步：语言选择
+ *
+ * 卡片式双选（CN / US），与「设置 → 语言」保持同一套视觉语言，
+ * 但这里必须**中英双语同时标注**：此刻用户还没选语言，
+ * 用单语写等于用他可能看不懂的语言去问他「你看得懂哪种语言」。
+ */
+function LanguageStep({ onNext }: { onNext: () => void }) {
+  const { t, i18n } = useTranslation()
+  const current = (i18n.language || 'zh-CN').startsWith('zh') ? 'zh-CN' : 'en-US'
+
+  const options = [
+    {
+      id: 'zh-CN' as const,
+      code: 'CN',
+      nameKey: 'onboarding.lang_zh_name',
+      subKey: 'onboarding.lang_zh_sub',
+      descKey: 'onboarding.lang_zh_desc',
+    },
+    {
+      id: 'en-US' as const,
+      code: 'US',
+      nameKey: 'onboarding.lang_en_name',
+      subKey: 'onboarding.lang_en_sub',
+      descKey: 'onboarding.lang_en_desc',
+    },
+  ]
+
+  return (
+    <div style={{ padding: '16px 12px' }}>
+      <div style={{ display: 'flex', gap: 10 }}>
+        {options.map(opt => {
+          const active = current === opt.id
+          return (
+            <button
+              key={opt.id}
+              onClick={() => i18n.changeLanguage(opt.id)}
+              aria-pressed={active}
+              style={{
+                flex: 1, padding: '16px 10px', borderRadius: 10, cursor: 'pointer',
+                border: `2px solid ${active ? 'var(--accent-500)' : 'var(--border-light)'}`,
+                background: active ? 'var(--accent-50)' : 'var(--surface-0)',
+                transition: 'all 0.2s', textAlign: 'center', fontFamily: 'inherit',
+              }}
+            >
+              <div style={{
+                fontSize: 22, fontWeight: 800, letterSpacing: 1, lineHeight: 1.2,
+                color: active ? 'var(--accent-600)' : 'var(--text-tertiary)',
+              }}>{opt.code}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>
+                {t(opt.nameKey)}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
+                {t(opt.subKey)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>
+                {t(opt.descKey)}
+              </div>
+              {active && (
+                <div style={{ marginTop: 8, fontSize: 10, fontWeight: 600, color: 'var(--accent-600)' }}>
+                  {t('onboarding.lang_active')}
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{
+        marginTop: 14, padding: 10, borderRadius: 8,
+        background: 'var(--accent-50)', border: '1px solid var(--accent-100)',
+        fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.6,
+      }}>
+        {t('onboarding.lang_note')}
+      </div>
+
+      <button onClick={onNext} className="onboarding-btn-primary" style={{ width: '100%', marginTop: 16 }}>
+        {t('onboarding.continue')} →
+      </button>
+    </div>
+  )
+}
+
 function WelcomeStep({ onNext }: { onNext: () => void }) {
+  const { t } = useTranslation()
   return (
     <div style={{ textAlign: 'center', padding: '24px 16px' }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🌸</div>
       <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
-        欢迎来到 Lumina Life
+        {t('onboarding.welcome_heading')}
       </h2>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 340, margin: '0 auto 20px' }}>
-        我是 <strong>Lumina 🐱</strong>，你的 AI 桌面伙伴。<br />
-        这是我的队友 <strong>热茶 🍵</strong> 和 <strong>Yak 📊</strong>。<br /><br />
-        我们会一起陪你聊天、帮你做事、记着你的事。<br />
-        先花 <strong>30 秒</strong>设置一下吧！
+        {t('onboarding.welcome_line1_pre')}<strong>{t('onboarding.agent_lumina')} 🐱</strong>{t('onboarding.welcome_line1_post')}<br />
+        {t('onboarding.welcome_line2_pre')}<strong>{t('onboarding.agent_recha')} 🍵</strong>{t('onboarding.welcome_line2_mid')}<strong>{t('onboarding.agent_yak')} 📊</strong>{t('onboarding.welcome_line2_post')}<br /><br />
+        {t('onboarding.welcome_line3')}<br />
+        {t('onboarding.welcome_line4_pre')}<strong>{t('onboarding.welcome_line4_strong')}</strong>{t('onboarding.welcome_line4_post')}
       </p>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8, fontSize: 28 }}>
         <span>🐱</span><span>🍵</span><span>📊</span>
       </div>
       <button onClick={onNext} className="onboarding-btn-primary">
-        开始设置 →
+        {t('onboarding.welcome_cta')}
       </button>
     </div>
   )
 }
 
 function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () => void; onBack: () => void }) {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<string>('lmstudio')
   const [apiKey, setApiKey] = useState('')
   const [customBaseUrl, setCustomBaseUrl] = useState('')
@@ -239,7 +313,7 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
         const trimmedUrl = customBaseUrl.trim()
         const trimmedModel = customModel.trim()
         if (!trimmedUrl || !trimmedModel) {
-          setDetectMsg('⚠️ 请填写「服务地址」和「模型名」后再继续。')
+          setDetectMsg(t('onboarding.llm_custom_need_fields'))
           return
         }
         baseUrl = trimmedUrl
@@ -257,12 +331,12 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
       const r = await window.luminaAPI?.providerDiscoverLocal?.()
       if (r?.found?.length) {
         setFound(r.found)
-        setDetectMsg('检测到本地模型，点右侧「使用」即可（无需 Key）。')
+        setDetectMsg(t('onboarding.llm_detect_found'))
       } else {
-        setDetectMsg('暂未检测到本地模型。可用上面的「免费在线」，或先安装 Ollama 后重新检测。')
+        setDetectMsg(t('onboarding.llm_detect_none'))
       }
     } catch {
-      setDetectMsg('检测失败，可直接选择「免费在线」继续。')
+      setDetectMsg(t('onboarding.llm_detect_failed'))
     } finally { setDetecting(false) }
   }
 
@@ -282,11 +356,11 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
       })
       if (!saved.ok) {
         // 落盘失败必须拦下来告知，否则用户会带着「假成功」走完引导
-        setDetectMsg('⚠️ 接入成功但保存失败：' + saved.error + '（重启后会失效）')
+        setDetectMsg(t('onboarding.llm_save_failed', { error: saved.error }))
         return
       }
       onNext()
-    } else { setDetectMsg('接入失败：' + (r?.error || '未知错误')) }
+    } else { setDetectMsg(t('onboarding.llm_apply_failed', { error: r?.error || t('common.unknown_error') })) }
   }
 
   return (
@@ -304,13 +378,13 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
             <PresetLogo logo={(p as any).logo} icon={p.icon} />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.desc}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t(p.descKey)}</div>
             </div>
             <span style={{
               fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
               background: 'var(--accent-100)', color: 'var(--accent-600)',
               whiteSpace: 'nowrap',
-            }}>{p.badge}</span>
+            }}>{t(p.badgeKey)}</span>
           </div>
         ))}
       </div>
@@ -321,8 +395,9 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
           width: '100%', padding: '8px 12px', borderRadius: 8, marginBottom: 8,
           border: '1.5px dashed var(--accent-500)', background: 'var(--accent-50)',
           color: 'var(--accent-600)', fontSize: 12, fontWeight: 600, cursor: detecting ? 'wait' : 'pointer',
+          fontFamily: 'inherit',
         }}>
-        {detecting ? '⏳ 正在检测 Ollama / LM Studio…' : '🔎 自动检测本地模型（已安装就一键接入）'}
+        {detecting ? t('onboarding.llm_detecting') : t('onboarding.llm_detect_btn')}
       </button>
       {detectMsg && (
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.6 }}>
@@ -332,10 +407,10 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
               {found.map((f) => (
                 <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ flex: 1, fontSize: 11, color: 'var(--text-primary)' }}>
-                    {f.label} · 推荐 {f.recommendedModel}（{f.models.length} 个）
+                    {t('onboarding.llm_found_item', { label: f.label, model: f.recommendedModel, count: f.models.length })}
                   </span>
-                  <button onClick={() => useFound(f)} style={{ padding: '2px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer' }}>
-                    使用
+                  <button onClick={() => useFound(f)} style={{ padding: '2px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {t('onboarding.llm_use')}
                   </button>
                 </div>
               ))}
@@ -347,7 +422,7 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
       {selected === 'custom' && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
-            服务地址（Base URL）
+            {t('onboarding.llm_base_url_label')}
           </div>
           <input value={customBaseUrl} onChange={e => setCustomBaseUrl(e.target.value)}
             placeholder="https://your-endpoint.com/v1"
@@ -356,7 +431,7 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
               fontSize: 13, outline: 'none', background: 'var(--surface-0)',
             }} />
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, marginTop: 8 }}>
-            模型名
+            {t('onboarding.llm_model_label')}
           </div>
           <input value={customModel} onChange={e => setCustomModel(e.target.value)}
             placeholder="your-model-name"
@@ -365,7 +440,7 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
               fontSize: 13, outline: 'none', background: 'var(--surface-0)',
             }} />
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.5 }}>
-            需兼容 OpenAI /chat/completions 协议。填写后可在设置页继续微调。
+            {t('onboarding.llm_custom_hint')}
           </div>
         </div>
       )}
@@ -373,10 +448,10 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
       {PRESET_LLMS.find(p => p.id === selected)?.needApiKey && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
-            输入 API Key（可在设置页面随时修改）
+            {t('onboarding.llm_api_key_label')}
           </div>
           <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-            placeholder={selected === 'custom' ? '可留空（部分自建端点无需 Key）' : 'sk-...'}
+            placeholder={selected === 'custom' ? t('onboarding.llm_api_key_placeholder_custom') : 'sk-...'}
             style={{
               width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-medium)',
               fontSize: 13, outline: 'none', background: 'var(--surface-0)',
@@ -385,10 +460,10 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-        <button onClick={onBack} className="onboarding-btn-secondary">← 上一步</button>
-        <button onClick={onSkip} className="onboarding-btn-secondary">跳过</button>
+        <button onClick={onBack} className="onboarding-btn-secondary">{t('onboarding.back')}</button>
+        <button onClick={onSkip} className="onboarding-btn-secondary">{t('onboarding.skip_step')}</button>
         <button onClick={handleConfirm} className="onboarding-btn-primary" style={{ flex: 1 }}>
-          {PRESET_LLMS.find(p => p.id === selected)?.needApiKey ? '确认并继续' : '免费开始（无需 Key）'}
+          {PRESET_LLMS.find(p => p.id === selected)?.needApiKey ? t('onboarding.confirm_continue') : t('onboarding.llm_start_free')}
         </button>
       </div>
     </div>
@@ -396,13 +471,14 @@ function LLMStep({ onNext, onSkip, onBack }: { onNext: () => void; onSkip: () =>
 }
 
 function PersonalityStep({ onNext }: { onNext: () => void }) {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<string>('default')
   const setAgentConfig = useStore((s) => s.setAgentConfig)
 
   const handleConfirm = () => {
     const p = PERSONALITIES.find(pp => pp.id === selected)
     if (p) {
-      setAgentConfig({ systemPrompt: p.systemPrompt, customPersonas: [] })
+      setAgentConfig({ systemPrompt: t(p.spKey), customPersonas: [] })
     }
     onNext()
   }
@@ -418,20 +494,21 @@ function PersonalityStep({ onNext }: { onNext: () => void }) {
               background: selected === p.id ? 'var(--accent-50)' : 'var(--surface-0)',
               textAlign: 'center', transition: 'all 0.15s',
             }}>
-            <div style={{ fontSize: 28, marginBottom: 4 }}>{p.name.split(' ')[0]}</div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{p.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{p.desc}</div>
+            <div style={{ fontSize: 28, marginBottom: 4 }}>{p.emoji}</div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t(p.nameKey)}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{t(p.descKey)}</div>
           </div>
         ))}
       </div>
       <button onClick={handleConfirm} className="onboarding-btn-primary" style={{ width: '100%' }}>
-        ✨ 开始使用！
+        {t('onboarding.personality_cta')}
       </button>
     </div>
   )
 }
 
 function TeamStep({ onNext }: { onNext: () => void }) {
+  const { t } = useTranslation()
   const llmConfig = useStore((s) => s.llmConfig)
   // 默认全开：让成员跟随主模型。这样开箱即用时团队就是活的。
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
@@ -469,14 +546,14 @@ function TeamStep({ onNext }: { onNext: () => void }) {
           timeout: 600,
         })
         if (res && res.success === false) {
-          results.push(`${m.name}：${res.error || '未知错误'}`)
+          results.push(`${t(m.nameKey)}：${res.error || t('common.unknown_error')}`)
         }
       }
       setNotice(results.length > 0
-        ? `⚠️ 部分成员未能配置：${results.join('；')}。你可以在设置 → LLM 模型配置里单独调整。`
-        : `✅ 团队已就绪，${targets.length} 位成员跟随主模型（${llmConfig.model}）`)
+        ? t('onboarding.team_notice_partial', { list: results.join('；') })
+        : t('onboarding.team_notice_ok', { count: targets.length, model: llmConfig.model }))
     } catch (e: any) {
-      setNotice(`⚠️ 配置未保存：${e?.message || e}。不影响使用，随时可在设置里补。`)
+      setNotice(t('onboarding.team_notice_error', { error: e?.message || e }))
     } finally {
       setBusy(false)
     }
@@ -489,8 +566,7 @@ function TeamStep({ onNext }: { onNext: () => void }) {
         fontSize: 12, lineHeight: 1.7, color: 'var(--text-secondary)',
         background: 'var(--surface-1)', borderRadius: 8, padding: '10px 12px', marginBottom: 12,
       }}>
-        你只会跟 <b>Lumina 🐱</b> 说话。她负责判断任务该谁做、派活、然后用人话把结果给你。
-        下面这两位<b>不会直接跟你对话</b>，但你能在桌宠上看到他们干活时的状态。
+        {t('onboarding.team_intro_pre')}<b>{t('onboarding.agent_lumina')} 🐱</b>{t('onboarding.team_intro_post')}
       </div>
 
       {TEAM_MEMBERS.map(m => (
@@ -505,13 +581,13 @@ function TeamStep({ onNext }: { onNext: () => void }) {
           <div style={{ fontSize: 24, lineHeight: 1.2 }}>{m.icon}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{m.name}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{m.role}</span>
+              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t(m.nameKey)}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{t(m.roleKey)}</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              {m.duties.join(' · ')}
+              {t(m.dutiesKey)}
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>🔒 {m.note}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>🔒 {t(m.noteKey)}</div>
           </div>
           <button
             onClick={() => setEnabled(e => ({ ...e, [m.id]: !e[m.id] }))}
@@ -523,14 +599,13 @@ function TeamStep({ onNext }: { onNext: () => void }) {
               background: enabled[m.id] ? 'var(--accent-500)' : 'var(--surface-1)',
               color: enabled[m.id] ? '#fff' : 'var(--text-secondary)',
             }}>
-            {enabled[m.id] ? '已启用' : '已关闭'}
+            {enabled[m.id] ? t('onboarding.team_on') : t('onboarding.team_off')}
           </button>
         </div>
       ))}
 
       <div style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '8px 0 12px', lineHeight: 1.6 }}>
-        默认使用与你相同的大模型。如果你想让 Yak 用更强的模型、热茶用更稳的，
-        随时可以在 <b>设置 → LLM 模型配置</b> 里分别指定。
+        {t('onboarding.team_footnote')}
       </div>
 
       {notice && (
@@ -544,7 +619,7 @@ function TeamStep({ onNext }: { onNext: () => void }) {
       )}
 
       <button onClick={handleConfirm} disabled={busy} className="onboarding-btn-primary" style={{ width: '100%' }}>
-        {busy ? '正在配置团队…' : '确认并继续'}
+        {busy ? t('onboarding.team_busy') : t('onboarding.confirm_continue')}
       </button>
     </div>
   )
@@ -559,6 +634,7 @@ function hasUsableModel(c: LLMConfig): boolean {
 }
 
 function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => void }) {
+  const { t } = useTranslation()
   const llmConfig = useStore((s) => s.llmConfig)
   const ready = hasUsableModel(llmConfig)
 
@@ -576,14 +652,14 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
     return (
       <div style={{ textAlign: 'center', padding: '24px 16px' }}>
         <div style={{ fontSize: 48, marginBottom: 10 }}>🤔</div>
-        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>还差一步：Lumina 需要一个模型才能思考</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>{t('onboarding.done_need_model_title')}</h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 18 }}>
-          她还没有可以对话的大脑。<br />
-          随便挑一个就行 —— <b>免费在线</b>最快，<b>本地模型</b>不花钱也不外传。
+          {t('onboarding.done_need_model_body_1')}<br />
+          {t('onboarding.done_need_model_body_2_pre')}<b>{t('onboarding.done_need_model_body_2_free')}</b>{t('onboarding.done_need_model_body_2_mid')}<b>{t('onboarding.done_need_model_body_2_local')}</b>{t('onboarding.done_need_model_body_2_post')}
         </p>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 20 }}>
-          <button onClick={onBack} className="onboarding-btn-secondary">← 回去选模型</button>
-          <button onClick={onFinish} className="onboarding-btn-primary">先跳过，稍后再说</button>
+          <button onClick={onBack} className="onboarding-btn-secondary">{t('onboarding.done_back_to_llm')}</button>
+          <button onClick={onFinish} className="onboarding-btn-primary">{t('onboarding.done_skip_later')}</button>
         </div>
       </div>
     )
@@ -592,18 +668,17 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
   return (
     <div style={{ textAlign: 'center', padding: '32px 16px' }}>
       <div style={{ fontSize: 72, marginBottom: 12, animation: 'pulse 2s ease-in-out infinite' }}>🎉</div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>一切准备就绪！</h2>
+      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{t('onboarding.done_ready_title')}</h2>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 24 }}>
-        Lumina 🐱 已经准备好为你工作（{llmConfig.model}），背后的团队也已就位。<br />
-        现在去跟她说第一句话吧！
+        {t('onboarding.done_ready_body_pre')}{llmConfig.model}{t('onboarding.done_ready_body_post')}
       </p>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 20 }}>
-        <span>💡 试试说 "你好"</span>
+        <span>{t('onboarding.done_tip_try')}</span>
         <span>·</span>
-        <span>🔧 随时在设置里改配置</span>
+        <span>{t('onboarding.done_tip_settings')}</span>
       </div>
       <button onClick={onFinish} className="onboarding-btn-primary">
-        🚀 开始和 Lumina 聊天！
+        {t('onboarding.done_cta')}
       </button>
     </div>
   )
@@ -614,6 +689,7 @@ function DoneStep({ onFinish, onBack }: { onFinish: () => void; onBack: () => vo
 // ═══════════════════════════════════════════════════════════
 
 export default function OnboardingWizard() {
+  const { t } = useTranslation()
   const [stepIndex, setStepIndex] = useState(0)
   const firstRun = useStore((s) => s.firstRun)
   const completeOnboarding = useStore((s) => s.completeOnboarding)
@@ -623,7 +699,6 @@ export default function OnboardingWizard() {
 
   const current = STEPS[stepIndex]
   const total = STEPS.length
-  const isLast = stepIndex >= total - 1
 
   const goNext = () => {
     if (stepIndex < total - 1) {
@@ -661,14 +736,14 @@ export default function OnboardingWizard() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{current.title}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{current.subtitle}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{t(current.titleKey)}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{t(current.subtitleKey)}</div>
           </div>
           <button onClick={skipAll} style={{
             fontSize: 12, color: 'var(--text-disabled)', cursor: 'pointer',
             padding: '4px 8px', borderRadius: 6, border: 'none', background: 'transparent',
             fontFamily: 'inherit',
-          }}>跳过引导</button>
+          }}>{t('onboarding.skip')}</button>
         </div>
 
         {/* 进度条 */}
@@ -688,6 +763,7 @@ export default function OnboardingWizard() {
           minHeight: 220,
           animation: 'fadeInUp 0.35s ease',
         }}>
+          {current.id === 'language' && <LanguageStep onNext={goNext} />}
           {current.id === 'welcome' && <WelcomeStep onNext={goNext} />}
           {current.id === 'llm' && (
             <LLMStep
