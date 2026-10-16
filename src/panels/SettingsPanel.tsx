@@ -17,6 +17,7 @@ import HandoverPanel from './features/HandoverPanel'
 import SecurityPanel from './SecurityPanel'
 import TasksPanel from './TasksPanel'
 import ModelPickerModal from './settings/ModelPickerModal'
+import { refreshAgentLlmConfigs } from '../services/llmPersist'
 import SettingsPrivacyFlags from './settings/SettingsPrivacyFlags'
 
 // ⚠️ 这里曾经还有一份 LLM_PROVIDERS + ProviderBtn（已删）。
@@ -924,6 +925,9 @@ export default function SettingsPanel({ embedded, activeTab, onNotice: _onNotice
         return
       }
       // 保存成功后重新加载，确保 UI 与后端一致
+      // 🔧 2026-10-16：同时刷新全局 store —— 团队群聊的就绪判定读的是它，
+      //   只刷本组件的 useState 会导致「保存了但群聊还说未配置」。
+      await refreshAgentLlmConfigs()
       const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
       if (r?.configs) {
         setAgentLlmConfigs(r.configs)

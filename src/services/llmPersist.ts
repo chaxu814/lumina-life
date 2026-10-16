@@ -64,9 +64,34 @@ export async function persistLLMConfig(
       return { ok: false, error: res.error || '保存到配置失败' }
     }
     await (window as any).luminaAPI?.providerSetActive?.(providerId)
+    await refreshAgentLlmConfigs()
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) }
+  }
+}
+
+/**
+ * 保存 LLM 配置后，刷新前端「per-agent 配置」缓存。
+ *
+ * 【为什么必须刷新】
+ * 后端在保存供应商时会顺手把配置同步写进 agent-llm-configs.json
+ * （lumina/yak/recha 三方）。但前端 store 里的 `agentLlmConfigs` 只在
+ * 「团队群聊」首次挂载时加载过一次 —— 保存完不刷新的话，群聊页会继续
+ * 拿**旧端点 + 旧 Key** 去探测，于是界面一直报「未配置 LLM / 鉴权失败」，
+ * 而磁盘上的配置其实已经是对的。
+ *
+ * 用户侧的表现就是最气人的那种：「我明明配好了，它还是不认」。
+ *
+ * 动态 import 而非顶层 import：appStore 是重量级模块，顶层引入会让
+ * 这条纯工具链把整个 store 拖进依赖图（也避免潜在的循环依赖）。
+ */
+export async function refreshAgentLlmConfigs(): Promise<void> {
+  try {
+    const { useStore } = await import('../stores/appStore')
+    await useStore.getState().loadAgentLlmConfigs()
+  } catch {
+    // 刷新失败不影响保存结果：保存本身已经成功，最坏情况是界面晚一步才更新
   }
 }
 

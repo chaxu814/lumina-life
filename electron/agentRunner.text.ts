@@ -62,6 +62,8 @@ export type RunFailureKind =
   | 'tool_permission'
   /** 🔧 2026-10-07 新增：工具执行失败（参数非法 / 目标不可用等） */
   | 'tool_failed'
+  /** 🔧 2026-10-16 新增：服务端没有这个模型（模型名不是服务端的模型 ID） */
+  | 'model_not_found'
   | 'unknown'
 
 const FAILURE_PATTERNS: Array<[RunFailureKind, RegExp, string]> = [
@@ -75,6 +77,20 @@ const FAILURE_PATTERNS: Array<[RunFailureKind, RegExp, string]> = [
     '这次对话的内容超出了模型的上下文容量。建议新开一轮对话，或先让我总结一下再继续。'],
   ['content_filter', /content[\s_-]?filter|content_policy|safety|敏感词|审核不通过/i,
     '请求被模型服务的内容安全策略拦截了，换一种问法通常就能通过。'],
+
+  // 🔧 2026-10-16 新增：模型名对不上。
+  // 【为什么必须单列】LM Studio 在「模型 ID 不存在」时返回的是
+  //   400 + "No models loaded. Please load a model in the developer page…" ——
+  //   这句话把人指向「你还没加载模型」，而真实原因是**名字写错了**：
+  //   用户在 LM Studio 界面看到的是显示名（QwenPaw Flash 4B Q4），
+  //   而 API 要的是模型 ID（qwenpaw-flash-4b@q4_k_m）。
+  //   照 LM Studio 的原文去「加载模型」永远修不好，必须直接点出「用 ID 不要用显示名」。
+  ['model_not_found', /no models? loaded|model[\s\S]{0,60}?(not[\s_-]*found|does not exist|unavailable)|unknown model|invalid model|模型(不存在|未找到|不可用)/i,
+    '模型服务里找不到这个名字的模型。请到「设置 → LLM 模型」核对 Model 一栏，'
+    + '必须填服务端给出的**模型 ID**，而不是界面上显示的友好名称 —— '
+    + '例如 LM Studio 的 ID 形如 `qwenpaw-flash-4b@q4_k_m`（带 @量化后缀），'
+    + '用「QwenPaw Flash 4B Q4」这样的显示名会被拒。'
+    + '最快的办法是在该页点「获取模型列表」，从列表里直接选。'],
   ['network', /econnrefused|enotfound|econnreset|network|fetch failed|getaddrinfo|网络|连接/i,
     '连不上模型服务，请检查网络或代理设置。'],
 

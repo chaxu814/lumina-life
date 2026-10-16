@@ -38,11 +38,27 @@ describe('群聊 LLM 就绪判据', () => {
   })
 
   it('就绪探测只使用 Lumina Team → Lumina 的端点、供应商与 API Key', () => {
-    expect(src).toMatch(/providerProbeLocalConfig\?\.\(\{/)
-    expect(src).toMatch(/baseUrl: readinessConfig\.baseUrl/)
-    expect(src).toMatch(/provider: readinessConfig\.provider/)
-    expect(src).toMatch(/apiKey: readinessConfig\.apiKey/)
+    // 🔧 2026-10-16：探测目标改为「实时读 store，回落到本次渲染快照」。
+    //   原因见下一条用例 —— 旧写法用渲染闭包里的快照，用户改完配置点「重新检测」
+    //   仍按旧值发请求，表现为「配好了却说没配」。
+    expect(src).toMatch(/const probeTarget = \{/)
+    expect(src).toMatch(/baseUrl: fresh\?\.endpoint \|\| readinessConfig\.baseUrl/)
+    expect(src).toMatch(/provider: fresh\?\.provider \|\| readinessConfig\.provider/)
+    expect(src).toMatch(/apiKey: fresh\?\.apiKey \|\| readinessConfig\.apiKey/)
+    expect(src).toMatch(/providerProbeLocalConfig\?\.\(probeTarget\)/)
     expect(src).not.toMatch(/providerDiscoverLocal\?\.\(\{ baseUrl: llmConfig\.baseUrl \}\)/)
+  })
+
+  it('探测目标实时读 store，不缓存渲染闭包里的旧配置', () => {
+    // 用户在设置里改好端点/Key → 回到群聊点「重新检测」必须生效。
+    expect(src).toMatch(/useStore\.getState\(\)\.agentLlmConfigs\?\.lumina/)
+  })
+
+  it('保存配置后前端缓存会刷新（窗口重新聚焦时重拉 per-agent 配置）', () => {
+    // 群聊就绪判定完全依赖 agentLlmConfigs，而它只在挂载时加载过一次；
+    // 没有这个刷新，保存完配置后群聊会一直按旧配置探测。
+    expect(src).toMatch(/window\.addEventListener\('focus', onFocus\)/)
+    expect(src).toMatch(/void loadAgentLlmConfigs\(\)/)
   })
 
   it('本地未就绪时文案指向 Lumina Team 配置，并说明开启鉴权时需要匹配的 Key', () => {

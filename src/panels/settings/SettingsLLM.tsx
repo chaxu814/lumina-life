@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../stores/appStore'
-import { persistLLMConfig, switchAndPersist } from '../../services/llmPersist'
+import { persistLLMConfig, switchAndPersist, refreshAgentLlmConfigs } from '../../services/llmPersist'
 import { SettingSection, SettingRow, SettingRowLast, SettingBtn, SettingInput, ButtonGroup, StatusBadge } from '../../components/SettingsUI'
 import ModelPickerModal from './ModelPickerModal'
 
@@ -294,6 +294,11 @@ export default function SettingsLLM() {
       await window.luminaAPI?.providerSetActive?.(provider)
 
       // 刷新前端缓存，避免界面仍显示旧值
+      // 🔧 2026-10-16：这里过去只刷新了本组件自己的 useState，
+      //   而「团队群聊」读的是全局 store 的 agentLlmConfigs —— 它只在群聊挂载时
+      //   加载一次。于是保存完供应商后，群聊页仍拿旧端点/旧 Key 探测，
+      //   界面持续报「未配置 LLM / 鉴权失败」，而磁盘上其实已经存好了。
+      await refreshAgentLlmConfigs()
       try {
         const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
         if (r?.configs) {setAgentLlmConfigs(r.configs)}
@@ -381,6 +386,9 @@ export default function SettingsLLM() {
         maxContextTokens: cfg.maxContextTokens || 262144,
       })
       if (res && res.success === false) { setNotice('❌ 保存失败: ' + (res.error || '后端未知错误')); return }
+      // 🔧 2026-10-16：同时刷新全局 store —— 团队群聊的就绪判定读的是它，
+      //   只刷本组件的 useState 不够（保存后群聊仍按旧配置探测 → 误报未配置）。
+      await refreshAgentLlmConfigs()
       const r = await window.luminaAPI?.agentLlmGetAllConfigs?.()
       if (r?.configs) {setAgentLlmConfigs(r.configs)}
       setNotice(`✅ ${AGENT_META.find(a => a.id === agentId)?.name || agentId} 配置已保存`)

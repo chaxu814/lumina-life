@@ -101,3 +101,38 @@ describe('本地 vs 云端：auth 文案必须区分', () => {
     expect(msg).toContain('API Key')
   })
 })
+
+// ============================================================
+// 模型名对不上：不能照抄服务端那句「你还没加载模型」（2026-10-16）
+//
+// 【怎么发现的】用户把 LM Studio 界面上的显示名「QwenPaw Flash 4B Q4」
+//   填进了 Model 一栏（服务端的模型 ID 其实是 qwenpaw-flash-4b@q4_k_m）。
+//   调用返回 400，body 是 LM Studio 的原文：
+//     "No models loaded. Please load a model in the developer page…"
+//   这句话把人指向「去加载模型」，而模型其实早就加载好了 —— 名字写错而已。
+//
+// 【本文件守的】模型名类失败必须单列，且文案要点出「用模型 ID 而不是显示名」，
+//   否则用户会照着服务端原文反复重装/重载模型，永远修不好。
+// ============================================================
+describe('模型名对不上：文案必须点破「ID ≠ 显示名」', () => {
+  it('LM Studio 的 "No models loaded" → 指向模型名而不是「去加载模型」', () => {
+    const msg = describeRunFailure(
+      '{"error":{"message":"No models loaded. Please load a model in the developer page or use the \'lms load\' command.","param":"model"}}',
+    )
+    expect(msg, '要点出是模型名的问题').toMatch(/模型名|模型 ID|显示名/)
+    expect(msg, '要给出可抄的正确形态').toContain('@')
+    expect(msg, '不能跟着服务端说「去加载模型」').not.toMatch(/加载模型/)
+  })
+
+  it('model not found / 模型不存在 → 同样归类', () => {
+    for (const raw of ['model "foo" not found', 'The model does not exist', '模型不存在']) {
+      const msg = describeRunFailure(raw)
+      expect(msg, raw).toMatch(/模型名|模型 ID|显示名/)
+    }
+  })
+
+  it('鉴权失败不会被误判成模型名问题', () => {
+    const msg = describeRunFailure('401 Unauthorized', { isLocal: true })
+    expect(msg).toMatch(/鉴权/)
+  })
+})

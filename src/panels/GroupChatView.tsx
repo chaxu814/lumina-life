@@ -545,11 +545,17 @@ export default function GroupChatView() {
   } | null>(null)
   const probeLocal = () => {
     setLocalDetecting(true)
-    return window.luminaAPI?.providerProbeLocalConfig?.({
-      baseUrl: readinessConfig.baseUrl,
-      provider: readinessConfig.provider,
-      apiKey: readinessConfig.apiKey,
-    })
+    // 🔧 2026-10-16：探测必须用**当前**的 Agent 配置，而不是本次渲染闭包里的快照。
+    //   真实故障：用户在设置里把 Lumina 的端点/Key 改对了，回到群聊点「重新检测」，
+    //   仍然按旧配置发请求 → 继续 401 → 用户得出「配了也没用」的结论。
+    //   改为实时读取 store，手动重试才真的有意义。
+    const fresh = useStore.getState().agentLlmConfigs?.lumina
+    const probeTarget = {
+      baseUrl: fresh?.endpoint || readinessConfig.baseUrl,
+      provider: fresh?.provider || readinessConfig.provider,
+      apiKey: fresh?.apiKey || readinessConfig.apiKey,
+    }
+    return window.luminaAPI?.providerProbeLocalConfig?.(probeTarget)
       .then((r: any) => {
         const ready = Array.isArray(r?.provider?.models) && r.provider.models.length > 0
         if (!ready) {
@@ -626,6 +632,17 @@ export default function GroupChatView() {
     probeLocal().then((ready) => { if (alive) { setLocalModelReady(ready) } })
     return () => { alive = false }
   }, [llmConfigured, isLocalLLM, readinessConfig.baseUrl, readinessConfig.model, readinessConfig.apiKey, readinessConfig.provider])
+
+  // 🔧 2026-10-16：窗口重新获得焦点时重新拉一次 per-agent 配置。
+  //   本页的就绪判定完全建立在 agentLlmConfigs 之上，而它只在挂载时加载一次。
+  //   用户「去设置里配好 → 切回聊天窗口」这个最常见的动作，此前不会触发任何刷新，
+  //   于是界面停留在旧配置上继续报「未配置 / 鉴权失败」。
+  //   这里只做一次轻量 IPC 拉取，无配置变化时 set 的是等值对象，不会引起重渲染风暴。
+  useEffect(() => {
+    const onFocus = () => { void loadAgentLlmConfigs() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [loadAgentLlmConfigs])
 
   // 探测未完成时允许发送（agentIpc 仍会用实际 Agent 凭据做运行时鉴权）；
   // 一旦精确探测确认鉴权失败/无模型，就不再把 Lumina 标成就绪。
