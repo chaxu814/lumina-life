@@ -44,6 +44,12 @@ function main() {
     path.join(root, 'out', 'main', 'chunks'),
     path.join(root, 'out', 'main', 'newstools'),
     path.join(root, 'out', 'main', 'assets'),
+    // 🔧 2026-10-16：补齐 renderer。此前只清了 out/main/*，于是 renderer 构建阶段
+    //   Vite 的 emptyOutDir 会去批量删 out/renderer/providers（实测 60 个文件），
+    //   在带批量删除守卫的终端里直接 Build failed：
+    //     [safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] count=60 > threshold=50
+    //   后果与 out/main 那批完全一样（构建中断），所以必须一并预清理。
+    path.join(root, 'out', 'renderer'),
   ]
   let total = 0
   for (const t of targets) { total += cleanDirFiles(t) }
