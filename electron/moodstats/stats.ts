@@ -15,9 +15,22 @@
 //   成功率从 60% 跳到 90% 可能只是两三次失败的波动，
 //   报出来就是在喂用户假关联。
 //
-// 【A/B 对照输出原则】
-//   只给两组的 n / 成功率 / 失败率 / 平均重试 / 平均耗时，
-//   不做显著性检验（样本根本撑不住 p 值），不写「门控有效/无效」的结论。
+// 【「门控分组」输出原则 —— 发布前的措辞纠正】
+//   ⚠️ 这里**曾经**叫「A/B 对照」，那是错的，必须改掉。
+//   abGroup.ts 用 FNV-1a 对持久化的 userId 取奇偶，一个安装里
+//   treatment / control 永远只有一个非空。于是 compareGroups()
+//   最好也只能返回「off + 一个臂」，而面板把两列并排一放，
+//   用户读到的其实是「同一个人前后两个时间段」——
+//   中间混着他自己的作息、任务难度、心情变化，这些和门控完全无法分离。
+//
+//   所以本文件把「怎么称呼这件事」也当成输出的一部分：
+//   comparisonDesign() 根据**实际有几臂数据**给出标题与免责声明，
+//   由 UI 原样渲染，避免任何面板自己写一个「A/B 对照」出来。
+//
+//   仍然保留的纪律（一条都不许放松）：
+//   · MIN_SAMPLE = 30，不够就不给成功率；
+//   · 不做显著性检验，不写「门控有效/无效」；
+//   · 默认关闭（moodstats.enabled）。
 // ============================================================
 
 import type { MoodSnapshot, GroupTag } from './types'
@@ -194,7 +207,13 @@ export function trendByDay(snaps: MoodSnapshot[]): TrendPoint[] {
   })
 }
 
-/** A/B 两组对照 —— 只给数字，不给结论 */
+/**
+ * 按分组列数字 —— 只给数字，不给结论。
+ *
+ * ⚠️ 注意这不是「A/B 两组对照」：分组是稳定单值，
+ * 单个安装里 treatment / control 只可能有一个非空（见 abGroup.ts 头注释）。
+ * 想让标题说得准确，请把结果交给 comparisonDesign() 判定。
+ */
 export function compareGroups(snaps: MoodSnapshot[]): GroupComparison[] {
   const groups = new Map<GroupTag, MoodSnapshot[]>()
   for (const s of snaps) {
@@ -226,6 +245,90 @@ export function honestyNote(n: number): string {
   return `样本量 ${n}`
 }
 
+// ═══════════════════════════════════════════════════════════
+// 「这到底是不是 A/B」——由数据自己回答，UI 不得自己编
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 分组对照的实际形态。
+ * - none        还没有任何快照
+ * - observation 只有 off（实验没开 / 已退出）——纯观测
+ * - single-arm  只有 treatment 或只有 control —— 单臂，**不可能是对照**
+ * - crossover   两臂都有（用户手动换过组）——同一人的前后对照，仍被时间混杂
+ */
+export type ComparisonKind = 'none' | 'observation' | 'single-arm' | 'crossover'
+
+export interface ComparisonDesign {
+  kind: ComparisonKind
+  /** UI 标题。必须是「前后对比」，不得出现「A/B」 */
+  title: string
+  /** 面板正文里必须原样显示的免责声明 */
+  disclosure: string
+  /** 是否真的存在两个臂的数据（false 时并排展示两列就是误导） */
+  twoArms: boolean
+}
+
+/**
+ * 统一措辞的唯一定义处。UI 必须用这里的字符串，不许自己写标题。
+ * 「非严格对照实验」这半句是刻意保留的：即使换过组，
+ * 两段数据仍发生在不同时间点，仍与用户当时的生活状况完全混杂。
+ */
+const BEFORE_AFTER_DISCLOSURE =
+  '这是「门控关闭 vs 门控开启」的**前后对比，不是严格对照实验**：' +
+  '单机单用户安装里两组无法同时存在（见 abGroup.ts），' +
+  '差异里混着你生活里发生的一切变化。只列数字，不构成结论。'
+
+const CROSSOVER_DISCLOSURE =
+  '你手动换过组，因此两个臂都有数据 —— 但这是你自己在**不同时间点**的前后对照，' +
+  '仍然和你当时的状态（作息、任务难度、心情）完全混杂，依然不是严格对照实验。' +
+  '只列数字，不构成结论。'
+
+/**
+ * 根据实际分组行数判定「这算什么对照」。
+ *
+ * 【为什么必须由数据判定，而不是由调用方声明】
+ * 面板只要写死一个标题，就会在只有单臂数据时也画上「对照组」那一行，
+ * 空白列被读者自动脑补成「没有差异」—— 这是最常见的一种自欺。
+ */
+export function comparisonDesign(rows: GroupComparison[]): ComparisonDesign {
+  const arms = rows.filter(r => r.group === 'treatment' || r.group === 'control')
+  const hasTreatment = arms.some(r => r.group === 'treatment')
+  const hasControl = arms.some(r => r.group === 'control')
+  const twoArms = hasTreatment && hasControl
+
+  if (rows.length === 0) {
+    return {
+      kind: 'none',
+      title: '门控前后对比（非对照实验）',
+      disclosure: '还没有任何分组数据。',
+      twoArms: false,
+    }
+  }
+  if (twoArms) {
+    return {
+      kind: 'crossover',
+      title: '门控前后对比（换过组，仍非对照实验）',
+      disclosure: CROSSOVER_DISCLOSURE,
+      twoArms: true,
+    }
+  }
+  if (arms.length > 0) {
+    return {
+      kind: 'single-arm',
+      title: '门控前后对比（非对照实验）',
+      disclosure: BEFORE_AFTER_DISCLOSURE,
+      twoArms: false,
+    }
+  }
+  return {
+    kind: 'observation',
+    title: '门控前后对比（仅观测，尚未开启实验）',
+    disclosure: '实验未开启，所有记录都标为 off：只观测、不干预，' +
+      '所以这里没有任何对照可言。开启实验后仍只会出现一个臂。',
+    twoArms: false,
+  }
+}
+
 /** 整份报告（导出 / IPC 用的聚合根） */
 export interface StatsReport {
   generatedAt: number
@@ -233,19 +336,24 @@ export interface StatsReport {
   buckets: BucketRow[]
   trend: TrendPoint[]
   groups: GroupComparison[]
+  /** 分组对照的标题与免责声明（UI 必须原样渲染，勿自撰） */
+  groupsDesign: ComparisonDesign
   honesty: { minSample: number; note: string }
 }
 
 export function buildReport(snaps: MoodSnapshot[]): StatsReport {
+  const groups = compareGroups(snaps)
   return {
     generatedAt: Date.now(),
     totalSnapshots: snaps.length,
     buckets: aggregateBuckets(snaps),
     trend: trendByDay(snaps),
-    groups: compareGroups(snaps),
+    groups,
+    groupsDesign: comparisonDesign(groups),
     honesty: {
       minSample: MIN_SAMPLE,
       note: `每桶样本 < ${MIN_SAMPLE} 时不输出成功率结论（避免小样本噪声被当成规律）`,
     },
   }
 }
+

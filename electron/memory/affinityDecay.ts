@@ -57,6 +57,37 @@
 // ============================================================
 
 import type { Database } from 'better-sqlite3'
+import { readFeatureFlag } from '../core/appConfig'
+
+// ═══════════════════════════════════════════════════════════
+// 特性开关（本模块此前最大的问题：实现了、测了，开关却没人读）
+// ═══════════════════════════════════════════════════════════
+
+/** 与 memoryIpc.ts 的 CONFIG_DEFAULTS.features / 设置面板共用同一个键名 */
+export const AFFINITY_FLAG_KEY = 'affinityDecay'
+
+/**
+ * 读用户开关。**默认 true**，与 CONFIG_DEFAULTS 保持一致
+ * （键缺失 = 开；只有用户显式关过才是 false）。
+ *
+ * 静态 import appConfig 而不是 require：打包后相对路径会被压平，
+ * 运行时 require 才是项目里踩过的坑（见 appConfig.ts 头注释）。
+ * appConfig → pathsFallback 内部对 electron 是**延迟 require + try/catch**，
+ * 所以纯 Node（vitest）下加载本模块不会炸。
+ *
+ * 【为什么包 try/catch：默认 true，不是 false】
+ * 配置读不出来属于「可降级」状态。若这里失败就返回 false，
+ * 等于「配置坏了一点点 → 用户的记忆排序被静默换掉」，
+ * 比「读不到就用产品默认值」糟糕得多。
+ */
+export function readAffinityDecayEnabled(): boolean {
+  try {
+    return readFeatureFlag(AFFINITY_FLAG_KEY, true)
+  } catch {
+    return true
+  }
+}
+
 
 // ═══════════════════════════════════════════════════════════
 // 常量
@@ -115,6 +146,114 @@ export function ageInDays(iso: string | null | undefined, now: number = Date.now
   if (Number.isNaN(t)) {return 0}
   return (now - t) / 86_400_000
 }
+
+// ═══════════════════════════════════════════════════════════
+// 排序调整（纯函数，供 hybridRecall 等召回打分点注入）
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 【为什么这里要有一套「乘子」而不是直接把 decayedScore 当分数】
+ * 召回层的分数（RRF 的 1/(k+rank)、余弦相似度）和本模块的 confidence×衰减
+ * 完全不是一个量纲，直接相乘/相加没有任何解释力。
+ * 所以这里只输出一个**有界乘子**，由调用方乘到自己的分数上。
+ *
+ * 【上界为什么锁在 1】
+ * 衰减是**关系感的修正**，不是相关性。允许乘子 >1 就等于让「记得久」
+ * 去盖过「跟这次提问相关」，那会把检索彻底变成时间排序。
+ * 锁在 ≤1 意味着：它最多只能把一条记忆**往下挪**，
+ * 永远不可能把一条不相关的记忆抬上来，也永远不可能把谁删掉或清零。
+ */
+export const MAX_DECAY_PENALTY = 0.08
+
+/**
+ * 一条记忆的相对衰减权重（0, 1]。
+ * = 产生时的亲密度系数 × 时间新鲜度。
+ *
+ * 未标记亲和度的记忆走 affinityAtWriteOf 的中性 0.5，
+ * 即「关系中性期的记忆」—— 不偏袒任何一方（与本文件既有约定一致）。
+ */
+export function decayWeight(affinityAtWrite: number, ageDays: number): number {
+  const w = affinityDecay(affinityAtWrite) * recencyFactor(ageDays)
+  return w > 0 ? Math.min(1, w) : 0
+}
+
+/**
+ * 把权重换算成对召回分数的乘子 ∈ [1-MAX_DECAY_PENALTY, 1]。
+ *
+ * @param weight    本条记忆的 decayWeight
+ * @param maxWeight 同一批候选里的最大权重（用作归一化基准）
+ *
+ * 【为什么要除以 maxWeight】
+ * 不归一化的话，一条「从未标记过」的普通记忆会被乘 0.675，
+ * 于是**开关一开，所有分数都被压低**——排序虽不变，但分数整体漂移，
+ * 任何依赖分数绝对值的地方（UI 百分比、去重阈值）都会跟着动。
+ * 归一化之后：候选集权重全部相同 → 全部乘子恰好为 1 → 分数逐字节不变；
+ * 只有真的存在「谁更值得被想起」的差异时才会产生调整。
+ *
+ * 【maxWeight 为 0 的退路】
+ * 理论上算不出（权重恒 >0），但仍写死返回 1：
+ * 排序调整绝不能自己变成一次故障。
+ */
+export function decayRankMultiplier(
+  weight: number,
+  maxWeight: number,
+  maxPenalty: number = MAX_DECAY_PENALTY,
+): number {
+  if (!(maxWeight > 0)) {return 1}
+  const ratio = Math.max(0, Math.min(1, weight / maxWeight))
+  const m = 1 - maxPenalty * (1 - ratio)
+  return Math.max(1 - maxPenalty, Math.min(1, m))
+}
+
+/** 从 HybridDoc.metadata 里找亲和度的键名（写入侧尚未统一，这里列全已知的） */
+const AFFINITY_KEYS = ['affinity_at_write', 'affinityAtWrite', 'affinity'] as const
+/** 从 metadata 里找产生时间/更新时间的键名 */
+const TIME_KEYS = ['created_at', 'createdAt', 'ts', 'timestamp', 'updated_at'] as const
+
+function numOf(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) {return v}
+  if (typeof v === 'string' && v.trim()) {
+    const n = Number(v)
+    if (Number.isFinite(n)) {return n}
+  }
+  return null
+}
+
+/**
+ * 从召回条目的 metadata 直接算出 decayWeight，让调用方零解析成本接入。
+ *
+ * 缺字段时的语义（很重要，别当成 bug）：
+ *   · 没有亲和度 → 按中性 0.5 处理（既不奖励也不惩罚）
+ *   · 没有时间戳 → ageDays = 0（新鲜度 1，不惩罚）
+ *   · 两者都缺 → 权重与同批候选一致 → 归一化后乘子恒为 1 → 排序与分数不变
+ * 也就是说：**没有衰减数据 = 什么都不发生**，绝不会因为「没数据」而误伤召回。
+ */
+export function decayWeightFromMetadata(meta: unknown, now: number = Date.now()): number {
+  if (!meta || typeof meta !== 'object') {return decayWeight(0.5, 0)}
+  const m = meta as Record<string, unknown>
+
+  let aff = 0.5
+  for (const key of AFFINITY_KEYS) {
+    const v = numOf(m[key])
+    if (v !== null) {aff = Math.max(0, Math.min(1, v)); break}
+  }
+
+  let age = 0
+  for (const key of TIME_KEYS) {
+    const raw = m[key]
+    if (raw === undefined || raw === null) {continue}
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      age = ageInDays(new Date(raw).toISOString(), now)
+      break
+    }
+    if (typeof raw === 'string' && raw) {
+      age = ageInDays(raw, now)
+      break
+    }
+  }
+  return decayWeight(aff, age)
+}
+
 
 // ═══════════════════════════════════════════════════════════
 // metadata 编解码（affinity_at_write 存在 metadata JSON 里）

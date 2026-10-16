@@ -96,6 +96,15 @@ export interface TrialSubject {
  */
 export interface TrialStore {
   getFacts(category?: string, limit?: number): FactEntry[]
+  /**
+   * 读回历史裁决（可选实现）。
+   *
+   * 为什么需要它：裁决记录只放在内存 Map 里的话，重启即全部消失，
+   * 而模块自己的注释写着「裁决历史必须跨会话留存，否则『记错了』这个反馈等于没给」。
+   * 这条可选方法就是让那句话成立的入口——生产实现接 SQLite，
+   * 不实现它的纯内存 mock（单测）行为不变。
+   */
+  loadTrialRecords?(): TrialRecord[]
 }
 
 /** 无状态提交时由调用方补的最小信息（不必先 review 就能算） */
@@ -108,6 +117,16 @@ export interface TrialSubjectInput {
 /** 置信度被改写后交给上层落库的载荷 */
 export interface TrialWriteBack {
   memoryKey: string
+  /**
+   * 记忆正文。
+   *
+   * 为什么必须带上：memoryKey 来自证据链的 `ScoredMemory.id`，
+   * 而落库事实表的行是按 **内容指纹**（`facts.content_key`）定位的，
+   * 两者不是同一个键。sink 拿不到正文就只能反查一次全表，
+   * 或者干脆放弃落库——而「放弃落库」正是这个模块最初假成功的原因。
+   * 带上它，sink 才有能力精确定位到要改的那一行。
+   */
+  content: string
   verdict: TrialVerdict
   confidence: number
   cap: number
@@ -361,8 +380,19 @@ export class MemoryTrialBench {
   private readonly store: TrialStore | null
   private readonly now: () => Date
   private readonly sink: TrialSink | null
-  /** memoryKey → 当前裁决态（置信度已包含历史裁决效果） */
+  /** memoryKey → 当前裁决态（置信度已包含历史裁决效果）。**只装本次 review 到的条目** */
   private readonly subjects = new Map<string, TrialSubject>()
+  /**
+   * memoryKey → 从持久化裁决恢复出来的现值。
+   *
+   * 为什么要和 subjects 分开存：
+   * `stats()` 的 `total` 取 `max(lastReviewCount, subjects.size)`，
+   * 而审判台一次只展示最近 50 条。如果把恢复出来的历史也塞进 subjects，
+   * 一个攒了一年裁决历史的用户会看到「受审记忆总数 = 历史条数」，
+   * 与屏幕上那 50 条对不上号 —— 统计口径当场失真。
+   * 分开存之后：subjects 只反映「本轮看到的」，restored 只负责把权重带过来。
+   */
+  private readonly restored = new Map<string, { confidence: number; cap: number; source: FactSource }>()
   /** memoryKey → 该记忆的全部裁决记录（内存态，持久化由上层决定） */
   private readonly records = new Map<string, TrialRecord[]>()
   private lastReviewCount = 0
@@ -371,6 +401,58 @@ export class MemoryTrialBench {
     this.store = store ?? null
     this.now = options?.now ?? (() => new Date())
     this.sink = options?.sink ?? null
+    this.hydrate()
+  }
+
+  /**
+   * 从 store 恢复历史裁决，并按裁决重建「当前置信度」。
+   *
+   * 【为什么必须做，而不是「重启后重新审一遍就行」】
+   * 置信度的权威来源是裁决历史：用户判一次「记错了」，权重就下调一次。
+   * 如果重启后 subjects 被清空、records 也空了，那么
+   *   · 面板重新加载 → 显示的是未受裁决影响的原始置信度
+   *   · 用户看到自己刚纠正过的记忆又变回原来的权重
+   * 这正是本模块要消灭的「反馈看起来完全没生效」。
+   *
+   * 恢复顺序必须是「先灌 records，再回放最后一次同键裁决」——
+   * 直接拿最后一条的 confidenceAfter 当现值是不对的：
+   * pending 裁决不改数值，却会把时间戳刷到最新，抢掉「最后一次有效裁决」的名额。
+   */
+  private hydrate(): void {
+    const load = this.store?.loadTrialRecords
+    if (typeof load !== 'function') {return}
+    let restored: TrialRecord[] = []
+    try {
+      const r = load.call(this.store)
+      if (Array.isArray(r)) {restored = r}
+    } catch (e) {
+      // 恢复失败不能阻断审判台可用性，但必须留痕：
+      // 静默吞掉会让人以为「这次是空库」。
+      // eslint-disable-next-line no-console
+      console.warn('[TrialBench] 恢复历史裁决失败，本次按空历史处理：', errText(e))
+      return
+    }
+    if (restored.length === 0) {return}
+
+    for (const rec of restored) {
+      const key = str(rec?.memoryKey).trim()
+      if (!key) {continue}
+      const list = this.records.get(key) ?? []
+      list.push(rec)
+      this.records.set(key, list)
+
+      // 只有真正改变权重的裁决才推进现值（pending 不改）
+      if (rec.verdict === 'pending') {continue}
+      const src = normalizeFactSource(rec.source)
+      const cap = Number.isFinite(rec.cap) && (rec.cap as number) > 0
+        ? (rec.cap as number)
+        : SOURCE_CONFIDENCE[src].cap
+      this.restored.set(key, {
+        confidence: clampConfidence(rec.confidenceAfter, cap),
+        cap,
+        source: src,
+      })
+    }
   }
 
   /**
@@ -463,6 +545,7 @@ export class MemoryTrialBench {
       try {
         this.sink({
           memoryKey: key,
+          content: base.content,
           verdict: v,
           confidence: after,
           cap: base.cap,
@@ -582,10 +665,15 @@ export class MemoryTrialBench {
     const source = normalizeFactSource(fact?.source)
     const cap = SOURCE_CONFIDENCE[source].cap
     const prior = this.subjects.get(s.memoryKey)
-    // 关键：置信度优先级是「历史裁决结果 > 落库事实 > 来源缺省值」。
+    const restored = this.restored.get(s.memoryKey)
+    // 关键：置信度优先级是「本次会话裁决结果 > 重启恢复的裁决结果 > 落库事实 > 来源缺省值」。
     // 排在第一位是因为：否则用户在界面上点一次「记错了」，
     // 下次打开面板数据一刷新就又变回原来的权重 —— 反馈看起来完全没生效。
-    const raw = prior ? prior.confidence : (fact ? fact.confidence : SOURCE_CONFIDENCE[source].default)
+    // 第二位（restored）同理：那是「上一次进程里的裁决」，
+    // 少了它，重启后权重会退回落库的原始值，用户的纠正等于没发生过。
+    const raw = prior
+      ? prior.confidence
+      : (restored ? restored.confidence : (fact ? fact.confidence : SOURCE_CONFIDENCE[source].default))
     return { memoryKey: s.memoryKey, content: s.content, source, confidence: clampConfidence(raw, cap), cap }
   }
 
@@ -608,6 +696,13 @@ export class MemoryTrialBench {
     }
 
     const unverified = subject.confidence < UNVERIFIED_CONFIDENCE
+    // 🔧 2026-10-15：生命周期必须服从**用户裁决**，不能只读证据引擎的 status。
+    //   证据引擎的 status 只看「这条记忆被提及/佐证了多少次」，
+    //   它并不知道用户点过「记错了」—— 而权重是被裁决改写的。
+    //   两者不同步会产生一个很刺眼的矛盾：
+    //   权重已经按「记错了」压到地板，标签却还写着「已确认」。
+    //   裁决是用户对事实的权威判定，优先级高于自动统计。
+    const lifecycle: TrialLifecycle = verdict !== null ? lifecycleFor(verdict) : s.status
     return {
       memoryKey: subject.memoryKey,
       content: subject.content,
@@ -615,7 +710,7 @@ export class MemoryTrialBench {
       sourceLabel: SOURCE_CONFIDENCE[subject.source].label,
       confidence: subject.confidence,
       cap: subject.cap,
-      lifecycle: s.status,
+      lifecycle,
       mentionCount: s.mentionCount,
       sourceCount: s.sourceCount,
       evidence: s.scores,

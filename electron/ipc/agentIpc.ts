@@ -30,6 +30,13 @@ import * as emotionBridge from '../gamification/emotionBridge'
 import { probeEndpoint, buildUnreachableGuidance } from '../onboarding/llmReachability'
 import { getAgentDialogManager } from '../agentDialogManager'
 import { isLocalEndpoint } from '../core/modelCompat'
+import {
+  applyCompanionGuard,
+  guardEvent,
+  StreamingCompanionFilter,
+  type CompanionGuardOptions,
+} from '../agent/companionGuard'
+import { getVisibilityTier } from '../orchestration/visibility'
 
 // ═══════════════════════════════════════════════════════════
 // LLM API 响应类型
@@ -461,9 +468,37 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
       //   ② 前台请求若带了 config.requestId，则原样回显在每条事件上，
       //      前端可据此丢弃「非本次请求」的事件（纵深防御）。
       const reqId = (params.config as any)?.requestId as string | undefined
+      // 过滤器提到 if 外面：流结束后要把压住的尾巴 flush 出来，
+      // 并且最终回复也要再过一次护栏（模型偶尔会绕过流式直接给 text 事件）。
+      const guardOpts: CompanionGuardOptions = { tier: getVisibilityTier(), isGroupChat: isGroupChat === true }
+      const textFilter = new StreamingCompanionFilter(guardOpts)
+      const thinkFilter = new StreamingCompanionFilter(guardOpts)
       if (!isBackground) {
+        // 🔒 2026-10-15：铁则一第一次有了代码兜底。
+        //   此前「用户永远不知道 Yak 和热茶」只写在 AGENTS.md 里靠模型自律，
+        //   而 tools/impl/team.ts 又亲手把「### Yak（程序员）输出」写进回灌模型的工具结果 ——
+        //   模型在自己上下文里反复读到名字，再被要求「绝不暴露」，等于赌它听话。
+        //   现在所有**用户可见**的出口都要过 companionGuard：
+        //     · text / text_stream  主回复（含流式）
+        //     · thinking / thinking_stream  思考面板
+        //     · tool_start / tool_end  工具参数与结果（delegate_to 的结果里就有成员名）
+        //     · error / memory_summary
+        //   非陪伴档位（collab / audit）与群聊会话按 companionGuard 的规则豁免。
+        // 防抖：同一句话反复触发遮蔽时只报一次，避免刷日志
+        let redactWarned = false
+        const noteLeak = (leaked: string[]): void => {
+          if (!leaked.length || redactWarned) {return}
+          redactWarned = true
+          console.warn(
+            '[AgentIPC] 🛡️ 陪伴模式遮蔽到后台成员名（已替换为角色称谓）：',
+            leaked.join('、'),
+          )
+        }
+
         agent.setEventCallback((ev: AgentEvent) => {
-          event.sender.send('agent:event', reqId ? { ...ev, requestId: reqId } : ev)
+          const guarded = guardEvent(ev, textFilter, thinkFilter, guardOpts)
+          if (guarded.redactedLeak.length) { noteLeak(guarded.redactedLeak) }
+          event.sender.send('agent:event', reqId ? { ...guarded.event, requestId: reqId } : guarded.event)
         })
       } else {
         // 后台任务：不订阅事件回调（省掉无用的 IPC 序列化开销）
@@ -479,6 +514,14 @@ export function registerAgentIpc(mainWindow: BrowserWindow): void {
           activeAgentRunning = false
         }
       }
+
+      // 🔒 流结束：把压住的尾巴放出来（已经过护栏），再对整条最终回复兜一次底。
+      //   这一步不是冗余 —— 模型并非每次都走 text_stream，也可能在 error 路径上给整段文本。
+      const tail = `${textFilter.flush()}${thinkFilter.flush()}`
+      if (tail) {
+        event.sender.send('agent:event', reqId ? { type: 'text_stream', content: tail, requestId: reqId } : { type: 'text_stream', content: tail })
+      }
+      result = applyCompanionGuard(result, guardOpts).text
 
       // 🔔 Agent 回复完成 → 后台 Windows 通知（前台不打扰，多条自动合并）
       //    ⚠️ 后台任务（自主刷新面板 / 朋友圈）**不算**「新回复」：

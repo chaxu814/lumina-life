@@ -3,14 +3,27 @@
 // ============================================================
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { MemoryEvidenceEngine } from '../electron/memoryEvidence'
 
 // 确保每次测试使用独立文件
 let testCounter = 0
 
+// 🔧 2026-10-15：测试产物改写到系统临时目录。
+//   原实现用相对路径 `./memory-evidence-test-N.json`，也就是**直接写在仓库根目录**：
+//     · 每跑一次 npm test，根目录就多一批文件（clean clone + CI 同样会脏）
+//     · 更糟的是 afterEach 只 unlink 主文件，而 MemoryEvidenceEngine.save()
+//       在覆盖前会自动 copyFileSync 出 `${path}.bak.<时间戳>` —— 那些 .bak 从来没人删。
+//   于是根目录的 .bak 只增不减（本次发布前已积到 16 个），任何人 clone 下来第一眼
+//   看到的是一地时间戳垃圾，而不是项目本身。
+//   现在写到 os.tmpdir()，并在清理时把 .bak 一并带走：测试不该给别人的工作区留垃圾。
+const TEST_TMP_DIR = path.join(os.tmpdir(), 'lumina-memory-evidence-test')
+
 function makeEngine() {
   const counter = ++testCounter
-  const p = `./memory-evidence-test-${counter}.json`
+  fs.mkdirSync(TEST_TMP_DIR, { recursive: true })
+  const p = path.join(TEST_TMP_DIR, `memory-evidence-test-${counter}.json`)
   // 创建新的引擎，然后替换 storagePath 并重新 load
   const eng = new MemoryEvidenceEngine()
   // 清除旧路径的持久化
@@ -26,9 +39,30 @@ describe('MemoryEvidenceEngine', () => {
   const engines: { engine: MemoryEvidenceEngine; path: string }[] = []
 
   afterEach(() => {
-    for (const { path } of engines.splice(0)) {
-      try { fs.unlinkSync(path) } catch {}
+    for (const { path: p } of engines.splice(0)) {
+      try { fs.unlinkSync(p) } catch {}
+      // 关键：连引擎自动生成的 .bak.<时间戳> 一起清掉。
+      // 只删主文件的话，save() 每次覆盖前留的备份会一直堆在临时目录里，
+      // 跑几百个用例就是几百个小文件 —— 下次清理同样没意义。
+      try {
+        const dir = path.dirname(p)
+        const base = path.basename(p)
+        for (const f of fs.readdirSync(dir)) {
+          if (f.startsWith(base + '.bak.')) {
+            try { fs.unlinkSync(path.join(dir, f)) } catch {}
+          }
+        }
+      } catch {}
     }
+  })
+
+  afterEach(() => {
+    // 本文件用完把临时目录整个收走，避免 os.tmpdir() 里留下空壳目录
+    try {
+      if (fs.existsSync(TEST_TMP_DIR) && fs.readdirSync(TEST_TMP_DIR).length === 0) {
+        fs.rmdirSync(TEST_TMP_DIR)
+      }
+    } catch {}
   })
 
   function newEngine() {

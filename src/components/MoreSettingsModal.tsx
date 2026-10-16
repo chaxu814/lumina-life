@@ -24,13 +24,14 @@ import EmotionDashboardPanel from '../panels/EmotionDashboardPanel'
 import ProactiveSettingsPanel from '../panels/ProactiveSettingsPanel'
 import PluginPanelContainer from './PluginPanelContainer'
 import SettingsPanel from '../panels/SettingsPanel'
-import AppearancePanel from '../panels/AppearancePanel'  // 🎨 外观主题
 import ModelStorePanel from '../panels/ModelStorePanel'
 import SettingsA11y from '../panels/settings/SettingsA11y'
 import MemoryFederationPanel from '../panels/MemoryFederationPanel'
 import WebDavSyncPanel from '../panels/WebDavSyncPanel'
-import BrowserLinksPanel from '../panels/settings/BrowserLinksPanel'
 import TheaterPanel from '../panels/settings/TheaterPanel'
+// 🔧 2026-10-15：AppearancePanel / BrowserLinksPanel 的 import 已随入口一起迁到
+//   SettingsModal，这里删掉 —— 留着未使用的 import 会被 lint 的 no-unused-vars 拦下，
+//   而「搬了一半」的 import 正是最容易在下次重构时被误当成「这里也能用」的地方。
 
 /* ── 侧边栏导航项 ── */
 const SIDEBAR_ITEMS = [
@@ -53,10 +54,13 @@ const SIDEBAR_ITEMS = [
   { id: 'test',        icon: '🧪', label: '测试覆盖' },
   { id: 'skilldev',    icon: '🔧', label: '技能开发' },
   { id: 'plugins',     icon: '📦', label: '插件面板' },
-  { id: 'appearance',  icon: '🎨', label: '外观' },
+  // 🔧 2026-10-15：外观 / 浏览器 已迁到「设置」弹窗（见 SettingsModal）。
+  //   同一个功能在两个弹窗里各有一份入口，是「设置没有单一事实源」的典型症状：
+  //   用户改完主题切到更多设置又看到一个外观，以为自己没保存成功。
+  //   外观此前还有两套**不同实现**（这里的 AppearancePanel 主题卡片 vs 设置里的
+  //   SettingsAppearance 主题切换），已经合并为「设置 → 外观」一处。
   { id: 'a11y',        icon: '♿', label: '无障碍' },
   { id: 'theater',     icon: '🎭', label: '任务剧场' },
-  { id: 'browser',     icon: '🌐', label: '浏览器' },
   { id: 'federation', icon: '🤝', label: '记忆共享' },
   { id: 'webdav',      icon: '☁️', label: '云同步' },
 ] as const
@@ -309,12 +313,10 @@ export default function MoreSettingsModal({ open, onClose }: MoreSettingsModalPr
   {activeSection === 'proactive' && <ProactiveSettingsPanel />}
             {activeSection === 'modelStore'  && <ModelStorePanel />}
             {activeSection === 'plugins'    && <PluginPanelContainer />}
-            {activeSection === 'appearance' && <AppearancePanel />}
             {activeSection === 'a11y'        && <SettingsA11y />}
             {activeSection === 'theater'    && <TheaterPanel />}
-      {activeSection === 'browser'     && <BrowserLinksPanel />}
-{activeSection === 'federation' && <MemoryFederationPanel embedded />}
-{activeSection === 'webdav'      && <WebDavSyncPanel embedded />}
+            {activeSection === 'federation' && <MemoryFederationPanel embedded />}
+            {activeSection === 'webdav'      && <WebDavSyncPanel embedded />}
             {(activeSection === 'agentPool' || activeSection === 'routing' || activeSection === 'access' || activeSection === 'modes' || activeSection === 'workflow') && (
               <SettingsPanel embedded activeTab={activeSection} onNotice={null} />
             )}

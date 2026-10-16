@@ -195,14 +195,28 @@ describe('P1-6 · 本地端点探测降频（不再每条消息 +2s）', () => {
 describe('P2-1 · 事件按请求归属，后台事件不外发', () => {
   const src = read('electron/ipc/agentIpc.ts')
 
+  // ⚠️ 这两条是「源码文本断言」，形态天然脆弱（重构一次就失效一次）。
+  //   2026-10-15 它们因为接入 companionGuard 而失配过一次 ——
+  //   失配的原因不是不变量被破坏，而是 `setEventCallback` 前面多了几行声明。
+  //   所以这里把断言放宽到「结构仍然分两支」，
+  //   而**行为本身**（成员名是否被遮蔽、后台是否真的不外发）
+  //   改由 tests/companionGuard.test.ts 做真正的行为验证。
   it('后台任务不订阅事件回调', () => {
-    expect(src).toMatch(/if \(!isBackground\) \{\s*agent\.setEventCallback\(/)
+    expect(src).toMatch(/if \(!isBackground\) \{/)
     expect(src).toMatch(/后台任务事件不外发/)
+    // 两支都要在：前台订阅 + 后台空实现
+    expect(src).toMatch(/agent\.setEventCallback\(\(ev: AgentEvent\) =>/)
+    expect(src).toMatch(/agent\.setEventCallback\(\(\) => \{ \/\* 后台任务事件不外发 \*\/ \}\)/)
   })
 
   it('前台事件回显 config.requestId', () => {
     expect(src).toMatch(/const reqId = \(params\.config as any\)\?\.requestId/)
-    expect(src).toMatch(/reqId \? \{ \.\.\.ev, requestId: reqId \} : ev/)
+    expect(src).toMatch(/reqId \? \{ \.\.\.guarded\.event, requestId: reqId \} : guarded\.event/)
+  })
+
+  it('事件出口先过陪伴模式护栏再外发', () => {
+    expect(src).toMatch(/guardEvent\(ev, textFilter, thinkFilter, guardOpts\)/)
+    expect(src).toMatch(/getVisibilityTier\(\)/)
   })
 
   it('前端按 requestId 过滤', () => {

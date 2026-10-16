@@ -1711,6 +1711,7 @@ const api = {
   moodstatsAbGet: () => ipcRenderer.invoke('moodstats:ab:get') as Promise<any>,
   moodstatsAbSetEnabled: (on: boolean) => ipcRenderer.invoke('moodstats:ab:setEnabled', on) as Promise<any>,
   moodstatsAbOptOut: () => ipcRenderer.invoke('moodstats:ab:optOut') as Promise<any>,
+  moodstatsAbRerandomize: () => ipcRenderer.invoke('moodstats:ab:rerandomize') as Promise<any>,
   moodstatsAbRejoin: () => ipcRenderer.invoke('moodstats:ab:rejoin') as Promise<any>,
   moodstatsSetMaster: (on: boolean) => ipcRenderer.invoke('moodstats:setMaster', on) as Promise<any>,
   moodstatsExport: () => ipcRenderer.invoke('moodstats:export') as Promise<any>,

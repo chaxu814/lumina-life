@@ -27,9 +27,28 @@
 // 【零依赖、可单测】
 // 不引入任何 npm 包：分词复用 layeredMemory 的 CJK unigram+bigram，
 // TF-IDF 在本文件内实现，RRF 是纯函数。符合项目「零外部依赖」的一贯做法。
+//
+// 【关系衰减（affinityDecay）如何接入本文件】
+// 本文件是「回复前的自动召回」的排序入口（memoryStore.searchHybrid 调它），
+// 所以关系衰减必须接在这里，而不是接在一个没人调用的排序函数上。
+//
+// 接法与三条纪律（见 affinityDecay.ts 的 decayRankMultiplier 注释）：
+//   ① 只乘一个有界乘子 ∈ [1-8%, 1]，绝不替换 RRF 分的数量纲；
+//   ② 乘子锁上界 1 → 它最多把一条记忆往下挪，绝不会把不相关的抬上来；
+//   ③ 归一化到「本批候选里的最大权重」→ 所有条目权重相同时乘子恰好为 1，
+//      分数**逐字节不变**。没有衰减数据 = 什么都没发生。
+//
+// 开关读的是 features.affinityDecay（默认开），调用方可用
+// HybridOptions.affinityDecay 显式覆盖（测试与「这次不想衰减」的场合）。
 // ============================================================
 
 import { tokenize } from './layeredMemory'
+import {
+  decayRankMultiplier,
+  decayWeightFromMetadata,
+  readAffinityDecayEnabled,
+} from './affinityDecay'
+
 
 // ═══════════════════════════════════════════════════════════
 // 类型
@@ -74,6 +93,13 @@ export interface HybridOptions {
   vectorize?: (text: string, corpusTokens?: Map<string, number>) => number[]
   /** 触发「已从外部拿到向量」模式的回调，用于把向量缓存回条目 */
   onVectorComputed?: (id: string | number, vector: number[]) => void
+  /**
+   * 关系衰减是否生效。不传 = 读用户开关 features.affinityDecay（默认开）。
+   * 显式传 false 可在单次召回里关掉衰减（测试 / 故障排查用）。
+   */
+  affinityDecay?: boolean
+  /** 冻结「现在」，让时间衰减可测（默认 Date.now） */
+  now?: number
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -284,6 +310,9 @@ export function hybridRecall(
   cosineRoute.forEach((docIdx, i) => cosRankMap.set(docIdx, i + 1))
 
   const hits: HybridHit[] = []
+  // 与 hits 平行的原始下标表：衰减调整要回到 docs[idx] 取 metadata，
+  // 而 hits 本身不保存下标（ HybridDoc.id 可能重复）。
+  const hitDocIdx: number[] = []
   for (const [idx, score] of fused) {
     const doc = docs[idx]
     if (!doc) {continue}
@@ -298,6 +327,12 @@ export function hybridRecall(
       cosineRank: cRank,
       metadata: doc.metadata,
     })
+    hitDocIdx.push(idx)
+  }
+
+  // ── 关系衰减：有界排序调整（开关关闭时整段跳过，分数逐字节不变）──
+  if (options.affinityDecay ?? readAffinityDecayEnabled()) {
+    applyAffinityDecay(hits, hitDocIdx, docs, options.now)
   }
 
   // 排序：融合分降序；同分时两路都命中的排前面（双路共识强于单路高分）
@@ -310,6 +345,38 @@ export function hybridRecall(
   })
 
   return hits.slice(0, topK)
+}
+
+/**
+ * 把关系衰减作为**有界排序调整**作用到 RRF 分上。
+ *
+ * 刻意不做的事：
+ *   · 不删条目、不把分数清零 —— 乘子恒 > 0，一条记忆永远能被想起；
+ *   · 不在乘子为 1 时做任何浮点运算 —— 候选集权重一致时分数逐字节不变；
+ *   · 不碰 RRF 的排名语义 —— 只改分数，bm25Rank/cosineRank 保持真实值。
+ */
+function applyAffinityDecay(
+  hits: HybridHit[],
+  hitDocIdx: number[],
+  docs: HybridDoc[],
+  now?: number,
+): void {
+  if (hits.length === 0) {return}
+  const weights = new Array<number>(hits.length)
+  let maxWeight = 0
+  for (let i = 0; i < hits.length; i++) {
+    const w = decayWeightFromMetadata(docs[hitDocIdx[i]]?.metadata, now)
+    weights[i] = w
+    if (w > maxWeight) {maxWeight = w}
+  }
+  // 权重全相同 → 乘子全为 1 → 直接返回，连一次乘法都不做
+  if (!(maxWeight > 0) || weights.every(w => w >= maxWeight)) {return}
+
+  for (let i = 0; i < hits.length; i++) {
+    const m = decayRankMultiplier(weights[i], maxWeight)
+    if (m === 1) {continue}
+    hits[i].score = hits[i].score * m
+  }
 }
 
 function buildCosineRoute(

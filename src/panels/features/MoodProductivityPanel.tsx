@@ -62,12 +62,29 @@ interface GroupComparison {
   avgRetries: number | null; avgDurationMs: number | null
   trustworthy: boolean
 }
+/**
+ * 分组对照的「真实形态」。
+ *
+ * 【为什么这里要有一个面板侧类型】
+ * 主进程的 `stats.ts` 已经把标题和免责声明做成了**由数据决定的输出**
+ * （`comparisonDesign()`），面板只负责原样渲染、不许自己编标题。
+ * 但 preload 尚未接入的旧版本会返回没有这个字段的报告，
+ * 所以这里用可选字段 + 兜底文案，保证降级时也只是文案退化，不会白屏。
+ */
+interface ComparisonDesign {
+  kind: 'none' | 'observation' | 'single-arm' | 'crossover'
+  title: string
+  disclosure: string
+  twoArms: boolean
+}
 interface StatsReport {
   generatedAt: number
   totalSnapshots: number
   buckets: BucketRow[]
   trend: TrendPoint[]
   groups: GroupComparison[]
+  /** ⚠️ 这**不是** A/B 对照 —— 单机单用户下两臂无法同时存在 */
+  groupsDesign?: ComparisonDesign
   honesty: { minSample: number; note: string }
 }
 
@@ -273,13 +290,19 @@ export default function MoodProductivityPanel() {
           )}
       </div>
 
-      {/* ── A/B 对照 ── */}
+      {/* ── 分组对照（**不是** A/B 实验，见下方说明）── */}
       <div style={card}>
-        <div style={title}>门控 A/B 对照</div>
+        <div style={title}>{report?.groupsDesign?.title ?? '门控前后对比（非对照实验）'}</div>
         <div style={desc}>
-          只列数字，不做显著性判断：样本量撑不住 p 值。开启实验后，
-          同一用户稳定分组，对照组的情绪门控会被临时关闭。
+          {report?.groupsDesign?.disclosure ??
+            '这是「门控关闭 vs 门控开启」的前后对比，不是严格对照实验：单个安装里两组无法同时存在，中间还混着你作息与任务难度的变化。'}
         </div>
+        {report?.groupsDesign && !report.groupsDesign.twoArms && (
+          <div style={desc}>
+            ⚠️ 当前只有 {report.groupsDesign.kind === 'observation' ? '「未开启」一档' : '一臂'}数据，
+            并排展示两列会让人误以为存在对照组 —— 所以这里只按实际有的分组列数字。
+          </div>
+        )}
         <table style={table}>
           <thead>
             <tr>

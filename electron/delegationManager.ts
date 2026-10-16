@@ -28,7 +28,7 @@ import { getTeamRegistry } from './core/teamRegistry'
 import { getTeamContextManager } from './agentTeamContext'
 import { AgentRunner } from './agentRunner'
 // 验证闭环 & 阶段门控
-import { autoFixLoop, runVerification, detectProjectRoot, detectProjectProfile, taskMayNeedVerification, defaultConvergenceCheck } from './orchestration/verifyLoop'
+import { autoFixLoop, runVerification, detectProjectProfile, taskMayNeedVerification, defaultConvergenceCheck, resolveProjectRoot } from './orchestration/verifyLoop'
 import { assessComplexity } from './orchestration/complexityAnalyzer'
 import { emitTheaterBeat, getCurrentEmotion3D } from './orchestration/theaterBridge'
 import type { TheaterRole } from './orchestration/theater'
@@ -47,6 +47,12 @@ import { getLuckyDelegationControl, shouldStopDelegationLoop, getConfig as getLu
 // 🆕 P3-5: spawn_subagent fork 模式集成
 import { getAsyncTaskManager } from './asyncTaskManager'
 import { getAgentWorkspaceManager } from './agentWorkspaceManager'
+// 🔧 2026-10-15：静态导入 permissionStore。
+//   原实现用运行时 require('./permission/permissionStore')，而打包器会压平模块 —
+//   tests/bundledRequires.test.ts 那道门禁正是为此存在，它会直接判定「打包后必然抛错」。
+//   permissionStore 只依赖 electron / fs / path / events / core 路径，不回引 delegationManager，
+//   所以静态导入不会成环（已核对 permission/ 下无任何文件引用 delegationManager）。
+import { getPermissionStore } from './permission/permissionStore'
 
 // ═══════════════════════════════════════════════════════════
 // 通知板 & 共享上下文 持久化路径
@@ -72,6 +78,31 @@ function readJson<T>(filePath: string, fallback: T): T {
 function writeJson(filePath: string, data: any): void {
   ensureDir(filePath)
   try { require('fs').writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8') } catch {}
+}
+
+/**
+ * 读「之前记录过的工作区根目录」——用户在安全/权限设置里显式指定过的那一个。
+ *
+ * 【为什么不用 effectiveWorkspaceRoot()】它没配置时会退回 defaultWorkspaceRoot()
+ * （用户主目录）。拿主目录当项目根去跑 tsc，只会在一个无关目录里验出个假通过。
+ * 这里只认**用户真的设过**的那个（没设过就是 null），宁可定不出也不乱猜。
+ *
+ * 懒加载：permissionStore 依赖 electron，只在主进程真跑时才需要它。
+ */
+function readRecordedWorkspaceRoot(): string | null {
+  try {
+    const root = getPermissionStore().get().workspaceRoot
+    if (typeof root !== 'string' || !root.trim()) { return null }
+    if (!require('fs').existsSync(root)) {
+      console.warn(`[DelegationManager] ⚠️ 已记录的工作区根不存在，忽略: ${root}`)
+      return null
+    }
+    return root
+  } catch (err: any) {
+    // 读不到就当没有：解析链会继续往下走（委托上下文 → cwd 兜底）
+    console.warn(`[DelegationManager] 读取已记录的工作区根失败:`, err?.message || err)
+    return null
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -644,6 +675,15 @@ ${lastError.slice(0, 1000)}
           try {
             const verifyResult = await this._autoVerifyAfterDelegation(
               from, to, member, task, cleanText,
+              {
+                // 本次委托自带的项目线索：显式 projectContext 优先于任何猜测，
+                // filePaths/relevantFiles 是 Worker 真正碰过的文件，最可信。
+                taskRoot: request.projectContext?.cwd ?? null,
+                touchedFiles: [
+                  ...(request.filePaths ?? []),
+                  ...(request.projectContext?.relevantFiles ?? []),
+                ],
+              },
             )
             if (verifyResult.autoFixed) {
               finalCleanText = `【原始输出】\n${cleanText}\n\n【自动修复记录】\n${verifyResult.fixLog}`
@@ -1038,6 +1078,8 @@ ${lastError.slice(0, 1000)}
    * 委托完成后自动运行验证 + 修复循环
    *
    * Phase 3 增强: 情绪影响修复轮数上限和策略
+   *
+   * @param rootHints 本次委托携带的项目线索（见 resolveProjectRoot 的优先级）
    */
   private async _autoVerifyAfterDelegation(
     from: string,
@@ -1045,22 +1087,54 @@ ${lastError.slice(0, 1000)}
     member: any,
     task: string,
     delegateOutput: string,
+    rootHints?: { taskRoot?: string | null; touchedFiles?: string[] },
   ): Promise<{
     autoFixed: boolean
     fixLog: string
     finalContent?: string
     attempts?: string[]
+    /** true = 没验证过（不是失败，更不是通过） */
+    unverified?: boolean
   }> {
     console.log(`[DelegationManager] 🔍 v9.0 自动验证: ${member.name} → ${task.slice(0, 80)}...`)
 
     try {
-      // 1. 检测项目根目录和特征
-      const projectRoot = detectProjectRoot(process.cwd())
+      // 1. 解析项目根目录。
+      //    旧实现直接 detectProjectRoot(process.cwd())：打包后 cwd 是启动目录，
+      //    不是用户的项目 → 却在错误目录里跑出一个「验证通过」。
+      //    现在按 resolveProjectRoot 的优先级找（触碰文件 > 委托上下文 > 已记录根 > cwd 兜底），
+      //    定不出就如实报「未验证」，绝不静默通过。
+      const resolution = resolveProjectRoot({
+        taskRoot: rootHints?.taskRoot ?? null,
+        touchedFiles: rootHints?.touchedFiles ?? null,
+        recordedRoot: readRecordedWorkspaceRoot(),
+        allowCwdFallback: true,
+      })
+
+      if (!resolution.root) {
+        console.error(`[DelegationManager] ⛔ 未能确定项目目录，未做自动验证: ${resolution.detail}`)
+        // autoFixed 用 true 只是为了把这句话送到用户眼前（调用方据此拼进最终回复）；
+        // 语义上它代表「验证环节已如实处理」，不代表代码通过或修过。
+        return {
+          autoFixed: true,
+          unverified: true,
+          fixLog: `⚠️ 未能确定项目目录，未做自动验证（${resolution.detail}）—— 本次改动未经 tsc / 测试检验，请自行确认，或先指定工作区目录。`,
+        }
+      }
+
+      console.log(`[DelegationManager] 📂 项目根 ${resolution.root}（来源: ${resolution.source}）— ${resolution.detail}`)
+
+      const projectRoot = resolution.root
       const profile = detectProjectProfile(projectRoot)
 
       if (profile.suggestedVerifyCommands.length === 0) {
-        console.log(`[DelegationManager] ⏭️ 跳过验证：无可用验证命令`)
-        return { autoFixed: false, fixLog: '无可用验证命令' }
+        // 同样要送到用户眼前：「没验」和「验过」是两回事，沉默等于撒谎
+        console.warn(`[DelegationManager] ⏭️ 项目根 ${projectRoot} 内无可用验证命令，未做自动验证`)
+        return {
+          autoFixed: true,
+          unverified: true,
+          fixLog: `⚠️ 项目目录 ${projectRoot} 内没有可识别的验证命令（无 tsconfig / package.json 测试脚本等），未做自动验证 —— 本次改动未经检验。`,
+        }
       }
 
       // 2. 执行首次验证
@@ -1148,6 +1222,18 @@ ${lastError.slice(0, 1000)}
 
       const attempts = fixResult.attempts.map(a => a.note ? `第 ${a.round} 轮: ${a.note}` : `第 ${a.round} 轮: ${a.delegateSuccess ? '已修复但验证仍失败' : '修复任务失败'}`)
 
+      // 「未验证」独立成一类：不是修复失败，更不是通过。用户必须看到这句话，
+      // 否则他会把一段从没跑过 tsc 的代码当成「Yak 已经自检过了」。
+      if (fixResult.verifyStatus === 'unverified') {
+        console.error(`[DelegationManager] ⛔ 未做自动验证: ${fixResult.error || fixResult.content}`)
+        return {
+          autoFixed: true,
+          unverified: true,
+          fixLog: `⚠️ ${fixResult.content.replace(/^⚠️\s*/, '')} —— 本次改动未经 tsc / 测试检验。`,
+          attempts,
+        }
+      }
+
       if (fixResult.success) {
         return {
           autoFixed: true,
@@ -1169,8 +1255,13 @@ ${lastError.slice(0, 1000)}
       }
 
     } catch (err: any) {
+      // 异常同样必须让用户看见 —— 静默 catch 会把「验证挂了」说成「验证过了」
       console.error(`[DelegationManager] ⚠️ 自动验证异常:`, err.message)
-      return { autoFixed: false, fixLog: `自动验证异常: ${err.message}` }
+      return {
+        autoFixed: true,
+        unverified: true,
+        fixLog: `⚠️ 自动验证异常（${err.message}），未做自动验证 —— 本次改动未经 tsc / 测试检验。`,
+      }
     }
   }
 

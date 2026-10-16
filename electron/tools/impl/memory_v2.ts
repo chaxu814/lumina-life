@@ -255,6 +255,15 @@ export async function memorySearch(args: Record<string, any>): Promise<ToolResul
       category: fact.category,
       confidence: fact.confidence,
       source: fact.source,
+      // 🔧 2026-10-15：把「产生时的亲密度」带进召回条目。
+      //   这是关系衰减（affinityDecay）**唯一**能让它从「代码存在」变成「真的生效」的一步：
+      //   读取侧（hybridRecall → decayWeightFromMetadata）只认 metadata 里的
+      //   affinity_at_write，而本函数是生产召回的入口 —— 条目建在这里，
+      //   戳不在这里，读取侧就永远读到「无数据 → 乘子恒为 1 → 什么都没发生」。
+      //   缺失的老数据不补默认值：那会让所有历史记忆一夜之间被当成「中性」重新洗牌。
+      ...(typeof fact.affinityAtWrite === 'number'
+        ? { affinity_at_write: fact.affinityAtWrite, created_at: fact.timestamp }
+        : {}),
     })
   }
 

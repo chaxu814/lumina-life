@@ -26,6 +26,14 @@ import { isEnabled } from '../core/featureFlags'
 // 打包后相对路径会相对 chunk 目录解析而失效（与 systemIpc 的
 // "Cannot find module" 同一类问题）。静态 import 由 Vite 在构建期解析，最稳。
 import { hybridRecall } from './hybridRecall'
+// 🔧 2026-10-15：静态导入而非运行时 require。
+//   打包器会把模块压平，运行时 `require('./affinityDecay')` 必然解析失败
+//   —— 正是 tests/bundledRequires.test.ts 这道门禁在拦的那类问题。
+//   无循环依赖：affinityDecay 只 import core/appConfig（→ fs + pathsFallback）。
+import { AffinityDecayStore, parseMeta } from './affinityDecay'
+// 同理，emotionBridge 只依赖 eventBus / luckyModeIntegration，不回引 memoryStore。
+// 它的文件头也写着「静态导入（打包后动态 require 路径解析不到）」，这里与它保持一致。
+import { getCurrentEmotion } from '../gamification/emotionBridge'
 import {
   RelationshipEventStore,
   type RelationshipEventInput,
@@ -133,6 +141,17 @@ export interface FactEntry {
   /** 来源: 'user_stated' | 'user_confirmed' | 'model_inferred'（旧数据可能是 'user_said'/'observed'/'inferred'/'agent_tool' 等历史值） */
   source: string
   timestamp: string
+  /**
+   * 这条记忆**产生时**的用户亲密度（0~1）。
+   *
+   * 为什么必须跟着 FactEntry 走：混合召回（hybridRecall）在每次 memory_search 时
+   * 用 `structured.facts` 现场重建一个临时向量库，条目的 metadata 完全来自
+   * FactEntry —— 也就是说，**凡是 FactEntry 上没有的字段，召回侧就永远看不到**。
+   * 关系衰减（affinityDecay）此前就死在这条缝里：metadata 存在 facts 表里，
+   * 却没人把它带进召回，所以读取侧接得再漂亮也是恒等于「无数据 → 什么都不变」。
+   * 缺失时按中性 0.5 处理，既不奖励也不惩罚。
+   */
+  affinityAtWrite?: number
 }
 
 export interface ReflectionEntry {
@@ -268,6 +287,25 @@ export class MemoryStore {
         metadata TEXT DEFAULT '{}',
         created_at TEXT DEFAULT (datetime('now','localtime'))
       );
+      -- 记忆审判台的用户裁决留档。
+      -- 为什么单独建表而不是塞进 facts：裁决是「关于事实的事实」——
+      -- 它有理由、有前后权重、有生命周期，却不改变事实本身的内容。
+      -- 塞进 facts 会污染事实表，而丢掉又等于让「记错了」这个反馈重启即失忆。
+      CREATE TABLE IF NOT EXISTS memory_trial_verdicts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_key TEXT NOT NULL,
+        content TEXT,
+        verdict TEXT NOT NULL CHECK(verdict IN ('confirmed','disputed','pending')),
+        confidence_before REAL,
+        confidence_after REAL NOT NULL,
+        cap REAL NOT NULL,
+        source TEXT,
+        lifecycle TEXT,
+        reason TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_trial_verdicts_key ON memory_trial_verdicts(memory_key);
+      CREATE INDEX IF NOT EXISTS idx_trial_verdicts_created ON memory_trial_verdicts(created_at);
     `)
 
     // 迁移：扩展 facts.category 约束以支持 agent_memory
@@ -292,6 +330,14 @@ export class MemoryStore {
       const names = new Set(cols.map(c => c.name))
       if (!names.has('content_key')) { this.db.exec('ALTER TABLE facts ADD COLUMN content_key TEXT') }
       if (!names.has('hit_count')) { this.db.exec('ALTER TABLE facts ADD COLUMN hit_count INTEGER DEFAULT 0') }
+      // 🔧 2026-10-15：补 metadata 列。
+      //   affinityDecay.stampAffinity() 一直在写 `UPDATE facts SET metadata=?`，
+      //   而 facts 表从来没有过这一列 —— 每次调用都抛 SQL error，
+      //   然后被它自己的 try/catch 吞成一行 console.warn。
+      //   于是「关系衰减」整个特性从上线起就**从未真正落过盘**：
+      //   读取侧（hybridRecall）接得再好，metadata 里也永远是空的。
+      //   同样用 ADD COLUMN 原地升级，老库不丢任何历史行。
+      if (!names.has('metadata')) { this.db.exec('ALTER TABLE facts ADD COLUMN metadata TEXT') }
       this.db.exec('CREATE INDEX IF NOT EXISTS idx_facts_content_key ON facts(content_key)')
 
       // 旧行没有 source → 按 user_said 处理
@@ -454,6 +500,41 @@ export class MemoryStore {
   // ── Layer 1: 事实记忆 (Facts) ──────────────────────────
 
   /**
+   * 取当前亲密度（0~1），用于给新写入的事实打「产生时的关系强度」戳。
+   *
+   * 【为什么必须在这里取，而不是在调用方传】
+   * affinityDecay 的整个前提是「这条记忆产生时，你们的关系有多深」。
+   * 让调用方决定传什么，等于让最可能忘记传的路径（也就是主写入路径）不传，
+   * 于是 metadata 永远为空 —— 那正是这个特性此前的真实状态。
+   * 收敛到记忆存储层自己取，才能保证**每一条**新事实都带得上这个戳。
+   */
+  private currentAffinity(): number {
+    try {
+      const raw = getCurrentEmotion?.()?.affinity
+      if (typeof raw === 'number' && Number.isFinite(raw)) {
+        return Math.max(0, Math.min(1, raw))
+      }
+    } catch { /* 桌宠未启动 / 情绪引擎不可用：按中性处理，不阻断写入 */ }
+    return 0.5
+  }
+
+  /**
+   * 写入时给事实打上 affinity_at_write 戳（关系衰减的写入侧）。
+   *
+   * 刻意**不抛异常**：衰减只是一个排序微调，
+   * 为了一个锦上添花的字段而让记忆写入失败，是本末倒置。
+   * 失败时那一条记忆只是没有戳（退化成中性），其余一切照常。
+   */
+  private stampAffinityOn(factId: number): void {
+    try {
+      new AffinityDecayStore(this.db).stampAffinity(factId, this.currentAffinity())
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[MemoryStore] 关系衰减打戳失败（不影响记忆写入）:', (e as Error)?.message ?? e)
+    }
+  }
+
+  /**
    * 添加一条事实记忆（带来源可信度策略：去重 + 纠正覆盖 + confidence clamp）
    *
    * 规则：
@@ -485,18 +566,28 @@ export class MemoryStore {
         // 同样强或更弱：只记一次命中，不改内容（避免同一幻觉被反复加固）
         this.db.prepare('UPDATE facts SET hit_count=COALESCE(hit_count,0)+1 WHERE id=?').run(existing.id)
       }
+      // 🔧 2026-10-15：新写入的**不是**一条新记忆，而是对同一条的再次陈述。
+      //   affinity_at_write 描述的是「这条记忆产生时的关系」，
+      //   重复陈述不代表关系变了，所以这里刻意**不**重打戳 ——
+      //   否则「关系变深」会通过反复提及偷渡成「记忆自动变重」，
+      //   那不是衰减模型想要的语义。
       return existing.id
     }
 
     const r = this.db.prepare(
       'INSERT INTO facts (category, content, confidence, source, created_at, content_key, hit_count) VALUES (?,?,?,?,?,?,0)'
     ).run(fact.category, fact.content, confidence, source, ts, contentKey)
-    return r.lastInsertRowid as number
+    const newId = r.lastInsertRowid as number
+    // 新事实才打戳：这一刻的关系强度，就是这条记忆此生的全部依据
+    this.stampAffinityOn(newId)
+    return newId
   }
 
   /** 读取时再 clamp 一次：即使有绕过 addFact 的裸写入，也不会把 100% 的幻觉放出去 */
   private static toFactEntry(r: any): FactEntry {
     const source = (r.source as string) || 'user_said'
+    // 关系戳随 FactEntry 出库 —— 否则混合召回那条链永远读不到它（见 FactEntry 上的说明）
+    const aff = parseMeta(r.metadata).affinity_at_write
     return {
       id: r.id as number,
       category: r.category,
@@ -504,6 +595,9 @@ export class MemoryStore {
       confidence: resolveConfidence(source, r.confidence),
       source,
       timestamp: r.created_at,
+      ...(typeof aff === 'number' && Number.isFinite(aff)
+        ? { affinityAtWrite: Math.max(0, Math.min(1, aff)) }
+        : {}),
     }
   }
 
@@ -569,6 +663,101 @@ export class MemoryStore {
   deleteFact(id: number): boolean {
     const result = this.db.prepare('DELETE FROM facts WHERE id=?').run(id)
     return result.changes > 0
+  }
+
+  // ── 记忆审判台：用户裁决落库 ─────────────────────────
+  //
+  // 【为什么不能用 addFact 走裁决路径】
+  // addFact 的覆盖规则是「只有 confidence 更高才覆盖，更低只累加 hit_count」
+  // —— 那条规则是为了防止同一个幻觉被反复加固，是对的。
+  // 但用户判「这条记错了」恰恰是**调低**权重，用 addFact 会被静默吞掉，
+  // 结果就是面板显示「已纠正」、库里权重一点没动。
+  // 裁决是用户对既有事实的**权威判定**，不是又一次「模型说了什么」，
+  // 所以必须有一条独立于 addFact 的直写通道。
+
+  /**
+   * 写入一次用户裁决：下调/上调该事实的权重，并留档。
+   *
+   * @param write 审判台算好的载荷（含正文与新权重）
+   * @returns 是否真的改动了一行事实表。false = 只留了档、没找到对应事实
+   *   （证据链里有、facts 表里没有的情况），调用方应当如实告知而不是假装成功。
+   */
+  applyTrialVerdict(write: {
+    memoryKey: string
+    content: string
+    verdict: 'confirmed' | 'disputed' | 'pending'
+    confidence: number
+    cap: number
+    source: string
+    lifecycle: string
+    reason?: string
+    at: string
+  }): { ok: boolean; factId: number | null } {
+    const source = normalizeFactSource(write.source)
+    // 与 addFact 同样的铁律：无论上游传什么，落库前一律按来源 cap 收敛
+    const confidence = resolveConfidence(source, write.confidence)
+    const content = (write.content || '').trim()
+
+    let factId: number | null = null
+    if (content) {
+      const row = this.db.prepare(
+        'SELECT id FROM facts WHERE content=? ORDER BY confidence DESC, id DESC LIMIT 1',
+      ).get(content) as { id: number } | undefined
+      if (row) {
+        factId = row.id
+        this.db.prepare('UPDATE facts SET confidence=? WHERE id=?').run(confidence, factId)
+      }
+    }
+
+    // 留档永远执行：即便没匹配到事实行，「用户纠正过这条」这件事本身
+    // 也必须留存，否则下次重开面板，同一条幻觉又会以原权重回到眼前。
+    this.db.prepare(
+      `INSERT INTO memory_trial_verdicts
+         (memory_key, content, verdict, confidence_before, confidence_after, cap, source, lifecycle, reason, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      write.memoryKey,
+      content,
+      write.verdict,
+      write.verdict === 'pending' ? null : confidence,
+      confidence,
+      write.cap,
+      source,
+      write.lifecycle,
+      write.reason || null,
+      write.at,
+    )
+
+    return { ok: factId !== null, factId }
+  }
+
+  /** 读回历史裁决（供审判台重启后恢复当前权重） */
+  loadTrialRecords(): Array<{
+    memoryKey: string
+    verdict: 'confirmed' | 'disputed' | 'pending'
+    at: string
+    reason?: string
+    confidenceBefore: number
+    confidenceAfter: number
+    cap: number
+    source: string
+    lifecycle: string
+  }> {
+    const rows = this.db.prepare(
+      'SELECT * FROM memory_trial_verdicts ORDER BY id ASC',
+    ).all() as any[]
+    return rows.map(r => ({
+      memoryKey: String(r.memory_key ?? ''),
+      verdict: (r.verdict === 'confirmed' || r.verdict === 'disputed' ? r.verdict : 'pending') as
+        'confirmed' | 'disputed' | 'pending',
+      at: String(r.created_at ?? ''),
+      ...(r.reason ? { reason: String(r.reason) } : {}),
+      confidenceBefore: typeof r.confidence_before === 'number' ? r.confidence_before : 0,
+      confidenceAfter: typeof r.confidence_after === 'number' ? r.confidence_after : 0,
+      cap: typeof r.cap === 'number' ? r.cap : 1,
+      source: String(r.source ?? DEFAULT_FACT_SOURCE),
+      lifecycle: String(r.lifecycle ?? 'pending'),
+    }))
   }
 
   /** 查找相关事实 (模糊搜索) */

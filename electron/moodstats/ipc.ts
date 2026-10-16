@@ -7,6 +7,7 @@
 //   moodstats:ab:get      → 当前 A/B 状态（分组 / 运行中 / 已退出）
 //   moodstats:ab:setEnabled(on) → 开启/关闭实验（默认仅观测）
 //   moodstats:ab:optOut   → 一键退出（停止干预，保留分组不重洗）
+//   moodstats:ab:rerandomize → 用户主动换组（让第二臂变得可达；不自动重洗）
 //   moodstats:ab:rejoin   → 重新加入
 //   moodstats:export      → 导出 CSV + JSON，返回文件路径
 //
@@ -16,6 +17,7 @@
 //   moodstatsAbGet: () => ipcRenderer.invoke('moodstats:ab:get')
 //   moodstatsAbSetEnabled: (on: boolean) => ipcRenderer.invoke('moodstats:ab:setEnabled', on)
 //   moodstatsAbOptOut: () => ipcRenderer.invoke('moodstats:ab:optOut')
+//   moodstatsAbRerandomize: () => ipcRenderer.invoke('moodstats:ab:rerandomize')
 //   moodstatsAbRejoin: () => ipcRenderer.invoke('moodstats:ab:rejoin')
 //   moodstatsExport: () => ipcRenderer.invoke('moodstats:export')
 // ============================================================
@@ -92,6 +94,29 @@ export function registerMoodStatsIpc(): void {
       if (!h) {return { ok: false, error: 'moodstats 未注册' }}
       h.ab.optOut()
       return { ok: true, state: h.ab.snapshot(), currentGroup: h.ab.currentGroup() }
+    } catch (err) {
+      return { ok: false, error: String((err as Error)?.message || err) }
+    }
+  })
+
+  ipcMain.handle('moodstats:ab:rerandomize', () => {
+    try {
+      const h = getHandle()
+      if (!h) {return { ok: false, error: 'moodstats 未注册' }}
+      const before = h.ab.currentGroup()
+      // 🔧 2026-10-15：让「第二臂」变得可达。
+      //   单机单用户下 treatment/control 天然无法同时非空（见 abGroup.ts 头注释），
+      //   所以「严格对照」是做不到的 —— 但用户至少可以**主动换一次组**，
+      //   从而拿到另一臂的数据，得到一个（仍被时间混杂的）前后对照。
+      //   不自动重洗：自动换组会把两臂都污染成混合体，比稳定分组更糟。
+      h.ab.rerandomize()
+      return {
+        ok: true,
+        before,
+        currentGroup: h.ab.currentGroup(),
+        assignmentCount: h.ab.assignmentCount(),
+        hasSeenBothArms: h.ab.hasSeenBothArms(),
+      }
     } catch (err) {
       return { ok: false, error: String((err as Error)?.message || err) }
     }

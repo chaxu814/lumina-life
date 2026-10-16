@@ -18,7 +18,8 @@
 
 import { ipcMain } from 'electron'
 import { getMemoryEvidence } from '../memoryEvidence'
-import { MemoryTrialBench } from '../memory/trialBench'
+import { MemoryTrialBench, type TrialSink, type TrialStore } from '../memory/trialBench'
+import { getMemoryStore } from '../memory/memoryStore'
 import { swimlaneFromBoard, swimlaneFromTrace, type SwimlaneModel } from '../team/swimlane'
 // 🔧 2026-10-04：这两个数据源**必须静态 import**。
 //   初版写的是 `require('../team/teamSharedBoard')` 惰性加载 ——
@@ -32,14 +33,56 @@ import { getTaskTrace } from '../team/llmTrace'
 // （worker 真的失败过 / 真的重试过），不是新造一个没人写的假 store。
 import { getWorkerFailureStreak, snapshotEmotionCausality, getCausalFrontendThree, getCausalGatingHints } from '../pet/emotionCausalityBridge'
 
-/** 审判台单例：裁决历史必须跨会话留存，否则「记错了」这个反馈等于没给 */
+/**
+ * 审判台单例：裁决历史必须跨会话留存，否则「记错了」这个反馈等于没给。
+ *
+ * 🔧 2026-10-15：原实现是 `new MemoryTrialBench()` —— 不传 store、不传 sink。
+ * 后果不是「少了个功能」，而是**面板在说谎**：
+ *   · sink 为 null → trialBench.submit() 里的回写分支从不执行，SQLite 里什么都没变
+ *   · sinkError 因此永不被设置 → 面板的诚实提示路径永不触发，一律显示「已生效」
+ *   · records 是内存 Map 且无上层持久化 → 重启后裁决历史全部蒸发
+ * 而面板上明确写着「你的纠正会真的下调它的记忆权重并标记为已被证伪」。
+ * 这是本项目最痛的那类**假成功**，必须接线，不能靠面板降级掩盖。
+ */
 let _bench: MemoryTrialBench | null = null
+
+/** 取一个能用「事实读取 + 裁决落库」能力的 store；取不到就返回 null 而不是硬撑 */
+function getTrialStore(): (TrialStore & {
+  applyTrialVerdict?: (w: Parameters<TrialSink>[0]) => { ok: boolean; factId: number | null }
+}) | null {
+  try {
+    const s = getMemoryStore() as unknown as {
+      getFacts?: (category?: string, limit?: number) => unknown[]
+    }
+    if (typeof s?.getFacts !== 'function') {return null}
+    return s as never
+  } catch (err: unknown) {
+    // eslint-disable-next-line no-console
+    console.warn('[TrialBench] 记忆存储不可用，审判台将以只读模式运行：',
+      err instanceof Error ? err.message : String(err))
+    return null
+  }
+}
 
 function getBench(): MemoryTrialBench {
   if (!_bench) {
-    // 刻意不注入 MemoryStore 实例 —— 审判台读的是 store 自己的数据源，
-    // 写入裁决时才落库。这样单测可以用纯内存 mock 替换掉它。
-    _bench = new MemoryTrialBench()
+    const store = getTrialStore()
+    // sink 缺失时**故意不注入**，让 submit() 走「无 sink」分支并如实留痕。
+    // 宁可让面板显示「落库失败」，也不制造第二次假成功。
+    const sink: TrialSink | undefined = store && typeof store.applyTrialVerdict === 'function'
+      ? (w) => {
+          const r = store.applyTrialVerdict!(w)
+          if (!r.ok) {
+            // 留了档但没匹配到事实行：仍然算失败，因为用户要的是权重真的变了
+            throw new Error('未能在事实库中定位到这条记忆，权重未变更（裁决已留档）')
+          }
+        }
+      : undefined
+    if (!store) {
+      // eslint-disable-next-line no-console
+      console.warn('[TrialBench] 未接入记忆存储，裁决将不会被持久化')
+    }
+    _bench = new MemoryTrialBench(store, sink ? { sink } : undefined)
   }
   return _bench
 }

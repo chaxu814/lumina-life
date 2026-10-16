@@ -17,6 +17,7 @@ import { MODE_CONFIGS } from '../../agentTeamPersonas'
 import type { AgentMode, TeamMemberId } from '../../agentTeamTypes'
 import { getDelegationManager } from '../../delegationManager'
 import { AgentRunner } from '../../agentRunner'
+import { parseReviewVerdict, REVIEW_VERDICT_PROTOCOL } from './reviewVerdict'
 
 // ═══════════════════════════════════════════════════════════
 // 「没做成」的统一口径（与 tools/registry.ts 的 buildNotExecutedResult 对齐）
@@ -313,7 +314,11 @@ async function runDelegateFallback(
       callId,
       ok: true,
       content:
-        `⚠️ ${who} 未单独配置 LLM，已由 Lumina 以「${who}」角色代执行完成任务（降级模式）：\n\n${result}`,
+        `⚠️ **团队降级提示**：后台成员「${who}」未单独配置 LLM，本次由 Lumina 直接代为执行其职责。\n\n` +
+        `这意味着本轮**没有发生真正的多 Agent 协作** —— 没有独立上下文、没有独立视角、\n` +
+        `也没有第二双眼睛帮你复核。审查结论不具备独立性，请自行确认。\n` +
+        `如需完整的三 Agent 协作，请为该成员配置 LLM（设置 → Agent 配置）。\n\n` +
+        `—— 以下是代执行结果 ——\n\n${result}`,
     }
   } catch (err: any) {
     return notExecuted(
@@ -491,7 +496,11 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
     }
 
     // Step 2: 热茶（审查员）审查
-    const reviewTask = `审查以下代码：\n\n${yakResult.content.slice(0, 4000)}\n\n关注：逻辑正确性、边界条件、安全问题、性能问题。`
+    // 🔧 2026-10-15：这里必须带上裁决协议。
+    //   delegate_chain 派给 worker 的是一段临时 task 字符串，走的是它自己的
+    //   system prompt —— 只在 AGENTS.md 里教「要输出结构化裁决」是不够的，
+    //   因为 chain 这边的约定不会自动传过去。模型没有理由知道要输出标记。
+    const reviewTask = `审查以下代码：\n\n${yakResult.content.slice(0, 4000)}\n\n关注：逻辑正确性、边界条件、安全问题、性能问题。${REVIEW_VERDICT_PROTOCOL}`
     console.log(`[delegate_chain] 📦 第${i}轮: 热茶 审查`)
 
     const rechaResult = await dm.delegate(fromId, {
@@ -512,24 +521,47 @@ export async function delegateChain(args: Record<string, any>): Promise<ToolResu
       }
     }
 
-    const reviewPassed = /✅|通过|批准|认可|没问题|可以合并|同意|LGTM|approved/i.test(rechaResult.content)
-    prevContext = `第${i}轮结果:\nYak: ${yakResult.content.slice(0, 1000)}\n\n热茶: ${rechaResult.content.slice(0, 1000)}`
+    // 🔧 2026-10-15：结构化裁决替代原来的关键词正则。
+    //   原判定 /✅|通过|批准|认可|没问题|可以合并|同意|LGTM|approved/i 只匹配语义中立词，
+    //   「没问题，但第 40 行有竞态」照样判通过 —— 这是整条流水线最薄弱的一环。
+    //   现在改为解析 [VERDICT:...] 标记，且 **fail-closed**：拿不到明确裁决一律不算通过。
+    const verdict = parseReviewVerdict(rechaResult.content)
+    const reviewPassed = verdict.verdict === 'pass'
+    prevContext = `第${i}轮结果:\nYak: ${yakResult.content.slice(0, 1000)}\n\n热茶: ${verdict.cleanText.slice(0, 1000)}`
+
+    if (!verdict.structured) {
+      // 不合规要留痕：这是「模型没按协议输出」的信号，
+      // 静默当未通过会让流水线看起来一直在转却查不出原因。
+      console.warn(
+        `[delegate_chain] ⚠️ 第${i}轮审查未给出合规裁决（found=${verdict.found.join(',') || '无'}）：${verdict.reason}`,
+      )
+    }
 
     if (reviewPassed) {
       console.log(`[delegate_chain] ✅ 第${i}轮审查通过！`)
       dm.setContext('last_chain_result', yakResult.content.slice(0, 500), 'yak')
       return {
         callId, ok: true,
-        content: `## 流水线结果（第${i}轮通过）\n\n### Yak（程序员）输出\n${yakResult.content}\n\n### 热茶 审查\n${rechaResult.content}\n\n> 共 ${i} 轮迭代完成`,
+        content: `## 流水线结果（第${i}轮通过）\n\n### 工程执行产出\n${yakResult.content}\n\n### 代码审查意见\n${verdict.cleanText}\n\n> 共 ${i} 轮迭代完成`,
       }
     }
 
     if (i < maxIterations) {
-      console.log(`[delegate_chain] 🔄 第${i}轮未通过审查，进入第${i + 1}轮修复...`)
+      const why = verdict.verdict === 'uncertain'
+        ? '未通过审查（审查未给出明确结论）'
+        : '未通过审查'
+      console.log(`[delegate_chain] 🔄 第${i}轮${why}，进入第${i + 1}轮修复...`)
     } else {
+      // 🔧 2026-10-15：措辞必须区分「明确判 FAIL」和「裁决不明」。
+      //   两者都未通过，但含义完全不同 —— 对用户谎称「审查发现了问题」，
+      //   是在编造一次根本没发生的审查结论。
+      const tail = verdict.verdict === 'uncertain'
+        ? '> ⚠️ 已达最大迭代次数，且**审查始终未给出明确结论**（未按协议输出裁决标记）。\n' +
+          '> 这不代表代码有问题，也不代表没问题 —— 请务必人工检查。'
+        : '> ⚠️ 已达最大迭代次数，审查仍判定存在问题。建议手动审查。'
       return {
         callId, ok: true,
-        content: `## 流水线达到最大轮数（${maxIterations}轮）\n\n### 最终 Yak（程序员）输出\n${yakResult.content}\n\n### 最终 热茶 审查\n${rechaResult.content}\n\n> ⚠️ 达到最大迭代次数，仍有未解决的问题。建议手动审查。`,
+        content: `## 流水线达到最大轮数（${maxIterations}轮）\n\n### 工程执行产出\n${yakResult.content}\n\n### 代码审查意见\n${verdict.cleanText}\n\n${tail}`,
       }
     }
   }
