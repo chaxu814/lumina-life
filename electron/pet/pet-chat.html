@@ -148,6 +148,35 @@
   #chat-panel .cp-typing span:nth-child(2) { animation-delay: 0.15s; }
   #chat-panel .cp-typing span:nth-child(3) { animation-delay: 0.3s; }
   @keyframes typingBounce { 0%,60%,100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-5px); opacity: 1; } }
+  /* ── 🧠 推理过程面板（2026-10-17）─────────────────────────────
+     桌宠聊天此前只有"三个点"等待动画，看不到任何思考与工具调用，
+     和主聊天面板的思考区完全不像同一个产品。现在主窗口把 agent:event
+     按 requestId 过滤后经 pet:chat-trace 中转过来，这里渲染成可折叠的推理链。 */
+  #chat-panel .cp-trace {
+    align-self: flex-start; max-width: 88%; margin: 0 0 2px 0;
+    background: rgba(248,250,255,0.78); border: 1px solid rgba(100,130,180,0.16);
+    border-radius: 10px; overflow: hidden; -webkit-app-region: no-drag;
+    animation: msgIn .2s ease;
+  }
+  #chat-panel .cp-trace-head {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    padding: 5px 9px; background: rgba(120,150,200,0.06); user-select: none;
+    font-size: 11px; font-weight: 600; color: #4a6a95;
+  }
+  #chat-panel .cp-trace-head:hover { background: rgba(120,150,200,0.12); }
+  #chat-panel .cp-trace-count { margin-left: auto; font-weight: 500; font-size: 10px; color: #8a9cba; }
+  #chat-panel .cp-trace-body {
+    max-height: 132px; overflow-y: auto; padding: 6px 9px 8px;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  #chat-panel .cp-trace-body::-webkit-scrollbar { width: 4px; }
+  #chat-panel .cp-trace-body::-webkit-scrollbar-thumb { background: rgba(100,130,180,0.25); border-radius: 2px; }
+  #chat-panel .cp-trace.collapsed .cp-trace-body { display: none; }
+  #chat-panel .cp-trace-line { display: flex; gap: 5px; line-height: 1.45; word-break: break-word; font-size: 11px; color: #5a6f92; }
+  #chat-panel .cp-trace-ico { flex: none; }
+  #chat-panel .cp-trace-txt { opacity: .94; }
+  #chat-panel .cp-trace.done .cp-trace-head { color: #4a7a5a; }
+  #chat-panel .cp-trace.fail .cp-trace-head { color: #a05a5a; }
   #chat-panel .cp-quick {
     display: flex; gap: 6px; padding: 8px 12px 0; flex-wrap: wrap; flex: none;
   }
@@ -272,6 +301,25 @@ const chatInput = document.getElementById('pet-chat-input');
 const typingEl = document.getElementById('chat-typing');
 
 function addChatMsg(role, text) {
+  // 🐛 2026-10-17：同一句话被画两次 —— 点 Live2D 头顶搭话卡片的 A/B/C 时必现。
+  //
+  //   根因（两条路径撞在一起）：
+  //     ① pet-live2d.html 的 replyProactive 先发 `pet:sync-send` → 主窗口
+  //        PetChatSync 把这句话写进 store 并开始跑 Agent；
+  //     ② 紧接着它又发 `pet:sync-reply {role:'user'}` 把用户气泡"回显"到本窗，
+  //        而这条走 sendWhenReady，要等 did-finish-load。
+  //
+  //   新窗口加载时会先拉一次历史 —— 此时 ① 已经把这句话写进 store 了，
+  //   于是历史里**已经有它**；随后 ② 的延迟回显到达，又画一遍 → 两个一样的蓝气泡。
+  //
+  //   为什么不能直接删掉 ②：窗口早就开着的时候不会拉历史，② 是唯一的渲染者。
+  //   所以修在渲染层：相邻、同角色、同文本、3 秒内 → 判为重复，丢弃。
+  //   （顺带也挡住快捷按钮连点、双击发送这类真实重复。）
+  //
+  //   历史回填时不丢：历史是权威数据，不可能含这条 bug 造成的重复，
+  //   但真实对话里"连说两句一样的话"是可能的 —— 回填阶段只记录不拦截。
+  const dup = isDuplicateMsg(role, text);
+  if (dup && !_replayingHistory) return;
   const d = document.createElement('div');
   d.className = 'cp-msg ' + role;
   if (role === 'pet') {
@@ -286,6 +334,23 @@ function addChatMsg(role, text) {
   while (chatLog.children.length > 30) chatLog.removeChild(chatLog.firstChild);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
+
+/* ── 相邻重复消息判定（见 addChatMsg 注释） ── */
+const DEDUPE_WINDOW_MS = 3000;
+let _lastMsg = null; // { role, text, at }
+/** 历史回填期间为 true —— 只记录不拦截（历史是权威数据，见 addChatMsg 注释） */
+let _replayingHistory = false;
+function isDuplicateMsg(role, text) {
+  const now = Date.now();
+  const t = text == null ? '' : String(text);
+  if (_lastMsg && _lastMsg.role === role && _lastMsg.text === t && now - _lastMsg.at < DEDUPE_WINDOW_MS) {
+    _lastMsg.at = now; // 续期：连续多次重复只算一次
+    return true;
+  }
+  _lastMsg = { role, text: t, at: now };
+  return false;
+}
+function resetMsgDedupe() { _lastMsg = null; }
 function showTyping(show) { typingEl.classList.toggle('show', show); if (show) chatLog.scrollTop = chatLog.scrollHeight; }
 // 🆕 2026-10-13：等待态改为**计数**而不是布尔开关。
 //   桌宠侧是串行排队处理消息的（见 src/lib/petChatOrchestrator.ts：处理中到达的
@@ -297,6 +362,91 @@ function beginWait() { _pendingReplies++; showTyping(true); }
 function endWait() {
   _pendingReplies = Math.max(0, _pendingReplies - 1);
   if (_pendingReplies === 0) showTyping(false);
+}
+
+/* ════════════════════════════════════════════════════════════
+   🧠 推理过程面板（2026-10-17 新增）
+   ────────────────────────────────────────────────────────────
+   需求原话：「这里也不像 agent 那样的推理思考」。
+   此前桌宠聊天只有三个点的等待动画：模型在搜网页、在翻文件、在纠错，
+   用户完全看不见，体验上和主聊天面板的「思考过程」是两个产品。
+
+   数据从哪来：`agent:event` 只发给**发起 agent:chat 的窗口**（主窗口），
+   桌宠聊天窗收不到。主窗口的 PetChatSync 订阅事件、按 requestId 过滤，
+   再经 `pet:chat-trace` 中转到这里（见 electron/pet/petWindow.ts）。
+
+   渲染策略：一轮一块，可折叠；回复到达后自动收起成一行摘要，
+   点标题可展开回看。不自动删除 —— 想回看上一轮怎么想的还能翻到。
+   ════════════════════════════════════════════════════════════ */
+let _trace = null; // { el, title, count, body, steps, streamLine }
+
+function traceClear() {
+  if (_trace && _trace.el && _trace.el.isConnected) {
+    try { _trace.el.remove(); } catch (e) {}
+  }
+  _trace = null;
+}
+
+function traceEnsure() {
+  if (_trace && _trace.el && _trace.el.isConnected) return _trace;
+  const el = document.createElement('div');
+  el.className = 'cp-trace';
+  const head = document.createElement('div'); head.className = 'cp-trace-head';
+  const title = document.createElement('span'); title.className = 'cp-trace-title';
+  title.textContent = '💭 思考中…';
+  const count = document.createElement('span'); count.className = 'cp-trace-count';
+  head.appendChild(title); head.appendChild(count);
+  const body = document.createElement('div'); body.className = 'cp-trace-body';
+  el.appendChild(head); el.appendChild(body);
+  chatLog.appendChild(el);
+  while (chatLog.children.length > 30) chatLog.removeChild(chatLog.firstChild);
+  _trace = { el: el, title: title, count: count, body: body, steps: 0, streamLine: null };
+  head.onclick = function () {
+    if (!_trace) return;
+    _trace.el.classList.toggle('collapsed');
+  };
+  return _trace;
+}
+
+/**
+ * 追加一行推理。
+ * @param {string} icon  💭 思考 / 🔧 工具 / ✅ 完成 / ⚠️ 失败 / ❌ 错误
+ * @param {string} text  一行文字
+ * @param {{stream?: boolean}} [opts] stream=true 表示这是**同一条**流式推理的增量，
+ *        原地更新最后一行而不是新起一行（否则每 180ms 就多一行，瞬间刷满）。
+ */
+function tracePush(icon, text, opts) {
+  const t = String(text == null ? '' : text).trim();
+  if (!t) return;
+  const isStream = !!(opts && opts.stream);
+  const tr = traceEnsure();
+  if (isStream && tr.streamLine) {
+    tr.streamLine.querySelector('.cp-trace-txt').textContent = t;
+  } else {
+    const line = document.createElement('div'); line.className = 'cp-trace-line';
+    const ico = document.createElement('span'); ico.className = 'cp-trace-ico'; ico.textContent = icon;
+    const txt = document.createElement('span'); txt.className = 'cp-trace-txt'; txt.textContent = t;
+    line.appendChild(ico); line.appendChild(txt);
+    tr.body.appendChild(line);
+    tr.steps++;
+    tr.count.textContent = tr.steps + ' 步';
+    if (isStream) tr.streamLine = line;
+  }
+  if (!isStream) tr.streamLine = null;
+  tr.body.scrollTop = tr.body.scrollHeight;
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+/** 收尾：把面板折成一行摘要（失败时标红），并断开引用。
+ *  断开引用是必须的：这块面板已"定型"留在聊天记录里当回看入口，
+ *  下一轮 traceEnsure 要新建一块，而不是把新推理接到旧面板尾巴上。 */
+function traceFinish(ok) {
+  if (!_trace) return;
+  _trace.streamLine = null;
+  _trace.title.textContent = (ok === false ? '⚠️ 思考中断 · ' : '🧠 思考完成 · ') + _trace.steps + ' 步';
+  _trace.el.classList.add(ok === false ? 'fail' : 'done');
+  _trace.el.classList.add('collapsed');
+  _trace = null;
 }
 // 当前显示中的选项组。
 // 【为什么要记下来，而不是每次各自 append】
@@ -359,7 +509,7 @@ function addChatOptions(options) {
   _activeOptions = wrap;
   chatLog.scrollTop = chatLog.scrollHeight;
 }
-function clearChat() { _activeOptions = null; _optionHistory = []; chatLog.innerHTML = ''; }
+function clearChat() { _activeOptions = null; _optionHistory = []; chatLog.innerHTML = ''; traceClear(); resetMsgDedupe(); }
 
 // 由主 Agent 回复文本本地派生动作/表情（纯关键词启发式，**不发任何 LLM**）。
 // 替代旧的"同一轮再打一次 pet:chat 意图 LLM"——那会和完整回复并发抢同一个本地模型。
@@ -377,6 +527,7 @@ function sendText(text) {
   if (!t) return;
   addChatMsg('user', t);
   if (chatInput) chatInput.value = '';
+  traceClear();          // 新一轮 → 上一轮的推理面板收走（已折叠的那块保留在历史里）
   beginWait();
   if (HAS_IPC) {
     // 完整回复统一走 pet:sync 主 Agent 路径（串行排队 + 退避重试在主窗 PetChatSync 编排）。
@@ -432,8 +583,13 @@ if (HAS_IPC) {
     //   输入框与聊天窗内选项走 sendText()，且主窗不会回推自己注入的 user 消息，
     //   所以这里判断 role==='user' 不会给它们带来副作用。
     if (data && data.role === 'user') {
+      // 用户消息来自别处（Live2D 头顶卡片的 A/B/C）→ 进入等待态。
+      // ⚠️ 这里**不能** traceClear()：卡片路径是先 pet:sync-send（Agent 立刻开跑、
+      //    推理事件已经在路上了），再延迟回显这句用户消息。此时清面板会把
+      //    刚收到的思考行抹掉。收尾由 traceFinish 自己断引用，下一轮自然新建。
       beginWait();
     } else {
+      traceFinish(true);
       endWait();
     }
     if (data && data.text) {
@@ -449,7 +605,30 @@ if (HAS_IPC) {
   ipc.on('pet:sync-history-reply', (_e, messages) => {
     if (!Array.isArray(messages) || messages.length === 0) return;
     chatLog.innerHTML = '';
-    for (const m of messages) addChatMsg(m.role === 'user' ? 'user' : 'pet', m.content);
+    // 清空后必须重置去重状态：否则"清空前最后一条"会跟"回填的第一条"比较，
+    // 若恰好同角色同文本，历史的第一条会被误吞。
+    resetMsgDedupe();
+    traceClear();
+    _replayingHistory = true;
+    try {
+      for (const m of messages) addChatMsg(m.role === 'user' ? 'user' : 'pet', m.content);
+    } finally {
+      _replayingHistory = false;
+    }
+  });
+  // 🧠 推理过程中转（主窗口 → 本窗，见 petWindow.ts 的 pet:chat-trace 注释）
+  ipc.on('pet:chat-trace', (_e, data) => {
+    if (!data || typeof data.kind !== 'string') return;
+    if (data.kind === 'thinking') { tracePush('💭', data.text, { stream: !!data.stream }); return; }
+    if (data.kind === 'tool_start') {
+      tracePush('🔧', data.detail ? ('调用 ' + data.tool + '：' + data.detail) : ('调用 ' + data.tool));
+      return;
+    }
+    if (data.kind === 'tool_end') {
+      tracePush(data.ok === false ? '⚠️' : '✅', data.tool + (data.ok === false ? ' 失败' : ' 完成'));
+      return;
+    }
+    if (data.kind === 'error') { tracePush('❌', data.text || '出错了'); return; }
   });
   // 拉取历史
   try { ipc.send('pet:sync-history-request'); } catch (e) {}

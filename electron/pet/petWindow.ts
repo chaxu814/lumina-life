@@ -1769,6 +1769,41 @@ export function registerPetIpc(): void {
       sendWhenReady(petWindow, 'pet:sync-reply', data)
     }
   })
+  // 🆕 2026-10-17：推理过程中转（主窗口 → 独立聊天窗）
+  //
+  // 为什么需要这一跳：`agent:event` 是 `event.sender.send(...)`，只发给**发起
+  // agent:chat 的那个窗口** —— 也就是主窗口（PetChatSync 在其中）。桌宠聊天窗
+  // 作为独立 BrowserWindow 收不到，于是它只能显示"三个点"，看不到思考与工具调用。
+  // 由主窗口按 requestId 过滤后经本通道转发过来，桌宠窗就能像主面板一样显示推理链。
+  //
+  // ⚠️ 首次从 Live2D 头顶卡片发起对话时，聊天窗是**刚被创建、还在 loadFile** 的。
+  //   这时既不能直接 send（页面还没注册 ipc.on，消息静默丢失），也不能像
+  //   pet:sync-reply 那样每条都挂 once('did-finish-load')（推理流会来几十条，
+  //   监听器堆到 MaxListeners 警告）。所以这里**缓冲 + 加载完一次性补发**。
+  //   缓冲的是"第一轮"的推理 —— 恰恰是用户最想看到的那一轮。
+  // 只发给 petChatWindow：Live2D 桌宠窗没有聊天流，送过去也没人渲染。
+  ipcMain.on('pet:chat-trace', (_e, data: { kind: string; text?: string }) => {
+    if (!data || typeof data.kind !== 'string') {return}
+    if (!petChatWindow || petChatWindow.isDestroyed()) {return}
+    const wc = petChatWindow.webContents
+    if (!wc.isLoading()) {
+      wc.send('pet:chat-trace', data)
+      return
+    }
+    traceBuffer.push(data)
+    if (traceBuffer.length > 200) {traceBuffer.shift()}
+    if (!traceFlushHooked) {
+      traceFlushHooked = true
+      wc.once('did-finish-load', () => {
+        traceFlushHooked = false
+        const pending = traceBuffer.splice(0)
+        if (!petChatWindow || petChatWindow.isDestroyed()) {return}
+        for (const item of pending) {
+          try { petChatWindow.webContents.send('pet:chat-trace', item) } catch { break }
+        }
+      })
+    }
+  })
   // 历史记录请求方（桌宠窗或独立聊天窗），回复时定向送回
   let historyRequester: BrowserWindow | null = null
   // 桌宠/聊天窗请求历史记录 → 转发给主窗口
@@ -2386,6 +2421,15 @@ export const PET_CHAT_WINDOW_H = 620
 
 let petChatWindow: BrowserWindow | null = null
 
+/**
+ * 推理过程（pet:chat-trace）在聊天窗加载期间的缓冲。
+ * 页面还没注册 ipc.on 时直接 send 会静默丢失；而推理流有几十条，
+ * 每条都挂一次 did-finish-load 监听会堆到 MaxListeners 警告 ——
+ * 所以缓冲到加载完一次性补发（详见 pet:chat-trace 处理器的注释）。
+ */
+let traceBuffer: Array<{ kind: string; text?: string }> = []
+let traceFlushHooked = false
+
 export function isPetChatOpen(): boolean {
   return !!(petChatWindow && !petChatWindow.isDestroyed())
 }
@@ -2481,6 +2525,9 @@ export function openPetChatWindow(): { ok: boolean; error?: string } {
     petChatWindow.on('move', persistPos)
     petChatWindow.on('closed', () => {
       petChatWindow = null
+      // 窗口关掉时缓冲里的推理已无意义，留着会在下一个窗口里"补发"上一轮的旧思考
+      traceBuffer = []
+      traceFlushHooked = false
       console.log('[PetChatWindow] 独立聊天窗口已关闭')
     })
 

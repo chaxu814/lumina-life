@@ -162,11 +162,20 @@ describe('Live2D 聊天窗 · 从角色头顶卡片选项发起对话时的加�
   const petWindowSrc = read(path.join(process.cwd(), 'electron', 'pet', 'petWindow.ts'))
 
   it('收到「用户消息」回显时进入等待态（而不是把动画关掉）', () => {
-    expect(html).toMatch(/if \(data && data\.role === 'user'\)\s*\{\s*beginWait\(\)/)
+    // 2026-10-17：分支里多了一段注释（说明此处为何不能 traceClear），
+    //   断言放宽到「user 分支 → beginWait() 之间只有注释」。
+    expect(html).toMatch(/if \(data && data\.role === 'user'\)\s*\{(?:[^}]*?)\bbeginWait\(\)/)
+    // 反例守卫：user 分支绝不能直接关动画
+    const userBranch = html.slice(
+      html.indexOf("if (data && data.role === 'user')"),
+      html.indexOf("if (data && data.role === 'user')") + 400,
+    )
+    expect(userBranch).not.toContain('showTyping(false)')
   })
 
   it('助手回复到达时才结束等待态', () => {
-    expect(html).toMatch(/\}\s*else\s*\{\s*endWait\(\);\s*\}/)
+    // 2026-10-17：结束等待前先收推理面板（traceFinish），再 endWait()。
+    expect(html).toMatch(/\}\s*else\s*\{\s*traceFinish\(true\);\s*endWait\(\);\s*\}/)
   })
 
   it('等待态用计数而非布尔（排队时不会提前收掉动画）', () => {

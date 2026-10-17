@@ -1106,6 +1106,16 @@ const api = {
   petSyncSend: (text: string) => ipcRenderer.send('pet:sync-send', { text }),
   /** 主窗口 → 桌宠：发送 Agent 回复 */
   petSyncReply: (text: string, role: string) => ipcRenderer.send('pet:sync-reply', { text, role }),
+  /**
+   * 主窗口 → 桌宠：转发本次 Agent 请求的**推理过程**（thinking / tool_*）。
+   *
+   * 🆕 2026-10-17：桌宠聊天窗此前只有「三个点」等待动画，看不到任何推理与工具调用，
+   *   和主聊天面板的思考过程完全不像同一个产品。而 `agent:event` 只发给**发起请求的
+   *   窗口**（这里是主窗口，PetChatSync 在其中），桌宠窗收不到。
+   *   所以由主窗口订阅事件、按 requestId 过滤后，经本通道中转给桌宠窗。
+   */
+  petSyncTrace: (payload: { kind: string; text?: string; tool?: string; detail?: string; ok?: boolean; stream?: boolean }) =>
+    ipcRenderer.send('pet:chat-trace', payload),
   /** 主窗口 → 桌宠：发送历史记录 */
   petSendHistory: (messages: Array<{ role: string; content: string }>) => ipcRenderer.send('pet:sync-history-reply', messages),
   /** 桌宠 → 主窗口：请求历史聊天记录 */
