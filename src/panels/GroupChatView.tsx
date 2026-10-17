@@ -32,6 +32,8 @@ import {
   calculateChainSpark,
   detectUncertainty,
   detectMentionInReply,
+  SPARK_NOTE_PREFIX,
+  SPARK_NOTE_SUFFIX,
 } from '../services/conversationDynamics'
 import LuckyModeSelector from '../components/LuckyModeSelector'
 import ModelSelector from '../components/ModelSelector'
@@ -3599,11 +3601,17 @@ export default function GroupChatView() {
           let nextContext: string
           if (mentionedAgent) {
             nextSpeakerId = mentionedAgent
-            nextContext = `${responder.name} @了你：${lastReply.slice(0, 300)}`
+            // 🐛 2026-10-17: 同样套场记外框 —— 这段会作为 user 消息喂给模型，
+            //   裸写「热茶 @了你：…」会让模型以为有人在给它下指令。
+            nextContext = SPARK_NOTE_PREFIX
+              + `${responder.name} 刚在群里点了你，TA 说的是：「${lastReply.slice(0, 300)}」——接着话头回应一下。`
+              + SPARK_NOTE_SUFFIX
           } else if (isUncertain) {
             const others = AGENTS.filter(a => a.id !== responder.id)
             nextSpeakerId = others[Math.floor(Math.random() * others.length)].id
-            nextContext = `${userText.slice(0, 200)}\n\n（${responder.name} 刚才说：${reply.slice(0, 300)}）`
+            nextContext = SPARK_NOTE_PREFIX
+              + `用户刚才说：「${userText.slice(0, 200)}」\n${responder.name} 接了一句：「${reply.slice(0, 300)}」——你接着往下说。`
+              + SPARK_NOTE_SUFFIX
           } else {
             nextSpeakerId = spark!.agentId
             nextContext = spark!.contextForLLM

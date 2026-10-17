@@ -127,7 +127,7 @@ import {
 } from './agent/toolLoopGuard'
 import { applyEvidenceGuard, RETRIEVAL_TOOL_NAMES } from './agent/answerEvidenceGuard'
 import { trimToBudget } from './agent/contextBudget'
-import { pickRecoverySummaryText } from './agent/recoveryText'
+import { pickRecoverySummaryText, isInstructionEcho } from './agent/recoveryText'
 import { computePersistStart, advanceCursor } from './agent/persistCursor'
 import { resolveCapabilities, type ServerFacts } from './core/modelCapabilities'
 import { isLiteTier, LITE_SYSTEM_NOTE } from './orchestration/weakModelMode'
@@ -2737,8 +2737,17 @@ private summarizer: ConversationSummarizer | null = null
             //   注意：原句必须保持原样开头 —— tests/agentStabilityGuards.test.ts
             //   用它作定位串断言「这条伪造 user 消息被登记为瞬态」。
             content: '请根据本轮对话给出一个简洁的自然语言回复。不要调用工具，不要输出代码块。'
-              + '（本轮没有任何工具可用，请直接依据上面的对话与搜索结果作答；'
-              + '如果信息不足，就如实说明缺少什么，不要编造。）',
+              // 🐛 2026-10-17：结尾旧文案是「如果信息不足，就如实说明缺少什么，不要编造」。
+              //   实测（群聊接话，上下文很薄）模型**忠实执行**了这句话，回：
+              //   「这一轮里好像没有给我提供具体的对话内容……是漏传了材料吗？」
+              //   用户看到的是软件在抱怨自己漏传数据 —— 既无法行动，也损害可信度。
+              //   现在改成：这是内部指令；缺内容就直接给一句自然的过渡话；
+              //   严禁谈论指令 / 轮次 / 工具 / 材料。
+              + '（本条是系统给你的内部指令，不是用户说的话，不要在回复里提及它。'
+              + '本轮没有任何工具可用，请直接依据上面的对话与搜索结果作答。'
+              + '严禁提到「本轮对话」「系统指令」「工具」「材料」「漏传」「上下文」这类内部机制，'
+              + '也不要向用户索要材料或解释自己的运行规则。'
+              + '如果上面确实没有可回答的内容，就只用一句符合你角色的自然过渡话带过，不要描述系统状态。）',
           })
           // 🆕 2026-10-12: 这条「总结轮」提示是伪造的 user 消息，只对本轮有效。
           //   若留到下一轮，模型会看到一条"用户说：请给出简洁回复"的假历史并可能去回应它。
@@ -2794,6 +2803,19 @@ private summarizer: ConversationSummarizer | null = null
 
     // 安全 strip 链 — 防止内容被过度剥离
     finalText = _safeStripChain(finalText, _stripFillerText, _stripMetaCommentary, _stripLeakedOutput)
+
+    // 🐛 2026-10-17：复述/评论内部指令的文本一律不上屏。
+    //   这类文本（「你说要…来回复」「这一轮没有给我提供对话内容」「按照规则，
+    //   只有在需要…时才用工具」）读起来通顺、语气也正常，所以清洗链与长度判断
+    //   都会放行 —— 用户看到的却是模型在念内部指令，还以为软件漏传了数据。
+    //   判空后交给 sendMessage 的诚实兜底（"这轮我没能给出有效回复"），
+    //   比让用户去排查一个不存在的"漏传"要诚实得多。
+    if (finalText && isInstructionEcho(finalText)) {
+      console.warn(
+        `[AgentRunner] 🚫 丢弃「复述指令」文本（${finalText.length} 字）：${finalText.slice(0, 60)}…`,
+      )
+      finalText = ''
+    }
 
     // 重复结构化块截断（同一段新闻/列表/搜索输出最多出现 1 次）
     finalText = _stripRepeatedBlocks(finalText)

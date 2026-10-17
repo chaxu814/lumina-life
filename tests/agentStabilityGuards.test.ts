@@ -212,8 +212,13 @@ describe('⑨ 内部「控制消息」不得残留到下一轮（本轮核心 bu
     // 用带 `content:` 前缀的定位串 —— 否则会命中注释里引用的同一句话
     const i = runner.indexOf("content: '请根据本轮对话给出一个简洁的自然语言回复")
     expect(i).toBeGreaterThan(-1)
-    // 该 push 之后紧跟登记
-    expect(runner.slice(i, i + 400)).toContain('_transientMsgs.add(')
+    // 该 push 之后紧跟登记。
+    // 这里不卡死字面字数：指令文案本身会随迭代变长（2026-10-17 加了
+    // 「不要提及内部机制」的约束），卡 400 字会让「只是改了提示词」也红。
+    // 真正要守的是「登记紧跟在 push 之后、中间没插别的逻辑」。
+    const addIdx = runner.indexOf('_transientMsgs.add(', i)
+    expect(addIdx).toBeGreaterThan(-1)
+    expect(addIdx - i).toBeLessThan(1500)
     // 摘要同样登记
     const s = runner.indexOf('const summaryMsg: AgentMessage')
     expect(s).toBeGreaterThan(-1)

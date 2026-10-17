@@ -44,22 +44,63 @@ const SPARK_WEIGHTS: Record<string, Record<SparkType, number>> = {
   yak:    { '反驳': 0.25, '补充': 0.30, '吐槽': 0.05, '关心': 0.10, '冷幽默': 0.30 },
 }
 
-// ── 火花上下文提示 (v2.8.4: 重写为自然聊天语气) ──
+// ── 火花上下文提示 ──
+//
+// ═══════════════════════════════════════════════════════════
+// 🐛 2026-10-17：为什么这里必须加「场记」外框
+//
+// 【现象】群聊接话时，队友有时不说人话，而是对着指令本身作答：
+//   「你说要"根据本轮对话"来回复，但这一轮里好像没有给我提供具体的
+//     对话内容或搜索结果啊？是漏传了材料吗？」
+//   「这一轮确实没有实际调用任何工具。因为按照规则，只有在需要写文件、
+//     执行命令或搜索信息时才用工具。」
+//
+// 【成因】这段 `contextForLLM` 是被当作 `text:` 传进 agentChat 的 ——
+//   在模型眼里它**就是用户这一轮说的话**。而原文是第三人称旁白
+//   （「你听了觉得不对」「就像朋友聊天时…」），模型读完会困惑：
+//   这既不像用户在提问，也不像用户在陈述，于是最省力的解释是
+//   「有人在给我下指令」→ 它就开始评论这条指令、索要"漏传的材料"。
+//
+// 【修法】把它显式框成**内部场记**（stage direction）：
+//   ① 开头说明这不是用户发言，是系统给你的私下提示；
+//   ② 中间只写"要说什么"，不写"我为什么这么想"的元叙述；
+//   ③ 结尾三条硬约束：别提这条提示、别问用户要材料、没有话头就自然带过。
+//
+//   为什么不能只靠 `isInstructionEcho()` 兜底？那是**事后**过滤，
+//   用户仍会看到气泡闪一下再消失。从源头让它不产生，才是干净的。
+// ═══════════════════════════════════════════════════════════
+
+/** 场记外框前缀 —— 让模型明白下面这段不是用户说的话 */
+export const SPARK_NOTE_PREFIX =
+  '【群聊场记 · 系统私下给你的提示，不是用户发言，也不要在回复里提到这段提示】\n'
+
+/** 场记外框后缀 —— 三条硬约束，专治"对着指令说话" */
+export const SPARK_NOTE_SUFFIX =
+  '\n\n——直接说你要说的那句话就行，别解释你为什么这么说，' +
+  '别提到「提示」「指令」「本轮」「工具」「材料」这类词，' +
+  '也别问用户是不是漏传了什么。上面要是实在没有可接的话头，' +
+  '就用一句符合你角色的自然短句带过。'
+
 const SPARK_CONTEXT: Record<SparkType, (firstAgent: string, firstReply: string) => string> = {
   '反驳': (a, r) =>
-    `${a} 刚说「${r.slice(0, 100)}」——你听了觉得不对。不是恶意，就是你刚好知道更准确的信息。用你的方式纠正一下，像朋友聊天时随口说「诶其实不是那样的…」的感觉。`,
+    `${a} 刚才那句「${r.slice(0, 100)}」你听着不太对——不是恶意，是你手里刚好有更准的信息。接着群里的话头，用你自己的语气纠正过来，像朋友随口说「诶其实不是那样」。`,
 
   '补充': (a, r) =>
-    `${a} 刚说「${r.slice(0, 100)}」——你听着觉得还漏了点东西。不是 TA 说错了，是你刚好想到另一个角度。就像朋友聊天时突然想起来「哦对了还有…」那种自然补充。`,
+    `${a} 刚才那句「${r.slice(0, 100)}」没说到的地方，你刚好想到了另一个角度。不是 TA 说错了，接着话头自然补一句，像朋友突然想起来「哦对了还有…」。`,
 
   '吐槽': (a, r) =>
-    `${a} 刚说「${r.slice(0, 100)}」——你忍不住想逗 TA 一下。不是攻击，是朋友之间的调侃。你知道 TA 不会真的生气，TA 也知道你这是亲近的表现。`,
+    `${a} 刚才那句「${r.slice(0, 100)}」让你忍不住想逗 TA 一下。是朋友之间的调侃，不是攻击——你知道 TA 不会真的生气。`,
 
   '关心': (a, r) =>
-    `${a} 刚说了「${r.slice(0, 100)}」——你感觉对话里有些情绪没被接住。不是因为 TA 不好，是你刚好注意到了。就像朋友在你低落时多说一句「你还好吗」的自然关心。`,
+    `${a} 刚才那句「${r.slice(0, 100)}」里有点情绪没被接住。你注意到了，就多说一句，像朋友在你低落时那句「你还好吗」。`,
 
   '冷幽默': (a, r) =>
-    `${a} 刚说「${r.slice(0, 100)}」——你脑子里突然冒出一个冷幽默。不是为了表演，是你真的觉得这个角度很好笑。面无表情说出来，看看有没有人 get 到。`,
+    `${a} 刚才那句「${r.slice(0, 100)}」让你脑子里冒出个冷幽默。不是表演，是你真觉得这角度好笑。面无表情说出来，看看有没有人 get 到。`,
+}
+
+/** 组装完整场记：前缀 + 内容 + 后缀 */
+function buildSparkNote(type: SparkType, firstAgent: string, firstReply: string): string {
+  return SPARK_NOTE_PREFIX + SPARK_CONTEXT[type](firstAgent, firstReply) + SPARK_NOTE_SUFFIX
 }
 
 // ═══════════════════════════
@@ -131,7 +172,7 @@ export function calculateSpark(params: {
     type: sparkType,
     reason: `roll=${roll.toFixed(2)} ≤ prob=${probability.toFixed(2)} | ${speaker.name} ${sparkType}`,
     probability,
-    contextForLLM: SPARK_CONTEXT[sparkType](AGENTS.find(a => a.id === firstAgentId)?.name || firstAgentId, firstReply),
+    contextForLLM: buildSparkNote(sparkType, AGENTS.find(a => a.id === firstAgentId)?.name || firstAgentId, firstReply),
     agentId: speaker.id,
     agentName: speaker.name,
     agentIcon: speaker.icon,
@@ -224,7 +265,8 @@ export function calculateChainSpark(params: {
     type: sparkType,
     reason: `链式#${chainIndex + 1}: roll=${roll.toFixed(2)} ≤ prob=${probability.toFixed(2)} | ${speaker.name} ${sparkType}`,
     probability,
-    contextForLLM: SPARK_CONTEXT[sparkType](
+    contextForLLM: buildSparkNote(
+      sparkType,
       AGENTS.find(a => a.id === lastSpeakerId)?.name || lastSpeakerId,
       lastReply,
     ),
