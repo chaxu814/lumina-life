@@ -86,6 +86,10 @@
         "to": "pet/pet-chat.html"
       },
       {
+        "from": "electron/pet/pet-md.js",
+        "to": "pet/pet-md.js"
+      },
+      {
         "from": "electron/pet/pet-pngtuber.html",
         "to": "pet/pet-pngtuber.html"
       },

@@ -10,7 +10,7 @@
  * （纯函数、可单测）；本组件只负责把 zustand store 与 IPC 适配进编排器。
  */
 import { useEffect, useRef } from 'react'
-import { useStore } from '../stores/appStore'
+import { useStore, getDisabledToolNames } from '../stores/appStore'
 import {
   PetChatOrchestrator,
   messagesToForward,
@@ -134,8 +134,9 @@ export default function PetChatSync() {
       },
       addMessage: addMessageTracked,
       agentChat: async (text, history, scene) => {
-        const llmConfig = useStore.getState().llmConfig
-        const conv = useStore.getState().conversations.find((c: any) => c.id === PET_CONV_ID)
+        const state = useStore.getState()
+        const llmConfig = state.llmConfig
+        const conv = state.conversations.find((c: any) => c.id === PET_CONV_ID)
         const reqId = `pet-${Date.now()}-${++petReqSeq}`
         activeReqId = reqId
         const config = {
@@ -155,10 +156,18 @@ export default function PetChatSync() {
           apiKey: llmConfig.apiKey,
           temperature: llmConfig.temperature,
           maxTokens: llmConfig.maxTokens,
-          maxToolCalls: 8,
+          // 🔧 2026-10-18：8 → 20，与主聊天面板（ChatPanel.tsx 的 maxToolCalls）对齐。
+          //   用户问的是"这里会不会和本体一样的 agent 质量"，那工具预算就不该更少：
+          //   「读文件 → 改 → 跑命令 → 验证」这种闭环，8 次经常在验证之前就被迫收尾。
+          //   agentRunner 里有重复工具封禁门，调高是安全的。
+          maxToolCalls: 20,
           // 桌宠里说「帮我查一下」就该真的查 —— 不再跳过自动搜索预处理
           noAutoSearch: false,
-          personaId: 'lumina',
+          // 用户在设置里关掉的工具，桌宠同样不能用（主面板会传 disabledTools，
+          // 桌宠以前漏了 → 会出现"主面板禁用了联网，桌宠照样联网"的不一致）
+          disabledTools: getDisabledToolNames(state.skillConfig),
+          // 人格跟主面板走，不再硬编码 'lumina'
+          personaId: state.activePersona || 'lumina',
           contextWindow: llmConfig.contextWindow || 0,
           requestId: reqId,            // ← 事件归属（见上方注释）
           // 🧠 与主聊天面板的默认一致（ChatPanel 的 thinkingMode 默认开启）：

@@ -46,9 +46,13 @@ describe('Live2D 聊天窗 · 拖拽行为', () => {
   it('拖动手柄在 HTML 结构里（不只是 CSS 写了）', () => {
     // 手柄必须真实存在，否则是「写了样式没插入元素」的半成品
     const handleIdx = html.indexOf('class="cp-drag-handle"')
-    const panelEnd = html.indexOf('</div>\n\n<script')
+    // 断言它出现在**第一个 <script> 之前**（即属于结构而非脚本生成的）
+    // 原来锚在 '</div>\n\n<script'，2026-10-18 在 <script> 前插了
+    // pet-md.js 的 <script src>，那个字面量不再成立
+    const scriptIdx = html.indexOf('<script')
     expect(handleIdx).toBeGreaterThan(-1)
-    expect(handleIdx).toBeLessThan(panelEnd)
+    expect(scriptIdx).toBeGreaterThan(-1)
+    expect(handleIdx).toBeLessThan(scriptIdx)
   })
 
   it('正文恢复可选中（拖拽区不再吞掉文本选择）', () => {

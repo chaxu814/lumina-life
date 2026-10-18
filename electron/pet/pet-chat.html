@@ -127,13 +127,18 @@
     align-self: flex-start; background: rgba(255,255,255,0.9); color: #2a3a5c;
     border-bottom-left-radius: 4px; border: 1px solid rgba(100,130,180,0.1);
     box-shadow: 0 1px 4px rgba(40,60,120,0.06);
+    /* 头像与正文并排：正文是块级（标题/列表/代码块），不能再用 inline 流 */
+    display: flex; align-items: flex-start; gap: 6px;
   }
   #chat-panel .cp-msg.pet .cp-msg-avatar {
     display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
     background: linear-gradient(135deg, #4a9eff, #6bb5ff); color: #fff;
     align-items: center; justify-content: center; font-size: 12px;
-    margin-right: 6px; vertical-align: middle;
+    margin: 0; flex: none;
   }
+  /* pet-md.js 没加载成功时的纯文本兜底：保住换行 */
+  #chat-panel .cp-msg.pet.no-md { white-space: pre-wrap; }
+  #chat-panel .cp-msg.pet.no-md .cp-msg-avatar { margin-right: 6px; }
   #chat-panel .cp-typing {
     align-self: flex-start; background: rgba(255,255,255,0.9);
     border: 1px solid rgba(100,130,180,0.1); border-radius: 14px;
@@ -321,6 +326,71 @@
     box-shadow: 0 2px 8px rgba(74,158,255,0.3);
   }
   #chat-panel #pet-chat-send:hover { filter: brightness(1.1); transform: scale(1.05); }
+
+  /* ── 消息正文排版 ────────────────────────────────────────────
+     2026-10-18：原来 .cp-msg 没设 white-space，模型回复里的换行被
+     全部折叠成一段，`**加粗**`、`- 列表` 的标记原样露出来 —— 几百字挤成
+     一坨，眼睛很难受。现在：
+       · 用户气泡保持纯文本 + pre-wrap（用户敲的换行要保留）
+       · 助手气泡走 pet-md.js 渲染成真正的标题/列表/代码块/表格
+     所以两者用不同的 white-space：pre-wrap 会把已渲染的块级结构再撑开一次。 */
+  #chat-panel .cp-msg.user { white-space: pre-wrap; }
+  #chat-panel .cp-msg.pet { white-space: normal; }
+  #chat-panel .cp-msg.pet .cp-md { min-width: 0; }
+
+  #chat-panel .cp-md > *:first-child { margin-top: 0; }
+  #chat-panel .cp-md > *:last-child { margin-bottom: 0; }
+  #chat-panel .cp-md p { margin: 0 0 7px; }
+  #chat-panel .cp-md h3,
+  #chat-panel .cp-md h4,
+  #chat-panel .cp-md h5,
+  #chat-panel .cp-md h6 {
+    margin: 11px 0 5px; font-weight: 700; color: #1f2d49; line-height: 1.35;
+  }
+  #chat-panel .cp-md h3 { font-size: 14.5px; }
+  #chat-panel .cp-md h4 { font-size: 13.5px; }
+  #chat-panel .cp-md h5 { font-size: 13px; }
+  #chat-panel .cp-md h6 { font-size: 12.5px; color: #3a4c6d; }
+  #chat-panel .cp-md ul,
+  #chat-panel .cp-md ol { margin: 5px 0 7px; padding-left: 19px; }
+  #chat-panel .cp-md li { margin: 3px 0; }
+  #chat-panel .cp-md li > p { margin: 0; }
+  #chat-panel .cp-md strong { font-weight: 700; color: #1f2d49; }
+  #chat-panel .cp-md em { font-style: italic; }
+  #chat-panel .cp-md del { opacity: 0.65; }
+  #chat-panel .cp-md code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 11.5px; padding: 1px 4px; border-radius: 4px;
+    background: rgba(74,158,255,0.12); color: #245b9c;
+  }
+  #chat-panel .cp-md .cp-pre {
+    margin: 6px 0 8px; padding: 8px 10px; border-radius: 8px;
+    background: #f3f6fb; border: 1px solid rgba(100,130,180,0.14);
+    overflow-x: auto; white-space: pre; font-size: 11.5px; line-height: 1.5;
+  }
+  #chat-panel .cp-md .cp-pre code { background: none; padding: 0; color: #2a3a5c; }
+  #chat-panel .cp-md blockquote {
+    margin: 6px 0 8px; padding: 2px 0 2px 9px;
+    border-left: 3px solid rgba(74,158,255,0.4); color: #5a6a88;
+  }
+  #chat-panel .cp-md hr {
+    margin: 10px 0; border: none; border-top: 1px dashed rgba(100,130,180,0.3);
+  }
+  #chat-panel .cp-md a {
+    color: #2a6abb; text-decoration: underline;
+    text-decoration-color: rgba(42,106,187,0.35); text-underline-offset: 2px;
+    cursor: pointer; word-break: break-all;
+  }
+  #chat-panel .cp-md a:hover { color: #1d4f8f; }
+  #chat-panel .cp-md .cp-table-wrap { margin: 6px 0 8px; overflow-x: auto; }
+  #chat-panel .cp-md table { border-collapse: collapse; font-size: 11.5px; min-width: 100%; }
+  #chat-panel .cp-md th,
+  #chat-panel .cp-md td {
+    border: 1px solid rgba(100,130,180,0.22); padding: 4px 7px;
+    text-align: left; vertical-align: top;
+  }
+  #chat-panel .cp-md th { background: rgba(74,158,255,0.10); font-weight: 700; color: #1f2d49; }
+  #chat-panel .cp-md tr:nth-child(even) td { background: rgba(100,130,180,0.04); }
 </style>
 </head>
 <body>
@@ -404,6 +474,8 @@
   </div>
 </div>
 
+<!-- Markdown 渲染（零依赖，见 pet-md.js 顶部注释）：必须在主脚本之前加载 -->
+<script src="./pet-md.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
    Lumina 独立聊天窗口（pet-chat.html）
@@ -418,6 +490,22 @@ const HAS_IPC = !!ipc;
 const chatLog = document.getElementById('chat-log');
 const chatInput = document.getElementById('pet-chat-input');
 const typingEl = document.getElementById('chat-typing');
+
+/* 助手回复里的链接走受控外链打开（petPreload 的 openExternal 只放行 http(s)/mailto）。
+   不在 <a> 上直接挂 onclick —— 渲染出来的是 innerHTML，用事件委托更稳，
+   也不会因为重新渲染丢失监听。 */
+chatLog.addEventListener('click', function (e) {
+  const a = e.target && e.target.closest ? e.target.closest('a[data-ext]') : null;
+  if (!a) return;
+  e.preventDefault();
+  const url = a.getAttribute('href') || '';
+  if (!/^https?:\/\//i.test(url)) return;
+  try {
+    if (window.petAPI && typeof window.petAPI.openExternal === 'function') {
+      window.petAPI.openExternal(url);
+    }
+  } catch (err) { /* 无 preload 的纯浏览器预览：静默忽略 */ }
+});
 
 function addChatMsg(role, text) {
   // 🐛 2026-10-17：同一句话被画两次 —— 点 Live2D 头顶搭话卡片的 A/B/C 时必现。
@@ -443,9 +531,29 @@ function addChatMsg(role, text) {
   d.className = 'cp-msg ' + role;
   if (role === 'pet') {
     d.innerHTML = '<span class="cp-msg-avatar">🐱</span>';
-    const span = document.createElement('span');
-    span.textContent = text;
-    d.appendChild(span);
+    // 🔧 2026-10-18：助手回复走 Markdown 渲染。
+    //   旧实现 `span.textContent = text` 是纯文本，而 .cp-msg 又没设
+    //   white-space —— 换行被全部折叠成一段，`**加粗**`、`- 列表` 的标记
+    //   原样露出来，几百字挤成一坨（用户原话：「眼睛看起来比较难受」）。
+    //   渲染器先整体转义再插标签，模型输出里的 <script> 只会变成可见字符。
+    //   若 pet-md.js 没加载成功（离线/文件缺失），退化为纯文本 + pre-wrap，
+    //   至少不会把原文吞掉。
+    const body = document.createElement('div');
+    body.className = 'cp-md';
+    let html = '';
+    try {
+      if (window.PetMD && typeof window.PetMD.render === 'function') {
+        html = window.PetMD.render(text);
+      }
+    } catch (e) { html = ''; }
+    if (html) {
+      body.innerHTML = html;
+    } else {
+      body.textContent = text;
+      body.classList.add('cp-md-plain');
+      d.classList.add('no-md');
+    }
+    d.appendChild(body);
   } else {
     d.textContent = text;
   }

@@ -337,7 +337,10 @@ describe('buildScenePrompt — 屏幕上下文注入', () => {
   it('桌宠跑 agent 档（完整工具链），不再是只有 11 个工具、不能落盘的 chat 档', () => {
     expect(petSync).toMatch(/mode: 'agent' as const/)
     expect(petSync).not.toMatch(/mode: 'chat' as const/)
-    expect(petSync).toMatch(/maxToolCalls: 8/)
+    // 工具预算与主面板对齐（2026-10-18 从 8 提到 20，见 PetChatSync 注释）
+    const pet = petSync.match(/^\s*maxToolCalls:\s*(\d+)/m)
+    expect(pet).toBeTruthy()
+    expect(Number(pet![1])).toBeGreaterThanOrEqual(20)
     expect(petSync).toMatch(/noAutoSearch: false/)
   })
 })
