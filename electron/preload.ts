@@ -1120,6 +1120,51 @@ const api = {
   petSendHistory: (messages: Array<{ role: string; content: string }>) => ipcRenderer.send('pet:sync-history-reply', messages),
   /** 桌宠 → 主窗口：请求历史聊天记录 */
   petRequestHistory: () => ipcRenderer.send('pet:sync-history-request'),
+
+  // ── 🗑 会话删除（2026-10-18）──────────────────────────────────
+  //
+  // 背景：桌宠聊天窗右上角那个垃圾桶此前只调 `clearChat()` 清空 DOM ——
+  //   后端 store 里的会话与消息一条没动，下次拉历史又全回来，用户感知是
+  //   「点了删除但没删掉」。而会话本身住在**主窗口**的 zustand store 里，
+  //   桌宠窗是独立 BrowserWindow，够不到。所以需要这四个通道做中转：
+  //     pet:conv-list-request  桌宠窗 → 主窗口   要会话清单
+  //     pet:conv-list          主窗口 → 桌宠窗   回清单
+  //     pet:conv-delete        桌宠窗 → 主窗口   执行删除
+  //     pet:conv-changed       主窗口 → 桌宠窗   删完了，请清屏重拉
+  /** 桌宠窗 → 主窗口：请求会话清单（用于"选择要删除的对话"） */
+  petRequestConvList: () => ipcRenderer.send('pet:conv-list-request'),
+  /** 主窗口 → 桌宠窗：回会话清单 */
+  petSendConvList: (list: Array<{ id: string; name: string; count: number; isPet?: boolean }>) =>
+    ipcRenderer.send('pet:conv-list', list),
+  /** 桌宠窗 → 主窗口：执行删除（scope: current=清空当前会话 / select=删选中 / all=全删） */
+  petDeleteConvs: (payload: { scope: 'current' | 'select' | 'all'; ids?: string[] }) =>
+    ipcRenderer.send('pet:conv-delete', payload),
+  /** 主窗口 → 桌宠窗：会话已变更（请清屏并重新拉历史） */
+  petNotifyConvChanged: () => ipcRenderer.send('pet:conv-changed'),
+  /** 主窗口监听：桌宠窗要会话清单 */
+  onPetConvListRequest: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('pet:conv-list-request', handler)
+    return () => { ipcRenderer.removeListener('pet:conv-list-request', handler) }
+  },
+  /** 桌宠窗监听：收到会话清单 */
+  onPetConvList: (callback: (list: Array<{ id: string; name: string; count: number; isPet?: boolean }>) => void) => {
+    const handler = (_event: any, list: Array<{ id: string; name: string; count: number; isPet?: boolean }>) => callback(list)
+    ipcRenderer.on('pet:conv-list', handler)
+    return () => { ipcRenderer.removeListener('pet:conv-list', handler) }
+  },
+  /** 主窗口监听：桌宠窗请求删除 */
+  onPetConvDelete: (callback: (payload: { scope: 'current' | 'select' | 'all'; ids?: string[] }) => void) => {
+    const handler = (_event: any, payload: { scope: 'current' | 'select' | 'all'; ids?: string[] }) => callback(payload)
+    ipcRenderer.on('pet:conv-delete', handler)
+    return () => { ipcRenderer.removeListener('pet:conv-delete', handler) }
+  },
+  /** 桌宠窗监听：会话已变更 */
+  onPetConvChanged: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('pet:conv-changed', handler)
+    return () => { ipcRenderer.removeListener('pet:conv-changed', handler) }
+  },
   /** 主窗口 → 主进程：回传桌宠请求的朋友圈/剧场/日报数据 */
   lifeProvideData: (payload: { reqId: string; items: Array<{ title: string; body?: string; meta?: string; icon?: string }> }) =>
     ipcRenderer.send('life:data-response', payload),

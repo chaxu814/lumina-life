@@ -1730,7 +1730,7 @@ export function registerPetIpc(): void {
   })
 
   // ── 聊天同步：pet / 独立聊天窗 ↔ 主窗口 Lumina Agent ──────────────
-  ipcMain.on('pet:sync-send', (_e, data: { text: string }) => {
+  ipcMain.on('pet:sync-send', (_e, data: { text: string; scene?: { scene?: string; title?: string; process?: string } }) => {
     // 桌宠或独立聊天窗发消息 → 转发给主窗口注入聊天
     let target = petMainWindow
     if (!target || target.isDestroyed()) {
@@ -1739,7 +1739,10 @@ export function registerPetIpc(): void {
         .find(w => !w.isDestroyed() && w !== petWindow && w !== petChatWindow) || null
     }
     if (target && !target.isDestroyed()) {
-      target.webContents.send('pet:sync-message', { text: data.text, from: 'pet' })
+      // 🖥️ scene：点 Live2D 头顶搭话卡片那一刻的屏幕上下文（窗口标题/进程）。
+      //   卡片选项里全是"这部剧 / 这段代码"这类指代，不带上下文模型就无从解析，
+      //   只能反问「你指的是哪个」—— 用户感知就是"点了它什么都不会"。
+      target.webContents.send('pet:sync-message', { text: data.text, from: 'pet', scene: data.scene || null })
     }
   })
   // 🆕 2026-10-13：窗口可能处于「已创建、但页面尚未加载完」的中间态 ——
@@ -1804,6 +1807,36 @@ export function registerPetIpc(): void {
       })
     }
   })
+  // ── 🗑 会话删除中转（2026-10-18）────────────────────────────
+  //
+  // 会话住在**主窗口**的 zustand store 里；桌宠聊天窗是独立 BrowserWindow，
+  // 够不到。而此前桌宠窗的垃圾桶只 `clearChat()` 清 DOM，后端一条没删 ——
+  // 所以"删掉"的对话下次拉历史又全回来。这四个通道把删除请求送到主窗口执行。
+  const petMainTarget = (): BrowserWindow | null => {
+    if (petMainWindow && !petMainWindow.isDestroyed()) {return petMainWindow}
+    return BrowserWindow.getAllWindows()
+      .find(w => !w.isDestroyed() && w !== petWindow && w !== petChatWindow) || null
+  }
+
+  ipcMain.on('pet:conv-list-request', () => {
+    const target = petMainTarget()
+    if (target) {target.webContents.send('pet:conv-list-request')}
+  })
+  ipcMain.on('pet:conv-list', (_e, list) => {
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      sendWhenReady(petChatWindow, 'pet:conv-list', list)
+    }
+  })
+  ipcMain.on('pet:conv-delete', (_e, payload) => {
+    const target = petMainTarget()
+    if (target) {target.webContents.send('pet:conv-delete', payload)}
+  })
+  ipcMain.on('pet:conv-changed', () => {
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      sendWhenReady(petChatWindow, 'pet:conv-changed', null)
+    }
+  })
+
   // 历史记录请求方（桌宠窗或独立聊天窗），回复时定向送回
   let historyRequester: BrowserWindow | null = null
   // 桌宠/聊天窗请求历史记录 → 转发给主窗口

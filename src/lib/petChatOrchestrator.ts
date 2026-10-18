@@ -43,13 +43,37 @@ export interface StoreMessage {
   timestamp?: number
 }
 
+/**
+ * 用户点 Live2D 头顶搭话卡片那一刻的屏幕上下文。
+ *
+ * 【为什么必须带上它】卡片上的选项是"接着当前场景说的话"，典型如
+ *   「让我帮你整理**这部剧**的资料吧」—— 里面全是**指代**。
+ *   旧实现点完只发选项文本，场景信息（窗口标题）被丢掉，于是模型
+ *   完全不知道"这部剧"是哪部，只能反问「你指的是哪部剧？」。
+ *   用户看到的就是「点了也没用，它什么都不会」。
+ */
+export interface PetSceneContext {
+  /** 场景分类（video / code / doc …，由主进程判定） */
+  scene?: string
+  /** 活动窗口标题 —— 绝大多数情况下"这部剧/这段代码"就靠它解析 */
+  title?: string
+  /** 进程名 */
+  process?: string
+}
+
+/** 队列里的一轮待处理消息 */
+export interface PetTurn {
+  text: string
+  scene?: PetSceneContext | null
+}
+
 export interface PetChatDeps {
   /** 取 conv-pet-live2d 的非 system 对话历史（供 agentChat 拼上下文） */
   getHistory: () => PetTurnMessage[]
   /** 注入一条消息到该对话，返回消息 id（用于双向同步去重，不回显给桌宠自己发的） */
   addMessage: (role: 'user' | 'assistant', content: string) => string
-  /** 调主 Agent 完整对话（内部自行拼 config） */
-  agentChat: (text: string, history: PetTurnMessage[]) => Promise<PetAgentResult>
+  /** 调主 Agent 完整对话（内部自行拼 config）；scene 用于解析"这部剧/这段代码" */
+  agentChat: (text: string, history: PetTurnMessage[], scene?: PetSceneContext | null) => Promise<PetAgentResult>
   /** 把回复/错误推回桌宠窗（petSyncReply） */
   sendToPet: (text: string, role: 'user' | 'assistant') => void
   /** 回复成功后，由文本本地派生动作/表情（走 pet:test-intent，**不再发第二次 LLM**） */
@@ -64,7 +88,7 @@ export const PET_RETRY_BACKOFF_MS = [600, 1500] as const
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 export class PetChatOrchestrator {
-  private queue: string[] = []
+  private queue: PetTurn[] = []
   private running = false
 
   // ── 观测点（测试断言用）─────────────────────────
@@ -81,12 +105,14 @@ export class PetChatOrchestrator {
   /**
    * 桌宠发来一条用户消息。
    * 立即注入对话历史（保证主窗/桌宠历史一致）并入队；串行泵处理，绝不丢消息。
+   *
+   * @param scene 点卡片那一刻的屏幕上下文（解析"这部剧/这段代码"用），闲聊时为 undefined
    */
-  handlePetMessage(text: string): void {
+  handlePetMessage(text: string, scene?: PetSceneContext | null): void {
     const t = (text || '').trim()
     if (!t) {return}
     this.deps.addMessage('user', t)
-    this.queue.push(t)
+    this.queue.push({ text: t, scene: scene || null })
     void this.pump()
   }
 
@@ -96,8 +122,8 @@ export class PetChatOrchestrator {
     this.running = true
     try {
       while (this.queue.length > 0) {
-        const text = this.queue.shift() as string
-        await this.runOne(text)
+        const turn = this.queue.shift() as PetTurn
+        await this.runOne(turn)
       }
     } finally {
       this.running = false
@@ -105,7 +131,8 @@ export class PetChatOrchestrator {
   }
 
   /** 跑单条：失败按退避重试，耗尽才报错 */
-  private async runOne(text: string): Promise<void> {
+  private async runOne(turn: PetTurn): Promise<void> {
+    const { text, scene } = turn
     let attempt = 0
     let lastReason = '空回复'
 
@@ -115,7 +142,7 @@ export class PetChatOrchestrator {
       let res: PetAgentResult
       try {
         const history = this.deps.getHistory()
-        res = await this.deps.agentChat(text, history)
+        res = await this.deps.agentChat(text, history, scene)
       } catch (e: any) {
         res = { success: false, error: e?.message || String(e) }
       }
@@ -169,7 +196,7 @@ export class PetChatOrchestrator {
           { role: 'user', content: continuationText },
         ]
         this.agentCallCount++
-        const res2 = await this.deps.agentChat(continuationText, history2)
+        const res2 = await this.deps.agentChat(continuationText, history2, scene)
         const ok2 = !!res2 && res2.success !== false && typeof res2.content === 'string' && res2.content.length > 0
         if (ok2) {
           const realReply = (res2 as PetAgentResult).content as string

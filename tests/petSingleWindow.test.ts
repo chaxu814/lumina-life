@@ -45,7 +45,20 @@ describe('Live2D 独立聊天窗与主动卡片交互', () => {
     const fn = live2d.slice(start, end)
     expect(fn).toMatch(/pet:open-chat-window/)
     expect(fn).toMatch(/pet:sync-reply', \{ text, role: 'user' \}/)
-    expect(fn).toMatch(/pet:sync-send', \{ text \}/)
+    // 🔧 2026-10-18：转发时**必须**带上 scene（点卡片那一刻的窗口标题）。
+    //   卡片选项全是指代（"让我帮你整理这部剧的资料吧"），丢了 scene 模型就
+    //   不知道"这部剧"是哪部，只能反问「你指的是哪部剧？」→ 用户感觉「点了没用」。
+    expect(fn).toMatch(/pet:sync-send', \{ text, scene \}/)
+    // scene 必须来自 showProactiveCard 存下的 _pcScene，且发完即清（不污染下一次闲聊）
+    expect(fn).toMatch(/const scene = _pcScene/)
+    expect(fn).toMatch(/_pcScene = null/)
+  })
+
+  it('showProactiveCard 把卡片自带的 scene 存进 _pcScene 供点击时使用', () => {
+    const start = live2d.indexOf('function showProactiveCard')
+    const end = live2d.indexOf('function addChatOptions', start)
+    const fn = live2d.slice(start, end)
+    expect(fn).toMatch(/_pcScene = \(cmd && cmd\.scene\) \? cmd\.scene : null/)
   })
 
   it('主进程仍将 pet:sync-send 转给主窗口，并为独立聊天窗路由回复', () => {

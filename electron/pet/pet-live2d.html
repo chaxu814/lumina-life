@@ -941,6 +941,12 @@ function say(text) {
 /* ── 🤵 主动秘书搭话卡片（文本 + A/B/C 快捷回复 + 收起）── */
 const KIND_LABEL = { observe: '看到了', suggest: '小建议', ask: '问你一下', praise: '夸夸' };
 let _pcTimer = null;
+/* 🖥️ 当前这张搭话卡片对应的屏幕上下文（窗口标题 / 进程 / 场景分类）。
+   【为什么要存】卡片选项里全是"这部剧 / 这段代码 / 这份文档"这类**指代**，
+   点完之后选项文本单独发给模型，它不知道指的是什么，只能反问"你指的是哪个" ——
+   用户感知就是「点了它什么都不会」。把点卡片那一刻的 scene 一起带过去，
+   模型才能直接动手。 */
+let _pcScene = null;
 function showProactiveCard(cmd) {
   // 🔧 2026-10-11：聊天面板已剥离为独立窗口，主动搭话改为渲染到独立的悬浮卡片
   // （#proactive-card，自带 .pc-* 样式），不再依赖内嵌聊天消息流。
@@ -950,6 +956,8 @@ function showProactiveCard(cmd) {
   const card = document.getElementById('proactive-card');
   if (!card) { speakTts(text); return; }
   const kind = (cmd && cmd.kind) || '';
+  // 记下这一卡的屏幕上下文，供 replyProactive 随选项一起发出去
+  _pcScene = (cmd && cmd.scene) ? cmd.scene : null;
   card.innerHTML = '';
   const head = document.createElement('div'); head.className = 'pc-head';
   const kindEl = document.createElement('span'); kindEl.className = 'pc-kind';
@@ -1032,11 +1040,14 @@ function replyProactive(list, chosenIndex) {
   // 同时把对话带到独立聊天窗（pet-chat.html），不再依赖内嵌聊天流。
   const idx = Math.max(0, Math.min(typeof chosenIndex === 'number' ? chosenIndex : 0, list.length - 1));
   const text = list[idx];
+  // 选项里的"这部剧 / 这段代码"靠它解析；没有上下文时模型只能反问，等于白点
+  const scene = _pcScene;
+  _pcScene = null;
   if (HAS_IPC) {
     // 先确保独立聊天窗打开，再把用户刚选的选项显示在该窗口并转给主 Agent。
     // 这条卡片属于 Live2D 渲染页，不像 pet-chat.html 输入框那样会本地先画用户气泡。
     const sendChosenOption = function(){
-      try { ipc.send('pet:sync-send', { text }); } catch (e) {}
+      try { ipc.send('pet:sync-send', { text, scene }); } catch (e) {}
     };
     try {
       ipc.invoke('pet:open-chat-window').then(function(result){
