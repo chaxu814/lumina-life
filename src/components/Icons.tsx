@@ -110,3 +110,32 @@ export const IconSmile: React.FC<IconProps> = (p) => <Svg {...p}><circle cx="12"
 
 // Discord — stroke-based (no Game-Icon-Pack match, keeps Lumina style)
 export const IconDiscord: React.FC<IconProps> = (p) => <Svg {...p}><path d="M9 6.5c-2 .5-3.5 1.5-4 3 .5 1 2 2 3 2.5M15 6.5c2 .5 3.5 1.5 4 3-.5 1-2 2-3 2.5"/><circle cx="9" cy="13" r="1.5"/><circle cx="15" cy="13" r="1.5"/><path d="M8 17c1.5 1.5 4 1.5 5.5.5"/></Svg>
+
+// ═══ 喇叭 / 静音（2026-10-18）
+//   原来用的是 🔇 / 🔊 emoji：不同系统字体差异大、和界面里的线性图标不搭。
+//   换成 1.7 描边的线性喇叭：开 → 两道声波，静音 → 一个叉。
+//   与桌宠小窗（electron/pet/pet-chat.html 的 .cp-ico .spk-x）同一套画法。
+export const IconSpeaker: React.FC<IconProps & { muted?: boolean }> = ({ muted, size = 18, className }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.7}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M4 9.5h3L11.5 6v12L7 14.5H4z" />
+    {muted ? (
+      <path d="M16.2 9.6l4 4.8M20.2 9.6l-4 4.8" />
+    ) : (
+      <>
+        <path d="M15.1 9.4a3.6 3.6 0 0 1 0 5.2" />
+        <path d="M17.7 7.2a7.2 7.2 0 0 1 0 9.6" />
+      </>
+    )}
+  </svg>
+)

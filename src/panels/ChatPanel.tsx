@@ -21,7 +21,7 @@ import { proactiveChat } from '../services/proactiveChat'
 import { getDisabledToolNames } from '../stores/appStore'
 import PersonalityConflictAlert from '../components/PersonalityConflictAlert'
 import DecisionDebateCard from './DecisionCard'
-import { IconPlus, IconSend } from '../components/Icons'
+import { IconPlus, IconSend, IconSpeaker } from '../components/Icons'
 import ModelSelector from '../components/ModelSelector'
 import { DEFAULT_PERSONAS, getPersona, getPersonaPrompt } from '../data/personas'
 import { AGENT_ROLES, getAgentRole } from '../data/agentRoles'
@@ -50,7 +50,7 @@ import {
   detectUncertainty,
   detectMentionInReply,
 } from '../services/conversationDynamics'
-import LuckyModeSelector from '../components/LuckyModeSelector'
+import ChatComposer from '../components/ChatComposer'
 import TaskDispatcher from '../components/TaskDispatcher'
 import DecisionCard, { type DecisionRequest } from '../components/DecisionCard'
 import SubagentCards from '../components/SubagentCards'
@@ -196,8 +196,12 @@ export default function ChatPanel() {
   const luckyMode = useLuckyMode()
   const [uploadTipVisible, setUploadTipVisible] = useState(false)
   const uploadTipTimer = useRef<ReturnType<typeof setTimeout>>(null)
-  const [attachments, setAttachments] = useState<Array<{ name: string; size: number; type: string; dataUrl?: string; text?: string }>>([])
+  const [attachments, setAttachments] = useState<Array<{ name: string; size: number; type: string; dataUrl?: string; text?: string; path?: string }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // ✨ 增强提示词（2026-10-18：从团队群聊搬过来，Agent 也支持）
+  const [promptEnhancing, setPromptEnhancing] = useState(false)
+  const [promptEnhanceNotice, setPromptEnhanceNotice] = useState('')
+  const promptEnhanceUndoRef = useRef<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [dragFiles, setDragFiles] = useState<Array<{name:string,size:number,type:string}>>([])
   // ── v2.4.1: 流式输出 ─────────────────────────────────
@@ -761,6 +765,8 @@ export default function ChatPanel() {
         const sizeStr = a.size > 1024 * 1024 ? `${(a.size / (1024 * 1024)).toFixed(1)}MB` : `${(a.size / 1024).toFixed(1)}KB`
         let desc = `[附件${i + 1}: ${a.name} (${sizeStr})]`
         if (a.text) {desc += `\n内容:\n${a.text}`}
+        // 截图这类「只落了盘」的附件把路径给出去，agent 才能用文件工具真正打开它
+        if (a.path) {desc += `\n路径: ${a.path}`}
         return desc
       }).join('\n')
       userMessage = `${text}\n\n--- 上传文件 ---\n${fileDescs}`
@@ -1187,6 +1193,123 @@ export default function ChatPanel() {
   }
 
   // ═════════════════════════════════════════════════════
+  // 2026-10-18：统一输入栏用到的动作
+  //   「更多 → 增强提示词 / 实时语音 / AI 操作电脑 / 胶囊」原来是一排小按钮，
+  //   现在收进「更多」弹层，动作本身不变，只是换了个入口。
+  // ═════════════════════════════════════════════════════
+
+  /** ✨ 增强提示词：复用主进程 llm:enhance-prompt（与团队群聊同一条通道） */
+  const handleEnhancePrompt = async () => {
+    const original = input.trim()
+    if (!original || promptEnhancing) { return }
+    const cfg = useStore.getState().llmConfig
+    if (!cfg.baseUrl || !cfg.model) {
+      setPromptEnhanceNotice('❌ 先在模型选择器中配置 Endpoint 和 Model。')
+      return
+    }
+    const api = window.luminaAPI?.llmEnhancePrompt
+    if (!api) {
+      setPromptEnhanceNotice('❌ 当前版本不支持提示词增强，请重启或重新构建应用。')
+      return
+    }
+    setPromptEnhancing(true)
+    setPromptEnhanceNotice('正在润色草稿（保留原意，只改表达）…')
+    try {
+      const r = await api({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey || '', model: cfg.model, text: original })
+      if (r?.error) { throw new Error(r.error) }
+      const enhanced = String(r?.content || '').trim()
+      if (!enhanced) { throw new Error('模型没有返回增强后的提示词。') }
+      // 请求期间用户可能继续编辑：以输入框里的实时值为准，绝不覆盖新输入
+      const latest = (inputRef.current?.value ?? input).trim()
+      if (latest !== original) {
+        setPromptEnhanceNotice('增强已返回，但你期间修改了草稿；为避免覆盖，未替换当前内容。')
+        return
+      }
+      if (enhanced === original) {
+        setPromptEnhanceNotice('原文已经比较清晰，模型认为无需改写（草稿未变）。')
+        return
+      }
+      promptEnhanceUndoRef.current = original
+      setInput(enhanced)
+      setPromptEnhanceNotice(`✨ 已润色（${original.length} → ${enhanced.length} 字），请检查后再发送。`)
+      requestAnimationFrame(() => autoResize())
+    } catch (err: any) {
+      setPromptEnhanceNotice(`❌ 增强失败：${err?.message || err}`)
+    } finally {
+      setPromptEnhancing(false)
+    }
+  }
+
+  /** ↩︎ 撤销增强 */
+  const undoEnhancePrompt = () => {
+    if (promptEnhanceUndoRef.current === null) { return }
+    setInput(promptEnhanceUndoRef.current)
+    promptEnhanceUndoRef.current = null
+    setPromptEnhanceNotice('已撤销增强，恢复为原来的草稿。')
+    requestAnimationFrame(() => autoResize())
+  }
+
+  /** ✂ 截图提问：截当前屏幕 → 作为附件挂上（带路径，agent 可用文件工具打开） */
+  const handleComposerScreenshot = async () => {
+    try {
+      const r = await window.luminaAPI?.agentScreenshot?.()
+      if (!r?.success || !r.path) {
+        showToast(`⚠️ ${r?.error || '截图失败'}`, 'warning')
+        return
+      }
+      const name = String(r.path).split(/[\\/]/).pop() || `screenshot-${Date.now()}.png`
+      setAttachments(prev => [...prev, { name, size: 0, type: 'image/png', path: r.path }])
+      showToast('✂ 已截屏，会作为附件附在这条消息上', 'info')
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || e}`, 'warning')
+    }
+  }
+
+  /** 🎙️ 实时语音对话 开/关 */
+  const toggleRealtimeVoice = async (on: boolean) => {
+    try {
+      if (!on) {
+        const r = await window.luminaAPI?.agentStopRealtimeVoice?.()
+        if (r?.success) { setRealtimeVoiceActive(false); showToast('🎙️ 实时语音对话已停止', 'info') }
+        else { showToast(`⚠️ ${r?.error || '停止失败'}`, 'warning') }
+      } else {
+        const r = await window.luminaAPI?.agentStartRealtimeVoice?.()
+        if (r?.success) { setRealtimeVoiceActive(true); showToast(r.message || '🎙️ 实时语音对话已启动', 'info') }
+        else { showToast(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+      }
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || e}`, 'warning')
+    }
+  }
+
+  /** 💻 AI 操作电脑 开/关 */
+  const toggleComputerUse = async (on: boolean) => {
+    try {
+      if (!on) {
+        await window.luminaAPI?.agentStopComputerUse?.()
+        setComputerUseActive(false)
+        showToast('💻 AI操作电脑已停止', 'info')
+      } else {
+        const r = await window.luminaAPI?.agentStartComputerUse?.()
+        if (r?.success) { setComputerUseActive(true); showToast(r.message || '💻 AI操作电脑已就绪', 'info') }
+        else { showToast(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+      }
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || e}`, 'warning')
+    }
+  }
+
+  /** ⏳ 埋时光胶囊 */
+  const handleCapsule = () => {
+    const text = input.trim()
+    if (!text) { showToast('先输入你想对未来的自己说的话，再点 ⏳ 胶囊', 'warning'); return }
+    if (window.confirm(`⏳ 埋一颗时光胶囊给未来的自己？\n\n内容: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"\n\n默认 30 天后开启`)) {
+      handleSendWithText(`帮我埋一颗时光胶囊，内容是：${text}，30天后开启`)
+      setInput('')
+    }
+  }
+
+  // ═════════════════════════════════════════════════════
   // Render
   // ═════════════════════════════════════════════════════
 
@@ -1560,10 +1683,6 @@ export default function ChatPanel() {
             )}
           </span>
 
-          {/* 📋 任务工作区入口已移至群聊工具条（紧邻「任务派发中心」）—— 2026-10-04
-               这两个是同一件事的两面：派发与看结果，放在一起才不用来回找。
-               状态本来就在 useTaskWorkspace store，任何位置都能开关。 */}
-
           {/* 🔄 切换角色按钮 — 仅非群聊模式 */}
           {mode !== 'group' && (
             <button onClick={() => setRolePickerOpen(true)}
@@ -1579,6 +1698,27 @@ export default function ChatPanel() {
               <span style={{ fontSize: 12 }}>🔄</span>
               <span>切换角色</span>
             </button>
+          )}
+
+          {/* 📋 任务派发中心 / 任务工作区 —— 2026-10-18 从底部工具条移入头部栏
+               这两个是同一件事的两面：派发与看结果，放在一起才不用来回找。
+               状态本来就在 useTaskWorkspace store，任何位置都能开关。
+               现在与团队群聊头部栏同一位置、同一观感。 */}
+          {!compact && (
+            <>
+              <button onClick={() => setShowTaskDispatcher(true)}
+                className={'hd-chip' + (showTaskDispatcher ? ' hd-chip-on' : '')}
+                title="任务派发中心：选择任务类型 → 选择执行者 → 一键派发">
+                <span className="hd-chip-ico">📋</span>
+                <span className="hd-chip-txt">任务派发中心</span>
+              </button>
+              <button onClick={toggleTaskPanel}
+                className={'hd-chip' + (taskPanelOpen ? ' hd-chip-on' : '')}
+                title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}>
+                <span className="hd-chip-ico">{taskPanelOpen ? '📕' : '📋'}</span>
+                <span className="hd-chip-txt">任务工作区</span>
+              </button>
+            </>
           )}
 
           <div style={{ flex: 1, minWidth: 8 }} />
@@ -1680,39 +1820,26 @@ export default function ChatPanel() {
               }
               style={{
                 ...subtleBtn,
+                // 2026-10-18：去掉 emoji 时代的粉色描边方块，改成和其它顶栏按钮一样的
+                // 透明底 + hover 变色；静音只用图标颜色（灰 → 红）区分。
                 padding: ttsSpeaking || ttsJustStopped ? '4px 10px' : '4px 7px',
                 fontSize: 15,
                 minWidth: ttsSpeaking || ttsJustStopped ? 48 : 28,
                 justifyContent: 'center',
                 gap: 3,
-                background: ttsError
-                  ? '#fffbeb'
-                  : ttsJustStopped
-                  ? '#fef2f2'
-                  : ttsSpeaking
-                  ? '#eff6ff'
-                  : ttsToggling
-                  ? (ttsMuted ? '#fef2f2' : '#eff6ff')
+                color: ttsError
+                  ? '#b45309'
                   : ttsMuted
-                  ? '#fef2f2'
-                  : 'var(--surface-100)',
-                border: `1.5px solid ${
-                  ttsError
-                    ? '#fcd34d'
-                    : ttsJustStopped
-                    ? '#fca5a5'
-                    : ttsSpeaking
-                    ? '#93c5fd'
-                    : ttsToggling
-                    ? (ttsMuted ? '#fca5a5' : '#93c5fd')
-                    : ttsMuted
-                    ? '#fca5a5'
-                    : 'var(--border-light)'
-                }`,
+                  ? '#ef4444'
+                  : ttsSpeaking
+                  ? '#2563eb'
+                  : 'var(--text-secondary)',
+                background: ttsSpeaking ? '#eff6ff' : ttsToggling ? 'var(--surface-100)' : 'transparent',
+                border: '1px solid transparent',
                 transition: 'all 0.2s ease',
-                transform: ttsToggling ? 'scale(1.1)' : 'scale(1)',
+                transform: ttsToggling ? 'scale(1.08)' : 'scale(1)',
                 boxShadow: ttsToggling
-                  ? (ttsMuted ? '0 0 0 3px rgba(239,68,68,0.2)' : '0 0 0 3px rgba(59,130,246,0.2)')
+                  ? (ttsMuted ? '0 0 0 3px rgba(239,68,68,0.16)' : '0 0 0 3px rgba(59,130,246,0.16)')
                   : 'none',
               }}>
               {/* ── 播放中：音频可视化条 ── */}
@@ -1764,7 +1891,7 @@ export default function ChatPanel() {
                 <span style={{ fontSize: 13 }}>⚠️</span>
               )}
 
-              {/* ── 默认状?── */}
+              {/* ── 默认状态（2026-10-18：emoji 换成线性喇叭，与桌宠小窗同款） ── */}
               {!ttsSpeaking && !ttsJustStopped && !ttsError && (
                 <span style={{
                   animation: ttsToggling
@@ -1772,9 +1899,10 @@ export default function ChatPanel() {
                     : ttsMuted
                     ? 'none'
                     : 'ttsBreath 2s ease-in-out infinite',
-                  display: 'inline-block',
+                  display: 'inline-flex',
+                  alignItems: 'center',
                 }}>
-                  {ttsMuted ? '🔇' : '🔊'}
+                  <IconSpeaker size={17} muted={ttsMuted} />
                 </span>
               )}
             </button>
@@ -1993,15 +2121,17 @@ export default function ChatPanel() {
               onMouseLeave={() => setHoveredMsgId(null)}
               style={{
               animationDelay: `${Math.min(i * 25, 300)}ms`,
-              marginBottom: 12, display: 'flex',
+              marginBottom: 10, display: 'flex',
               flexDirection: isUser ? 'row-reverse' : 'row',
               alignItems: 'flex-start', gap: 8,
             }}>
+              {/* 头像：32px 圆形浅底 + 角色色描边（2026-10-18 对齐团队群聊） */}
               <div style={{
-                width: 28, height: 28, borderRadius: 14,
-                background: isUser ? '#3b82f6' : '#f472b6',
-                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, flexShrink: 0, overflow: 'hidden',
+                width: 32, height: 32, borderRadius: 16, fontSize: 18,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, overflow: 'hidden',
+                background: isUser ? 'var(--accent-50)' : 'var(--surface-50)',
+                border: `1.5px solid ${isUser ? '#BFDBFE' : `${getAgentRole(selectedRole).color}33`}`,
                 fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
               }}>
                 {isUser
@@ -2011,29 +2141,45 @@ export default function ChatPanel() {
                   : currentPersona?.icon || '🐱'}
               </div>
               <div style={{
-                maxWidth: '75%', background: isUser
-                  ? (profile.bubbleColorUser || 'var(--accent-50)')
-                  : (profile.bubbleColorAgent || 'var(--surface-100)'),
-                borderRadius: 12, padding: '8px 12px', border: '1px solid var(--border-light)',
-                userSelect: 'text',
-                cursor: 'text',
-                color: 'var(--text-primary)',
+                maxWidth: '72%', minWidth: 0,
+                display: 'flex', flexDirection: 'column',
+                alignItems: isUser ? 'flex-end' : 'flex-start',
               }}>
-                {isUser && profile.nickname && (
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', marginBottom: 2 }}>
-                    {profile.nickname}
-                  </div>
-                )}
+                {/* 名字 + 时间在气泡上方（对齐团队群聊，气泡里只剩内容） */}
                 <div style={{
-                  fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word', userSelect: 'text',
-                }}><LinkifiedText text={msg.content.replace(/^\n+/, '')} /></div>
-                {/* ⚖️ /decide：生活决策三栏辩论卡片（有 debateResult 才渲染） */}
-                {msg.debateResult && (<DecisionDebateCard result={msg.debateResult} />)}
-                {/* ═══ v2.14: 内联操作按钮 ═══ */}
+                  fontSize: 12, fontWeight: 600, marginBottom: 2,
+                  color: isUser ? '#3b82f6' : getAgentRole(selectedRole).color,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {isUser
+                    ? (profile.nickname || '你')
+                    : (currentPersona?.name || getAgentRole(selectedRole).name)}
+                  <span style={{ color: 'var(--text-tertiary, #94a3b8)', fontWeight: 400, marginLeft: 6 }}>
+                    {formatDateLabel(msg.timestamp)}
+                  </span>
+                </div>
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 2, marginTop: 6,
-                  opacity: hoveredMsgId === msg.id ? 1 : 0.35,
+                  maxWidth: '100%',
+                  background: isUser
+                    ? (profile.bubbleColorUser || 'var(--accent-50)')
+                    : (profile.bubbleColorAgent || 'var(--surface-50)'),
+                  borderRadius: 10, padding: '9px 14px',
+                  border: '1px solid var(--border-light)',
+                  userSelect: 'text',
+                  cursor: 'text',
+                  color: 'var(--text-primary)',
+                }}>
+                  <div style={{
+                    fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word', userSelect: 'text',
+                  }}><LinkifiedText text={msg.content.replace(/^\n+/, '')} /></div>
+                  {/* ⚖️ /decide：生活决策三栏辩论卡片（有 debateResult 才渲染） */}
+                  {msg.debateResult && (<DecisionDebateCard result={msg.debateResult} />)}
+                </div>
+                {/* ═══ v2.14: 内联操作按钮（移到气泡下方，与团队群聊一致） ═══ */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 1, marginTop: 4,
+                  opacity: hoveredMsgId === msg.id ? 1 : 0.3,
                   transition: 'opacity 0.15s',
                   justifyContent: isUser ? 'flex-end' : 'flex-start',
                 }}>
@@ -2058,9 +2204,6 @@ export default function ChatPanel() {
                       🗑️
                     </button>
                   </>)}
-                  <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 4 }}>
-                    {formatDateLabel(msg.timestamp)}
-                  </span>
                 </div>
               </div>
             </div>
@@ -2262,21 +2405,22 @@ export default function ChatPanel() {
               animation: 'fadeInUp 0.2s ease',
             }}>
               <div style={{
-                width: 28, height: 28, borderRadius: 14,
-                background: '#f472b6', color: '#fff',
+                width: 32, height: 32, borderRadius: 16, fontSize: 18,
+                background: 'var(--surface-50)',
+                border: `1.5px solid ${getAgentRole(selectedRole).color}33`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, flexShrink: 0,
+                flexShrink: 0,
               }}>
                 {currentPersona?.icon || '🐱'}
               </div>
               <div style={{
-                maxWidth: '75%', background: 'var(--surface-100)',
-                borderRadius: 12, padding: '8px 12px',
+                maxWidth: '72%', background: 'var(--surface-50)',
+                borderRadius: 10, padding: '9px 14px',
                 border: '1px solid var(--border-light)',
               }}>
                 <div style={{
-                  fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word', color: '#172b4d',
+                  fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word', color: 'var(--text-primary)',
                 }}>
                   {streamingText.replace(/^\n+/, '')}
                   <span style={{
@@ -2329,59 +2473,8 @@ export default function ChatPanel() {
           outline: dragOver ? '2px dashed #93c5fd' : 'none',
           outlineOffset: -4,
         }}>
-          {isProcessing && (
-            <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={handleAbort} style={{
-                padding: '2px 10px', borderRadius: 4, border: '1px solid #fca5a5',
-                background: 'var(--red-100)', color: '#dc2626', cursor: 'pointer', fontSize: 12,
-              }}>停止</button>
-            </div>
-          )}
-
-          {sttListening && (
-            <div style={{
-              marginBottom: 4, fontSize: 11, color: '#ef4444',
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: 3, background: '#ef4444',
-                animation: 'pulse 0.6s infinite',
-              }} />
-              🎤 正在听你说话...
-            </div>
-          )}
-          {sttStatus?.error && (
-            <div style={{ marginBottom: 4, fontSize: 11, color: '#f59e0b' }}>
-              ⚠️ {sttStatus.error}
-            </div>
-          )}
-
-          {/* 附件预览 */}
-          {attachments.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-              {attachments.map((a, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: 'var(--accent-50)', border: '1px solid var(--accent-100)',
-                  borderRadius: 6, padding: '3px 8px', fontSize: 11,
-                  color: 'var(--accent-600)', maxWidth: 200,
-                }}>
-                  {a.dataUrl ? (
-                    <img src={a.dataUrl} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: 13 }}>{a.name.match(/\.(pdf|doc|docx|xls|xlsx)$/i) ? '📄' : '📁'}</span>
-                  )}
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {a.name.length > 16 ? a.name.slice(0, 14) + '...' : a.name}
-                  </span>
-                  <button onClick={() => removeAttachment(i)} style={{
-                    border: 'none', background: 'transparent', color: '#93c5fd',
-                    cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1,
-                  }}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* 中断 / 语音状态 / 增强提示都交给 ChatComposer 的 sending + hint，
+              这里不再重复画一份（2026-10-18） */}
 
           {/* ── 隐藏文件上传 input ── */}
           <input
@@ -2393,341 +2486,215 @@ export default function ChatPanel() {
             onChange={handleFileSelect}
           />
 
-          {/* ── textarea（与团队群聊一致） ── */}
-          <div style={{ position: 'relative' }}>
-            <textarea ref={inputRef} value={input}
-              onChange={e => { setInput(e.target.value); autoResize() }}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                isProcessing ? 'Lumina 正在回复，你可以先打草稿等待' :
-                `${getAgentRole(selectedRole).icon} ${getAgentRole(selectedRole).name} · ${getAgentRole(selectedRole).desc}`
-              }
-              rows={1}
-              style={{
-                width: '100%', padding: '10px 14px', borderRadius: 10,
-                border: `1.5px solid ${getAgentRole(selectedRole).color}40`,
-                fontSize: 15, outline: 'none', fontFamily: 'inherit',
-                resize: 'vertical', minHeight: 52, paddingRight: 74,
-                boxSizing: 'border-box', lineHeight: 1.6,
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={e => { (e.target as HTMLElement).style.borderColor = getAgentRole(selectedRole).color }}
-              onBlur={e => { (e.target as HTMLElement).style.borderColor = `${getAgentRole(selectedRole).color}40` }}
-            />
-            {/* 发送按钮（输入框内右下角，与团队群聊一致） */}
-            <div style={{
-              position: 'absolute', right: 10, bottom: 8,
-              display: 'flex', alignItems: 'center',
-            }}>
-              {isProcessing ? (
-                <button onClick={handleAbort}
-                  title="中断回复"
-                  style={{
-                    padding: '4px 12px', borderRadius: 6,
-                    border: '1.5px solid #fca5a5', background: 'var(--red-100)', color: '#ef4444',
-                    cursor: 'pointer', fontSize: 12, display: 'flex',
-                    alignItems: 'center', gap: 3, fontFamily: 'inherit', fontWeight: 600,
-                  }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" style={{ animation: 'sendSpin 0.9s linear infinite' }}>
-                    <circle cx="12" cy="12" r="10" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="50 50" strokeLinecap="round" />
-                  </svg>
-                  中断
-                </button>
-              ) : (
-                <button onClick={handleSend} disabled={!input.trim()}
-                  title="发送消息"
-                  style={{
-                    border: 'none', borderRadius: 6, padding: '4px 12px',
-                    background: input.trim() ? '#3b82f6' : 'var(--border-light)',
-                    color: input.trim() ? '#fff' : 'var(--text-secondary)',
-                    fontSize: 12, cursor: input.trim() ? 'pointer' : 'default', fontWeight: 600,
-                    fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}>
-                  <IconSend size={14} />
-                  发送
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ── 功能工具栏（小长方形按钮 + 微软雅黑标注） ── */}
-          <div style={{
-            display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
-            fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
-          }}>
-            {/* ── 🧠 模型选择 ── */}
-            <ModelSelector />
-            {/* ── 🍀 Lucky 模式（第二位） ── */}
-            <LuckyModeSelector
-              currentPreset={luckyMode.preset}
-              onPresetChange={luckyMode.setPreset}
-              runtimeInfo={{
-                preset: luckyMode.preset,
-                isActive: luckyMode.isActive,
-                currentIteration: luckyMode.runtime.currentIteration,
-                maxIteration: luckyMode.runtime.maxIteration,
-                isPaused: luckyMode.isPaused,
-                pauseReason: luckyMode.runtime.pauseReason,
-              }}
-              onOpenSettings={() => luckyMode.setShowSettings(true)}
-            />
-            {/* 🍀 Lucky 模式暂停继续按钮 */}
-            {luckyMode.isPaused && (
-              <button
-                onClick={luckyMode.resume}
-                style={{
-                  padding: '4px 10px', borderRadius: 6,
-                  border: '1.5px solid #fca5a5', background: '#fef2f2',
-                  cursor: 'pointer', fontSize: 12, display: 'flex',
-                  alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                  color: '#dc2626',
-                }}>
-                ▶️ 继续
+          {/* ── 统一输入栏（2026-10-18）
+               结构与桌宠小窗一致：+ ｜ 对话 › ｜ 更多 ›，右下角保留模型选择器 + 圆形发送。
+               业务动作全部走上面的 handler，组件本身不读 store、不发消息。 ── */}
+          <ChatComposer
+            value={input}
+            onChange={v => { setInput(v); autoResize() }}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isProcessing ? 'Lumina 正在回复，你可以先打草稿等待' :
+              `${getAgentRole(selectedRole).icon} ${getAgentRole(selectedRole).name} · ${getAgentRole(selectedRole).desc}`
+            }
+            textareaRef={inputRef}
+            minHeight={52}
+            attachments={attachments.map(a => ({ name: a.name, size: a.size, dataUrl: a.dataUrl }))}
+            onRemoveAttachment={removeAttachment}
+            onPickFiles={() => fileInputRef.current?.click()}
+            onScreenshot={() => { void handleComposerScreenshot() }}
+            onSearch={q => {
+              setInput(prev => (prev.trim() ? prev.replace(/\s*$/, '') + '\n' : '') + `帮我联网搜索：${q}`)
+            }}
+            convSlot={(
+              <button type="button" className="cc-pill" title="历史对话"
+                onClick={() => setShowHistory(!showHistory)}>
+                对话<span className="cc-chev">›</span>
               </button>
             )}
-            {/* ── 🧠 思考 ── */}
-            <button
-              onClick={() => setThinkingMode(v => !v)}
-              title={thinkingMode ? '🧠 思考过程已开启 — 点击关闭' : '🧠 思考过程已关闭 — 点击开启'}
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: `1.5px solid ${thinkingMode ? '#f59e0b' : 'var(--border-light)'}`,
-                background: thinkingMode ? 'var(--yellow-100)' : 'var(--surface-50)',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                opacity: thinkingMode ? 1 : 0.6,
-                transition: 'all .2s',
-              }}>
-              🧠 思考
-            </button>
-            {/* ── 😊 表情 ── */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <button
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                title="表情符号"
-                style={{
-                  padding: '4px 10px', borderRadius: 6,
-                  border: `1.5px solid ${showEmojiPicker ? '#93c5fd' : 'var(--border-light)'}`,
-                  background: showEmojiPicker ? 'var(--accent-50)' : 'var(--surface-50)',
-                  cursor: 'pointer', fontSize: 12, display: 'flex',
-                  alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                  transition: 'all .15s',
-                }}>
-                😊 表情
-              </button>
-              {showEmojiPicker && (
-                <>
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 99 }}
-                    onClick={() => setShowEmojiPicker(false)} />
-                  <div style={{
-                    position: 'absolute', bottom: 40, left: 0, zIndex: 100,
-                    width: 312, background: 'var(--surface-0)', borderRadius: 12,
-                    border: '1px solid var(--border-light)',
-                    boxShadow: '0 4px 24px rgba(0,0,0,.12)',
-                    overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      display: 'flex', gap: 2, padding: '4px 6px',
-                      borderBottom: '1px solid var(--border-light)',
-                      background: 'var(--surface-50)', overflowX: 'auto',
-                    }}
-                      onWheel={e => {
-                        const el = e.currentTarget
-                        el.scrollLeft += e.deltaY
-                        e.preventDefault()
-                      }}
-                    >
-                      {EMOJI_GROUPS.map((group, gi) => (
-                        <button key={gi}
-                          onClick={() => {
-                            const el = document.getElementById(`emoji-panel-${gi}`)
-                            if (el) {
-                              const container = el.parentElement
-                              if (container) {
-                                container.scrollTo({ top: el.offsetTop - 8, behavior: 'smooth' })
-                              }
-                            }
-                          }}
-                          title={group.name}
-                          style={{
-                            flexShrink: 0, height: 28, borderRadius: 6,
-                            border: 'none', background: 'transparent',
-                            cursor: 'pointer', fontSize: 12, fontWeight: 500,
-                            color: 'var(--text-secondary)', padding: '0 8px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            gap: 3, transition: 'background .1s',
-                            whiteSpace: 'nowrap',
-                          }}
-                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--border-light)'}
-                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-                        >
-                          <span style={{ fontSize: 14 }}>{group.label}</span>
-                          <span>{group.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ maxHeight: 240, overflowY: 'auto', padding: 6 }}>
-                      {EMOJI_GROUPS.map((group, gi) => (
-                        <div key={gi} id={`emoji-panel-${gi}`}>
-                          {gi > 0 && <div style={{ height: 1, background: 'var(--border-light)', margin: '6px 2px' }} />}
-                          <div style={{
-                            fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600,
-                            padding: '2px 4px', marginBottom: 2,
-                          }}>
-                            {group.label} {group.name}
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                            {group.emojis.map((emoji, ei) => (
-                              <button key={ei}
-                                onClick={() => {
-                                  const el = inputRef.current
-                                  if (el) {
-                                    const { value, cursor } = insertAtCursor(el, emoji)
-                                    setInput(value)
-                                    setTimeout(() => {
-                                      el.focus()
-                                      el.setSelectionRange(cursor, cursor)
-                                    }, 0)
-                                  }
-                                }}
-                                title={emoji}
-                                style={{
-                                  width: 32, height: 32, borderRadius: 6,
-                                  border: 'none', background: 'transparent',
-                                  cursor: 'pointer', fontSize: 18,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  transition: 'background .1s',
-                                }}
-                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--border-light)'}
-                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+            modelSlot={<ModelSelector />}
+            moreItems={[
+              {
+                key: 'enhance', icon: '✨',
+                label: promptEnhancing ? '正在增强…' : '增强提示词',
+                hint: input.trim() ? undefined : '先写点内容',
+                disabled: !input.trim() || promptEnhancing,
+                onClick: () => { void handleEnhancePrompt() },
+              },
+              {
+                key: 'lucky', icon: '🍀', label: 'Lucky Agent',
+                hint: luckyMode.preset === 'off' ? '关闭' : luckyMode.preset === 'default' ? '标准' : '目标',
+                onClick: () => luckyMode.setShowSettings(true),
+                quick: [
+                  { key: 'off', label: '关闭', active: luckyMode.preset === 'off', onPick: () => luckyMode.setPreset('off') },
+                  { key: 'default', label: '标准', active: luckyMode.preset === 'default', onPick: () => luckyMode.setPreset('default') },
+                  { key: 'goal', label: '目标', active: luckyMode.preset === 'goal', onPick: () => luckyMode.setPreset('goal') },
+                ],
+              },
+              {
+                key: 'thinking', icon: '🧠', label: '思考',
+                toggle: { on: thinkingMode, onChange: setThinkingMode },
+              },
+              {
+                key: 'emoji', icon: '😊', label: '表情',
+                onClick: () => setShowEmojiPicker(true),
+              },
+              {
+                key: 'file', icon: '📎', label: '文件',
+                hint: attachments.length > 0 ? `${attachments.length} 个` : undefined,
+                onClick: () => fileInputRef.current?.click(),
+              },
+              {
+                key: 'voice', icon: '🎙️', label: '实时语音对话', dividerBefore: true,
+                toggle: { on: realtimeVoiceActive, onChange: (v) => { void toggleRealtimeVoice(v) } },
+              },
+              {
+                key: 'cu', icon: '💻', label: 'AI 操作电脑',
+                toggle: { on: computerUseActive, onChange: (v) => { void toggleComputerUse(v) } },
+              },
+              { key: 'capsule', icon: '⏳', label: '胶囊', onClick: handleCapsule },
+            ]}
+            sending={isProcessing}
+            canSend={!!input.trim() && !isProcessing}
+            onSend={handleSend}
+            onAbort={handleAbort}
+            hint={(
+              <>
+                {sttListening && (
+                  <div style={{ marginBottom: 4, fontSize: 11, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 3, background: '#ef4444', animation: 'pulse 0.6s infinite' }} />
+                    🎤 正在听你说话...
                   </div>
-                </>
-              )}
-            </div>
-            {/* ── 📎 文件 ── */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              title="上传文件"
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: `1.5px solid ${attachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
-                background: attachments.length > 0 ? 'var(--accent-50)' : '#f9fafb',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              }}>
-              📎 文件{attachments.length > 0 ? <sup style={{ fontSize: 9, color: '#3b82f6', marginLeft: 1 }}>{attachments.length}</sup> : null}
-            </button>
-            {/* ── 🎙️ 实时语音对话 ── */}
-            <button onClick={async () => {
-              if (realtimeVoiceActive) {
-                try {
-                  const r = await window.luminaAPI?.agentStopRealtimeVoice?.()
-                  if (r?.success) { setRealtimeVoiceActive(false); showToast?.('🎙️ 实时语音对话已停止', 'info') }
-                  else { showToast?.(`⚠️ ${r?.error || '停止失败'}`, 'warning') }
-                } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
-              } else {
-                try {
-                  const r = await window.luminaAPI?.agentStartRealtimeVoice?.()
-                  if (r?.success) { setRealtimeVoiceActive(true); showToast?.(r.message || '🎙️ 实时语音对话已启动', 'info') }
-                  else { showToast?.(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
-                } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
-              }
-            }}
-              title={realtimeVoiceActive ? '停止实时语音对话' : '实时语音对话'}
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: `1.5px solid ${realtimeVoiceActive ? '#22c55e' : 'var(--border-light)'}`,
-                background: realtimeVoiceActive ? 'var(--green-100)' : '#f9fafb',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                boxShadow: realtimeVoiceActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
-              }}>
-              {realtimeVoiceActive ? '🔊 实时语音对话' : '🎙️ 实时语音对话'}
-            </button>
-            {/* ── 💻 AI操作电脑 ── */}
-            <button onClick={async () => {
-              if (computerUseActive) {
-                try { await window.luminaAPI?.agentStopComputerUse?.() } catch {}
-                setComputerUseActive(false)
-                showToast?.('💻 AI操作电脑已停止', 'info')
-              } else {
-                try {
-                  const r = await window.luminaAPI?.agentStartComputerUse?.()
-                  if (r?.success) { setComputerUseActive(true); showToast?.(r.message || '💻 AI操作电脑已就绪', 'info') }
-                  else { showToast?.(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
-                } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
-              }
-            }}
-              title={computerUseActive ? '停止 AI操作电脑' : '让 AI 操作你的电脑'}
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: `1.5px solid ${computerUseActive ? '#22c55e' : 'var(--border-light)'}`,
-                background: computerUseActive ? 'var(--green-100)' : '#f9fafb',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                boxShadow: computerUseActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
-              }}>
-              {computerUseActive ? '💻 AI操作电脑（运行中）' : '💻 AI操作电脑'}
-            </button>
-            {/* ── ⏳ 胶囊 ── */}
-            <button onClick={() => {
-              const text = input.trim()
-              if (!text) { alert('输入你想对未来的自己说的话，然后点击 ⏳ 埋下时光胶囊'); return }
-              if (window.confirm(`⏳ 埋一颗时光胶囊给未来的自己？\n\n内容: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"\n\n默认 30 天后开启`)) {
-                handleSendWithText(`帮我埋一颗时光胶囊，内容是：${text}，30天后开启`)
-                setInput('')
-              }
-            }}
-              title="埋时光胶囊 ⏳"
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: '1.5px solid var(--border-light)',
-                background: '#f9fafb',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              }}>
-              ⏳ 胶囊
-            </button>
-            {/* 🆕 上下文用量指示器 */}
-            <ContextUsageIndicator />
-            {/* 弹性空间 */}
-            <div style={{ flex: 1, minWidth: 8 }} />
-          </div>
-
-          {/* ── 📋 任务派发中心入口（工具条下方，与群聊一致） ── */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            fontFamily: 'var(--font-sans)',
-          }}>
-            <button
-              onClick={() => setShowTaskDispatcher(true)}
-              title="任务派发中心"
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: '1.5px solid var(--border-light)',
-                background: 'var(--surface-50)',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent, #6366f1)'; e.currentTarget.style.background = 'var(--surface-100)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.background = 'var(--surface-50)' }}
-            >
-              📋 任务派发中心
-            </button>
-            <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-              选择任务类型 → 选择执行者 → 一键派发
-            </span>
-          </div>
+                )}
+                {sttStatus?.error && (
+                  <div style={{ marginBottom: 4, fontSize: 11, color: '#f59e0b' }}>⚠️ {sttStatus.error}</div>
+                )}
+                {promptEnhanceNotice && (
+                  <div style={{ marginBottom: 4, fontSize: 11, color: promptEnhanceNotice.startsWith('❌') ? '#dc2626' : '#6d28d9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{promptEnhanceNotice}</span>
+                    {promptEnhanceUndoRef.current !== null && (
+                      <button type="button" onClick={undoEnhancePrompt}
+                        style={{ border: 'none', background: 'transparent', color: '#6d28d9', cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>
+                        撤销
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+            footerNote={(
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {luckyMode.isPaused && (
+                  <button type="button" onClick={luckyMode.resume}
+                    style={{
+                      padding: '3px 9px', borderRadius: 6,
+                      border: '1.5px solid #fca5a5', background: '#fef2f2',
+                      cursor: 'pointer', fontSize: 11, display: 'flex',
+                      alignItems: 'center', gap: 3, fontFamily: 'inherit', color: '#dc2626',
+                    }}>
+                    ▶ 继续
+                  </button>
+                )}
+                <ContextUsageIndicator />
+              </span>
+            )}
+            overlay={showEmojiPicker ? (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                  onClick={() => setShowEmojiPicker(false)} />
+                <div style={{
+                  position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, zIndex: 100,
+                  width: 312, background: 'var(--surface-0)', borderRadius: 12,
+                  border: '1px solid var(--border-light)',
+                  boxShadow: '0 4px 24px rgba(0,0,0,.12)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    display: 'flex', gap: 2, padding: '4px 6px',
+                    borderBottom: '1px solid var(--border-light)',
+                    background: 'var(--surface-50)', overflowX: 'auto',
+                  }}
+                    onWheel={e => {
+                      const el = e.currentTarget
+                      el.scrollLeft += e.deltaY
+                      e.preventDefault()
+                    }}
+                  >
+                    {EMOJI_GROUPS.map((group, gi) => (
+                      <button key={gi}
+                        onClick={() => {
+                          const el = document.getElementById(`emoji-panel-${gi}`)
+                          if (el) {
+                            const container = el.parentElement
+                            if (container) {
+                              container.scrollTo({ top: el.offsetTop - 8, behavior: 'smooth' })
+                            }
+                          }
+                        }}
+                        title={group.name}
+                        style={{
+                          flexShrink: 0, height: 28, borderRadius: 6,
+                          border: 'none', background: 'transparent',
+                          cursor: 'pointer', fontSize: 12, fontWeight: 500,
+                          color: 'var(--text-secondary)', padding: '0 8px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          gap: 3, transition: 'background .1s',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--border-light)'}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                      >
+                        <span style={{ fontSize: 14 }}>{group.label}</span>
+                        <span>{group.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ maxHeight: 240, overflowY: 'auto', padding: 6 }}>
+                    {EMOJI_GROUPS.map((group, gi) => (
+                      <div key={gi} id={`emoji-panel-${gi}`}>
+                        {gi > 0 && <div style={{ height: 1, background: 'var(--border-light)', margin: '6px 2px' }} />}
+                        <div style={{
+                          fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600,
+                          padding: '2px 4px', marginBottom: 2,
+                        }}>
+                          {group.label} {group.name}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                          {group.emojis.map((emoji, ei) => (
+                            <button key={ei}
+                              onClick={() => {
+                                const el = inputRef.current
+                                if (el) {
+                                  const { value, cursor } = insertAtCursor(el, emoji)
+                                  setInput(value)
+                                  setTimeout(() => {
+                                    el.focus()
+                                    el.setSelectionRange(cursor, cursor)
+                                  }, 0)
+                                }
+                              }}
+                              title={emoji}
+                              style={{
+                                width: 32, height: 32, borderRadius: 6,
+                                border: 'none', background: 'transparent',
+                                cursor: 'pointer', fontSize: 18,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'background .1s',
+                              }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--border-light)'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          />
 
           {/* 子智能体（实习生）进度卡片：入口条正下方，与群聊视图一致 */}
           <SubagentCards sessionId={activeConversationId} />

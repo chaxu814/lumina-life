@@ -35,7 +35,8 @@ import {
   SPARK_NOTE_PREFIX,
   SPARK_NOTE_SUFFIX,
 } from '../services/conversationDynamics'
-import LuckyModeSelector from '../components/LuckyModeSelector'
+import ChatComposer from '../components/ChatComposer'
+import { IconSpeaker } from '../components/Icons'
 import ModelSelector from '../components/ModelSelector'
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
@@ -1034,6 +1035,68 @@ export default function GroupChatView() {
     requestAnimationFrame(() => gcAutoResize())
   }
 
+  // ═══ 2026-10-18：统一输入栏用到的动作（原来是内联在工具条上的小按钮）═══
+
+  /** ✂ 截图提问：截当前屏幕 → 作为附件挂上（带路径，agent 可用文件工具打开） */
+  const handleComposerScreenshot = async () => {
+    try {
+      const r = await window.luminaAPI?.agentScreenshot?.()
+      if (!r?.success || !r.path) {
+        showToast(`⚠️ ${r?.error || '截图失败'}`, 'warning')
+        return
+      }
+      const name = String(r.path).split(/[\\/]/).pop() || `screenshot-${Date.now()}.png`
+      setGcAttachments(prev => [...prev, { name, size: 0, path: r.path }])
+      showToast('✂ 已截屏，会作为附件附在这条消息上', 'info')
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || e}`, 'warning')
+    }
+  }
+
+  /** 🎙️ 实时语音对话 开/关 */
+  const toggleRealtimeVoice = async (on: boolean) => {
+    try {
+      if (!on) {
+        const r = await window.luminaAPI?.agentStopRealtimeVoice?.()
+        if (r?.success) { setRealtimeVoiceActive(false); showToast('🎙️ 实时语音对话已停止', 'info') }
+        else { showToast(`⚠️ ${r?.error || '停止失败'}`, 'warning') }
+      } else {
+        const r = await window.luminaAPI?.agentStartRealtimeVoice?.()
+        if (r?.success) { setRealtimeVoiceActive(true); showToast(r.message || '🎙️ 实时语音对话已启动', 'info') }
+        else { showToast(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+      }
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || e}`, 'warning')
+    }
+  }
+
+  /** 💻 AI 操作电脑 开/关 */
+  const toggleComputerUse = async (on: boolean) => {
+    try {
+      if (!on) {
+        await window.luminaAPI?.agentStopComputerUse?.()
+        setComputerUseActive(false)
+        showToast('💻 AI操作电脑已停止', 'info')
+      } else {
+        const r = await window.luminaAPI?.agentStartComputerUse?.()
+        if (r?.success) { setComputerUseActive(true); showToast(r.message || '💻 AI操作电脑已就绪', 'info') }
+        else { showToast(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
+      }
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || e}`, 'warning')
+    }
+  }
+
+  /** ⏳ 埋时光胶囊 */
+  const handleCapsule = () => {
+    const text = input.trim()
+    if (!text) { showToast('先输入你想对未来的自己说的话，再点 ⏳ 胶囊', 'warning'); return }
+    if (window.confirm(`⏳ 埋一颗时光胶囊给未来的自己？\n\n内容: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"\n\n默认 30 天后开启`)) {
+      setInput(`帮我埋一颗时光胶囊，内容是：${text}，30天后开启`)
+      setTimeout(() => { sendRef.current(); setInput('') }, 80)
+    }
+  }
+
   // ═══ v2.7 群聊同步升级 ═══
   const [sttListening, setSttListening] = useState(false)
   const [sttStatus, setSttStatus] = useState<STTStatus | null>(null)
@@ -1057,7 +1120,7 @@ export default function GroupChatView() {
   const [showGcVoicePicker, setShowGcVoicePicker] = useState(false) // 🔧 v2.9: 群聊TTS音色面板
   const [gcVoiceTarget, setGcVoiceTarget] = useState<string | null>(null) // 🔧 v2.9: 当前调整的Agent
   const [ttsToggling, setTtsToggling] = useState(false) // 🔧 v2.9: 静音切换动画
-  const [gcAttachments, setGcAttachments] = useState<Array<{name:string,size:number,text?:string,imageDataUrl?:string}>>([])
+  const [gcAttachments, setGcAttachments] = useState<Array<{name:string,size:number,text?:string,imageDataUrl?:string;path?:string}>>([])
   const [thinkingCollapsed, setThinkingCollapsed] = useState<Record<string, boolean>>({})
   const userExpandedRef = useRef<Set<string>>(new Set())
   /**
@@ -2071,6 +2134,8 @@ export default function GroupChatView() {
         const sizeStr = a.size > 1024 * 1024 ? `${(a.size / (1024 * 1024)).toFixed(1)}MB` : `${(a.size / 1024).toFixed(1)}KB`
         let desc = `[附件${i + 1}: ${a.name} (${sizeStr})]`
         if (a.text) {desc += `\n内容:\n${a.text}`}
+        // 截图这类「只落了盘」的附件把路径给出去，agent 才能用文件工具真正打开它
+        if (a.path) {desc += `\n路径: ${a.path}`}
         return desc
       }).join('\n')
       fullText = `${userText}\n\n--- 上传文件 ---\n${fileDescs}`
@@ -4551,23 +4616,27 @@ export default function GroupChatView() {
             {taskPanelOpen ? '📕' : '📋'} 任务工作区
           </button>
 
-          {/* 🔊 v2.13: TTS 静音 */}
+          {/* 🔊 TTS 静音（2026-10-18：emoji 换成线性喇叭，与桌宠小窗 / Agent 同款） */}
           <button onClick={ttsToggle}
-            title={ttsMuted ? '🔇 TTS 已静音，点击取消' : '🔊 TTS 开启，点击静音'}
+            title={ttsMuted ? 'TTS 已静音，点击取消' : 'TTS 开启，点击静音'}
             style={{
               width: 28, height: 28, borderRadius: 6,
-              border: `1.5px solid ${ttsMuted ? '#fca5a5' : '#86efac'}`,
-              background: ttsMuted ? '#fef2f2' : 'var(--green-100)',
+              border: '1px solid transparent',
+              background: 'transparent',
+              color: ttsMuted ? '#ef4444' : 'var(--text-secondary)',
               cursor: 'pointer', fontSize: 14, display: 'flex',
               alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.3s ease', opacity: ttsMuted ? 0.7 : 1,
+              transition: 'all 0.3s ease', opacity: ttsMuted ? 1 : 0.85,
               flexShrink: 0,
-            }}>
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-50)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
             <span style={{
-              display: 'inline-block',
+              display: 'inline-flex',
+              alignItems: 'center',
               animation: ttsMuted ? 'none' : 'ttsWave 1.2s ease-in-out infinite',
             }}>
-              {ttsMuted ? '🔇' : '🔊'}
+              <IconSpeaker size={16} muted={ttsMuted} />
             </span>
           </button>
 
@@ -5474,37 +5543,6 @@ export default function GroupChatView() {
           ))}
         </div>
       )}
-      {/* 🔧 v2.11: 附件预览 — 与普通聊天一致的逐个文件预览 */}
-      {gcAttachments.length > 0 && (
-        <div style={{ margin: '0 12px', display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
-          {gcAttachments.map((a, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: 'var(--accent-50)', border: '1px solid #bfdbfe',
-              borderRadius: 6, padding: '3px 8px', fontSize: 11,
-              color: '#1d4ed8', maxWidth: 200,
-            }}>
-              <span style={{ fontSize: 13 }}>
-                {a.name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) ? '🖼️'
-                  : a.name.match(/\.(pdf|doc|docx)$/i) ? '📄'
-                  : a.name.match(/\.(xls|xlsx|csv)$/i) ? '📊'
-                  : a.name.match(/\.(py|js|ts|java|cpp|c|h|html|css|json|xml)$/i) ? '💻'
-                  : '📁'}
-              </span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {a.name.length > 16 ? a.name.slice(0, 14) + '...' : a.name}
-              </span>
-              <span style={{ color: 'var(--text-secondary)', fontSize: 9 }}>
-                {a.size > 1024 * 1024 ? `${(a.size / (1024 * 1024)).toFixed(1)}MB` : `${(a.size / 1024).toFixed(0)}KB`}
-              </span>
-              <button onClick={() => setGcAttachments(prev => prev.filter((_, idx) => idx !== i))} style={{
-                border: 'none', background: 'transparent', color: '#93c5fd',
-                cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1,
-              }}>×</button>
-            </div>
-          ))}
-        </div>
-      )}
       <div
         style={{
         padding: '8px 12px', borderTop: '1px solid var(--border-light)', flexShrink: 0,
@@ -5515,183 +5553,122 @@ export default function GroupChatView() {
         outline: gcDragOver ? '2px dashed #93c5fd' : 'none',
         outlineOffset: -4,
       }}>
-        <div style={{ position: 'relative' }}>
-          <textarea
-            key={`gc-input-${inputKey}`}
-            ref={gcTextareaRef}
-            placeholder={llmReady ? '发消息... @Lumina @热茶 @Yak 指定回复者 （Shift+Enter 换行）' : '发消息...（模拟模式，配置LLM后解锁真实对话）'}
-            value={input}
-            onChange={e => { setInput(e.target.value); setPromptEnhanceNotice(''); gcAutoResize() }}
-            onPaste={e => handlePasteInsert(e, input, setInput)}
-            onKeyDown={e => {
-              // ⚠️ 中文输入法（IME）选词时按回车只是「确认候选词」，不是「发送」。
-              //   不判 isComposing 的话，拼音打字按回车会把半截内容当成消息发出去
-              //   （甚至发空）—— 典型的「聊天断断续续」。
-              if (isImeComposing(e)) {return}
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
-            }}
-            onDragOver={e => e.preventDefault()}
-            rows={1}
-            style={{
-              width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-light)',
-              fontSize: 13, outline: 'none', fontFamily: 'inherit',
-              resize: 'vertical', minHeight: 72, paddingLeft: 14, paddingRight: 224, paddingBottom: 40,
-              boxSizing: 'border-box', lineHeight: 1.5,
-            }}
-          />
-          {/* ── 模型选择器紧挨发送/中断按钮左侧 ── */}
-          <div style={{
-            position: 'absolute', right: 10, bottom: 8, zIndex: 2,
-            maxWidth: 'calc(100% - 20px)', display: 'flex', gap: 7, alignItems: 'center',
-          }}>
-            <div style={{ minWidth: 0, maxWidth: 160, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
-              <ModelSelector />
-            </div>
-            {/* ── 发送 / 中断（圆形上箭头；无内容暗淡，有内容高亮） ── */}
-          {sending ? (
-            <button onClick={() => { abortRef.current = true; setSending(false); setReplyingAgent(null); window.luminaAPI.agentAbort() }}
-              title="中断回复"
-              style={{
-                padding: '4px 12px', borderRadius: 6,
-                border: '1.5px solid #fca5a5', background: 'var(--red-100)', color: '#ef4444',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit', fontWeight: 600,
-              }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" style={{ animation: 'sendSpin 0.9s linear infinite' }}>
-                <circle cx="12" cy="12" r="10" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="50 50" strokeLinecap="round" />
-              </svg>
-              中断
-            </button>
-          ) : (
-            <button onClick={send} disabled={sending || !input.trim()}
-              aria-label="发送消息"
-              title="发送消息（Enter）"
-              style={{
-                width: 32, height: 32, padding: 0, flexShrink: 0,
-                border: 'none', borderRadius: '50%',
-                background: input.trim() ? '#dbeafe' : '#eef0f3',
-                color: input.trim() ? '#2563eb' : '#a0a5ae',
-                cursor: input.trim() ? 'pointer' : 'default',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background .16s ease, color .16s ease, transform .12s ease',
-                boxShadow: input.trim() ? '0 0 0 1px rgba(37,99,235,.12)' : 'none',
-              }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 4.25 3.8 12.9c-.33.35-.08.93.4.93h4.35v5.42c0 .3.24.54.54.54h5.82c.3 0 .54-.24.54-.54v-5.42h4.35c.48 0 .73-.58.4-.93L12 4.25Z" fill="currentColor" />
-              </svg>
-            </button>
+        {/* ── 统一输入栏（2026-10-18）
+             与桌宠小窗同一套结构：+ ｜ 更多 ›，右下角保留模型选择器 + 圆形发送。
+             群聊没有「对话」胶囊（会话在左侧栏切换）。 ── */}
+        <ChatComposer
+          value={input}
+          onChange={v => { setInput(v); setPromptEnhanceNotice(''); gcAutoResize() }}
+          onKeyDown={e => {
+            // ⚠️ 中文输入法（IME）选词时按回车只是「确认候选词」，不是「发送」。
+            //   不判 isComposing 的话，拼音打字按回车会把半截内容当成消息发出去
+            //   （甚至发空）—— 典型的「聊天断断续续」。
+            if (isImeComposing(e)) {return}
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+          }}
+          onPaste={e => handlePasteInsert(e, input, setInput)}
+          placeholder={llmReady ? '发消息... @Lumina @热茶 @Yak 指定回复者 （Shift+Enter 换行）' : '发消息...（模拟模式，配置LLM后解锁真实对话）'}
+          textareaRef={gcTextareaRef}
+          textareaKey={`gc-input-${inputKey}`}
+          minHeight={72}
+          attachments={gcAttachments.map(a => ({ name: a.name, size: a.size, dataUrl: a.imageDataUrl }))}
+          onRemoveAttachment={i => setGcAttachments(prev => prev.filter((_, idx) => idx !== i))}
+          onPickFiles={() => fileInputRef.current?.click()}
+          onScreenshot={() => { void handleComposerScreenshot() }}
+          onSearch={q => {
+            setInput(prev => (prev.trim() ? prev.replace(/\s*$/, '') + '\n' : '') + `帮我联网搜索：${q}`)
+          }}
+          modelSlot={<ModelSelector />}
+          moreItems={[
+            {
+              key: 'enhance', icon: '✨',
+              label: promptEnhancing ? '正在增强…' : '增强提示词',
+              hint: input.trim() ? undefined : '先写点内容',
+              disabled: !input.trim() || promptEnhancing,
+              onClick: () => { void enhancePrompt() },
+            },
+            {
+              key: 'lucky', icon: '🍀', label: 'Lucky Agent',
+              hint: luckyMode.preset === 'off' ? '关闭' : luckyMode.preset === 'default' ? '标准' : '目标',
+              onClick: () => luckyMode.setShowSettings(true),
+              quick: [
+                { key: 'off', label: '关闭', active: luckyMode.preset === 'off', onPick: () => luckyMode.setPreset('off') },
+                { key: 'default', label: '标准', active: luckyMode.preset === 'default', onPick: () => luckyMode.setPreset('default') },
+                { key: 'goal', label: '目标', active: luckyMode.preset === 'goal', onPick: () => luckyMode.setPreset('goal') },
+              ],
+            },
+            {
+              key: 'thinking', icon: '🧠', label: '思考',
+              toggle: { on: thinkingMode, onChange: setThinkingMode },
+            },
+            {
+              key: 'emoji', icon: '😊', label: '表情',
+              onClick: () => setShowEmoji(true),
+            },
+            {
+              key: 'file', icon: '📎', label: '文件',
+              hint: gcAttachments.length > 0 ? `${gcAttachments.length} 个` : undefined,
+              onClick: () => fileInputRef.current?.click(),
+            },
+            {
+              key: 'voice', icon: '🎙️', label: '实时语音对话', dividerBefore: true,
+              toggle: { on: realtimeVoiceActive, onChange: (v) => { void toggleRealtimeVoice(v) } },
+            },
+            {
+              key: 'cu', icon: '💻', label: 'AI 操作电脑',
+              toggle: { on: computerUseActive, onChange: (v) => { void toggleComputerUse(v) } },
+            },
+            { key: 'capsule', icon: '⏳', label: '胶囊', onClick: handleCapsule },
+          ]}
+          sending={sending}
+          canSend={!sending && !!input.trim()}
+          onSend={send}
+          onAbort={() => {
+            abortRef.current = true
+            setSending(false)
+            setReplyingAgent(null)
+            window.luminaAPI.agentAbort()
+          }}
+          hint={(
+            <>
+              {promptEnhanceNotice && (
+                <div role="status" style={{
+                  marginBottom: 4, fontSize: 11, lineHeight: 1.4,
+                  color: promptEnhanceNotice.startsWith('❌') ? '#b91c1c' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>{promptEnhanceNotice}</span>
+                  {promptEnhanceUndo !== null && !promptEnhancing && (
+                    <button type="button" onClick={undoEnhancePrompt}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--accent, #3b82f6)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>
+                      ↩︎ 撤销
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           )}
-          </div>
-        </div>
-        {/* ── 功能工具栏（小长方形按钮 + 微软雅黑标注） ── */}
-        <div style={{
-          display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
-          fontFamily: '"微软雅黑","Microsoft YaHei",sans-serif',
-        }}>
-          {/* ✨ 增强提示词：按任务类型自适应改写草稿，不会自动发送 */}
-          <button
-            onClick={() => { void enhancePrompt() }}
-            disabled={!input.trim() || promptEnhancing}
-            title="保留原意润色草稿：改含糊/啰嗦/语病，不替你加需求、不加维度；只替换输入草稿，不会自动发送"
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: `1.5px solid ${input.trim() && !promptEnhancing ? '#c4b5fd' : 'var(--border-light)'}`,
-              background: input.trim() && !promptEnhancing ? '#f5f3ff' : 'var(--surface-50)',
-              color: input.trim() && !promptEnhancing ? '#6d28d9' : 'var(--text-secondary)',
-              cursor: !input.trim() || promptEnhancing ? 'default' : 'pointer',
-              opacity: !input.trim() ? 0.55 : 1,
-              fontSize: 12, display: 'flex', alignItems: 'center', gap: 4,
-              fontFamily: 'inherit', transition: 'all .15s',
-            }}
-          >
-            <span aria-hidden="true">{promptEnhancing ? '⏳' : '✨'}</span>
-            {promptEnhancing ? '正在增强…' : '增强提示词'}
-          </button>
-          {/* ↩︎ 撤销增强：恢复增强前的草稿 */}
-          {promptEnhanceUndo !== null && !promptEnhancing && (
-            <button
-              onClick={undoEnhancePrompt}
-              title="恢复为增强前的草稿"
-              style={{
-                padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-light)',
-                background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
-                fontSize: 12, display: 'flex', alignItems: 'center', gap: 4,
-                fontFamily: 'inherit',
-              }}
-            >
-              <span aria-hidden="true">↩︎</span>撤销
-            </button>
+          footerNote={(
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {luckyMode.isPaused && (
+                <button type="button" onClick={luckyMode.resume}
+                  style={{
+                    padding: '3px 9px', borderRadius: 6,
+                    border: '1.5px solid #fca5a5', background: '#fef2f2',
+                    cursor: 'pointer', fontSize: 11, display: 'flex',
+                    alignItems: 'center', gap: 3, fontFamily: 'inherit', color: '#dc2626',
+                  }}>
+                  ▶ 继续
+                </button>
+              )}
+            </span>
           )}
-          {promptEnhanceNotice && (
-            <span role="status" style={{
-              fontSize: 10, color: promptEnhanceNotice.startsWith('❌') ? '#b91c1c' : 'var(--text-secondary)',
-              maxWidth: 360, lineHeight: 1.4,
-            }}>{promptEnhanceNotice}</span>
-          )}
-          {/* ── 🍀 Lucky 模式（第二位） ── */}
-          <LuckyModeSelector
-            currentPreset={luckyMode.preset}
-            onPresetChange={luckyMode.setPreset}
-            runtimeInfo={{
-              preset: luckyMode.preset,
-              isActive: luckyMode.isActive,
-              currentIteration: luckyMode.runtime.currentIteration,
-              maxIteration: luckyMode.runtime.maxIteration,
-              isPaused: luckyMode.isPaused,
-              pauseReason: luckyMode.runtime.pauseReason,
-            }}
-            onOpenSettings={() => luckyMode.setShowSettings(true)}
-          />
-          {/* 🍀 Lucky 模式暂停继续按钮 */}
-          {luckyMode.isPaused && (
-            <button
-              onClick={luckyMode.resume}
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: '1.5px solid #fca5a5', background: '#fef2f2',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                color: '#dc2626',
-              }}>
-              ▶️ 继续
-            </button>
-          )}
-          {/* ── 🧠 思考 ── */}
-          <button
-            onClick={() => setThinkingMode(v => !v)}
-            title={thinkingMode ? '🧠 思考过程已开启 — 点击关闭' : '🧠 思考过程已关闭 — 点击开启'}
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: `1.5px solid ${thinkingMode ? '#f59e0b' : 'var(--border-light)'}`,
-              background: thinkingMode ? 'var(--yellow-100)' : 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              opacity: thinkingMode ? 1 : 0.6,
-              transition: 'all .2s',
-            }}>
-            🧠 思考
-          </button>
-          {/* ── 😊 表情 ── */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button
-              onClick={() => setShowEmoji(!showEmoji)}
-              title="表情符号"
-              style={{
-                padding: '4px 10px', borderRadius: 6,
-                border: `1.5px solid ${showEmoji ? '#93c5fd' : 'var(--border-light)'}`,
-                background: showEmoji ? 'var(--accent-50)' : 'var(--surface-50)',
-                cursor: 'pointer', fontSize: 12, display: 'flex',
-                alignItems: 'center', gap: 3, fontFamily: 'inherit',
-                transition: 'all .15s',
-              }}>
-              😊 表情
-            </button>
-          {showEmoji && (
+          overlay={showEmoji ? (
             <>
               <div style={{ position: 'fixed', inset: 0, zIndex: 99 }}
                 onClick={() => setShowEmoji(false)} />
               <div style={{
-                position: 'absolute', bottom: 40, left: 0, zIndex: 100,
+                position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, zIndex: 100,
                 width: 312, background: 'var(--surface-0)', borderRadius: 12,
                 border: '1px solid var(--border-light)',
                 boxShadow: '0 4px 24px rgba(0,0,0,.12)',
@@ -5772,95 +5749,8 @@ export default function GroupChatView() {
                 </div>
               </div>
             </>
-          )}
-        </div>
-          {/* ── 📎 文件 ── */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="上传文件"
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: `1.5px solid ${gcAttachments.length > 0 ? '#93c5fd' : 'var(--border-light)'}`,
-              background: gcAttachments.length > 0 ? 'var(--accent-50)' : 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-            }}>
-            📎 文件{gcAttachments.length > 0 ? <sup style={{ fontSize: 9, color: 'var(--accent, #3b82f6)', marginLeft: 1 }}>{gcAttachments.length}</sup> : null}
-          </button>
-
-          {/* ── 🎙️ 实时语音对话 ── */}
-          <button onClick={async () => {
-            if (realtimeVoiceActive) {
-              try {
-                const r = await window.luminaAPI?.agentStopRealtimeVoice?.()
-                if (r?.success) { setRealtimeVoiceActive(false); showToast?.('🎙️ 实时语音对话已停止', 'info') }
-                else { showToast?.(`⚠️ ${r?.error || '停止失败'}`, 'warning') }
-              } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
-            } else {
-              try {
-                const r = await window.luminaAPI?.agentStartRealtimeVoice?.()
-                if (r?.success) { setRealtimeVoiceActive(true); showToast?.(r.message || '🎙️ 实时语音对话已启动', 'info') }
-                else { showToast?.(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
-              } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
-            }
-          }}
-            title={realtimeVoiceActive ? '停止实时语音对话' : '实时语音对话'}
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: `1.5px solid ${realtimeVoiceActive ? '#22c55e' : 'var(--border-light)'}`,
-              background: realtimeVoiceActive ? 'var(--green-100)' : 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              boxShadow: realtimeVoiceActive ? '0 0 6px rgba(34,197,94,0.35)' : 'none',
-            }}>
-            {realtimeVoiceActive ? '🔊 实时语音对话' : '🎙️ 实时语音对话'}
-          </button>
-          {/* ── 💻 AI操作电脑 ── */}
-          <button onClick={async () => {
-            if (computerUseActive) {
-              try { await window.luminaAPI?.agentStopComputerUse?.() } catch {}
-              setComputerUseActive(false)
-              showToast?.('💻 AI操作电脑已停止', 'info')
-            } else {
-              try {
-                const r = await window.luminaAPI?.agentStartComputerUse?.()
-                if (r?.success) { setComputerUseActive(true); showToast?.(r.message || '💻 AI操作电脑已就绪', 'info') }
-                else { showToast?.(`⚠️ ${r?.error || '启动失败'}`, 'warning') }
-              } catch (e: any) { showToast?.(`⚠️ ${e.message}`, 'warning') }
-            }
-          }}
-            title={computerUseActive ? '停止 AI操作电脑' : '让 AI 操作你的电脑'}
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: `1.5px solid ${computerUseActive ? '#a855f7' : 'var(--border-light)'}`,
-              background: computerUseActive ? 'var(--accent-50)' : 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-              boxShadow: computerUseActive ? '0 0 6px rgba(168,85,247,0.35)' : 'none',
-            }}>
-            {computerUseActive ? '💻 AI操作电脑' : '💻 AI操作电脑'}
-          </button>
-          {/* ── ⏳ 胶囊 ── */}
-          <button onClick={() => {
-            const text = input.trim()
-            if (!text) { alert('输入你想对未来的自己说的话，然后点击 ⏳ 埋下时光胶囊'); return }
-            if (window.confirm(`⏳ 埋一颗时光胶囊给未来的自己？\n\n内容: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"\n\n默认 30 天后开启`)) {
-              setInput(`帮我埋一颗时光胶囊，内容是：${text}，30天后开启`)
-              setTimeout(() => { sendRef.current(); setInput('') }, 80)
-            }
-          }}
-            title="埋时光胶囊 ⏳"
-            style={{
-              padding: '4px 10px', borderRadius: 6,
-              border: '1.5px solid var(--border-light)',
-              background: 'var(--surface-50)',
-              cursor: 'pointer', fontSize: 12, display: 'flex',
-              alignItems: 'center', gap: 3, fontFamily: 'inherit',
-            }}>
-            ⏳ 胶囊
-          </button>
-
-        </div>
+          ) : null}
+        />
 
         {/* 子智能体（实习生）进度卡片：入口条正下方，与单聊一致 */}
         <SubagentCards sessionId={activeSessionId} />

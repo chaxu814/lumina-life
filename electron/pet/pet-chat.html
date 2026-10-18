@@ -121,7 +121,7 @@
   #chat-panel #chat-log::-webkit-scrollbar { width: 5px; }
   #chat-panel #chat-log::-webkit-scrollbar-thumb { background: rgba(100,130,180,0.25); border-radius: 3px; }
   #chat-panel .cp-msg {
-    max-width: 82%; padding: 8px 12px; border-radius: 14px; line-height: 1.5; word-break: break-word;
+    max-width: 88%; padding: 8px 12px; border-radius: 14px; line-height: 1.5; word-break: break-word;
     font-size: 13px; animation: msgIn .25s ease;
   }
   @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -129,12 +129,20 @@
     align-self: flex-end; background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
     border-bottom-right-radius: 4px; box-shadow: 0 2px 8px rgba(74,158,255,0.25);
   }
+  /* AI 气泡（2026-10-18）
+     原来底色是 rgba(255,255,255,0.9)、边框 0.1 透明度 —— 叠在白底聊天区上等于没有气泡，
+     一整段回复直接摊在页面上，长回复看久了眼睛很累。现在给它一个明确可辨的浅蓝灰底。 */
   #chat-panel .cp-msg.pet {
-    align-self: flex-start; background: rgba(255,255,255,0.9); color: #2a3a5c;
-    border-bottom-left-radius: 4px; border: 1px solid rgba(100,130,180,0.1);
-    box-shadow: 0 1px 4px rgba(40,60,120,0.06);
+    align-self: flex-start;
+    background: #f4f7fc;
+    color: #24304a;
+    border-bottom-left-radius: 5px;
+    border: 1px solid rgba(86,120,180,0.16);
+    box-shadow: 0 1px 3px rgba(40,60,120,0.05);
+    padding: 10px 13px;
+    line-height: 1.62;
     /* 头像与正文并排：正文是块级（标题/列表/代码块），不能再用 inline 流 */
-    display: flex; align-items: flex-start; gap: 6px;
+    display: flex; align-items: flex-start; gap: 7px;
   }
   #chat-panel .cp-msg.pet .cp-msg-avatar {
     display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
@@ -579,6 +587,28 @@
     border-top: 1px solid rgba(15,25,45,0.07);
   }
 
+  /* 弹窗标题里的主体名（Lumina Agent） */
+  #chat-panel .cp-dialog-sub {
+    font-style: normal; font-size: 10.5px; font-weight: 600;
+    color: #4a7dd6; background: #eef4ff; border: 1px solid #d7e5ff;
+    border-radius: 999px; padding: 1px 7px; margin-left: 6px;
+    vertical-align: 1px;
+  }
+
+  /* Lucky 快捷选择栏 */
+  #chat-panel .cp-quick {
+    display: flex; gap: 4px; padding: 0 9px 7px 34px; flex-wrap: wrap;
+  }
+  #chat-panel .cp-quick-btn {
+    border: 1px solid rgba(15,25,45,0.12); background: #fff; color: #5a6474;
+    font-family: inherit; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    cursor: pointer; transition: all .12s; white-space: nowrap;
+  }
+  #chat-panel .cp-quick-btn:hover { border-color: #93c5fd; color: #2563eb; }
+  #chat-panel .cp-quick-btn.on {
+    background: #eff6ff; border-color: #93c5fd; color: #2563eb; font-weight: 600;
+  }
+
   /* 「更多」里的开关行 */
   #chat-panel .cp-pop-item.toggle .cp-sw {
     width: 30px; height: 17px; border-radius: 999px; background: #dfe2e7;
@@ -763,10 +793,20 @@
     <button class="cp-pop-item" data-act="enhance">
       <span class="cp-pop-ico">✨</span><span class="cp-pop-label">增强提示词</span>
     </button>
-    <button class="cp-pop-item" data-act="lucky">
-      <span class="cp-pop-ico">🍀</span><span class="cp-pop-label">Lucky Agent</span>
-      <span class="cp-pop-kbd" id="lucky-state">关闭 ▾</span>
-    </button>
+    <div class="cp-pop-row">
+      <button class="cp-pop-item" data-act="lucky" title="点一下切到下一个模式">
+        <span class="cp-pop-ico">🍀</span><span class="cp-pop-label">Lucky Agent</span>
+        <span class="cp-pop-kbd" id="lucky-state">关闭</span>
+      </button>
+      <!-- 快捷选择（2026-10-18）：原来只能点一次换一个模式，要连点三次才到「目标」。
+           四个模式直接摊开，点一下就到位。 -->
+      <div class="cp-quick" id="lucky-quick">
+        <button class="cp-quick-btn" data-lucky="off">关闭</button>
+        <button class="cp-quick-btn" data-lucky="default">标准</button>
+        <button class="cp-quick-btn" data-lucky="goal">目标</button>
+        <button class="cp-quick-btn" data-lucky="mission">任务</button>
+      </div>
+    </div>
     <button class="cp-pop-item toggle" data-act="thinking">
       <span class="cp-pop-ico">🧠</span><span class="cp-pop-label">思考</span>
       <span class="cp-sw"></span>
@@ -877,7 +917,8 @@
   <div class="cp-mask" id="cp-picker-mask">
     <div class="cp-dialog">
       <div class="cp-dialog-head">
-        <span>选择要删除的对话</span>
+        <!-- 标题带上主体名：这个面板管的是 Lumina Agent 的会话，不是桌宠自己的记录 -->
+        <span>选择要删除的对话 <em class="cp-dialog-sub">Lumina Agent</em></span>
         <button class="cp-x" id="cp-picker-close">✕</button>
       </div>
       <div class="cp-dialog-body" id="cp-picker-list"></div>
@@ -1767,6 +1808,15 @@ $id('btn-more').addEventListener('click', function (e) {
   if (open && HAS_IPC) { try { ipc.send('pet:ui:action', { kind: 'lucky-get' }); } catch (e2) {} }
 });
 popMore.addEventListener('click', function (e) {
+  // Lucky 快捷选择栏：点一下就切过去，不用连点
+  const qb = e.target.closest ? e.target.closest('.cp-quick-btn') : null;
+  if (qb) {
+    const preset = qb.getAttribute('data-lucky') || 'off';
+    if (HAS_IPC) { try { ipc.send('pet:ui:action', { kind: 'lucky-preset', preset: preset }); } catch (e3) {} }
+    applyLucky(preset);
+    toast('🍀 Lucky Agent：' + ({ off: '关闭', default: '标准', goal: '目标', mission: '任务' }[preset] || '关闭'));
+    return;
+  }
   const btn = e.target.closest ? e.target.closest('.cp-pop-item') : null;
   if (!btn) { return; }
   const act = btn.getAttribute('data-act');
@@ -1801,9 +1851,17 @@ function applyLucky(preset) {
   _luckyPreset = preset || 'off';
   const label = { off: '关闭', default: '标准', goal: '目标', mission: '任务' }[_luckyPreset] || '关闭';
   const el = $id('lucky-state');
-  if (el) { el.textContent = label + ' ▾'; }
+  if (el) { el.textContent = label; }
   const row = popMore.querySelector('[data-act="lucky"]');
   if (row) { row.classList.toggle('on', _luckyPreset !== 'off'); }
+  // 快捷栏高亮跟着走 —— 不跟着走就会出现「选了目标、栏里还亮着标准」
+  const quick = $id('lucky-quick');
+  if (quick) {
+    const btns = quick.querySelectorAll('.cp-quick-btn');
+    for (let i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', btns[i].getAttribute('data-lucky') === _luckyPreset);
+    }
+  }
 }
 
 function insertCapsule() {

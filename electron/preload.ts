@@ -915,6 +915,10 @@ const api = {
   agentComputerUseStatus: () =>
     ipcRenderer.invoke('computer-use:status') as Promise<{ active: boolean; running: boolean; error?: string }>,
 
+  /** ✂ 截屏（落盘，返回路径）—— 输入栏「+ → 截图提问」用，agent 可再用文件工具打开 */
+  agentScreenshot: () =>
+    ipcRenderer.invoke('computer-use:screenshot') as Promise<{ success: boolean; path?: string; error?: string }>,
+
   /** 🧰 v1.0 工具箱: 同步角色配置到主进程 */
   teamSyncProfiles: (profiles: Array<{
     id: string; name: string; icon: string; role: string; description: string

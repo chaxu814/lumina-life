@@ -438,6 +438,8 @@ declare global {
       agentStartComputerUse: () => Promise<{ success: boolean; message?: string; error?: string }>
       agentStopComputerUse: () => Promise<{ success: boolean; error?: string }>
       agentComputerUseStatus: () => Promise<{ active: boolean; running: boolean; error?: string }>
+      /** ✂ 截屏（落盘，返回路径）—— 输入栏「+ → 截图提问」用 */
+      agentScreenshot: () => Promise<{ success: boolean; path?: string; error?: string }>
 
       // 🧰 v1.0 工具箱: 同步角色配置
       teamSyncProfiles: (profiles: Array<{
