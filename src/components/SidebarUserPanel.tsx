@@ -14,6 +14,7 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import { showToast } from './Toast'
+import { IconBrain, IconMessageCircle, IconRefresh, IconSun, IconX } from './Icons'
 
 export default function SidebarUserPanel() {
   const { t } = useTranslation()
@@ -70,7 +71,7 @@ export default function SidebarUserPanel() {
     </div>
   )
 
-  const itemRow = (icon: string, label: string, right?: React.ReactNode, onClick?: () => void) => (
+  const itemRow = (icon: React.ReactNode, label: string, right?: React.ReactNode, onClick?: () => void) => (
     <div
       onClick={onClick}
       role={onClick ? 'button' : undefined}
@@ -86,7 +87,10 @@ export default function SidebarUserPanel() {
       onMouseLeave={e => { if (onClick) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 16, textAlign: 'center', opacity: 0.85 }}>{icon}</span>
+        <span style={{
+          width: 16, display: 'inline-flex', alignItems: 'center',
+          justifyContent: 'center', opacity: 0.85, flex: 'none',
+        }}>{icon}</span>
         <span>{label}</span>
       </span>
       {right && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{right}</span>}
@@ -149,11 +153,11 @@ export default function SidebarUserPanel() {
         transition: 'max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease',
       }}>
         <div style={{ paddingTop: 4 }}>
-          {itemRow('🎨', t('userpanel.appearance'), Segmented)}
-          {itemRow('💡', t('userpanel.memory'), undefined, openMemory)}
-          {itemRow('💬', t('userpanel.feedback'), undefined, onFeedback)}
-          {itemRow('🔄', t('userpanel.check_update'), undefined, onCheckUpdate)}
-          {itemRow('⏏️', t('userpanel.logout'), undefined, onLogout)}
+          {itemRow(<IconSun size={14} />, t('userpanel.appearance'), Segmented)}
+          {itemRow(<IconBrain size={14} />, t('userpanel.memory'), undefined, openMemory)}
+          {itemRow(<IconMessageCircle size={14} />, t('userpanel.feedback'), undefined, onFeedback)}
+          {itemRow(<IconRefresh size={14} />, t('userpanel.check_update'), undefined, onCheckUpdate)}
+          {itemRow(<IconX size={14} />, t('userpanel.logout'), undefined, onLogout)}
         </div>
       </div>
 

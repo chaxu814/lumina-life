@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
+import {
+  IconBarChart, IconFile, IconFolder, IconImage, IconMonitor, IconScissors, IconUpload,
+} from './Icons'
 
 /**
  * ChatComposer —— 统一输入栏
@@ -22,7 +25,8 @@ export interface ComposerQuickOption {
 
 export interface ComposerMenuItem {
   key: string
-  icon: string
+  /** 线性图标节点（2026-10-18：从 emoji 字符串改为 ReactNode，尺寸由 size 控制） */
+  icon: React.ReactNode
   label: string
   /** 右侧灰字：快捷键 / 当前值 / 数量 */
   hint?: string
@@ -226,13 +230,13 @@ export default function ChatComposer(props: ChatComposerProps) {
           <div className="cc-pop" style={{ left: 0, width: 248 }}>
             <div className="cc-pop-head">添加</div>
             <button type="button" className="cc-pop-item" onClick={() => { close(); onPickFiles() }}>
-              <span className="cc-pop-ico">⬆</span>
+              <span className="cc-pop-ico"><IconUpload size={16} /></span>
               <span className="cc-pop-label">上传文件或图片</span>
               <span className="cc-pop-kbd">Ctrl+1</span>
             </button>
             {onScreenshot && (
               <button type="button" className="cc-pop-item" onClick={() => { close(); onScreenshot() }}>
-                <span className="cc-pop-ico">✂</span>
+                <span className="cc-pop-ico"><IconScissors size={16} /></span>
                 <span className="cc-pop-label">截图提问</span>
                 <span className="cc-pop-kbd">Ctrl+4</span>
               </button>
@@ -291,11 +295,11 @@ export default function ChatComposer(props: ChatComposerProps) {
   )
 }
 
-function fileIcon(name: string): string {
+function fileIcon(name: string): React.ReactNode {
   const n = (name || '').toLowerCase()
-  if (/\.(png|jpe?g|gif|webp|svg|bmp)$/.test(n)) { return '🖼️' }
-  if (/\.(pdf|docx?|txt|md)$/.test(n)) { return '📄' }
-  if (/\.(xlsx?|csv)$/.test(n)) { return '📊' }
-  if (/\.(py|js|ts|tsx|java|cpp|c|h|html|css|json|xml|sh|bat|ps1)$/.test(n)) { return '💻' }
-  return '📁'
+  if (/\.(png|jpe?g|gif|webp|svg|bmp)$/.test(n)) { return <IconImage size={14} /> }
+  if (/\.(pdf|docx?|txt|md)$/.test(n)) { return <IconFile size={14} /> }
+  if (/\.(xlsx?|csv)$/.test(n)) { return <IconBarChart size={14} /> }
+  if (/\.(py|js|ts|tsx|java|cpp|c|h|html|css|json|xml|sh|bat|ps1)$/.test(n)) { return <IconMonitor size={14} /> }
+  return <IconFolder size={14} />
 }

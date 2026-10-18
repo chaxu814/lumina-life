@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
+import {
+  IconBarChart, IconClock, IconHeart, IconMoon, IconRefresh, IconScale, IconSun,
+} from '../components/Icons'
 
 import ModeSettings from '../components/ModeSettings'
 import WorkflowPanel from '../components/WorkflowPanel'
@@ -107,14 +110,14 @@ function LabsPanel() {
   }
 
   const row = (
-    key: string, icon: string, name: string, hint: string,
+    key: string, icon: React.ReactNode, name: string, hint: string,
     opts: { readOnly?: boolean; value?: boolean; apply?: (on: boolean) => Promise<unknown> } = {},
   ) => (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px',
       borderBottom: '1px solid var(--border-light)',
     }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-secondary)' }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{hint}</div>
@@ -136,14 +139,14 @@ function LabsPanel() {
       {!loaded && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>读取开关状态…</div>}
       {loaded && (
         <>
-          {row('budget', '💰', '预算守护者', '常驻开启（统一 LLM 账本 + 预算守护）。详细配置见「预算守护」tab。', { readOnly: true })}
-          {row('dayreplay.enabled', '🕰️', 'Day Replay', '聚合一天的时间线（LLM 调用/命令/委托/文件改动），可导出回放。', {})}
-          {row('moodstats.enabled', '📊', '情绪看板（采集）', '采集情绪×成功率快照；A/B 二级实验在「情绪看板」面板里开启。',
+          {row('budget', <IconBarChart size={16} />, '预算守护者', '常驻开启（统一 LLM 账本 + 预算守护）。详细配置见「预算守护」tab。', { readOnly: true })}
+          {row('dayreplay.enabled', <IconClock size={16} />, 'Day Replay', '聚合一天的时间线（LLM 调用/命令/委托/文件改动），可导出回放。', {})}
+          {row('moodstats.enabled', <IconHeart size={16} />, '情绪看板（采集）', '采集情绪×成功率快照；A/B 二级实验在「情绪看板」面板里开启。',
             { apply: (v) => window.luminaAPI?.moodstatsSetMaster?.(v) })}
-          {row('rituals.nightReview', '🌙', '睡前复盘', '每晚定时口播当日复盘（时间设置见「仪式感」tab）。', {})}
-          {row('rituals.morningBriefing', '🌅', '晨间简报', '每早定时口播天气/待办/日历简报。', {})}
-          {row('decision.enabled', '⚖️', '生活决策三栏', '触发方式：聊天框输入 /decide <你的问题>，三栏辩论后给建议。', {})}
-          {row('handover.enabled', '🔁', '交班模式', '生成加密交班卡片 + 二维码，手机局域网查看/审批。', {})}
+          {row('rituals.nightReview', <IconMoon size={16} />, '睡前复盘', '每晚定时口播当日复盘（时间设置见「仪式感」tab）。', {})}
+          {row('rituals.morningBriefing', <IconSun size={16} />, '晨间简报', '每早定时口播天气/待办/日历简报。', {})}
+          {row('decision.enabled', <IconScale size={16} />, '生活决策三栏', '触发方式：聊天框输入 /decide <你的问题>，三栏辩论后给建议。', {})}
+          {row('handover.enabled', <IconRefresh size={16} />, '交班模式', '生成加密交班卡片 + 二维码，手机局域网查看/审批。', {})}
         </>
       )}
     </div>

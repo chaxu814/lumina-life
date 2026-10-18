@@ -139,3 +139,216 @@ export const IconSpeaker: React.FC<IconProps & { muted?: boolean }> = ({ muted, 
     )}
   </svg>
 )
+
+// ═══════════════════════════════════════════════════════════
+// 线性图标补充集（2026-10-18）
+// ---------------------------------------------------------------
+// 界面里此前用 emoji 当图标的地方（✨🧠📎💻🍀📋🌸⏳✂⬆ 等）统一换成
+// 下面这批 1.7 描边的线性图标：
+//   · emoji 的字形由系统字体决定，Windows / macOS / 不同版本渲染差别很大，
+//     和已有的 24×24 线性图标并排时粗细、基线都对不上；
+//   · emoji 无法跟随 currentColor，深色主题下会「自己亮着」；
+//   · 尺寸只能靠 font-size 猜，同一排里大小不齐。
+// 统一 24×24 viewBox + strokeWidth 1.7，尺寸由 size 精确控制。
+// ═══════════════════════════════════════════════════════════
+
+const SvgLine = ({ size = 18, className = '', children }: IconProps & { children: React.ReactNode }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.7}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    {children}
+  </svg>
+)
+
+/** ✨ 增强提示词 / 润色 */
+export const IconSparkles: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M11.2 4.2l1.5 3.6 3.6 1.5-3.6 1.5-1.5 3.6-1.5-3.6-3.6-1.5 3.6-1.5 1.5-3.6Z" />
+    <path d="M17.8 14.2l.75 1.8 1.8.75-1.8.75-.75 1.8-.75-1.8-1.8-.75 1.8-.75.75-1.8Z" />
+  </SvgLine>
+)
+
+/** 🧠 思考 / 推理 */
+export const IconBrain: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M12 5.2v13.6" />
+    <path d="M12 7.2c-.5-1.3-1.6-2.2-2.9-2.2A2.9 2.9 0 0 0 6.2 7c-1.4.3-2.4 1.4-2.4 2.8 0 .8.3 1.5.9 2-.4.5-.6 1.1-.6 1.8a2.8 2.8 0 0 0 2.6 2.8c.3 1.2 1.4 2.1 2.7 2.1.9 0 1.7-.4 2.2-1.1" />
+    <path d="M12 7.2c.5-1.3 1.6-2.2 2.9-2.2A2.9 2.9 0 0 1 17.8 7c1.4.3 2.4 1.4 2.4 2.8 0 .8-.3 1.5-.9 2 .4.5.6 1.1.6 1.8a2.8 2.8 0 0 1-2.6 2.8c-.3 1.2-1.4 2.1-2.7 2.1-.9 0-1.7-.4-2.2-1.1" />
+  </SvgLine>
+)
+
+/** 📎 附件 / 文件 */
+export const IconPaperclip: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M17.9 10.6 11 17.5a3.7 3.7 0 0 1-5.2-5.2l7.4-7.4a2.6 2.6 0 0 1 3.7 3.7l-7.3 7.3a1.5 1.5 0 0 1-2.2-2.2l6.4-6.4" />
+  </SvgLine>
+)
+
+/** 💻 AI 操作电脑 / 屏幕 */
+export const IconMonitor: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <rect x="3.4" y="4.8" width="17.2" height="11.4" rx="1.8" />
+    <path d="M2.2 19.2h19.6" />
+  </SvgLine>
+)
+
+/** 🍀 Lucky Agent */
+export const IconLeaf: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M19.2 4.8c.5 7.6-4.2 12.3-10.4 12.3H5.6c-.5-7.2 4.2-12.3 10.4-12.3h3.2Z" />
+    <path d="M5.6 19.2 12.4 12" />
+  </SvgLine>
+)
+
+/** 📋 任务 / 任务派发 / 任务工作区 */
+export const IconClipboard: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M9.2 4.6H7.6A1.6 1.6 0 0 0 6 6.2v12.4a1.6 1.6 0 0 0 1.6 1.6h8.8a1.6 1.6 0 0 0 1.6-1.6V6.2a1.6 1.6 0 0 0-1.6-1.6h-1.6" />
+    <rect x="9.2" y="2.9" width="5.6" height="3.2" rx="1.1" />
+    <path d="M9.4 10.4h5.2M9.4 13.7h5.2M9.4 17h3.2" />
+  </SvgLine>
+)
+
+/** 🌸 朋友圈 / 生活流 */
+export const IconFlower: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <circle cx="12" cy="7.4" r="2.5" />
+    <circle cx="16.5" cy="10.7" r="2.5" />
+    <circle cx="14.8" cy="16" r="2.5" />
+    <circle cx="9.2" cy="16" r="2.5" />
+    <circle cx="7.5" cy="10.7" r="2.5" />
+  </SvgLine>
+)
+
+/** 📌 置顶 */
+export const IconPin: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M9.2 3.6h5.6M10.2 3.6v5.6L7.5 12.3a1 1 0 0 0 .7 1.7h7.6a1 1 0 0 0 .7-1.7l-2.7-3.1V3.6" />
+    <path d="M12 14v6.4" />
+  </SvgLine>
+)
+
+/** 收起/展开侧栏 */
+export const IconPanelLeft: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.2" />
+    <path d="M9.6 4.4v15.2" />
+  </SvgLine>
+)
+
+/** 在主窗口中打开 */
+export const IconExternalLink: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M14.2 4.4h5.4v5.4" />
+    <path d="M19.6 4.4 11.6 12.4" />
+    <path d="M18.2 14.2v4.4a1.6 1.6 0 0 1-1.6 1.6H5.8a1.6 1.6 0 0 1-1.6-1.6V7.8a1.6 1.6 0 0 1 1.6-1.6h4.4" />
+  </SvgLine>
+)
+
+/** 侧边工作台 / 分栏 */
+export const IconColumns: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.2" />
+    <path d="M12 4.4v15.2" />
+  </SvgLine>
+)
+
+/** 最小化 */
+export const IconMinus: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M5 12h14" />
+  </SvgLine>
+)
+
+/** 列表 / 任务列表 */
+export const IconList: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M8.6 6.8h11M8.6 12h11M8.6 17.2h11" />
+    <path d="M4.4 6.8h.02M4.4 12h.02M4.4 17.2h.02" />
+  </SvgLine>
+)
+
+/** ✂ 截图 */
+export const IconScissors: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <circle cx="6.8" cy="6.6" r="2.3" />
+    <circle cx="6.8" cy="17.4" r="2.3" />
+    <path d="M8.6 7.9 19 17.2M8.6 16.1 19 6.8" />
+  </SvgLine>
+)
+
+/** 时光胶囊（沙漏） */
+export const IconHourglass: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M7.4 3.6h9.2M7.4 20.4h9.2" />
+    <path d="M8.4 3.6v2.6c0 1.6 3.6 3.6 3.6 5.8s-3.6 4.2-3.6 5.8v2.6" />
+    <path d="M15.6 3.6v2.6c0 1.6-3.6 3.6-3.6 5.8s3.6 4.2 3.6 5.8v2.6" />
+  </SvgLine>
+)
+
+/** 🎨 外观 / 主题 / 桌宠工坊 */
+export const IconPalette: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M12 3.6c-4.7 0-8.4 3.5-8.4 7.9 0 4.4 3.7 7.9 8.4 7.9 1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.7 1.7-1.7h1.6c2.4 0 4.3-1.9 4.3-4.2 0-3.2-3.7-5.8-8.4-5.8Z" />
+    <path d="M7.6 11.4h.02M9.9 8.2h.02M14.1 8.2h.02M16.4 11.4h.02" />
+  </SvgLine>
+)
+
+/** 🧭 路由 */
+export const IconCompass: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <circle cx="12" cy="12" r="8.4" />
+    <path d="M15.2 8.8l-1.9 4.4-4.4 1.9 1.9-4.4 4.4-1.9Z" />
+  </SvgLine>
+)
+
+/** 🔗 渠道 / 链接 */
+export const IconLink: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l2.4-2.4a3.6 3.6 0 0 0-5.1-5.1l-1.4 1.4" />
+    <path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-2.4 2.4a3.6 3.6 0 0 0 5.1 5.1l1.4-1.4" />
+  </SvgLine>
+)
+
+/** 📱 手机推送 */
+export const IconMobile: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <rect x="6.6" y="2.8" width="10.8" height="18.4" rx="2.2" />
+    <path d="M10.6 18.4h2.8" />
+  </SvgLine>
+)
+
+/** 🧩 自定义 Agent / 插件 */
+export const IconPuzzle: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M10 4.4h4v2.2a1.5 1.5 0 1 0 3 0V4.4h2.6v5.2h-2.2a1.5 1.5 0 1 0 0 3h2.2v5.2h-5.2v-2.2a1.5 1.5 0 1 0-3 0v2.2H4.4v-5.2h2.2a1.5 1.5 0 1 0 0-3H4.4V4.4H10Z" />
+  </SvgLine>
+)
+
+/** 🎯 目标驱动 */
+export const IconTarget: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <circle cx="12" cy="12" r="8.2" />
+    <circle cx="12" cy="12" r="4.4" />
+    <circle cx="12" cy="12" r=".9" />
+  </SvgLine>
+)
+
+/** ⚖️ 记忆审判台 / 权衡 */
+export const IconScale: React.FC<IconProps> = (p) => (
+  <SvgLine {...p}>
+    <path d="M12 4.4v15.2M7 19.6h10" />
+    <path d="M6.6 8.4h10.8" />
+    <path d="M6.6 8.4 4.2 14.2a2.6 2.6 0 0 0 4.8 0L6.6 8.4Z" />
+    <path d="M17.4 8.4l-2.4 5.8a2.6 2.6 0 0 0 4.8 0l-2.4-5.8Z" />
+  </SvgLine>
+)

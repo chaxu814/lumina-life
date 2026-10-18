@@ -7,6 +7,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
+import { IconClipboard, IconLeaf, IconRefresh, IconTarget } from './Icons'
 
 export type LuckyModePreset = 'off' | 'default' | 'goal' | 'mission'
 
@@ -34,14 +35,18 @@ export interface LuckyModeInfo {
 
 const PRESETS: Array<{
   id: LuckyModePreset
-  icon: string
+  icon: React.ReactNode
   label: string
   description: string
   color: string
 }> = [
-  { id: 'off',       icon: '🍀',  label: 'Lucky Agent', description: '不启用 Lucky 模式',         color: '#9ca3af' },
-  { id: 'default',   icon: '🔄',  label: '标准循环',    description: '防死循环 + 自动完成检查',   color: '#3b82f6' },
-  { id: 'goal',      icon: '🎯',  label: '目标驱动',    description: '设定目标→含子任务拆解→完成', color: '#8b5cf6' },
+  { id: 'off',       icon: <IconLeaf size={16} />,    label: 'Lucky Agent', description: '不启用 Lucky 模式',         color: '#9ca3af' },
+  { id: 'default',   icon: <IconRefresh size={16} />, label: '标准循环',    description: '防死循环 + 自动完成检查',   color: '#3b82f6' },
+  { id: 'goal',      icon: <IconTarget size={16} />,  label: '目标驱动',    description: '设定目标→含子任务拆解→完成', color: '#8b5cf6' },
+  // 🔧 2026-10-18：'mission' 一直在 LuckyModePreset 类型里，但 PRESETS 没有对应项，
+  //   于是 `PRESETS.find(...) || PRESETS[0]` 会把它显示成「关闭」——选了「任务」
+  //   却看到「Lucky Agent 关闭」，用户会以为没生效。补上这一项。
+  { id: 'mission',   icon: <IconClipboard size={16} />, label: '任务模式',  description: '按任务卡执行 → 产出归档',   color: '#f59e0b' },
 ]
 
 interface LuckyModeSelectorProps {
@@ -136,7 +141,7 @@ export default function LuckyModeSelector({
           }
         }}
       >
-        <span style={{ fontSize: isSmall ? 13 : 15 }}>{currentPresetInfo.icon}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>{currentPresetInfo.icon}</span>
         <span>{currentPresetInfo.label}</span>
 
         {/* 运行时状态指示器 */}
@@ -243,7 +248,7 @@ export default function LuckyModeSelector({
                   }
                 }}
               >
-                <span style={{ fontSize: 18 }}>{preset.icon}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center' }}>{preset.icon}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontSize: 13,

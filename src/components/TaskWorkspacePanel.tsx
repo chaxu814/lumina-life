@@ -12,6 +12,7 @@
 // ============================================================
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { IconClipboard, IconGlobe } from './Icons'
 import { isImeComposing } from '../lib/ime'
 import { useTaskWorkspace, mapAgentEventToTimeline, getPanelWrapperClass } from '../stores/taskWorkspaceStore'
 import { useAgentRuntime } from '../stores/agentRuntimeStore'
@@ -150,7 +151,7 @@ const TaskWorkspacePanel: React.FC = () => {
             title="打开内置浏览器"
             onClick={() => { window.luminaAPI?.openBrowser?.() }}
           >
-            <span>🌐 浏览器</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconGlobe size={14} />浏览器</span>
           </button>
 
           {/* 🆕 一键派人：从工作区直接打开任务派发中心（不切回聊天框） */}
@@ -159,7 +160,7 @@ const TaskWorkspacePanel: React.FC = () => {
             title="派人：打开任务派发中心"
             onClick={() => { window.dispatchEvent(new CustomEvent('lumina:open-dispatcher')) }}
           >
-            <span>📋 派人</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} />派人</span>
           </button>
 
           {/* 主视图切换：对话摘要（默认）/ 详情（时间线·工具·产物） */}

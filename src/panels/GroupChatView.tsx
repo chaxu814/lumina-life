@@ -36,10 +36,18 @@ import {
   SPARK_NOTE_SUFFIX,
 } from '../services/conversationDynamics'
 import ChatComposer from '../components/ChatComposer'
-import { IconSpeaker } from '../components/Icons'
+import {
+  IconBrain, IconClipboard, IconFlower, IconFolder, IconHourglass, IconLeaf, IconMessageCircle,
+  IconMic, IconMonitor, IconPaperclip, IconPlus, IconSmile, IconSparkles, IconSpeaker, IconUser,
+} from '../components/Icons'
 import ModelSelector from '../components/ModelSelector'
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
+
+/** Lucky 预设 → 中文标签（「更多」里 Lucky 那一行右侧的灰字） */
+const GC_LUCKY_PRESET_LABEL: Record<string, string> = {
+  off: '关闭', default: '标准', goal: '目标', mission: '任务',
+}
 import type { LuckySettingsConfig } from '../components/LuckyModeSettings'
 import {
   getToolNotification,
@@ -811,10 +819,12 @@ export default function GroupChatView() {
     window.addEventListener('lumina:team-tab', onTeamTab as EventListener)
     return () => window.removeEventListener('lumina:team-tab', onTeamTab as EventListener)
   }, [])
+  // 图标统一走线性 SVG（2026-10-18）：emoji 在深色主题下不跟随 currentColor，
+  // 且和同排 16px 线性图标字重对不上。
   const teamTabs = [
-    { key: 'chat' as const, label: '群聊', icon: '💬' },
-    { key: 'tasks' as const, label: '任务', icon: '📋' },
-    { key: 'moments' as const, label: '朋友圈', icon: '🌸' },
+    { key: 'chat' as const, label: '群聊', icon: <IconMessageCircle size={15} /> },
+    { key: 'tasks' as const, label: '任务', icon: <IconClipboard size={15} /> },
+    { key: 'moments' as const, label: '朋友圈', icon: <IconFlower size={15} /> },
   ]
 
   // 📋 角色选择界面控制
@@ -4579,7 +4589,7 @@ export default function GroupChatView() {
               fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
-            👥 团队
+            <IconUser size={14} /> 团队
           </button>
 
           {/* 🆕 ACP 添加成员按钮 */}
@@ -4591,7 +4601,7 @@ export default function GroupChatView() {
               fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
-            🌐 添加成员
+            <IconPlus size={14} /> 添加成员
           </button>
 
           {/* 📋 任务派发中心 / 任务工作区（2026-10-09 从下方工具条移入头部栏） */}
@@ -4603,7 +4613,7 @@ export default function GroupChatView() {
               fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
-            📋 任务派发中心
+            <IconClipboard size={14} /> 任务派发中心
           </button>
           <button onClick={toggleTaskPanel}
             className={'gc-tool-btn' + (taskPanelOpen ? ' gc-tool-btn-active' : '')}
@@ -4613,7 +4623,7 @@ export default function GroupChatView() {
               fontSize: 12, cursor: 'pointer', background: 'var(--surface-0)', color: 'var(--text-secondary)',
               display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
             }}>
-            {taskPanelOpen ? '📕' : '📋'} 任务工作区
+            {taskPanelOpen ? <IconFolder size={14} /> : <IconClipboard size={14} />} 任务工作区
           </button>
 
           {/* 🔊 TTS 静音（2026-10-18：emoji 换成线性喇叭，与桌宠小窗 / Agent 同款） */}
@@ -4862,7 +4872,7 @@ export default function GroupChatView() {
               display: 'flex', alignItems: 'center', gap: compact ? 3 : 5,
               whiteSpace: 'nowrap',
             }}>
-            <span style={{ fontSize: compact ? 12 : 13.5 }}>{tab.icon}</span> {!compact && tab.label}
+            <span style={{ display: 'inline-flex', alignItems: 'center' }}>{tab.icon}</span> {!compact && tab.label}
           </button>
         ))}
         {/* 📋 切换角色按钮 — 紧凑 */}
@@ -5581,44 +5591,45 @@ export default function GroupChatView() {
           modelSlot={<ModelSelector />}
           moreItems={[
             {
-              key: 'enhance', icon: '✨',
+              key: 'enhance', icon: <IconSparkles size={16} />,
               label: promptEnhancing ? '正在增强…' : '增强提示词',
               hint: input.trim() ? undefined : '先写点内容',
               disabled: !input.trim() || promptEnhancing,
               onClick: () => { void enhancePrompt() },
             },
             {
-              key: 'lucky', icon: '🍀', label: 'Lucky Agent',
-              hint: luckyMode.preset === 'off' ? '关闭' : luckyMode.preset === 'default' ? '标准' : '目标',
+              key: 'lucky', icon: <IconLeaf size={16} />, label: 'Lucky Agent',
+              hint: GC_LUCKY_PRESET_LABEL[luckyMode.preset] ?? '标准',
               onClick: () => luckyMode.setShowSettings(true),
               quick: [
                 { key: 'off', label: '关闭', active: luckyMode.preset === 'off', onPick: () => luckyMode.setPreset('off') },
                 { key: 'default', label: '标准', active: luckyMode.preset === 'default', onPick: () => luckyMode.setPreset('default') },
                 { key: 'goal', label: '目标', active: luckyMode.preset === 'goal', onPick: () => luckyMode.setPreset('goal') },
+                { key: 'mission', label: '任务', active: luckyMode.preset === 'mission', onPick: () => luckyMode.setPreset('mission') },
               ],
             },
             {
-              key: 'thinking', icon: '🧠', label: '思考',
+              key: 'thinking', icon: <IconBrain size={16} />, label: '思考',
               toggle: { on: thinkingMode, onChange: setThinkingMode },
             },
             {
-              key: 'emoji', icon: '😊', label: '表情',
+              key: 'emoji', icon: <IconSmile size={16} />, label: '表情',
               onClick: () => setShowEmoji(true),
             },
             {
-              key: 'file', icon: '📎', label: '文件',
+              key: 'file', icon: <IconPaperclip size={16} />, label: '文件',
               hint: gcAttachments.length > 0 ? `${gcAttachments.length} 个` : undefined,
               onClick: () => fileInputRef.current?.click(),
             },
             {
-              key: 'voice', icon: '🎙️', label: '实时语音对话', dividerBefore: true,
+              key: 'voice', icon: <IconMic size={16} />, label: '实时语音对话', dividerBefore: true,
               toggle: { on: realtimeVoiceActive, onChange: (v) => { void toggleRealtimeVoice(v) } },
             },
             {
-              key: 'cu', icon: '💻', label: 'AI 操作电脑',
+              key: 'cu', icon: <IconMonitor size={16} />, label: 'AI 操作电脑',
               toggle: { on: computerUseActive, onChange: (v) => { void toggleComputerUse(v) } },
             },
-            { key: 'capsule', icon: '⏳', label: '胶囊', onClick: handleCapsule },
+            { key: 'capsule', icon: <IconHourglass size={16} />, label: '胶囊', onClick: handleCapsule },
           ]}
           sending={sending}
           canSend={!sending && !!input.trim()}

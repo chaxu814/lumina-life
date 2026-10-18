@@ -129,30 +129,13 @@
     align-self: flex-end; background: linear-gradient(135deg, #4a9eff, #5aa8ff); color: #fff;
     border-bottom-right-radius: 4px; box-shadow: 0 2px 8px rgba(74,158,255,0.25);
   }
-  /* AI 气泡（2026-10-18）
-     原来底色是 rgba(255,255,255,0.9)、边框 0.1 透明度 —— 叠在白底聊天区上等于没有气泡，
-     一整段回复直接摊在页面上，长回复看久了眼睛很累。现在给它一个明确可辨的浅蓝灰底。 */
-  #chat-panel .cp-msg.pet {
-    align-self: flex-start;
-    background: #f4f7fc;
-    color: #24304a;
-    border-bottom-left-radius: 5px;
-    border: 1px solid rgba(86,120,180,0.16);
-    box-shadow: 0 1px 3px rgba(40,60,120,0.05);
-    padding: 10px 13px;
-    line-height: 1.62;
-    /* 头像与正文并排：正文是块级（标题/列表/代码块），不能再用 inline 流 */
-    display: flex; align-items: flex-start; gap: 7px;
-  }
-  #chat-panel .cp-msg.pet .cp-msg-avatar {
-    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
-    background: linear-gradient(135deg, #4a9eff, #6bb5ff); color: #fff;
-    align-items: center; justify-content: center; font-size: 12px;
-    margin: 0; flex: none;
-  }
+  /* ⚠️ AI 气泡不要写在这里 —— 本文件下方「── 消息区 ──」区块里还有一组
+     #chat-panel .cp-msg / .cp-msg.pet，同优先级、位置更靠后，会把这里的声明
+     整体覆盖掉。2026-10-18 那次「给 AI 消息加气泡」就是加在这一段，结果被
+     下面那句 `background: transparent` 清空，用户看到的仍然是没有气泡的一坨
+     文字。气泡的唯一定义点已收拢到下方消息区区块，改样式请只改那一处。 */
   /* pet-md.js 没加载成功时的纯文本兜底：保住换行 */
   #chat-panel .cp-msg.pet.no-md { white-space: pre-wrap; }
-  #chat-panel .cp-msg.pet.no-md .cp-msg-avatar { margin-right: 6px; }
   #chat-panel .cp-typing {
     align-self: flex-start; background: rgba(255,255,255,0.9);
     border: 1px solid rgba(100,130,180,0.1); border-radius: 14px;
@@ -213,7 +196,9 @@
     text-align: left; padding: 8px 10px; border-radius: 8px; border: none;
     background: transparent; color: #2a3a5c; font-size: 12px; cursor: pointer;
     font-family: inherit; -webkit-app-region: no-drag; transition: background .12s;
+    display: flex; align-items: center; gap: 7px;
   }
+  #chat-panel .cp-del-menu button .cp-i { width: 15px; height: 15px; opacity: .8; }
   #chat-panel .cp-del-menu button:hover { background: rgba(74,158,255,0.12); }
   #chat-panel .cp-del-menu button.danger { color: #c0392b; }
   #chat-panel .cp-del-menu button.danger:hover { background: rgba(239,68,68,0.12); }
@@ -474,10 +459,37 @@
     align-self: flex-end; background: #eef2f7; color: #1f2430;
     border-bottom-right-radius: 5px; box-shadow: none;
   }
+  /* ── AI 消息气泡（唯一定义点）────────────────────────────────
+     结构：.cp-msg.pet > (span.cp-msg-avatar + div.cp-bubble > div.cp-md)
+     头像在气泡外面，气泡本体是浅蓝灰底 + 1px 描边 + 12px 圆角，
+     和团队群聊 / Agent 面板的助手气泡同一套观感。
+     注意：这里也是 .cp-msg.pet 的**最终生效**定义，改样式只改这一段。 */
   #chat-panel .cp-msg.pet {
-    align-self: flex-start; background: transparent; color: #1f2430;
-    border: none; box-shadow: none; padding-left: 0;
+    align-self: flex-start;
+    display: flex; align-items: flex-start; gap: 8px;
+    max-width: 100%; padding: 0;
+    background: transparent; color: #1f2430;
+    border: none; box-shadow: none;
+    line-height: 1.62;
   }
+  #chat-panel .cp-msg.pet .cp-msg-avatar {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%; flex: none;
+    margin-top: 1px; font-size: 13px; line-height: 1;
+    background: linear-gradient(135deg, #4a9eff, #6bb5ff);
+    box-shadow: 0 1px 3px rgba(74,158,255,0.28);
+  }
+  #chat-panel .cp-bubble {
+    min-width: 0; max-width: 88%;
+    padding: 9px 13px;
+    background: #f4f7fc;
+    border: 1px solid rgba(86,120,180,0.16);
+    border-radius: 12px; border-top-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(40,60,120,0.05);
+    color: #24304a;
+  }
+  /* 纯文本兜底（pet-md.js 缺失）也要留在气泡里 */
+  #chat-panel .cp-msg.pet.no-md .cp-bubble { white-space: pre-wrap; }
 
   /* ── 快捷语 / 表情 ── */
   #chat-panel .cp-quick {
@@ -575,7 +587,20 @@
     font-size: 12.5px; color: #1f2430; cursor: pointer;
   }
   #chat-panel .cp-pop-item:hover { background: #f5f6f8; }
-  #chat-panel .cp-pop-item .cp-pop-ico { width: 16px; flex: none; display: inline-flex; justify-content: center; }
+  /* ── 线性图标（2026-10-18）──────────────────────────────────
+     弹层与快捷语此前用 emoji 当图标（✨🍀🧠📎💻⏳⬆✂…），问题有三个：
+     emoji 字形由系统字体决定、粗细和 24×24 线性图标对不上；不跟随
+     currentColor，深色背景下会「自己亮着」；大小只能靠 font-size 猜。
+     现在统一走 <svg class="cp-i"><use href="#i-xxx"/></svg>，
+     尺寸精确、颜色继承父级。symbol 定义在页面顶部的 .cp-sprite 里。 */
+  #chat-panel .cp-i {
+    width: 16px; height: 16px; display: block; flex: none;
+    stroke: currentColor; fill: none;
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  }
+  #chat-panel .cp-quick-btn .cp-i { width: 14px; height: 14px; }
+  #chat-panel .cp-pop-item .cp-pop-ico { width: 16px; flex: none; display: inline-flex; justify-content: center; color: #5a7aaa; }
+  #chat-panel .cp-quick-btn { display: inline-flex; align-items: center; gap: 4px; }
   #chat-panel .cp-pop-item .cp-pop-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #chat-panel .cp-pop-item .cp-pop-kbd { color: #a8aeba; font-size: 11px; flex: none; }
   #chat-panel .cp-pop-item .cp-pop-count { color: #a8aeba; font-size: 11px; flex: none; }
@@ -691,6 +716,96 @@
 </style>
 </head>
 <body>
+<!-- ══ 线性图标精灵表（2026-10-18）══
+     24×24 viewBox，描边/填充由 .cp-i 继承父级 currentColor。
+     用法：<svg class="cp-i"><use href="#i-spark"/></svg>
+     替代原先散落在弹层与快捷语里的 emoji（✨🍀🧠📎💻⏳⬆✂📄🧩🕘👋💭😂）。 -->
+<svg class="cp-sprite" aria-hidden="true" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <symbol id="i-spark" viewBox="0 0 24 24">
+      <path d="M11.2 4.2l1.5 3.6 3.6 1.5-3.6 1.5-1.5 3.6-1.5-3.6-3.6-1.5 3.6-1.5 1.5-3.6Z"/>
+      <path d="M17.8 14.2l.75 1.8 1.8.75-1.8.75-.75 1.8-.75-1.8-1.8-.75 1.8-.75.75-1.8Z"/>
+    </symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24">
+      <path d="M19.2 4.8c.5 7.6-4.2 12.3-10.4 12.3H5.6c-.5-7.2 4.2-12.3 10.4-12.3h3.2Z"/>
+      <path d="M5.6 19.2 12.4 12"/>
+    </symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24">
+      <path d="M12 5.2v13.6"/>
+      <path d="M12 7.2c-.5-1.3-1.6-2.2-2.9-2.2A2.9 2.9 0 0 0 6.2 7c-1.4.3-2.4 1.4-2.4 2.8 0 .8.3 1.5.9 2-.4.5-.6 1.1-.6 1.8a2.8 2.8 0 0 0 2.6 2.8c.3 1.2 1.4 2.1 2.7 2.1.9 0 1.7-.4 2.2-1.1"/>
+      <path d="M12 7.2c.5-1.3 1.6-2.2 2.9-2.2A2.9 2.9 0 0 1 17.8 7c1.4.3 2.4 1.4 2.4 2.8 0 .8-.3 1.5-.9 2 .4.5.6 1.1.6 1.8a2.8 2.8 0 0 1-2.6 2.8c-.3 1.2-1.4 2.1-2.7 2.1-.9 0-1.7-.4-2.2-1.1"/>
+    </symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.2"/>
+      <path d="M8.6 13.4a4.2 4.2 0 0 0 6.8 0"/>
+      <path d="M9.3 9.7h.02M14.7 9.7h.02"/>
+    </symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24">
+      <path d="M17.9 10.6 11 17.5a3.7 3.7 0 0 1-5.2-5.2l7.4-7.4a2.6 2.6 0 0 1 3.7 3.7l-7.3 7.3a1.5 1.5 0 0 1-2.2-2.2l6.4-6.4"/>
+    </symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24">
+      <rect x="9" y="3.5" width="6" height="10.5" rx="3"/>
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>
+    </symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24">
+      <rect x="3.4" y="4.8" width="17.2" height="11.4" rx="1.8"/>
+      <path d="M2.2 19.2h19.6"/>
+    </symbol>
+    <symbol id="i-hourglass" viewBox="0 0 24 24">
+      <path d="M7.4 3.6h9.2M7.4 20.4h9.2"/>
+      <path d="M8.4 3.6v2.6c0 1.6 3.6 3.6 3.6 5.8s-3.6 4.2-3.6 5.8v2.6"/>
+      <path d="M15.6 3.6v2.6c0 1.6-3.6 3.6-3.6 5.8s3.6 4.2 3.6 5.8v2.6"/>
+    </symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24">
+      <path d="M12 16.6V5"/><path d="M7.6 9.4 12 5l4.4 4.4"/><path d="M5 19.4h14"/>
+    </symbol>
+    <symbol id="i-scissors" viewBox="0 0 24 24">
+      <circle cx="6.8" cy="6.6" r="2.3"/><circle cx="6.8" cy="17.4" r="2.3"/>
+      <path d="M8.6 7.9 19 17.2M8.6 16.1 19 6.8"/>
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M14 3.8H8.2c-.9 0-1.6.7-1.6 1.6v13.2c0 .9.7 1.6 1.6 1.6h7.6c.9 0 1.6-.7 1.6-1.6V7.4L14 3.8Z"/>
+      <path d="M13.8 4v3.4h3.6"/>
+    </symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24">
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/>
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/>
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/>
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.2"/><path d="M12 7.6V12l3 1.8"/>
+    </symbol>
+    <symbol id="i-bubble" viewBox="0 0 24 24">
+      <path d="M20 11.6c0 3.4-3.6 6.1-8 6.1-.9 0-1.8-.1-2.6-.3L4.4 19.4l1.2-3.1C4.4 15.2 4 13.5 4 11.6 4 8.2 7.6 5.5 12 5.5s8 2.7 8 6.1Z"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24">
+      <path d="M8.6 15.4 5 17.6l.9-2.6C4.7 14.1 4 12.6 4 11c0-3 3.1-5.4 7-5.4 1.2 0 2.3.2 3.3.6"/>
+      <path d="M20 13.6c0 2.7-2.9 4.9-6.4 4.9-.8 0-1.5-.1-2.2-.3l-3.4 1.9.9-2.6c-1.3-.9-2.1-2.3-2.1-3.9 0-2.7 2.9-4.9 6.4-4.9s6.8 2.2 6.8 4.9Z"/>
+    </symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24">
+      <path d="M9 12.2V6.4a1.3 1.3 0 0 1 2.6 0v5.2"/>
+      <path d="M11.6 11.6V5.2a1.3 1.3 0 0 1 2.6 0v6.4"/>
+      <path d="M14.2 11.8V7.6a1.3 1.3 0 0 1 2.6 0V14c0 3.2-2.2 5.6-5.2 5.6S6.4 17.2 6.4 14v-2.1a1.3 1.3 0 0 1 2.6 0"/>
+    </symbol>
+    <symbol id="i-window" viewBox="0 0 24 24">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9h17"/>
+    </symbol>
+    <symbol id="i-eraser" viewBox="0 0 24 24">
+      <path d="M8.6 19.4H19"/>
+      <path d="M15.4 4.8 5.2 15a1.6 1.6 0 0 0 0 2.3l1.9 1.9a1.6 1.6 0 0 0 2.3 0l10.2-10.2a1.6 1.6 0 0 0 0-2.3l-1.9-1.9a1.6 1.6 0 0 0-2.3 0Z"/>
+    </symbol>
+    <symbol id="i-check-square" viewBox="0 0 24 24">
+      <rect x="4" y="4" width="16" height="16" rx="3"/>
+      <path d="M8.4 12.2l2.6 2.6 4.6-4.8"/>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24">
+      <path d="M4.6 7.2h14.8"/>
+      <path d="M9.4 7.2V5.4c0-.7.6-1.2 1.2-1.2h2.8c.7 0 1.2.5 1.2 1.2v1.8"/>
+      <path d="M6.6 7.2 7.4 19c.06.7.6 1.2 1.3 1.2h6.6c.7 0 1.2-.5 1.3-1.2l.8-11.8"/>
+    </symbol>
+  </defs>
+</svg>
 <div id="chat-panel">
   <!-- ══ 顶栏：左（最小化/置顶/收起）· 中（标题 ›）· 右（播报/主窗口/任务列表/工作台）══ -->
   <div class="cp-topbar" id="chat-head">
@@ -737,10 +852,10 @@
   <div id="chat-log"></div>
   <div class="cp-typing" id="chat-typing"><span></span><span></span><span></span></div>
   <div class="cp-quick" id="chat-quick">
-    <button class="cp-quick-btn" data-text="你好呀 Lumina！">👋 打招呼</button>
-    <button class="cp-quick-btn" data-text="今天心情怎么样？">💭 聊聊天</button>
-    <button class="cp-quick-btn" data-text="挥挥手！">👋 挥挥手</button>
-    <button class="cp-quick-btn" data-text="讲个笑话吧">😂 讲笑话</button>
+    <button class="cp-quick-btn" data-text="你好呀 Lumina！"><svg class="cp-i"><use href="#i-bubble"/></svg>打招呼</button>
+    <button class="cp-quick-btn" data-text="今天心情怎么样？"><svg class="cp-i"><use href="#i-chat"/></svg>聊聊天</button>
+    <button class="cp-quick-btn" data-text="挥挥手！"><svg class="cp-i"><use href="#i-hand"/></svg>挥挥手</button>
+    <button class="cp-quick-btn" data-text="讲个笑话吧"><svg class="cp-i"><use href="#i-smile"/></svg>讲笑话</button>
   </div>
   <div class="cp-emoji-panel" id="chat-emoji-panel">
     <span class="cp-emoji-item">😺</span><span class="cp-emoji-item">😸</span><span class="cp-emoji-item">😻</span>
@@ -775,12 +890,12 @@
   <div class="cp-pop" id="pop-plus" style="left:10px; bottom:104px; width:248px">
     <div class="cp-pop-head">添加</div>
     <button class="cp-pop-item" data-act="upload">
-      <span class="cp-pop-ico">⬆</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-upload"/></svg></span>
       <span class="cp-pop-label">上传文件或图片</span>
       <span class="cp-pop-kbd">Ctrl+1</span>
     </button>
     <button class="cp-pop-item" data-act="shot">
-      <span class="cp-pop-ico">✂</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-scissors"/></svg></span>
       <span class="cp-pop-label">截图提问</span>
       <span class="cp-pop-kbd">Ctrl+4</span>
     </button>
@@ -788,14 +903,14 @@
   </div>
 
   <!-- ══ 「更多」面板（Lumina 功能）══ -->
-  <div class="cp-pop" id="pop-more" style="left:64px; bottom:104px; width:246px">
+  <div class="cp-pop" id="pop-more" style="left:64px; bottom:104px; width:272px">
     <div class="cp-pop-head">更多</div>
     <button class="cp-pop-item" data-act="enhance">
-      <span class="cp-pop-ico">✨</span><span class="cp-pop-label">增强提示词</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-spark"/></svg></span><span class="cp-pop-label">增强提示词</span>
     </button>
     <div class="cp-pop-row">
       <button class="cp-pop-item" data-act="lucky" title="点一下切到下一个模式">
-        <span class="cp-pop-ico">🍀</span><span class="cp-pop-label">Lucky Agent</span>
+        <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-leaf"/></svg></span><span class="cp-pop-label">Lucky Agent</span>
         <span class="cp-pop-kbd" id="lucky-state">关闭</span>
       </button>
       <!-- 快捷选择（2026-10-18）：原来只能点一次换一个模式，要连点三次才到「目标」。
@@ -808,47 +923,47 @@
       </div>
     </div>
     <button class="cp-pop-item toggle" data-act="thinking">
-      <span class="cp-pop-ico">🧠</span><span class="cp-pop-label">思考</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-brain"/></svg></span><span class="cp-pop-label">思考</span>
       <span class="cp-sw"></span>
     </button>
     <button class="cp-pop-item" data-act="emoji">
-      <span class="cp-pop-ico">😊</span><span class="cp-pop-label">表情</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-smile"/></svg></span><span class="cp-pop-label">表情</span>
     </button>
     <button class="cp-pop-item" data-act="file">
-      <span class="cp-pop-ico">📎</span><span class="cp-pop-label">文件</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-clip"/></svg></span><span class="cp-pop-label">文件</span>
     </button>
     <div class="cp-pop-sep"></div>
     <button class="cp-pop-item toggle" data-act="voice">
-      <span class="cp-pop-ico">🎙</span><span class="cp-pop-label">实时语音对话</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-mic"/></svg></span><span class="cp-pop-label">实时语音对话</span>
       <span class="cp-sw"></span>
     </button>
     <button class="cp-pop-item toggle" data-act="cu">
-      <span class="cp-pop-ico">💻</span><span class="cp-pop-label">AI 操作电脑</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-monitor"/></svg></span><span class="cp-pop-label">AI 操作电脑</span>
       <span class="cp-sw"></span>
     </button>
     <button class="cp-pop-item" data-act="capsule">
-      <span class="cp-pop-ico">⏳</span><span class="cp-pop-label">胶囊</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-hourglass"/></svg></span><span class="cp-pop-label">胶囊</span>
     </button>
   </div>
 
   <!-- ══ 任务列表下拉（对话产物 / 技能 / 最近文件）══ -->
   <div class="cp-pop" id="pop-task" style="right:10px; top:46px; width:250px">
     <button class="cp-pop-item" data-sec="artifacts">
-      <span class="cp-pop-ico">📄</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-file"/></svg></span>
       <span class="cp-pop-label">对话产物</span>
       <span class="cp-pop-count" id="cnt-artifacts">0</span>
       <span class="cp-pop-kbd">›</span>
     </button>
     <div class="cp-pop-sep"></div>
     <button class="cp-pop-item" data-sec="skills">
-      <span class="cp-pop-ico">🧩</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-grid"/></svg></span>
       <span class="cp-pop-label">技能</span>
       <span class="cp-pop-count" id="cnt-skills">0</span>
       <span class="cp-pop-kbd">›</span>
     </button>
     <div class="cp-pop-sep"></div>
     <button class="cp-pop-item" data-sec="recent">
-      <span class="cp-pop-ico">🕘</span>
+      <span class="cp-pop-ico"><svg class="cp-i"><use href="#i-clock"/></svg></span>
       <span class="cp-pop-label">最近文件</span>
       <span class="cp-pop-count" id="cnt-recent">0</span>
       <span class="cp-pop-kbd">›</span>
@@ -867,7 +982,7 @@
       <button class="cp-ico" id="wb-close" data-tip="关闭工作台" aria-label="关闭">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
-      <span class="cp-wb-tab">🪟 工作台</span>
+      <span class="cp-wb-tab"><svg class="cp-i"><use href="#i-window"/></svg>工作台</span>
     </div>
     <div class="cp-wb-body">
       <button class="cp-wb-row" data-wb="search">
@@ -907,10 +1022,10 @@
 
   <!-- 🗑 删除菜单（点右上角垃圾桶弹出） -->
   <div class="cp-del-menu" id="cp-del-menu">
-    <button data-act="current">🧹 清空当前对话</button>
-    <button data-act="select">☑️ 选择要删除的对话…</button>
+    <button data-act="current"><svg class="cp-i"><use href="#i-eraser"/></svg>清空当前对话</button>
+    <button data-act="select"><svg class="cp-i"><use href="#i-check-square"/></svg>选择要删除的对话…</button>
     <div class="cp-del-sep"></div>
-    <button data-act="all" class="danger">💥 删除全部对话</button>
+    <button data-act="all" class="danger"><svg class="cp-i"><use href="#i-trash"/></svg>删除全部对话</button>
   </div>
 
   <!-- ☑️ 会话选择面板（"选择要删除的对话"） -->
@@ -1004,7 +1119,12 @@ function addChatMsg(role, text) {
   const d = document.createElement('div');
   d.className = 'cp-msg ' + role;
   if (role === 'pet') {
-    d.innerHTML = '<span class="cp-msg-avatar">🐱</span>';
+    // 结构：头像在气泡外，正文包在 .cp-bubble 里（见上方「AI 消息气泡」样式注释）
+    const av = document.createElement('span');
+    av.className = 'cp-msg-avatar';
+    av.textContent = '🐱';
+    const bubble = document.createElement('div');
+    bubble.className = 'cp-bubble';
     // 🔧 2026-10-18：助手回复走 Markdown 渲染。
     //   旧实现 `span.textContent = text` 是纯文本，而 .cp-msg 又没设
     //   white-space —— 换行被全部折叠成一段，`**加粗**`、`- 列表` 的标记
@@ -1027,7 +1147,9 @@ function addChatMsg(role, text) {
       body.classList.add('cp-md-plain');
       d.classList.add('no-md');
     }
-    d.appendChild(body);
+    bubble.appendChild(body);
+    d.appendChild(av);
+    d.appendChild(bubble);
   } else {
     d.textContent = text;
   }

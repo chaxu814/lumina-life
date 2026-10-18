@@ -1,5 +1,9 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  IconBell, IconBot, IconBrain, IconClock, IconGlobe, IconHeart, IconLink, IconMobile,
+  IconPalette, IconSearch, IconShield, IconSpeaker,
+} from './Icons'
 import SettingsPanel from '../panels/SettingsPanel'
 import SettingsLLM from '../panels/settings/SettingsLLM'
 import SettingsTTS from '../panels/settings/SettingsTTS'
@@ -19,20 +23,21 @@ import SettingsMemory from '../panels/settings/SettingsMemory'
 import AppearancePanel from '../panels/AppearancePanel'
 import BrowserLinksPanel from '../panels/settings/BrowserLinksPanel'
 
-/* ── 侧边栏导航项（label 走 i18n） ── */
+/* ── 侧边栏导航项（label 走 i18n） ──
+   2026-10-18：图标从 emoji 改为线性 SVG，尺寸由 size 精确控制。 */
 const SIDEBAR_ITEMS = [
-  { id: 'llm', icon: '🤖', labelKey: 'settings.nav_llm' },
-  { id: 'tts', icon: '🔊', labelKey: 'settings.nav_tts' },
-  { id: 'notifications', icon: '🔔', labelKey: 'settings.nav_notifications' },
-  { id: 'appearance', icon: '🎨', labelKey: 'settings.nav_appearance' },
-  { id: 'language', icon: '🌐', labelKey: 'settings.nav_language' },
-  { id: 'push', icon: '📱', labelKey: 'settings.nav_push' },
-  { id: 'channels', icon: '🔗', labelKey: 'settings.nav_channels' },
-  { id: 'browser', icon: '🌐', labelKey: 'settings.nav_browser' },
-  { id: 'security', icon: '🛡️', labelKey: 'settings.nav_security' },
-  { id: 'tasks', icon: '⏰', labelKey: 'settings.nav_tasks' },
-  { id: 'pet', icon: '🐱', labelKey: 'settings.nav_pet' },
-  { id: 'memory', icon: '🧠', labelKey: 'settings.nav_memory' },
+  { id: 'llm', icon: <IconBot size={16} />, labelKey: 'settings.nav_llm' },
+  { id: 'tts', icon: <IconSpeaker size={16} />, labelKey: 'settings.nav_tts' },
+  { id: 'notifications', icon: <IconBell size={16} />, labelKey: 'settings.nav_notifications' },
+  { id: 'appearance', icon: <IconPalette size={16} />, labelKey: 'settings.nav_appearance' },
+  { id: 'language', icon: <IconGlobe size={16} />, labelKey: 'settings.nav_language' },
+  { id: 'push', icon: <IconMobile size={16} />, labelKey: 'settings.nav_push' },
+  { id: 'channels', icon: <IconLink size={16} />, labelKey: 'settings.nav_channels' },
+  { id: 'browser', icon: <IconSearch size={16} />, labelKey: 'settings.nav_browser' },
+  { id: 'security', icon: <IconShield size={16} />, labelKey: 'settings.nav_security' },
+  { id: 'tasks', icon: <IconClock size={16} />, labelKey: 'settings.nav_tasks' },
+  { id: 'pet', icon: <IconHeart size={16} />, labelKey: 'settings.nav_pet' },
+  { id: 'memory', icon: <IconBrain size={16} />, labelKey: 'settings.nav_memory' },
 ] as const
 
 type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']
@@ -152,7 +157,10 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
                     }
                   }}
                 >
-                  <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>
+                  <span style={{
+                    width: 22, flexShrink: 0, display: 'inline-flex',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
                     {item.icon}
                   </span>
                   <span style={{ lineHeight: 1.3 }}>{t(item.labelKey)}</span>
@@ -199,9 +207,14 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
               flexShrink: 0,
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-              {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.icon}{' '}
-              {t(SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.labelKey ?? 'settings.title')}
+            <div style={{
+              fontSize: 15, fontWeight: 700, color: 'var(--text-primary)',
+              display: 'flex', alignItems: 'center', gap: 7,
+            }}>
+              {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.icon}
+              <span>
+                {t(SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.labelKey ?? 'settings.title')}
+              </span>
             </div>
             <button
               onClick={onClose}

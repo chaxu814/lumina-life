@@ -4,6 +4,7 @@
 // ============================================================
 
 import React, { useState, useEffect } from 'react'
+import { IconMessageCircle, IconPin } from './Icons'
 import { GCSession, loadGCSessions, saveGCSessions, newGCSessionId, formatDateLabel } from '../chat/chatShared'
 
 export default function GroupChatHistorySidebar() {
@@ -147,7 +148,7 @@ export default function GroupChatHistorySidebar() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 13 }}>💬</span>
+          <IconMessageCircle size={14} />
           群聊记录
         </span>
         <button onClick={handleNew} title="新建群聊"
@@ -216,7 +217,7 @@ export default function GroupChatHistorySidebar() {
           >
             {/* Pin indicator */}
             {(s as any).pinned && (
-              <span style={{ position: 'absolute', top: 2, right: 4, fontSize: 9 }}>📌</span>
+              <span style={{ position: 'absolute', top: 2, right: 4, display: 'inline-flex', color: 'var(--accent, #3b82f6)' }}><IconPin size={11} /></span>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

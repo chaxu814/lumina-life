@@ -21,7 +21,10 @@ import { proactiveChat } from '../services/proactiveChat'
 import { getDisabledToolNames } from '../stores/appStore'
 import PersonalityConflictAlert from '../components/PersonalityConflictAlert'
 import DecisionDebateCard from './DecisionCard'
-import { IconPlus, IconSend, IconSpeaker } from '../components/Icons'
+import {
+  IconBrain, IconClipboard, IconFolder, IconHourglass, IconLeaf, IconMic, IconMonitor,
+  IconPaperclip, IconPlus, IconRefresh, IconSend, IconSmile, IconSparkles, IconSpeaker,
+} from '../components/Icons'
 import ModelSelector from '../components/ModelSelector'
 import { DEFAULT_PERSONAS, getPersona, getPersonaPrompt } from '../data/personas'
 import { AGENT_ROLES, getAgentRole } from '../data/agentRoles'
@@ -61,6 +64,10 @@ import PermissionSelector, { usePermission } from '../components/PermissionSelec
 import LuckyModeSettings from '../components/LuckyModeSettings'
 import { useLuckyMode } from '../hooks/useLuckyMode'
 import type { LuckySettingsConfig } from '../components/LuckyModeSettings'
+/** Lucky 预设 → 中文标签（「更多」里那一行右侧的灰字） */
+const LUCKY_PRESET_LABEL: Record<string, string> = {
+  off: '关闭', default: '标准', goal: '目标', mission: '任务',
+}
 import {
   TTS_VOICES, AGENT_VOICES, AUTONOMY_INTERVAL,
   AGENTS, TEAM_CONV_ID, EMOJI_GROUPS,
@@ -1694,28 +1701,32 @@ export default function ChatPanel() {
                 border: `1px solid ${getAgentRole(selectedRole).color}30`,
                 borderRadius: 14,
                 transition: 'all 0.2s',
+                whiteSpace: 'nowrap', flexShrink: 0,
               }}>
-              <span style={{ fontSize: 12 }}>🔄</span>
+              <IconRefresh size={13} />
               <span>切换角色</span>
             </button>
           )}
 
-          {/* 📋 任务派发中心 / 任务工作区 —— 2026-10-18 从底部工具条移入头部栏
+          {/* 任务派发中心 / 任务工作区 —— 2026-10-18 从底部工具条移入头部栏
                这两个是同一件事的两面：派发与看结果，放在一起才不用来回找。
                状态本来就在 useTaskWorkspace store，任何位置都能开关。
-               现在与团队群聊头部栏同一位置、同一观感。 */}
+               现在与团队群聊头部栏同一位置、同一观感。
+               图标用线性 SVG（原来是 📋 / 📕 emoji，字重和同排图标对不上）。 */}
           {!compact && (
             <>
               <button onClick={() => setShowTaskDispatcher(true)}
                 className={'hd-chip' + (showTaskDispatcher ? ' hd-chip-on' : '')}
                 title="任务派发中心：选择任务类型 → 选择执行者 → 一键派发">
-                <span className="hd-chip-ico">📋</span>
+                <span className="hd-chip-ico"><IconClipboard size={15} /></span>
                 <span className="hd-chip-txt">任务派发中心</span>
               </button>
               <button onClick={toggleTaskPanel}
                 className={'hd-chip' + (taskPanelOpen ? ' hd-chip-on' : '')}
                 title={taskPanelOpen ? '收起任务工作区' : '展开任务工作区'}>
-                <span className="hd-chip-ico">{taskPanelOpen ? '📕' : '📋'}</span>
+                <span className="hd-chip-ico">
+                  {taskPanelOpen ? <IconFolder size={15} /> : <IconClipboard size={15} />}
+                </span>
                 <span className="hd-chip-txt">任务工作区</span>
               </button>
             </>
@@ -2515,44 +2526,45 @@ export default function ChatPanel() {
             modelSlot={<ModelSelector />}
             moreItems={[
               {
-                key: 'enhance', icon: '✨',
+                key: 'enhance', icon: <IconSparkles size={16} />,
                 label: promptEnhancing ? '正在增强…' : '增强提示词',
                 hint: input.trim() ? undefined : '先写点内容',
                 disabled: !input.trim() || promptEnhancing,
                 onClick: () => { void handleEnhancePrompt() },
               },
               {
-                key: 'lucky', icon: '🍀', label: 'Lucky Agent',
-                hint: luckyMode.preset === 'off' ? '关闭' : luckyMode.preset === 'default' ? '标准' : '目标',
+                key: 'lucky', icon: <IconLeaf size={16} />, label: 'Lucky Agent',
+                hint: LUCKY_PRESET_LABEL[luckyMode.preset] ?? '标准',
                 onClick: () => luckyMode.setShowSettings(true),
                 quick: [
                   { key: 'off', label: '关闭', active: luckyMode.preset === 'off', onPick: () => luckyMode.setPreset('off') },
                   { key: 'default', label: '标准', active: luckyMode.preset === 'default', onPick: () => luckyMode.setPreset('default') },
                   { key: 'goal', label: '目标', active: luckyMode.preset === 'goal', onPick: () => luckyMode.setPreset('goal') },
+                  { key: 'mission', label: '任务', active: luckyMode.preset === 'mission', onPick: () => luckyMode.setPreset('mission') },
                 ],
               },
               {
-                key: 'thinking', icon: '🧠', label: '思考',
+                key: 'thinking', icon: <IconBrain size={16} />, label: '思考',
                 toggle: { on: thinkingMode, onChange: setThinkingMode },
               },
               {
-                key: 'emoji', icon: '😊', label: '表情',
+                key: 'emoji', icon: <IconSmile size={16} />, label: '表情',
                 onClick: () => setShowEmojiPicker(true),
               },
               {
-                key: 'file', icon: '📎', label: '文件',
+                key: 'file', icon: <IconPaperclip size={16} />, label: '文件',
                 hint: attachments.length > 0 ? `${attachments.length} 个` : undefined,
                 onClick: () => fileInputRef.current?.click(),
               },
               {
-                key: 'voice', icon: '🎙️', label: '实时语音对话', dividerBefore: true,
+                key: 'voice', icon: <IconMic size={16} />, label: '实时语音对话', dividerBefore: true,
                 toggle: { on: realtimeVoiceActive, onChange: (v) => { void toggleRealtimeVoice(v) } },
               },
               {
-                key: 'cu', icon: '💻', label: 'AI 操作电脑',
+                key: 'cu', icon: <IconMonitor size={16} />, label: 'AI 操作电脑',
                 toggle: { on: computerUseActive, onChange: (v) => { void toggleComputerUse(v) } },
               },
-              { key: 'capsule', icon: '⏳', label: '胶囊', onClick: handleCapsule },
+              { key: 'capsule', icon: <IconHourglass size={16} />, label: '胶囊', onClick: handleCapsule },
             ]}
             sending={isProcessing}
             canSend={!!input.trim() && !isProcessing}

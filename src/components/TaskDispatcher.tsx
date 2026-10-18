@@ -10,6 +10,7 @@
 // ============================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { IconClipboard } from './Icons'
 import {
   TASK_TYPE_CARDS,
   TEAM_MEMBERS,
@@ -96,7 +97,7 @@ export default function TaskDispatcher({ onDispatch, onClose }: TaskDispatcherPr
         {/* ═══ 标题栏 ═══ */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)' }}>📋 任务派发中心</h3>
+            <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', display: 'flex', alignItems: 'center', gap: 6 }}><IconClipboard size={17} />任务派发中心</h3>
             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginTop: 2 }}>选择任务类型 → 选择执行者 → 一键派发</div>
           </div>
           <button

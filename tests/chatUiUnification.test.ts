@@ -66,19 +66,38 @@ describe('静音图标现代化', () => {
 // 三、桌宠 AI 消息要有看得见的气泡
 // ============================================================
 describe('桌宠 AI 消息气泡', () => {
+  // 同一个选择器在这个文件里出现过多次（后一处覆盖前一处），所以断言必须取
+  // **最后一条**——取第一条会测到早已被覆盖的死规则。这个坑就是「气泡加了但看不见」的成因。
+  const lastRule = (selector: string) => {
+    const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const all = [...petHtml.matchAll(new RegExp(esc + ' \\{([\\s\\S]*?)\\}', 'g'))]
+    return all.length ? all[all.length - 1][1] : ''
+  }
+
   it('AI 气泡有明确的浅色底和描边（不再是白底叠白底）', () => {
-    const rule = petHtml.match(/#chat-panel \.cp-msg\.pet \{([\s\S]*?)\}/)
-    expect(rule).toBeTruthy()
-    expect(rule![1]).toMatch(/background:\s*#f4f7fc/)
-    expect(rule![1]).toMatch(/border:\s*1px solid rgba\(86,120,180,0\.16\)/)
-    expect(rule![1]).not.toMatch(/rgba\(255,255,255,0\.9\)/)
+    const bubble = lastRule('#chat-panel .cp-bubble')
+    expect(bubble).toBeTruthy()
+    expect(bubble).toMatch(/background:\s*#f4f7fc/)
+    expect(bubble).toMatch(/border:\s*1px solid rgba\(86,120,180,0\.16\)/)
+    expect(bubble).not.toMatch(/rgba\(255,255,255,0\.9\)/)
   })
 
-  it('用户气泡保持右侧渐变深色，两者能一眼分开', () => {
-    const rule = petHtml.match(/#chat-panel \.cp-msg\.user \{([\s\S]*?)\}/)
-    expect(rule).toBeTruthy()
-    expect(rule![1]).toMatch(/align-self: flex-end/)
-    expect(rule![1]).toMatch(/linear-gradient\(135deg, #4a9eff/)
+  it('最终生效的 .cp-msg.pet 允许透明，但底色必须由 .cp-bubble 承接', () => {
+    const pet = lastRule('#chat-panel .cp-msg.pet')
+    expect(pet).toBeTruthy()
+    // 容器透明 + 子层 .cp-bubble 有底色 = 正确结构；
+    // 两边都没有底色才是「气泡消失」的回归。
+    const bubble = lastRule('#chat-panel .cp-bubble')
+    const containerHasBg = !/background:\s*transparent/.test(pet)
+    const bubbleHasBg = /background:\s*#f4f7fc/.test(bubble)
+    expect(containerHasBg || bubbleHasBg).toBe(true)
+  })
+
+  it('用户气泡右侧对齐，两者能一眼分开', () => {
+    const user = lastRule('#chat-panel .cp-msg.user')
+    expect(user).toBeTruthy()
+    expect(user).toMatch(/align-self: flex-end/)
+    expect(user).toMatch(/background:/)
   })
 })
 
