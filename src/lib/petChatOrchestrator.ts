@@ -59,6 +59,12 @@ export interface PetSceneContext {
   title?: string
   /** 进程名 */
   process?: string
+  /**
+   * 本轮附件（用户点「上传文件或图片」/「截图提问」挂上的东西）。
+   * 截图会先落盘成真实路径 —— 模型侧的读文件/读图工具都按路径工作，
+   * 直接把 base64 塞进消息体既撑爆上下文又要另开多模态通道。
+   */
+  files?: Array<{ name: string; path: string }>
 }
 
 /** 队列里的一轮待处理消息 */

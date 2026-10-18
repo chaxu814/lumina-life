@@ -12,6 +12,13 @@
 import { useEffect, useRef } from 'react'
 import { useStore, getDisabledToolNames } from '../stores/appStore'
 import {
+  useTaskWorkspace,
+  deriveConversationArtifacts,
+  deriveRecentFiles,
+  deriveUsedSkills,
+  detectArtifactKind,
+} from '../stores/taskWorkspaceStore'
+import {
   PetChatOrchestrator,
   messagesToForward,
   deriveLocalIntent,
@@ -55,19 +62,34 @@ function buildScenePrompt(scene?: PetSceneContext | null): string | undefined {
   if (!scene) {return undefined}
   const title = (scene.title || '').trim()
   const proc = (scene.process || '').trim()
-  if (!title && !proc) {return undefined}
+  const files = Array.isArray(scene.files) ? scene.files.filter((f) => f && f.path) : []
+  if (!title && !proc && !files.length) {return undefined}
   const what = title || proc
   const who = title && proc ? `（${proc}）` : ''
-  return [
+  const lines: string[] = [
     // agentRunner 会把这段追加在「## 自定义指令」之下，所以这里用三级标题做子节，
     // 否则会出现两个并排的 ## 标题。
     '### 🖥️ 屏幕上下文',
-    `用户点这句话时正在看：**${what}**${who}。`,
-    '用户话里的「这个 / 这个页面 / 这部剧 / 这段代码 / 这份文档 / 这里」等指代，指的就是它。',
-    '能直接动手就动手（搜索、读取、整理），不要反过来问用户"你指的是哪个"——',
-    '信息已经在这里了。只有确实还缺关键信息（比如要具体集数）时才问一句。',
-    '⚠️ 不要把这段上下文本身说出来，也不要提到「上下文」「屏幕」这类词。',
-  ].join('\n')
+  ]
+  if (what) {
+    lines.push(
+      `用户点这句话时正在看：**${what}**${who}。`,
+      '用户话里的「这个 / 这个页面 / 这部剧 / 这段代码 / 这份文档 / 这里」等指代，指的就是它。',
+      '能直接动手就动手（搜索、读取、整理），不要反过来问用户"你指的是哪个"——',
+      '信息已经在这里了。只有确实还缺关键信息（比如要具体集数）时才问一句。',
+    )
+  }
+  if (files.length) {
+    lines.push(
+      '',
+      '### 📎 本轮附件',
+      '用户这条消息附带了下面的文件，路径真实可读：',
+      ...files.map((f) => `- \`${f.path}\`（${f.name || '附件'}）`),
+      '需要内容就直接读这些路径（读文件 / 读图工具都行），不要问用户"文件在哪"。',
+    )
+  }
+  lines.push('⚠️ 不要把这段上下文本身说出来，也不要提到「上下文」「屏幕」这类词。')
+  return lines.join('\n')
 }
 
 export default function PetChatSync() {
@@ -124,6 +146,8 @@ export default function PetChatSync() {
     //      于是桌宠的 thinking / tool_* 会漏进主聊天面板的思考区。
     let petReqSeq = 0
     let activeReqId = ''
+    /** 「更多 → 思考」的临时覆盖（null = 用默认开） */
+    let thinkingOverride: boolean | null = null
 
     const orchestrator = new PetChatOrchestrator({
       getHistory: () => {
@@ -173,7 +197,7 @@ export default function PetChatSync() {
           // 🧠 与主聊天面板的默认一致（ChatPanel 的 thinkingMode 默认开启）：
           //   打开推理流，桌宠聊天窗才能显示模型真实的想法，而不是只看到工具调用。
           //   不支持 reasoning_content 的模型不会有任何额外输出，零副作用。
-          trackReasoning: true,
+          trackReasoning: thinkingOverride !== false,
           // 🖥️ 屏幕上下文 —— 通过 systemPrompt 附加，**不能拼进 text**。
           //
           // 为什么不能拼进 text：`agentRunner.sendMessage` 的去重逻辑是
@@ -267,10 +291,17 @@ export default function PetChatSync() {
     }
 
     // ── 桌宠 → 主聊天（注入 + 串行跑 Agent，失败退避重试由编排器负责）──
-    const unsubPetMsg = api.onPetSyncMessage((data: { text: string; from: string; scene?: PetSceneContext }) => {
+    const unsubPetMsg = api.onPetSyncMessage((data: { text: string; from: string; scene?: PetSceneContext; attachments?: Array<{ name: string; path: string }>; thinking?: boolean }) => {
       if (!data?.text) {return}
       ensurePetConv()
-      orchestrator.handlePetMessage(data.text, data.scene)
+      // 📎 附件合并进本轮上下文（见 PetSceneContext.files 的注释）
+      const files = Array.isArray(data.attachments) ? data.attachments.filter((f) => f && f.path) : []
+      const scene: PetSceneContext | null = files.length
+        ? { ...(data.scene || {}), files }
+        : (data.scene || null)
+      // 🧠 「更多 → 思考」的开关随消息带过来（桌宠窗没有自己的 store）
+      thinkingOverride = typeof data.thinking === 'boolean' ? data.thinking : null
+      orchestrator.handlePetMessage(data.text, scene)
     })
 
     // ── 桌宠请求历史记录 → 返回固定对话的消息 ──
@@ -345,6 +376,117 @@ export default function PetChatSync() {
       try { api.petNotifyConvChanged?.() } catch { /* 桌宠窗未开 */ }
     })
 
+    // ── 🪟 任务列表 / 动作中转（2026-10-18）──────────────────────
+    //
+    // 会话产物、技能、最近文件都住在**主窗口**的 taskWorkspaceStore 里；
+    // 实时语音、AI 操作电脑、Lucky 预设这些能力也只有主窗口的 luminaAPI 有。
+    // 桌宠窗统一发意图过来，这里执行完把结果回过去。
+    const unsubTaskListReq = api.onPetUiTaskListRequest?.(() => {
+      try {
+        const tw = useTaskWorkspace.getState()
+        const all = (tw.artifacts || []) as any[]
+        const artifacts = deriveConversationArtifacts(all).map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          kind: a.kind || detectArtifactKind(a.filename, (a as any).content),
+        }))
+        const recentFiles = deriveRecentFiles(all).map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          filePath: (a as any).filePath,
+        }))
+        const skills = deriveUsedSkills((tw.toolCalls || []) as any[])
+        api.petSendTaskList?.({ artifacts, skills, recentFiles })
+      } catch (e) {
+        console.warn('[PetChatSync] 任务列表生成失败:', e)
+        try { api.petSendTaskList?.({ artifacts: [], skills: [], recentFiles: [] }) } catch { /* 忽略 */ }
+      }
+    })
+
+    const unsubUiAction = api.onPetUiAction?.((payload: { kind: string; [k: string]: unknown }) => {
+      const kind = String(payload?.kind || '')
+      const reply = (ok: boolean, message?: string) => {
+        try { api.petUiActionResult?.({ kind, ok, message }) } catch { /* 桌宠窗未开 */ }
+      }
+      void (async () => {
+        try {
+          switch (kind) {
+            case 'open-artifact': {
+              const id = String(payload.id || '')
+              if (!id) {return reply(false, '缺少产物 id')}
+              useTaskWorkspace.getState().setActiveArtifact(id)
+              return reply(true, '已打开')
+            }
+            case 'voice': {
+              const on = payload.on === true
+              const r: any = on
+                ? await (window as any).luminaAPI?.agentStartRealtimeVoice?.()
+                : await (window as any).luminaAPI?.agentStopRealtimeVoice?.()
+              return reply(r?.success !== false, r?.message || r?.error)
+            }
+            case 'computer-use': {
+              const on = payload.on === true
+              const r: any = on
+                ? await (window as any).luminaAPI?.agentStartComputerUse?.()
+                : await (window as any).luminaAPI?.agentStopComputerUse?.()
+              return reply(r?.success !== false, r?.message || r?.error)
+            }
+            case 'lucky-preset': {
+              const preset = String(payload.preset || 'off')
+              const r: any = await (window as any).luminaAPI?.luckyModeSetPreset?.(preset)
+              return reply(r?.success !== false, preset)
+            }
+            case 'lucky-get': {
+              const cfg: any = await (window as any).luminaAPI?.luckyModeGetConfig?.()
+              return reply(true, String(cfg?.preset || 'off'))
+            }
+            case 'navigate': {
+              const panel = String(payload.panel || 'chat')
+              useStore.setState({ activePanel: panel } as any)
+              return reply(true)
+            }
+            // ✨ 「更多 → 增强提示词」：把桌宠输入框的草稿改写成更清晰的指令。
+            //
+            // 走的是主进程既有的 `llm:enhance-prompt`（与群聊输入框同一个通道），
+            // 而不是 agentChat —— 增强只是"改写一段文字"，不需要工具链、不该占用
+            // 桌宠对话的串行队列，更不该在 conv-pet-live2d 里留下两条消息。
+            case 'enhance': {
+              const draft = String(payload.text || '').trim()
+              if (!draft) { return reply(false, '输入框是空的，先写点内容再增强') }
+              const enhanceApi = (window as any).luminaAPI?.llmEnhancePrompt
+              if (!enhanceApi) { return reply(false, '当前版本不支持提示词增强') }
+              const cfg = useStore.getState().llmConfig
+              if (!cfg?.baseUrl || !cfg?.model) {
+                return reply(false, '先在模型选择器里配置 Endpoint 和 Model')
+              }
+              const r: any = await enhanceApi({
+                baseUrl: cfg.baseUrl,
+                apiKey: cfg.apiKey || '',
+                model: cfg.model,
+                text: draft,
+              })
+              if (r?.error) { return reply(false, String(r.error)) }
+              const enhanced = String(r?.content || '').trim()
+              if (!enhanced) { return reply(false, '模型没有返回增强结果') }
+              return reply(true, enhanced)
+            }
+            default:
+              return reply(false, `未知动作：${kind}`)
+          }
+        } catch (e: any) {
+          reply(false, String(e?.message || e))
+        }
+      })()
+    })
+
+    // 「在主窗口中打开」：切到桌宠这条对话，并把焦点交给主窗口
+    const unsubOpenMain = api.onPetUiOpenMain?.(() => {
+      try {
+        useStore.getState().switchConversation(PET_CONV_ID)
+        useStore.setState({ activePanel: 'chat' } as any)
+      } catch { /* 忽略 */ }
+    })
+
     // ── 主聊天 → 桌宠（订阅 store，监听固定对话的新消息）──
     //    zustand subscribe 在 set() 时同步触发：我们注入桌宠消息时 injectingRef=true，
     //    这批新消息不回推（已由 sendToPet 直接发过）；只有主窗 UI 新增的才推给桌宠。
@@ -368,6 +510,9 @@ export default function PetChatSync() {
       unsubAgentEvents?.()
       unsubConvListReq?.()
       unsubConvDelete?.()
+      unsubTaskListReq?.()
+      unsubUiAction?.()
+      unsubOpenMain?.()
       if (thinkTimer) {clearTimeout(thinkTimer)}
     }
   }, [])

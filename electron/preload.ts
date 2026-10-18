@@ -1165,6 +1165,39 @@ const api = {
     ipcRenderer.on('pet:conv-changed', handler)
     return () => { ipcRenderer.removeListener('pet:conv-changed', handler) }
   },
+
+  // ── 🪟 桌宠聊天窗顶栏 / 任务列表 / 动作中转（2026-10-18）──────────
+  //
+  // 会话与任务工作区的数据都住在**主窗口**的 zustand store 里，桌宠窗够不到。
+  // 所以「任务列表」「打开对话产物」「实时语音」「AI 操作电脑」这类动作
+  // 统一由桌宠窗发意图 → 主进程中转 → 主窗口 PetChatSync 执行 → 回结果。
+  /** 主窗口 → 桌宠窗：任务列表数据（对话产物 / 技能 / 最近文件） */
+  petSendTaskList: (data: {
+    artifacts: Array<{ id: string; filename: string; kind?: string }>
+    skills: string[]
+    recentFiles: Array<{ id: string; filename: string; filePath?: string }>
+  }) => ipcRenderer.send('pet:ui:tasklist', data),
+  /** 主窗口监听：桌宠窗请求任务列表 */
+  onPetUiTaskListRequest: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('pet:ui:tasklist-request', handler)
+    return () => { ipcRenderer.removeListener('pet:ui:tasklist-request', handler) }
+  },
+  /** 主窗口 → 桌宠窗：动作执行结果 */
+  petUiActionResult: (data: { kind: string; ok: boolean; message?: string }) =>
+    ipcRenderer.send('pet:ui:action-result', data),
+  /** 主窗口监听：桌宠窗发来的动作 */
+  onPetUiAction: (callback: (payload: { kind: string; [k: string]: unknown }) => void) => {
+    const handler = (_event: any, payload: { kind: string; [k: string]: unknown }) => callback(payload)
+    ipcRenderer.on('pet:ui:action', handler)
+    return () => { ipcRenderer.removeListener('pet:ui:action', handler) }
+  },
+  /** 主窗口监听：「在主窗口中打开」—— 切到桌宠对话并让输入框就绪 */
+  onPetUiOpenMain: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('pet:ui:open-main', handler)
+    return () => { ipcRenderer.removeListener('pet:ui:open-main', handler) }
+  },
   /** 主窗口 → 主进程：回传桌宠请求的朋友圈/剧场/日报数据 */
   lifeProvideData: (payload: { reqId: string; items: Array<{ title: string; body?: string; meta?: string; icon?: string }> }) =>
     ipcRenderer.send('life:data-response', payload),

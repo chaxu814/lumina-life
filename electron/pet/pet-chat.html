@@ -11,13 +11,19 @@
     font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   }
   /* 让圆角卡片浮在透明窗口内，留出阴影边距 */
+  /* 🔧 2026-10-18：去掉窗口外那圈"淡淡的黑框"。
+     旧样式是 inset:10px + box-shadow:0 12px 40px rgba(40,60,120,.30)：
+     窗口只比面板大 10px，而 40px 模糊半径的投影根本铺不开，被窗口边界
+     硬切一刀 → 四周出现一圈边缘生硬的深色带（用户看到的就是"黑框"）。
+     现在面板直接铺满窗口（inset:0），窗口本身透明 + 无边框 + hasShadow:false，
+     圆角由面板的 border-radius 负责；用 1px 描边替代投影来交代边界。 */
   #chat-panel {
-    position: fixed; top: 10px; left: 10px; right: 10px; bottom: 10px;
-    background: rgba(245,247,255,0.96); backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.6); border-radius: 18px;
-    box-shadow: 0 12px 40px rgba(40,60,120,0.30); overflow: hidden;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #ffffff;
+    border: 1px solid rgba(15,25,45,0.08); border-radius: 14px;
+    box-shadow: none; overflow: hidden;
     display: flex; flex-direction: column;
-    font-size: 13px; color: #2a3a5c; user-select: text;
+    font-size: 13px; color: #1f2430; user-select: text;
   }
   /* 标题栏：整个原生窗口的拖拽手柄（frame:false 下系统级拖动） */
   #chat-panel .cp-head {
@@ -391,23 +397,311 @@
   }
   #chat-panel .cp-md th { background: rgba(74,158,255,0.10); font-weight: 700; color: #1f2d49; }
   #chat-panel .cp-md tr:nth-child(even) td { background: rgba(100,130,180,0.04); }
+
+  /* ══════════════════════════════════════════════════════════
+     2026-10-18 视觉重塑：按参考稿改成「极简白 + 细线图标」。
+     旧版是蓝色渐变标题栏 + 圆角气泡按钮，偏可爱风；参考稿更克制：
+     纯白底、1px 细边、图标按钮只在 hover 时出浅灰底、输入区是一个
+     大圆角卡片（上输入 / 下操作条）。
+     所有新类名统一 cp-tb- / cp-ico / cp-composer 前缀，避免和旧样式打架。
+     ══════════════════════════════════════════════════════════ */
+
+  /* ── 顶栏 ── */
+  #chat-panel .cp-topbar {
+    display: flex; align-items: center; gap: 2px;
+    padding: 8px 8px; flex: none;
+    border-bottom: 1px solid rgba(15,25,45,0.06);
+    background: #fff; -webkit-app-region: drag;
+  }
+  #chat-panel .cp-tb-group { display: flex; align-items: center; gap: 1px; flex: none; }
+  #chat-panel .cp-ico {
+    width: 26px; height: 26px; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; background: transparent; border-radius: 7px;
+    color: #3a3f4a; cursor: pointer; padding: 0;
+    -webkit-app-region: no-drag; transition: background .12s, color .12s;
+  }
+  #chat-panel .cp-ico:hover { background: rgba(15,25,45,0.06); }
+  #chat-panel .cp-ico:active { background: rgba(15,25,45,0.10); }
+  #chat-panel .cp-ico svg { width: 16px; height: 16px; display: block; }
+  #chat-panel .cp-ico.on { background: rgba(74,158,255,0.12); color: #1f6fd0; }
+  #chat-panel .cp-ico.off { color: #9aa1ad; }
+
+  #chat-panel .cp-tb-title {
+    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center;
+    gap: 6px; border: none; background: transparent; cursor: pointer;
+    font: inherit; color: #1f2430; padding: 4px 6px; border-radius: 8px;
+    -webkit-app-region: no-drag;
+  }
+  #chat-panel .cp-tb-title:hover { background: rgba(15,25,45,0.05); }
+  #chat-panel .cp-tb-title .cp-avatar { font-size: 14px; line-height: 1; }
+  #chat-panel .cp-tb-title .cp-name {
+    font-size: 13px; font-weight: 600; letter-spacing: .1px;
+    /* min-width:0 是 flex 子项能收缩到省略号的前提（默认 min-width:auto 不肯缩） */
+    min-width: 0; max-width: 150px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #chat-panel .cp-chev { color: #a8aeba; font-size: 13px; line-height: 1; }
+
+  /* 窄窗兜底：360~380px 时 10 个顶栏按钮 + 完整标题会挤成一团，
+     先把标题文字收掉（🐱 › 仍在，点它照样能切对话），再缩一档图标。 */
+  @media (max-width: 380px) {
+    #chat-panel .cp-topbar { padding: 8px 6px; }
+    #chat-panel .cp-ico { width: 24px; height: 24px; }
+    #chat-panel .cp-ico svg { width: 15px; height: 15px; }
+    #chat-panel .cp-tb-title .cp-name { display: none; }
+  }
+
+  /* ── 消息区 ── */
+  #chat-panel #chat-log {
+    flex: 1; overflow-y: auto; padding: 14px 14px 6px;
+    display: flex; flex-direction: column; gap: 10px;
+    background: #fff;
+  }
+  #chat-panel .cp-msg {
+    max-width: 86%; padding: 9px 13px; border-radius: 14px; line-height: 1.55;
+    word-break: break-word; font-size: 13px; animation: msgIn .25s ease;
+  }
+  #chat-panel .cp-msg.user {
+    align-self: flex-end; background: #eef2f7; color: #1f2430;
+    border-bottom-right-radius: 5px; box-shadow: none;
+  }
+  #chat-panel .cp-msg.pet {
+    align-self: flex-start; background: transparent; color: #1f2430;
+    border: none; box-shadow: none; padding-left: 0;
+  }
+
+  /* ── 快捷语 / 表情 ── */
+  #chat-panel .cp-quick {
+    display: flex; gap: 6px; padding: 0 12px 8px; flex-wrap: wrap; flex: none;
+  }
+  #chat-panel .cp-quick-btn {
+    border: 1px solid rgba(15,25,45,0.10); background: #fff; color: #3a3f4a;
+    border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer;
+    font-family: inherit; transition: background .12s, border-color .12s;
+  }
+  #chat-panel .cp-quick-btn:hover { background: #f5f6f8; border-color: rgba(15,25,45,0.18); }
+
+  /* ── 输入卡片 ── */
+  #chat-panel .cp-composer {
+    flex: none; margin: 0 10px 10px;
+    border: 1px solid rgba(15,25,45,0.12); border-radius: 20px;
+    background: #fff; box-shadow: 0 2px 10px rgba(15,25,45,0.05);
+    padding: 10px 12px 8px; transition: border-color .15s, box-shadow .15s;
+  }
+  #chat-panel .cp-composer:focus-within {
+    border-color: rgba(74,158,255,0.55);
+    box-shadow: 0 2px 14px rgba(74,158,255,0.12);
+  }
+  #chat-panel .cp-composer #pet-chat-input {
+    width: 100%; border: none; outline: none; background: transparent;
+    font-family: inherit; font-size: 13.5px; line-height: 1.55; color: #1f2430;
+    resize: none; min-height: 42px; max-height: 132px; overflow-y: auto;
+    padding: 0; display: block;
+  }
+  #chat-panel .cp-composer #pet-chat-input::placeholder { color: #a8aeba; }
+  #chat-panel .cp-composer-foot {
+    display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  }
+  #chat-panel .cp-plus {
+    width: 30px; height: 30px; flex: none; border: none; background: transparent;
+    border-radius: 50%; color: #3a3f4a; font-size: 21px; line-height: 1;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: background .12s; padding: 0 0 2px;
+  }
+  #chat-panel .cp-plus:hover { background: #f2f3f5; }
+  #chat-panel .cp-plus.open { background: #eef2f7; }
+  #chat-panel .cp-foot-mid { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+  #chat-panel .cp-pill {
+    border: none; background: transparent; color: #3a3f4a;
+    font-family: inherit; font-size: 12.5px; cursor: pointer;
+    padding: 5px 8px; border-radius: 9px; display: inline-flex; align-items: center; gap: 3px;
+    transition: background .12s;
+  }
+  #chat-panel .cp-pill:hover { background: #f2f3f5; }
+  #chat-panel .cp-pill.on { background: #eef2f7; }
+  #chat-panel .cp-mic {
+    width: 34px; height: 34px; flex: none; border: none; border-radius: 50%;
+    background: #f0f1f3; color: #3a3f4a; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background .12s, color .12s;
+  }
+  #chat-panel .cp-mic:hover { background: #e6e8ec; }
+  #chat-panel .cp-mic.rec { background: #ffe8e8; color: #d63b3b; }
+  #chat-panel .cp-mic svg { width: 17px; height: 17px; }
+
+  /* 附件条 */
+  #chat-panel .cp-attach-bar {
+    display: none; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+  }
+  #chat-panel .cp-attach-bar.show { display: flex; }
+  #chat-panel .cp-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    max-width: 100%; padding: 4px 8px; border-radius: 8px;
+    background: #f5f6f8; border: 1px solid rgba(15,25,45,0.08);
+    font-size: 11.5px; color: #3a3f4a;
+  }
+  #chat-panel .cp-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+  #chat-panel .cp-chip-x {
+    border: none; background: transparent; color: #9aa1ad; cursor: pointer;
+    font-size: 13px; line-height: 1; padding: 0 1px;
+  }
+  #chat-panel .cp-chip-x:hover { color: #d63b3b; }
+  #chat-panel .cp-chip img { width: 22px; height: 22px; border-radius: 4px; object-fit: cover; }
+
+  /* ── 弹出层通用 ── */
+  #chat-panel .cp-pop {
+    position: absolute; z-index: 70; display: none;
+    background: #fff; border: 1px solid rgba(15,25,45,0.10);
+    border-radius: 14px; box-shadow: 0 12px 32px rgba(15,25,45,0.16);
+    padding: 6px; -webkit-app-region: no-drag;
+  }
+  #chat-panel .cp-pop.show { display: block; }
+  #chat-panel .cp-pop-head {
+    padding: 6px 9px 4px; font-size: 11px; color: #9aa1ad; font-weight: 600;
+  }
+  #chat-panel .cp-pop-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    border: none; background: transparent; text-align: left;
+    padding: 8px 9px; border-radius: 9px; font-family: inherit;
+    font-size: 12.5px; color: #1f2430; cursor: pointer;
+  }
+  #chat-panel .cp-pop-item:hover { background: #f5f6f8; }
+  #chat-panel .cp-pop-item .cp-pop-ico { width: 16px; flex: none; display: inline-flex; justify-content: center; }
+  #chat-panel .cp-pop-item .cp-pop-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chat-panel .cp-pop-item .cp-pop-kbd { color: #a8aeba; font-size: 11px; flex: none; }
+  #chat-panel .cp-pop-item .cp-pop-count { color: #a8aeba; font-size: 11px; flex: none; }
+  #chat-panel .cp-pop-sep { height: 1px; background: rgba(15,25,45,0.07); margin: 5px 4px; }
+  #chat-panel .cp-pop-empty { padding: 10px 9px; font-size: 12px; color: #a8aeba; }
+  #chat-panel .cp-pop-search {
+    width: 100%; border: none; outline: none; background: transparent;
+    font-family: inherit; font-size: 12.5px; padding: 7px 9px; color: #1f2430;
+    border-top: 1px solid rgba(15,25,45,0.07);
+  }
+
+  /* 「更多」里的开关行 */
+  #chat-panel .cp-pop-item.toggle .cp-sw {
+    width: 30px; height: 17px; border-radius: 999px; background: #dfe2e7;
+    position: relative; flex: none; transition: background .16s;
+  }
+  #chat-panel .cp-pop-item.toggle .cp-sw::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+    border-radius: 50%; background: #fff; transition: transform .16s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  #chat-panel .cp-pop-item.toggle.on .cp-sw { background: #4a9eff; }
+  #chat-panel .cp-pop-item.toggle.on .cp-sw::after { transform: translateX(13px); }
+
+  /* ── 侧边工作台 ── */
+  #chat-panel .cp-workbench {
+    position: absolute; inset: 0; z-index: 80; background: #fff;
+    display: flex; flex-direction: column;
+    transform: translateX(101%); transition: transform .22s ease;
+    -webkit-app-region: no-drag;
+  }
+  #chat-panel .cp-workbench.show { transform: translateX(0); }
+  #chat-panel .cp-wb-head {
+    display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+    border-bottom: 1px solid rgba(15,25,45,0.06); flex: none;
+  }
+  #chat-panel .cp-wb-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 9px; border-radius: 8px 8px 0 0; font-size: 12px; color: #3a3f4a;
+    background: #f5f6f8;
+  }
+  #chat-panel .cp-wb-body { flex: 1; overflow-y: auto; padding: 18px 14px; }
+  #chat-panel .cp-wb-row {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 13px 15px; margin-bottom: 10px;
+    border: 1px solid rgba(15,25,45,0.10); border-radius: 999px;
+    background: #fff; color: #1f2430; font-family: inherit; font-size: 13px;
+    cursor: pointer; text-align: left; transition: background .12s, border-color .12s;
+  }
+  #chat-panel .cp-wb-row:hover { background: #f7f8fa; border-color: rgba(15,25,45,0.18); }
+  #chat-panel .cp-wb-row svg { width: 17px; height: 17px; color: #5a6070; flex: none; }
+  #chat-panel .cp-wb-row .cp-wb-sub { color: #a8aeba; font-size: 11.5px; margin-left: auto; }
+
+  /* ── 提示气泡 ── */
+  #chat-panel .cp-tip {
+    position: absolute; z-index: 95; pointer-events: none;
+    background: #1c1f26; color: #fff; font-size: 11.5px; line-height: 1.4;
+    padding: 6px 9px; border-radius: 8px; white-space: nowrap;
+    opacity: 0; transform: translateY(3px); transition: opacity .12s, transform .12s;
+  }
+  #chat-panel .cp-tip.show { opacity: 1; transform: translateY(0); }
+  #chat-panel .cp-tip .cp-tip-kbd { color: #a8aeba; margin-left: 6px; }
+
+  /* 旧版蓝色标题栏/输入条已被上面替换，这里保留其样式定义给仍在使用的小元素 */
+
+  /* ── 2026-10-18 新增小件 ── */
+  /* 静音图标：关闭播报时显示斜杠 */
+  #chat-panel .cp-ico .spk-x { display: none; }
+  #chat-panel .cp-ico.off .spk-x { display: block; }
+  /* 简洁模式：收起快捷语与表情面板 */
+  #chat-panel.cp-compact .cp-quick { display: none; }
+  #chat-panel.cp-compact .cp-emoji-panel { display: none !important; }
+  /* 工作台内联搜索框 */
+  #chat-panel .cp-wb-input-wrap { display: none; margin: -4px 0 12px; }
+  #chat-panel .cp-wb-input-wrap.show { display: block; }
+  #chat-panel .cp-wb-input {
+    width: 100%; padding: 10px 14px; border-radius: 999px;
+    border: 1px solid rgba(15,25,45,0.14); outline: none;
+    font-family: inherit; font-size: 12.5px; color: #1f2430; background: #fff;
+  }
+  #chat-panel .cp-wb-input:focus { border-color: rgba(74,158,255,0.55); }
+  /* 轻提示 */
+  #chat-panel .cp-toast {
+    position: absolute; left: 50%; bottom: 110px; transform: translate(-50%, 8px);
+    z-index: 96; max-width: 82%;
+    background: rgba(28,31,38,0.94); color: #fff; font-size: 12px;
+    padding: 8px 12px; border-radius: 10px; line-height: 1.5;
+    opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+  }
+  #chat-panel .cp-toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
 </head>
 <body>
 <div id="chat-panel">
-  <div class="cp-head" id="chat-head">
-    <span class="cp-title">
+  <!-- ══ 顶栏：左（最小化/置顶/收起）· 中（标题 ›）· 右（播报/主窗口/任务列表/工作台）══ -->
+  <div class="cp-topbar" id="chat-head">
+    <div class="cp-tb-group">
+      <button class="cp-ico" id="tb-min" data-tip="最小化" aria-label="最小化">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14"/></svg>
+      </button>
+      <button class="cp-ico on" id="tb-pin" data-tip="取消置顶" aria-label="置顶">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6z"/><path d="M12 15v5"/></svg>
+      </button>
+      <button class="cp-ico" id="tb-side" data-tip="收起侧栏" aria-label="收起侧栏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M10 4.5v15"/></svg>
+      </button>
+    </div>
+
+    <button class="cp-tb-title" id="tb-title" data-tip="切换对话">
       <span class="cp-avatar">🐱</span>
-      <span class="cp-name">
-        <b>Lumina Virtual Pet</b>
-        <span class="cp-status">在线</span>
-      </span>
-    </span>
-    <span class="cp-actions">
-      <button class="cp-btn" id="chat-life" title="朋友圈 / 剧场 / 日报（在主窗口打开）">🌸</button>
-      <button class="cp-btn" id="chat-clear" title="清空聊天">🗑</button>
-      <button class="cp-btn" id="chat-close" title="关闭窗口">✕</button>
-    </span>
+      <span class="cp-name">Lumina Virtual Pet</span>
+      <span class="cp-chev">›</span>
+    </button>
+
+    <div class="cp-tb-group">
+      <button class="cp-ico off" id="tb-speak" data-tip="开启自动播报" aria-label="自动播报">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3l4.5-3.5v12L7 14.5H4z"/><path class="spk-x" d="M16.5 9.5l4 5M20.5 9.5l-4 5"/></svg>
+      </button>
+      <button class="cp-ico" id="tb-main" data-tip="在主窗口中打开" aria-label="在主窗口中打开">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="12" height="12" rx="2.5"/><path d="M12.5 11.5L20 4M20 4h-4.5M20 4v4.5"/></svg>
+      </button>
+      <button class="cp-ico" id="tb-task" data-tip="任务列表" aria-label="任务列表">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="5" cy="7" r="1.6"/><path d="M9.5 7H20"/><circle cx="5" cy="17" r="1.6"/><path d="M9.5 17H20"/></svg>
+      </button>
+      <button class="cp-ico" id="tb-work" data-tip="打开侧边工作台" data-kbd="Ctrl+Shift+B" aria-label="侧边工作台">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="15" rx="4"/><path d="M14 4.5v15"/></svg>
+      </button>
+      <button class="cp-ico" id="chat-clear" data-tip="清空 / 删除对话" aria-label="清空或删除对话">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5.2c0-.7.5-1.2 1.2-1.2h2.6c.7 0 1.2.5 1.2 1.2V7"/><path d="M6.5 7l.9 11.1c.1.9.8 1.4 1.7 1.4h5.8c.9 0 1.6-.5 1.7-1.4L17.5 7"/></svg>
+      </button>
+      <button class="cp-ico" id="chat-close" data-tip="关闭窗口" aria-label="关闭窗口">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
   </div>
 
   <div id="chat-log"></div>
@@ -427,15 +721,149 @@
     <span class="cp-emoji-item">🌙</span><span class="cp-emoji-item">☀️</span><span class="cp-emoji-item">💤</span>
     <span class="cp-emoji-item">👍</span><span class="cp-emoji-item">🎉</span><span class="cp-emoji-item">🤔</span>
   </div>
-  <div class="cp-input-row">
-    <button class="cp-input-btn" id="pet-chat-emoji" title="表情">😊</button>
-    <input id="pet-chat-input" type="text" placeholder="和 Lumina 说点什么…" autocomplete="off" />
-    <button class="cp-input-btn" id="pet-chat-send" title="发送">➤</button>
+  <!-- ══ 输入卡片：上输入 / 下操作条（+ ｜ 对话 更多 ｜ 🎤）══ -->
+  <div class="cp-composer" id="composer">
+    <div class="cp-attach-bar" id="attach-bar"></div>
+    <textarea id="pet-chat-input" rows="1" placeholder="发消息或按住空格说话…" autocomplete="off" spellcheck="false"></textarea>
+    <div class="cp-composer-foot">
+      <button class="cp-plus" id="btn-plus" data-tip="添加" aria-label="添加">+</button>
+      <div class="cp-foot-mid">
+        <button class="cp-pill" id="btn-conv">对话 <span class="cp-chev">›</span></button>
+        <button class="cp-pill" id="btn-more">更多 <span class="cp-chev">›</span></button>
+      </div>
+      <button class="cp-mic" id="btn-mic" data-tip="语音输入" aria-label="语音输入">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3"/></svg>
+      </button>
+    </div>
   </div>
   <!-- 🔧 2026-10-05：底部拖动手柄。
        标题栏也能拖，但那条只有 48px 高、容易拖不准；手柄让用户不用瞄准就能
        把窗口拖到屏幕任意位置，悬停变亮作为可拖提示。 -->
   <div class="cp-drag-handle" title="按住拖动窗口"></div>
+
+  <!-- ══ 「+」添加菜单（不含云盘 / 共享屏幕）══ -->
+  <div class="cp-pop" id="pop-plus" style="left:10px; bottom:104px; width:248px">
+    <div class="cp-pop-head">添加</div>
+    <button class="cp-pop-item" data-act="upload">
+      <span class="cp-pop-ico">⬆</span>
+      <span class="cp-pop-label">上传文件或图片</span>
+      <span class="cp-pop-kbd">Ctrl+1</span>
+    </button>
+    <button class="cp-pop-item" data-act="shot">
+      <span class="cp-pop-ico">✂</span>
+      <span class="cp-pop-label">截图提问</span>
+      <span class="cp-pop-kbd">Ctrl+4</span>
+    </button>
+    <input class="cp-pop-search" id="plus-search" placeholder="搜索…" />
+  </div>
+
+  <!-- ══ 「更多」面板（Lumina 功能）══ -->
+  <div class="cp-pop" id="pop-more" style="left:64px; bottom:104px; width:246px">
+    <div class="cp-pop-head">更多</div>
+    <button class="cp-pop-item" data-act="enhance">
+      <span class="cp-pop-ico">✨</span><span class="cp-pop-label">增强提示词</span>
+    </button>
+    <button class="cp-pop-item" data-act="lucky">
+      <span class="cp-pop-ico">🍀</span><span class="cp-pop-label">Lucky Agent</span>
+      <span class="cp-pop-kbd" id="lucky-state">关闭 ▾</span>
+    </button>
+    <button class="cp-pop-item toggle" data-act="thinking">
+      <span class="cp-pop-ico">🧠</span><span class="cp-pop-label">思考</span>
+      <span class="cp-sw"></span>
+    </button>
+    <button class="cp-pop-item" data-act="emoji">
+      <span class="cp-pop-ico">😊</span><span class="cp-pop-label">表情</span>
+    </button>
+    <button class="cp-pop-item" data-act="file">
+      <span class="cp-pop-ico">📎</span><span class="cp-pop-label">文件</span>
+    </button>
+    <div class="cp-pop-sep"></div>
+    <button class="cp-pop-item toggle" data-act="voice">
+      <span class="cp-pop-ico">🎙</span><span class="cp-pop-label">实时语音对话</span>
+      <span class="cp-sw"></span>
+    </button>
+    <button class="cp-pop-item toggle" data-act="cu">
+      <span class="cp-pop-ico">💻</span><span class="cp-pop-label">AI 操作电脑</span>
+      <span class="cp-sw"></span>
+    </button>
+    <button class="cp-pop-item" data-act="capsule">
+      <span class="cp-pop-ico">⏳</span><span class="cp-pop-label">胶囊</span>
+    </button>
+  </div>
+
+  <!-- ══ 任务列表下拉（对话产物 / 技能 / 最近文件）══ -->
+  <div class="cp-pop" id="pop-task" style="right:10px; top:46px; width:250px">
+    <button class="cp-pop-item" data-sec="artifacts">
+      <span class="cp-pop-ico">📄</span>
+      <span class="cp-pop-label">对话产物</span>
+      <span class="cp-pop-count" id="cnt-artifacts">0</span>
+      <span class="cp-pop-kbd">›</span>
+    </button>
+    <div class="cp-pop-sep"></div>
+    <button class="cp-pop-item" data-sec="skills">
+      <span class="cp-pop-ico">🧩</span>
+      <span class="cp-pop-label">技能</span>
+      <span class="cp-pop-count" id="cnt-skills">0</span>
+      <span class="cp-pop-kbd">›</span>
+    </button>
+    <div class="cp-pop-sep"></div>
+    <button class="cp-pop-item" data-sec="recent">
+      <span class="cp-pop-ico">🕘</span>
+      <span class="cp-pop-label">最近文件</span>
+      <span class="cp-pop-count" id="cnt-recent">0</span>
+      <span class="cp-pop-kbd">›</span>
+    </button>
+  </div>
+
+  <!-- ══ 任务列表：某一节的明细（点进 › 之后）══ -->
+  <div class="cp-pop" id="pop-task-detail" style="right:10px; top:46px; width:250px">
+    <div class="cp-pop-head" id="task-detail-title">对话产物</div>
+    <div id="task-detail-list"></div>
+  </div>
+
+  <!-- ══ 侧边工作台（Ctrl+Shift+B）══ -->
+  <div class="cp-workbench" id="workbench">
+    <div class="cp-wb-head">
+      <button class="cp-ico" id="wb-close" data-tip="关闭工作台" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <span class="cp-wb-tab">🪟 工作台</span>
+    </div>
+    <div class="cp-wb-body">
+      <button class="cp-wb-row" data-wb="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+        <span>搜索或输入网址</span>
+      </button>
+      <div class="cp-wb-input-wrap" id="wb-search-wrap">
+        <input class="cp-wb-input" id="wb-search-input" placeholder="输入关键词或网址，回车打开" autocomplete="off" />
+      </div>
+      <button class="cp-wb-row" data-wb="folder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3.5 7.5c0-1 .8-1.8 1.8-1.8h3.4l1.8 2h8.2c1 0 1.8.8 1.8 1.8v8.2c0 1-.8 1.8-1.8 1.8H5.3c-1 0-1.8-.8-1.8-1.8z"/></svg>
+        <span>打开项目文件夹</span>
+      </button>
+      <button class="cp-wb-row" data-wb="recent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 1.8"/></svg>
+        <span>最近文件</span>
+      </button>
+      <button class="cp-wb-row" data-wb="newfile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span>新建文件</span>
+      </button>
+      <button class="cp-wb-row" data-wb="capsule">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h10v5.5l-5 5-5-5z"/><path d="M12 14v6.5"/></svg>
+        <span>埋一颗时光胶囊</span>
+      </button>
+      <button class="cp-wb-row" id="chat-life" data-wb="life">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8.5v.01M12 11.5v4"/></svg>
+        <span>朋友圈 / 剧场 / 日报</span>
+        <span class="cp-wb-sub">主窗口</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ 悬停提示 / 轻提示 ══ -->
+  <div class="cp-tip" id="cp-tip"></div>
+  <div class="cp-toast" id="cp-toast"></div>
 
   <!-- 🗑 删除菜单（点右上角垃圾桶弹出） -->
   <div class="cp-del-menu" id="cp-del-menu">
@@ -490,6 +918,11 @@ const HAS_IPC = !!ipc;
 const chatLog = document.getElementById('chat-log');
 const chatInput = document.getElementById('pet-chat-input');
 const typingEl = document.getElementById('chat-typing');
+const micBtn = document.getElementById('btn-mic');
+/** 待发送的附件（文件路径 / 截图 dataURL），随下一条消息一起发出 */
+let _attachments = [];
+/** 思考开关（「更多 → 思考」），随消息带给主窗口决定 trackReasoning */
+let _thinking = true;
 
 /* 助手回复里的链接走受控外链打开（petPreload 的 openExternal 只放行 http(s)/mailto）。
    不在 <a> 上直接挂 onclick —— 渲染出来的是 innerHTML，用事件委托更稳，
@@ -751,16 +1184,23 @@ function deriveIntent(text) {
 
 function sendText(text) {
   const t = (text || '').trim();
-  if (!t) return;
-  addChatMsg('user', t);
+  if (!t && !_attachments.length) return;
+  // 📎 附件单独走 attachments 字段，**不拼进 text**：
+  //   主窗口 agentRunner.sendMessage 的去重条件是「history 末条 user 与本次 text
+  //   逐字相同」，拼前缀会让去重失效 → 用户的话被模型看到两遍。
+  const files = _attachments.map(function (a) { return { name: a.name, path: a.path }; });
+  addChatMsg('user', t || '（已发送附件）');
   if (chatInput) chatInput.value = '';
+  _attachments = [];
+  renderAttachments();
+  syncMicMode();
   traceClear();          // 新一轮 → 上一轮的推理面板收走（已折叠的那块保留在历史里）
   beginWait();
   if (HAS_IPC) {
     // 完整回复统一走 pet:sync 主 Agent 路径（串行排队 + 退避重试在主窗 PetChatSync 编排）。
     // 不再并发打 pet:chat 意图 LLM——避免与完整回复抢同一个本地模型导致冷启动失败。
     // 动作/表情等主 Agent 回复回来后，由回复文本本地派生（见 pet:sync-reply 处理）。
-    try { ipc.send('pet:sync-send', { text: t }); } catch (e) {}
+    try { ipc.send('pet:sync-send', { text: t || '（见附件）', attachments: files, thinking: _thinking }); } catch (e) {}
   } else {
     endWait();
     addChatMsg('pet', '喵~');
@@ -770,7 +1210,17 @@ function submitChat() { sendText(chatInput && chatInput.value); }
 
 // 发送
 chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitChat(); } });
-document.getElementById('pet-chat-send').addEventListener('click', submitChat);
+// 🔧 2026-10-18：新版输入条没有独立的发送按钮（参考稿就是回车发送）。
+//   🎤 按钮在输入框有内容时变成「发送」箭头，兼顾可发现性。
+function syncMicMode() {
+  const has = !!(chatInput.value || '').trim() || _attachments.length > 0;
+  micBtn.classList.toggle('has-text', has);
+  micBtn.setAttribute('data-tip', has ? '发送（Enter）' : '语音输入');
+  micBtn.innerHTML = has
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3"/></svg>';
+}
+chatInput.addEventListener('input', syncMicMode);
 // 清空 / 关闭
 /* ════════════════════════════════════════════════════════════
    🗑 删除对话（2026-10-18 重做）
@@ -949,15 +1399,24 @@ document.getElementById('chat-life').addEventListener('click', () => {
   if (HAS_IPC) { try { ipc.invoke('pet:open-life', 'moments'); } catch (e) {} }
 });
 
-// 表情面板
-const emojiBtn = document.getElementById('pet-chat-emoji');
+// 表情面板（入口从「更多 → 表情」进来，2026-10-18 改版后输入条不再单独放表情键）
 const emojiPanel = document.getElementById('chat-emoji-panel');
-emojiBtn.addEventListener('click', (e) => { e.stopPropagation(); emojiPanel.classList.toggle('show'); });
+function toggleEmojiPanel(force) {
+  const show = typeof force === 'boolean' ? force : !emojiPanel.classList.contains('show');
+  emojiPanel.classList.toggle('show', show);
+}
 emojiPanel.querySelectorAll('.cp-emoji-item').forEach(item => {
-  item.addEventListener('click', () => { chatInput.value += item.textContent; chatInput.focus(); });
+  item.addEventListener('click', () => {
+    chatInput.value += item.textContent;
+    chatInput.focus();
+    syncMicMode();
+  });
 });
 document.addEventListener('click', (e) => {
-  if (!emojiPanel.contains(e.target) && e.target !== emojiBtn) emojiPanel.classList.remove('show');
+  if (!emojiPanel.classList.contains('show')) return;
+  if (emojiPanel.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('[data-act="emoji"]')) return;
+  emojiPanel.classList.remove('show');
 });
 // 快捷回复
 document.querySelectorAll('.cp-quick-btn').forEach(btn => {
@@ -985,6 +1444,9 @@ if (HAS_IPC) {
     } else {
       traceFinish(true);
       endWait();
+      // 自动播报：仅对「主 Agent 的回复」生效，用户气泡不念。
+      // speakReply 内部自己判 _autoSpeak，关闭时零开销。
+      speakReply(data && data.text);
     }
     if (data && data.text) {
       addChatMsg(data.role === 'user' ? 'user' : 'pet', data.text);
@@ -1048,6 +1510,518 @@ if (HAS_IPC) {
 if (!HAS_IPC) {
   addChatMsg('pet', '你好呀！我是 Lumina，你的 AI 桌宠喵~');
 }
+
+/* ════════════════════════════════════════════════════════════
+   2026-10-18 · 新版顶栏 / 输入条 / 侧边工作台 / 附件
+   ────────────────────────────────────────────────────────────
+   参考稿的形态：极简白、细线图标、悬停出黑色小提示（带快捷键）、
+   输入区是一个大圆角卡片（上输入 / 下操作条：+ ｜ 对话 更多 ｜ 🎤）。
+   这里把每个按钮都接到**真实能力**上，不做占位：
+     · 最小化 / 置顶 / 自动播报 / 在主窗口中打开 → 主进程或主窗口
+     · 任务列表 → 主窗口 taskWorkspaceStore 的真实数据
+     · 侧边工作台 → 文件夹选择、新建文件、搜索、时光胶囊
+     · 更多 → 增强提示词（真调模型）、Lucky、思考、表情、文件、语音、CU、胶囊
+     · + → 上传文件 / 截图提问（按用户要求去掉云盘与共享屏幕）
+   ════════════════════════════════════════════════════════════ */
+const $id = function (id) { return document.getElementById(id); };
+
+/* ── 悬停提示 ── */
+const tipEl = $id('cp-tip');
+let _tipTimer = null;
+function showTipFor(el) {
+  const txt = el.getAttribute('data-tip') || '';
+  if (!txt) { return; }
+  const kbd = el.getAttribute('data-kbd') || '';
+  tipEl.textContent = txt;
+  if (kbd) {
+    const k = document.createElement('span');
+    k.className = 'cp-tip-kbd';
+    k.textContent = kbd;
+    tipEl.appendChild(k);
+  }
+  tipEl.classList.add('show');
+  const r = el.getBoundingClientRect();
+  const tr = tipEl.getBoundingClientRect();
+  let left = r.left + r.width / 2 - tr.width / 2;
+  left = Math.max(6, Math.min(left, window.innerWidth - tr.width - 6));
+  let top = r.bottom + 7;
+  if (top + tr.height > window.innerHeight - 6) { top = r.top - tr.height - 7; }
+  tipEl.style.left = left + 'px';
+  tipEl.style.top = top + 'px';
+}
+function hideTip() { tipEl.classList.remove('show'); }
+document.querySelectorAll('[data-tip]').forEach(function (el) {
+  el.addEventListener('mouseenter', function () {
+    clearTimeout(_tipTimer);
+    _tipTimer = setTimeout(function () { showTipFor(el); }, 300);
+  });
+  el.addEventListener('mouseleave', hideTip);
+  el.addEventListener('click', hideTip);
+});
+
+/* ── 轻提示（动作反馈） ── */
+const toastEl = $id('cp-toast');
+let _toastTimer = null;
+function toast(msg) {
+  if (!msg) { return; }
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+}
+
+/* ── 附件条 ── */
+const attachBar = $id('attach-bar');
+function renderAttachments() {
+  attachBar.innerHTML = '';
+  _attachments.forEach(function (a, i) {
+    const chip = document.createElement('span');
+    chip.className = 'cp-chip';
+    if (a.dataUrl) {
+      const img = document.createElement('img');
+      img.src = a.dataUrl;
+      chip.appendChild(img);
+    }
+    const nm = document.createElement('span');
+    nm.className = 'cp-chip-name';
+    nm.textContent = a.name || '附件';
+    chip.appendChild(nm);
+    const x = document.createElement('button');
+    x.className = 'cp-chip-x';
+    x.textContent = '✕';
+    x.title = '移除';
+    x.onclick = function (e) {
+      e.stopPropagation();
+      _attachments.splice(i, 1);
+      renderAttachments();
+      syncMicMode();
+    };
+    chip.appendChild(x);
+    attachBar.appendChild(chip);
+  });
+  attachBar.classList.toggle('show', _attachments.length > 0);
+}
+function addAttachments(list) {
+  (list || []).forEach(function (f) {
+    if (!f || !f.path) { return; }
+    if (_attachments.some(function (a) { return a.path === f.path; })) { return; }
+    _attachments.push({ name: f.name || '附件', path: f.path, dataUrl: f.dataUrl || '' });
+  });
+  renderAttachments();
+  syncMicMode();
+}
+
+/* ── 顶栏状态 ── */
+let _pinned = true;
+let _autoSpeak = false;
+let _compact = false;
+let _luckyPreset = 'off';
+let _voiceOn = false;
+let _cuOn = false;
+
+const pinBtn = $id('tb-pin');
+const speakBtn = $id('tb-speak');
+const sideBtn = $id('tb-side');
+
+function applyPin(on) {
+  _pinned = !!on;
+  pinBtn.classList.toggle('on', _pinned);
+  pinBtn.classList.toggle('off', !_pinned);
+  pinBtn.setAttribute('data-tip', _pinned ? '取消置顶' : '置顶窗口');
+}
+function applySpeak(on) {
+  _autoSpeak = !!on;
+  speakBtn.classList.toggle('on', _autoSpeak);
+  speakBtn.classList.toggle('off', !_autoSpeak);
+  speakBtn.setAttribute('data-tip', _autoSpeak ? '关闭自动播报' : '开启自动播报');
+}
+function applyCompact(on) {
+  _compact = !!on;
+  $id('chat-panel').classList.toggle('cp-compact', _compact);
+  sideBtn.classList.toggle('on', _compact);
+  sideBtn.setAttribute('data-tip', _compact ? '展开快捷语' : '收起快捷语');
+}
+
+if (HAS_IPC) {
+  try {
+    ipc.invoke('pet:ui:prefs').then(function (p) {
+      if (!p) { return; }
+      applyPin(p.pinned !== false);
+      applySpeak(p.autoSpeak === true);
+    }).catch(function () {});
+  } catch (e) {}
+}
+
+pinBtn.addEventListener('click', function () {
+  applyPin(!_pinned);
+  if (HAS_IPC) { try { ipc.invoke('pet:ui:set-pinned', _pinned); } catch (e) {} }
+});
+sideBtn.addEventListener('click', function () { applyCompact(!_compact); });
+speakBtn.addEventListener('click', function () {
+  applySpeak(!_autoSpeak);
+  if (HAS_IPC) { try { ipc.invoke('pet:ui:set-auto-speak', _autoSpeak); } catch (e) {} }
+  toast(_autoSpeak ? '🔊 已开启自动播报' : '🔇 已关闭自动播报');
+});
+$id('tb-min').addEventListener('click', function () {
+  if (HAS_IPC) { try { ipc.send('pet:chat-window-minimize'); } catch (e) {} }
+});
+$id('tb-main').addEventListener('click', function () {
+  if (HAS_IPC) { try { ipc.send('pet:ui:open-main'); } catch (e) {} }
+  toast('已在主窗口打开这条对话');
+});
+
+/* ── 自动播报：回复到达时读出来 ── */
+function speakReply(text) {
+  if (!_autoSpeak || !HAS_IPC || !text) { return; }
+  // 代码块/表格读出来是灾难，先洗一遍再念，并截断到合理长度
+  const clean = String(text)
+    .replace(/```[\s\S]*?```/g, '（代码块）')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_~#>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+  if (!clean) { return; }
+  try { ipc.invoke('edge-tts:speak', { text: clean }).catch(function () {}); } catch (e) {}
+}
+
+/* ── 弹出层管理 ── */
+const popPlus = $id('pop-plus');
+const popMore = $id('pop-more');
+const popTask = $id('pop-task');
+const popTaskDetail = $id('pop-task-detail');
+const workbench = $id('workbench');
+
+function closeAllPops(except) {
+  [popPlus, popMore, popTask, popTaskDetail].forEach(function (p) {
+    if (p && p !== except) { p.classList.remove('show'); }
+  });
+  $id('btn-plus').classList.remove('open');
+  $id('btn-more').classList.remove('on');
+  $id('tb-task').classList.remove('on');
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest) { return; }
+  if (e.target.closest('.cp-pop') || e.target.closest('#composer') || e.target.closest('.cp-topbar')) { return; }
+  closeAllPops(null);
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { closeAllPops(null); emojiPanel.classList.remove('show'); }
+});
+
+/* ── 「+」菜单 ── */
+$id('btn-plus').addEventListener('click', function (e) {
+  e.stopPropagation();
+  const open = !popPlus.classList.contains('show');
+  closeAllPops(popPlus);
+  popPlus.classList.toggle('show', open);
+  this.classList.toggle('open', open);
+  if (open) { $id('plus-search').focus(); }
+});
+$id('plus-search').addEventListener('input', function () {
+  const q = this.value.trim().toLowerCase();
+  popPlus.querySelectorAll('.cp-pop-item').forEach(function (it) {
+    const label = (it.querySelector('.cp-pop-label') || {}).textContent || '';
+    it.style.display = (!q || label.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+  });
+});
+popPlus.addEventListener('click', function (e) {
+  const btn = e.target.closest ? e.target.closest('.cp-pop-item') : null;
+  if (!btn) { return; }
+  const act = btn.getAttribute('data-act');
+  closeAllPops(null);
+  if (act === 'upload') { void pickFiles(); }
+  else if (act === 'shot') { void takeScreenshot(); }
+});
+
+async function pickFiles() {
+  if (!HAS_IPC) { toast('需要桌面端才能选文件'); return; }
+  try {
+    const r = await ipc.invoke('pet:ui:pick-files');
+    if (r && r.ok && r.files && r.files.length) {
+      addAttachments(r.files);
+      toast('已添加 ' + r.files.length + ' 个文件');
+    }
+  } catch (e) { toast('选择文件失败'); }
+}
+async function takeScreenshot() {
+  if (!HAS_IPC) { toast('需要桌面端才能截图'); return; }
+  try {
+    const shot = await ipc.invoke('pet:ui:screenshot');
+    if (!shot || !shot.ok || !shot.dataUrl) { toast(shot && shot.error ? shot.error : '截图失败'); return; }
+    const saved = await ipc.invoke('pet:ui:save-shot', shot.dataUrl);
+    if (!saved || !saved.ok) { toast(saved && saved.error ? saved.error : '截图保存失败'); return; }
+    addAttachments([{ name: '屏幕截图.png', path: saved.path, dataUrl: shot.dataUrl }]);
+    toast('已截屏，可继续输入问题');
+  } catch (e) { toast('截图失败'); }
+}
+
+/* ── 「更多」面板 ── */
+$id('btn-more').addEventListener('click', function (e) {
+  e.stopPropagation();
+  const open = !popMore.classList.contains('show');
+  closeAllPops(popMore);
+  popMore.classList.toggle('show', open);
+  this.classList.toggle('on', open);
+  if (open && HAS_IPC) { try { ipc.send('pet:ui:action', { kind: 'lucky-get' }); } catch (e2) {} }
+});
+popMore.addEventListener('click', function (e) {
+  const btn = e.target.closest ? e.target.closest('.cp-pop-item') : null;
+  if (!btn) { return; }
+  const act = btn.getAttribute('data-act');
+  if (act === 'emoji') { closeAllPops(null); toggleEmojiPanel(true); return; }
+  if (act === 'file') { closeAllPops(null); void pickFiles(); return; }
+  if (act === 'enhance') { closeAllPops(null); void enhancePrompt(); return; }
+  if (act === 'capsule') { closeAllPops(null); insertCapsule(); return; }
+  if (act === 'lucky') {
+    const order = ['off', 'default', 'goal', 'mission'];
+    const next = order[(order.indexOf(_luckyPreset) + 1) % order.length];
+    if (HAS_IPC) { try { ipc.send('pet:ui:action', { kind: 'lucky-preset', preset: next }); } catch (e2) {} }
+    applyLucky(next);
+    return;
+  }
+  if (act === 'thinking') {
+    _thinking = !_thinking;
+    btn.classList.toggle('on', _thinking);
+    toast(_thinking ? '🧠 思考过程已开启' : '🧠 思考过程已关闭');
+    return;
+  }
+  if (act === 'voice' || act === 'cu') {
+    const on = act === 'voice' ? !_voiceOn : !_cuOn;
+    if (HAS_IPC) { try { ipc.send('pet:ui:action', { kind: act, on: on }); } catch (e2) {} }
+    if (act === 'voice') { _voiceOn = on; } else { _cuOn = on; }
+    btn.classList.toggle('on', on);
+    toast(on ? (act === 'voice' ? '🎙 实时语音对话已启动' : '💻 AI 操作电脑已就绪')
+             : (act === 'voice' ? '🎙 已停止实时语音对话' : '💻 已停止 AI 操作电脑'));
+  }
+});
+
+function applyLucky(preset) {
+  _luckyPreset = preset || 'off';
+  const label = { off: '关闭', default: '标准', goal: '目标', mission: '任务' }[_luckyPreset] || '关闭';
+  const el = $id('lucky-state');
+  if (el) { el.textContent = label + ' ▾'; }
+  const row = popMore.querySelector('[data-act="lucky"]');
+  if (row) { row.classList.toggle('on', _luckyPreset !== 'off'); }
+}
+
+function insertCapsule() {
+  const draft = (chatInput.value || '').trim();
+  const text = draft
+    ? '帮我埋一颗时光胶囊，内容是：' + draft + '，30天后开启'
+    : '帮我埋一颗时光胶囊';
+  chatInput.value = text;
+  chatInput.focus();
+  syncMicMode();
+  toast(draft ? '已生成胶囊指令，回车发送' : '先写点想对未来的自己说的话');
+}
+
+async function enhancePrompt() {
+  const draft = (chatInput.value || '').trim();
+  if (!draft) { toast('先在输入框写点内容，再点增强提示词'); return; }
+  toast('✨ 正在增强…');
+  if (!HAS_IPC) { return; }
+  try { ipc.send('pet:ui:action', { kind: 'enhance', text: draft }); } catch (e) { toast('增强失败'); }
+}
+
+/* ── 任务列表 ── */
+let _taskData = { artifacts: [], skills: [], recentFiles: [] };
+$id('tb-task').addEventListener('click', function (e) {
+  e.stopPropagation();
+  const open = !popTask.classList.contains('show');
+  closeAllPops(popTask);
+  popTask.classList.toggle('show', open);
+  this.classList.toggle('on', open);
+  if (open && HAS_IPC) { try { ipc.send('pet:ui:tasklist-request'); } catch (e2) {} }
+});
+function renderTaskCounts() {
+  $id('cnt-artifacts').textContent = (_taskData.artifacts || []).length;
+  $id('cnt-skills').textContent = (_taskData.skills || []).length;
+  $id('cnt-recent').textContent = (_taskData.recentFiles || []).length;
+}
+popTask.addEventListener('click', function (e) {
+  const btn = e.target.closest ? e.target.closest('.cp-pop-item') : null;
+  if (!btn) { return; }
+  const sec = btn.getAttribute('data-sec');
+  closeAllPops(null);
+  openTaskDetail(sec);
+});
+function openTaskDetail(sec) {
+  const titles = { artifacts: '对话产物', skills: '技能', recent: '最近文件' };
+  const list = sec === 'skills'
+    ? (_taskData.skills || [])
+    : (sec === 'recent' ? (_taskData.recentFiles || []) : (_taskData.artifacts || []));
+  $id('task-detail-title').textContent = titles[sec] || '任务';
+  const box = $id('task-detail-list');
+  box.innerHTML = '';
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'cp-pop-empty';
+    empty.textContent = '暂无内容';
+    box.appendChild(empty);
+  } else {
+    list.forEach(function (item) {
+      const btn = document.createElement('button');
+      btn.className = 'cp-pop-item';
+      const ico = document.createElement('span');
+      ico.className = 'cp-pop-ico';
+      ico.textContent = sec === 'skills' ? '🧩' : '📄';
+      const label = document.createElement('span');
+      label.className = 'cp-pop-label';
+      label.textContent = typeof item === 'string' ? item : (item.filename || '未命名');
+      btn.appendChild(ico);
+      btn.appendChild(label);
+      if (typeof item !== 'string' && item.id) {
+        btn.onclick = function () {
+          if (HAS_IPC) { try { ipc.send('pet:ui:action', { kind: 'open-artifact', id: item.id }); } catch (e) {} }
+          closeAllPops(null);
+          toast('已打开：' + label.textContent);
+        };
+      }
+      box.appendChild(btn);
+    });
+  }
+  popTaskDetail.classList.add('show');
+}
+
+/* ── 侧边工作台 ── */
+function toggleWorkbench(force) {
+  const show = typeof force === 'boolean' ? force : !workbench.classList.contains('show');
+  workbench.classList.toggle('show', show);
+  $id('tb-work').classList.toggle('on', show);
+  if (show) { closeAllPops(null); }
+}
+$id('tb-work').addEventListener('click', function (e) { e.stopPropagation(); toggleWorkbench(); });
+$id('wb-close').addEventListener('click', function () { toggleWorkbench(false); });
+document.addEventListener('keydown', function (e) {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'B' || e.key === 'b')) {
+    e.preventDefault();
+    toggleWorkbench();
+  }
+});
+
+workbench.addEventListener('click', function (e) {
+  const row = e.target.closest ? e.target.closest('[data-wb]') : null;
+  if (!row) { return; }
+  const act = row.getAttribute('data-wb');
+  if (act === 'search') {
+    const wrap = $id('wb-search-wrap');
+    const on = !wrap.classList.contains('show');
+    wrap.classList.toggle('show', on);
+    if (on) { $id('wb-search-input').focus(); }
+    return;
+  }
+  if (act === 'folder') { void openFolder(); return; }
+  if (act === 'recent') { toggleWorkbench(false); openTaskDetail('recent'); return; }
+  if (act === 'newfile') { void newFile(); return; }
+  if (act === 'capsule') { toggleWorkbench(false); insertCapsule(); return; }
+  if (act === 'life') { /* 老按钮自带监听，这里不重复处理 */ return; }
+});
+
+$id('wb-search-input').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') { return; }
+  const q = (this.value || '').trim();
+  if (!q) { return; }
+  // 看着像网址就直接开，否则交给搜索引擎
+  const isUrl = /^https?:\/\//i.test(q) || /^[\w-]+(\.[\w-]+)+(\/|$)/.test(q);
+  const url = isUrl ? (/^https?:\/\//i.test(q) ? q : 'https://' + q) : ('https://www.bing.com/search?q=' + encodeURIComponent(q));
+  if (HAS_IPC) { try { ipc.invoke('pet:open-external', url); } catch (err) {} }
+  this.value = '';
+  toggleWorkbench(false);
+});
+
+async function openFolder() {
+  if (!HAS_IPC) { toast('需要桌面端'); return; }
+  try {
+    const r = await ipc.invoke('pet:ui:pick-folder');
+    if (r && r.ok) { toast('已打开：' + (r.name || r.path)); }
+  } catch (e) { toast('打开文件夹失败'); }
+}
+async function newFile() {
+  if (!HAS_IPC) { toast('需要桌面端'); return; }
+  try {
+    const r = await ipc.invoke('pet:ui:new-file');
+    if (r && r.ok && r.path) {
+      addAttachments([{ name: r.name, path: r.path }]);
+      toggleWorkbench(false);
+      toast('已新建：' + r.name + '（已挂为附件）');
+    }
+  } catch (e) { toast('新建文件失败'); }
+}
+
+/* ── 动作结果回执 ── */
+if (HAS_IPC) {
+  ipc.on('pet:ui:tasklist', function (_e, data) {
+    _taskData = data || { artifacts: [], skills: [], recentFiles: [] };
+    renderTaskCounts();
+    if (popTaskDetail.classList.contains('show')) {
+      // 明细开着时同步刷新，避免"点了半天没数据"
+      const title = $id('task-detail-title').textContent;
+      const sec = title === '技能' ? 'skills' : (title === '最近文件' ? 'recent' : 'artifacts');
+      openTaskDetail(sec);
+    }
+  });
+  ipc.on('pet:ui:action-result', function (_e, data) {
+    if (!data) { return; }
+    if (data.kind === 'lucky-get') {
+      applyLucky(String(data.message || 'off'));
+      return;
+    }
+    if (data.kind === 'enhance') {
+      if (data.ok && data.message) {
+        chatInput.value = data.message;
+        chatInput.focus();
+        syncMicMode();
+        toast('✨ 已增强，可继续编辑后发送');
+      } else {
+        toast('增强失败：' + (data.message || '未知错误'));
+      }
+      return;
+    }
+    if (data.ok === false && data.message) { toast(data.message); }
+  });
+}
+
+/* ── 输入区按钮 ── */
+$id('btn-conv').addEventListener('click', function (e) {
+  e.stopPropagation();
+  // 复用「选择对话」面板作为对话切换入口（同一个清单，只是不勾选删除）
+  openPicker();
+});
+// 顶栏标题「🐱 Lumina Virtual Pet ›」= 切换对话（与下方「对话 ›」同一入口）
+$id('tb-title').addEventListener('click', function (e) {
+  e.stopPropagation();
+  closeAllPops(null);
+  openPicker();
+});
+micBtn.addEventListener('click', function () {
+  if ((chatInput.value || '').trim() || _attachments.length) { submitChat(); return; }
+  const row = popMore.querySelector('[data-act="voice"]');
+  const on = !_voiceOn;
+  _voiceOn = on;
+  if (row) { row.classList.toggle('on', on); }
+  if (HAS_IPC) { try { ipc.send('pet:ui:action', { kind: 'voice', on: on }); } catch (e) {} }
+  toast(on ? '🎙 实时语音对话已启动' : '🎙 已停止实时语音对话');
+});
+
+// 初始同步一次（textarea 可能是自动填充）
+syncMicMode();
+
+/* ── 初始状态同步 ──
+   开关行的 .on 是「画出来的状态」，_thinking / _voiceOn / _cuOn 才是真实状态。
+   不在这里对齐一次，就会出现「开关看着是关的、其实思考是开的」这种鬼故事。
+   （置顶 / 自动播报的真实值由上方 pet:ui:prefs 异步取回后覆盖，这里只管开关行。） */
+(function syncToggles() {
+  const set = function (act, on) {
+    const row = popMore.querySelector('[data-act="' + act + '"]');
+    if (row) { row.classList.toggle('on', !!on); }
+  };
+  set('thinking', _thinking);
+  set('voice', _voiceOn);
+  set('cu', _cuOn);
+  set('lucky', _luckyPreset !== 'off');
+})();
 </script>
 </body>
 </html>

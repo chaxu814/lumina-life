@@ -262,7 +262,10 @@ describe('scene 屏幕上下文传递', () => {
   })
 
   it('PetChatSync 把 scene 交给编排器', () => {
-    expect(petSync).toMatch(/orchestrator\.handlePetMessage\(data\.text, data\.scene\)/)
+    // 2026-10-18：附件不再单独透传，而是先合并进 scene.files 再交给编排器
+    //   （`const scene = files.length ? { ...(data.scene||{}), files } : ...`）
+    expect(petSync).toMatch(/orchestrator\.handlePetMessage\(data\.text, scene\)/)
+    expect(petSync).toMatch(/files\.length[\s\S]{0,120}files\s*\}\s*:\s*\(data\.scene \|\| null\)/)
   })
 
   it('编排器把 scene 透传给每一轮 agentChat（含续轮）', () => {
@@ -286,7 +289,10 @@ function loadBuildScenePrompt(): (scene?: { scene?: string; title?: string; proc
   expect(end).toBeGreaterThan(start)
   const raw = norm.slice(start, end + 3)
   // 去掉 TS 类型标注（new Function 只吃 JS）
-  const src = raw.replace(/function buildScenePrompt\([^)]*\)[^{]*\{/, 'function buildScenePrompt(scene) {')
+  const src = raw
+    .replace(/function buildScenePrompt\([^)]*\)[^{]*\{/, 'function buildScenePrompt(scene) {')
+    // 局部变量上的类型标注，例如 `const lines: string[] = [`
+    .replace(/const (\w+): [^=]+? = /g, 'const $1 = ')
   // eslint-disable-next-line no-new-func
   return new Function(`${src}\nreturn buildScenePrompt`)() as any
 }

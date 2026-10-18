@@ -10,7 +10,7 @@
 //   - 统一事件通道: pet:event / pet:command
 // ============================================================
 
-import { BrowserWindow, app, screen, ipcMain, desktopCapturer, globalShortcut } from 'electron'
+import { BrowserWindow, app, screen, ipcMain, desktopCapturer, globalShortcut, dialog, shell } from 'electron'
 import { pushThemeToWindow } from '../ipc/themeIpc'
 import { registerLifeServicesIpc, decideScreenCapture, rememberScreenEpisode, loadLibrary } from './lifeServices'
 import { describeScreenViaVlm } from './vision/screenVision'
@@ -81,6 +81,10 @@ export interface PetConfig {
   y?: number
   chatX?: number          // 独立聊天窗口记住的左上角屏幕坐标（DIP）
   chatY?: number
+  /** 独立聊天窗口是否置顶（顶栏 📌 按钮，跨重启保留） */
+  chatPinned?: boolean
+  /** 独立聊天窗是否自动播报助手回复（顶栏 🔇 按钮，跨重启保留） */
+  chatAutoSpeak?: boolean
 }
 
 export interface PetEvent {
@@ -247,6 +251,8 @@ function ensurePetConfigLoaded(): void {
   if (typeof saved.y === 'number') {config.y = saved.y}
   if (typeof saved.chatX === 'number') {config.chatX = saved.chatX} // 独立聊天窗口记住位置
   if (typeof saved.chatY === 'number') {config.chatY = saved.chatY}
+  if (typeof saved.chatPinned === 'boolean') {config.chatPinned = saved.chatPinned}
+  if (typeof saved.chatAutoSpeak === 'boolean') {config.chatAutoSpeak = saved.chatAutoSpeak}
 }
 function persistPetConfig(): void {
   const s = readPersistedPetState()
@@ -1730,7 +1736,7 @@ export function registerPetIpc(): void {
   })
 
   // ── 聊天同步：pet / 独立聊天窗 ↔ 主窗口 Lumina Agent ──────────────
-  ipcMain.on('pet:sync-send', (_e, data: { text: string; scene?: { scene?: string; title?: string; process?: string } }) => {
+  ipcMain.on('pet:sync-send', (_e, data: { text: string; scene?: { scene?: string; title?: string; process?: string }; attachments?: Array<{ name: string; path: string }> }) => {
     // 桌宠或独立聊天窗发消息 → 转发给主窗口注入聊天
     let target = petMainWindow
     if (!target || target.isDestroyed()) {
@@ -1742,7 +1748,14 @@ export function registerPetIpc(): void {
       // 🖥️ scene：点 Live2D 头顶搭话卡片那一刻的屏幕上下文（窗口标题/进程）。
       //   卡片选项里全是"这部剧 / 这段代码"这类指代，不带上下文模型就无从解析，
       //   只能反问「你指的是哪个」—— 用户感知就是"点了它什么都不会"。
-      target.webContents.send('pet:sync-message', { text: data.text, from: 'pet', scene: data.scene || null })
+      target.webContents.send('pet:sync-message', {
+        text: data.text,
+        from: 'pet',
+        scene: data.scene || null,
+        // 📎 本轮附件（文件路径 / 截图落盘后的路径）：聊天窗里点「上传文件」或
+        //    「截图提问」挂上的东西，随这条消息一起交给主 Agent。
+        attachments: Array.isArray(data.attachments) ? data.attachments : [],
+      })
     }
   })
   // 🆕 2026-10-13：窗口可能处于「已创建、但页面尚未加载完」的中间态 ——
@@ -1834,6 +1847,202 @@ export function registerPetIpc(): void {
   ipcMain.on('pet:conv-changed', () => {
     if (petChatWindow && !petChatWindow.isDestroyed()) {
       sendWhenReady(petChatWindow, 'pet:conv-changed', null)
+    }
+  })
+
+  // ══════════════════════════════════════════════════════════
+  // 🪟 桌宠聊天窗：顶栏 / 附件 / 侧边工作台 / 任务列表
+  //
+  // 这一组都是「聊天窗自己就能做完」的事，不需要惊动主窗口：
+  // 最小化、置顶、选文件、选文件夹、在资源管理器里定位、截屏。
+  // 需要主窗口数据或能力的（任务列表、打开对话产物、实时语音、AI 操作电脑）
+  // 走下面的 pet:ui:action 中转。
+  // ══════════════════════════════════════════════════════════
+
+  ipcMain.on('pet:chat-window-minimize', () => {
+    if (petChatWindow && !petChatWindow.isDestroyed()) {petChatWindow.minimize()}
+  })
+
+  ipcMain.handle('pet:ui:set-pinned', (_e, pinned: boolean) => {
+    const on = !!pinned
+    config.chatPinned = on
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      petChatWindow.setAlwaysOnTop(on)
+    }
+    persistPetConfig()
+    return { ok: true, pinned: on }
+  })
+
+  ipcMain.handle('pet:ui:set-auto-speak', (_e, enabled: boolean) => {
+    config.chatAutoSpeak = !!enabled
+    persistPetConfig()
+    return { ok: true, enabled: !!enabled }
+  })
+
+  ipcMain.handle('pet:ui:prefs', () => ({
+    pinned: config.chatPinned !== false,
+    autoSpeak: config.chatAutoSpeak === true,
+  }))
+
+  /** 选择文件（可多选）→ 返回绝对路径，聊天窗把它们挂到下一次发送 */
+  ipcMain.handle('pet:ui:pick-files', async () => {
+    const win = petChatWindow && !petChatWindow.isDestroyed() ? petChatWindow : undefined
+    const result = await dialog.showOpenDialog(win as BrowserWindow, {
+      title: '选择要发送的文件',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: '常用文件', extensions: ['txt', 'md', 'json', 'csv', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] },
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] },
+        { name: '代码', extensions: ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs', 'java', 'c', 'cpp', 'html', 'css'] },
+        { name: '全部文件', extensions: ['*'] },
+      ],
+    })
+    if (result.canceled || !result.filePaths.length) {return { ok: false, canceled: true, files: [] }}
+    return {
+      ok: true,
+      files: result.filePaths.map((p) => ({
+        path: p,
+        name: path.basename(p),
+        size: (() => { try { return fs.statSync(p).size } catch { return 0 } })(),
+      })),
+    }
+  })
+
+  /** 选择文件夹（侧边工作台「打开项目文件夹」） */
+  ipcMain.handle('pet:ui:pick-folder', async () => {
+    const win = petChatWindow && !petChatWindow.isDestroyed() ? petChatWindow : undefined
+    const result = await dialog.showOpenDialog(win as BrowserWindow, {
+      title: '选择项目文件夹',
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || !result.filePaths.length) {return { ok: false, canceled: true }}
+    const dir = result.filePaths[0]
+    try { await shell.openPath(dir) } catch { /* 打不开就只返回路径 */ }
+    return { ok: true, path: dir, name: path.basename(dir) }
+  })
+
+  /** 在资源管理器里定位某个文件 */
+  ipcMain.handle('pet:ui:reveal', (_e, filePath: string) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) {return { ok: false, error: '文件不存在' }}
+      shell.showItemInFolder(filePath)
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  /** 用系统默认程序打开 */
+  ipcMain.handle('pet:ui:open-path', async (_e, filePath: string) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) {return { ok: false, error: '路径不存在' }}
+      const err = await shell.openPath(filePath)
+      return err ? { ok: false, error: err } : { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  /**
+   * 把截图 dataURL 落盘到临时目录，返回真实路径。
+   *
+   * 【为什么要落盘】模型侧只认「文件路径」——agent 的读图/读文件工具都按
+   * 路径工作。把 base64 直接塞进消息体既撑爆上下文，又要另开一条多模态通道。
+   * 落盘后当成普通附件路径交给模型，现有工具链直接就能用。
+   */
+  ipcMain.handle('pet:ui:save-shot', async (_e, dataUrl: string) => {
+    try {
+      const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/i.exec(String(dataUrl || ''))
+      if (!m) {return { ok: false, error: '不是有效的图片数据' }}
+      const ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase()
+      const dir = path.join(app.getPath('temp'), 'lumina-pet-shots')
+      fs.mkdirSync(dir, { recursive: true })
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const file = path.join(dir, `shot-${stamp}.${ext}`)
+      fs.writeFileSync(file, Buffer.from(m[2], 'base64'))
+      return { ok: true, path: file, name: path.basename(file) }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  /**
+   * 新建文件：弹保存框 → 建一个空文件 → 返回路径。
+   * 侧边工作台的「新建文件」用它，建完直接把路径挂成附件，接着就能让 AI 往里写。
+   */
+  ipcMain.handle('pet:ui:new-file', async () => {
+    const win = petChatWindow && !petChatWindow.isDestroyed() ? petChatWindow : undefined
+    const result = await dialog.showSaveDialog(win as BrowserWindow, {
+      title: '新建文件',
+      defaultPath: 'untitled.md',
+      filters: [
+        { name: 'Markdown', extensions: ['md'] },
+        { name: '文本', extensions: ['txt'] },
+        { name: '全部文件', extensions: ['*'] },
+      ],
+    })
+    if (result.canceled || !result.filePath) {return { ok: false, canceled: true }}
+    try {
+      if (!fs.existsSync(result.filePath)) {fs.writeFileSync(result.filePath, '', 'utf-8')}
+      return { ok: true, path: result.filePath, name: path.basename(result.filePath) }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  /**
+   * 截图提问：抓主屏一帧返回 dataURL。
+   * 不直接发给模型 —— 聊天窗会把它作为附件挂在用户下一条消息上，
+   * 用户还有机会确认/取消（避免"点了就自动发一张全屏"的失控感）。
+   */
+  ipcMain.handle('pet:ui:screenshot', async () => {
+    try {
+      const display = screen.getPrimaryDisplay()
+      const { width, height } = display.size
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: Math.min(width, 1920), height: Math.min(height, 1080) },
+      })
+      if (!sources.length) {return { ok: false, error: '没有可用的屏幕源' }}
+      const dataUrl = sources[0].thumbnail.toDataURL()
+      return { ok: true, dataUrl, width, height }
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) }
+    }
+  })
+
+  // ── 需要主窗口配合的动作（任务列表 / 打开产物 / 语音 / CU）──
+  ipcMain.on('pet:ui:tasklist-request', () => {
+    const target = petMainTarget()
+    if (target) {target.webContents.send('pet:ui:tasklist-request')}
+  })
+  ipcMain.on('pet:ui:tasklist', (_e, data) => {
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      sendWhenReady(petChatWindow, 'pet:ui:tasklist', data)
+    }
+  })
+  ipcMain.on('pet:ui:action', (_e, payload) => {
+    const target = petMainTarget()
+    if (target) {target.webContents.send('pet:ui:action', payload)}
+  })
+  ipcMain.on('pet:ui:action-result', (_e, data) => {
+    if (petChatWindow && !petChatWindow.isDestroyed()) {
+      sendWhenReady(petChatWindow, 'pet:ui:action-result', data)
+    }
+  })
+
+  /** 「在主窗口中打开」：把主窗口叫到前台，并让它切到桌宠这条对话 */
+  ipcMain.on('pet:ui:open-main', () => {
+    const target = petMainTarget()
+    if (target) {
+      if (target.isMinimized()) {target.restore()}
+      target.show()
+      target.focus()
+      target.webContents.send('pet:ui:open-main')
+    }
+    // 主窗口不在时（只开了桌宠），走托盘同一套逻辑把它拉起来
+    if (!target) {
+      try { petMainWindow?.show() } catch { /* 忽略 */ }
     }
   })
 
@@ -2514,7 +2723,8 @@ export function openPetChatWindow(): { ok: boolean; error?: string } {
       y,
       transparent: petCaps.transparent,
       frame: false,
-      alwaysOnTop: petCaps.alwaysOnTop,
+      // 顶栏 📌 可取消置顶；未设置过时默认置顶（桌宠窗一贯行为）
+      alwaysOnTop: petCaps.alwaysOnTop && config.chatPinned !== false,
       skipTaskbar: false, // 独立窗口显示在任务栏，方便找回
       resizable: true,
       minWidth: 360,

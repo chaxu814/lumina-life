@@ -179,7 +179,9 @@ describe('Live2D 聊天窗 · 从角色头顶卡片选项发起对话时的加�
 
   it('助手回复到达时才结束等待态', () => {
     // 2026-10-17：结束等待前先收推理面板（traceFinish），再 endWait()。
-    expect(html).toMatch(/\}\s*else\s*\{\s*traceFinish\(true\);\s*endWait\(\);\s*\}/)
+    // 2026-10-18：endWait() 之后还有自动播报（speakReply），所以这里不能把
+    //   右花括号钉死在 endWait() 后面，只校验「traceFinish → endWait」的先后。
+    expect(html).toMatch(/\}\s*else\s*\{\s*traceFinish\(true\);\s*endWait\(\);[\s\S]{0,200}?\}/)
   })
 
   it('等待态用计数而非布尔（排队时不会提前收掉动画）', () => {
@@ -190,7 +192,9 @@ describe('Live2D 聊天窗 · 从角色头顶卡片选项发起对话时的加�
   })
 
   it('输入框 / 聊天窗内选项路径不受影响（sendText 仍自行开动画）', () => {
-    expect(html).toMatch(/function sendText[\s\S]{0,400}beginWait\(\)/)
+    // 2026-10-18：sendText 先处理附件 chips 再 beginWait，函数头到 beginWait
+    //   的距离变长了（~500 字符），窗口放宽到 900。
+    expect(html).toMatch(/function sendText[\s\S]{0,900}beginWait\(\)/)
   })
 
   it('聊天窗页面未加载完时，回复延迟到 did-finish-load 再发（不静默丢失）', () => {
