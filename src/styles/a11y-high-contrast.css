@@ -83,8 +83,5 @@
   border: 2px solid var(--a11y-border) !important;
 }
 
-/* 字号缩放根变量（100% / 125% / 150%） */
-:root {
-  --font-scale: 1;
-  font-size: calc(13px * var(--font-scale));
-}
+/* 字号缩放根变量已统一在 global.css（--font-scale + --font-size-* 系列），
+   此处不再重复定义，避免两处 :root 规则互相覆盖。 */

@@ -502,6 +502,8 @@ declare global {
       petUpdateConfig: (config: Partial<{
         clickThrough: boolean; autoRestart: boolean; opacity: number; scale: number
       }>) => Promise<{ ok: boolean; config?: any; error?: string }>
+      /** ♿ 桌宠偏好补丁（含字号缩放 fontScale，广播给桌宠与独立聊天窗） */
+      petUpdatePrefs: (patch: { fontScale?: number; [k: string]: any }) => Promise<{ ok: boolean; prefs?: any; error?: string }>
       /** 监听桌宠事件（点击/双击/闲时等） */
       onPetEvent: (callback: (event: {
         type: 'click' | 'double-click' | 'drag-end' | 'idle-long' | 'mouse-enter' | 'mouse-leave'

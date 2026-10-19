@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { applyFontScale, startFontScaleObserver } from './lib/a11yFontScale'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 import ChatPanel from './panels/ChatPanel'
@@ -393,14 +394,29 @@ export default function App() {
   }, [theme])
 
   // ♿ 无障碍：高对比度 + 字号缩放（创新提案 7）
+  //
+  // 2026-10-19：字号缩放从「整页 zoom 放大镜」改为两路真缩放——
+  // 旧方案 documentElement 上直接设 zoom 属性，三个问题：
+  // 头像/图标/间距一起放大、固定窗口溢出裁切、TSX inline 字号不跟随。
+  // 现在：
+  //   ① CSS：global.css 的 --font-size-* 已乘 var(--font-scale)；
+  //   ② inline px：a11yFontScale 运行时缩放器（见该文件头注释）。
   const a11y = useStore((s) => s.a11y)
+  const fontScaleRef = useRef(a11y.fontScale)
+  fontScaleRef.current = a11y.fontScale
   useEffect(() => {
     const root = document.documentElement
     root.setAttribute('data-a11y-hc', a11y.highContrast ? 'on' : 'off')
     root.style.setProperty('--font-scale', String(a11y.fontScale))
-    // Electron/Chromium 下用 zoom 让 inline px 也跟随缩放（桌宠气泡/托盘菜单读同一变量）
-    root.style.zoom = String(a11y.fontScale)
+    applyFontScale(document.body, a11y.fontScale)
+    // 同步给桌宠独立聊天窗（经 PetPrefs 持久化 + pet:prefs-changed 推送，见 petWindow.ts）
+    window.luminaAPI?.petUpdatePrefs?.({ fontScale: a11y.fontScale })
   }, [a11y.highContrast, a11y.fontScale])
+  // 观察器只启动一次：React 重渲染写回设计字号 / 新节点插入后重新应用
+  useEffect(() => {
+    const stop = startFontScaleObserver(() => fontScaleRef.current)
+    return stop
+  }, [])
 
   // 启动时同步 cron 任务到主进程
   const cronTasksForSync = useStore((s) => s.cronTasks)

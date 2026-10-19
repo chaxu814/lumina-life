@@ -1,5 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
+import {
+  clampCrop, zoomCrop, initialCrop, zoomPercent,
+  type CropRect, type CropBounds,
+} from '../lib/avatarCrop'
 
 const GENDER_OPTIONS = [
   { value: 'male', label: '♂ 男', emoji: '♂️' },
@@ -51,58 +55,136 @@ function cropAvatar(dataUrl: string, cropX: number, cropY: number, cropW: number
   })
 }
 
+// ═══════════════════════════════════════════════════════════
+// 头像裁剪（2026-10-19 重写）
+//
+// 旧实现的四个问题（用户实测反馈）：
+//   ① 图片没有高度约束，大图直接把弹窗撑爆/底部被切，看不到全貌；
+//   ② 裁剪框是方的——头像是圆的，方框选中的内容与最终圆形呈现不一致；
+//   ③ 没有实时预览，用户靠想象「圈出来的是不是想用的部分」；
+//   ④ 滚轮缩放以左上角为锚，缩放时构图乱跳；且没有边界钳制、
+//      没有除滚轮以外的缩放入口（触控板/无滚轮用户无从下手）。
+//
+// 新版：圆形取景框 + 三分构图线 + 右侧实时圆形预览（canvas 重绘），
+// 缩放以中心为锚，全部操作边界钳制；滚轮 / +− 按钮 / 键盘三入口。
+// 纯函数在 lib/avatarCrop.ts（Node 环境可单测）。
+// ═══════════════════════════════════════════════════════════
+
 // ── 裁剪控件 ──
+const PREVIEW_SIZE = 128   // 实时预览圆图画布（CSS 像素）
+const MIN_CROP = 24        // 最小裁剪边（显示坐标）
+
 function CropModal({ src, onDone, onCancel }: {
   src: string
   onDone: (dataUrl: string) => void
   onCancel: () => void
 }) {
-  const [crop, setCrop] = useState({ x: 0, y: 0, size: 100 })
+  const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, size: 100 })
   const [dragging, setDragging] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<HTMLCanvasElement>(null)
+
+  const boundsOf = useCallback(() => {
+    const c = containerRef.current
+    return { w: c?.clientWidth || 0, h: c?.clientHeight || 0 }
+  }, [])
 
   // 初始化裁剪区域为图片中心的正方形
   const initCrop = useCallback(() => {
-    const img = imgRef.current
-    const container = containerRef.current
-    if (!img || !container) {return}
-    const displayW = img.offsetWidth
-    const displayH = img.offsetHeight
-    const minDim = Math.min(displayW, displayH)
-    const size = Math.round(minDim * 0.7)
-    setCrop({
-      x: Math.round((displayW - size) / 2),
-      y: Math.round((displayH - size) / 2),
-      size,
-    })
-  }, [])
+    const b = boundsOf()
+    if (b.w < MIN_CROP || b.h < MIN_CROP) {return}
+    setCrop(initialCrop(b))
+  }, [boundsOf])
 
+  // 滚轮缩放：以裁剪框中心为锚。用原生非 passive 监听，确保 preventDefault 生效。
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) {return}
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      setCrop(prev => zoomCrop(prev, prev.size - e.deltaY * 0.4, boundsOf()))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [imgLoaded, boundsOf])
+
+  // 实时圆形预览：把 img 的裁剪区域画进 canvas（圆形裁切）
+  useEffect(() => {
+    const img = imgRef.current
+    const canvas = previewRef.current
+    if (!img || !canvas || !imgLoaded || !img.naturalWidth) {return}
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {return}
+    const dpr = window.devicePixelRatio || 1
+    const cssW = PREVIEW_SIZE, cssH = PREVIEW_SIZE
+    if (canvas.width !== cssW * dpr) {canvas.width = cssW * dpr; canvas.height = cssH * dpr}
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, cssW, cssH)
+    const scaleX = img.naturalWidth / (img.offsetWidth || 1)
+    const scaleY = img.naturalHeight / (img.offsetHeight || 1)
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(cssW / 2, cssH / 2, cssW / 2, 0, Math.PI * 2)
+    ctx.clip()
+    ctx.drawImage(
+      img,
+      crop.x * scaleX, crop.y * scaleY, crop.size * scaleX, crop.size * scaleY,
+      0, 0, cssW, cssH,
+    )
+    ctx.restore()
+  }, [crop, imgLoaded])
+
+  // 拖拽：按下时记录抓取偏移，拖动不跳变；点在框外则把框心移到指针处
+  const grabOffset = useRef({ x: 0, y: 0, inside: false })
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) {return}
+    const px = e.clientX - rect.left
+    const py = e.clientY - rect.top
+    const inside = px >= crop.x && px <= crop.x + crop.size && py >= crop.y && py <= crop.y + crop.size
+    grabOffset.current = {
+      x: inside ? px - crop.x : crop.size / 2,
+      y: inside ? py - crop.y : crop.size / 2,
+      inside,
+    }
+    if (!inside) {
+      setCrop(prev => clampCrop({ ...prev, x: px - prev.size / 2, y: py - prev.size / 2 }, boundsOf()))
+    }
     setDragging(true)
-    setCrop(prev => ({
-      ...prev,
-      x: e.clientX - rect.left - prev.size / 2,
-      y: e.clientY - rect.top - prev.size / 2,
-    }))
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!dragging) {return}
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) {return}
-    setCrop(prev => ({
+    setCrop(prev => clampCrop({
       ...prev,
-      x: Math.max(0, Math.min(e.clientX - rect.left - prev.size / 2, rect.width - prev.size)),
-      y: Math.max(0, Math.min(e.clientY - rect.top - prev.size / 2, rect.height - prev.size)),
-    }))
+      x: e.clientX - rect.left - grabOffset.current.x,
+      y: e.clientY - rect.top - grabOffset.current.y,
+    }, boundsOf()))
   }
 
   const handleMouseUp = () => setDragging(false)
+
+  // 键盘：方向键移动（Shift = 1px 精调），+/- 缩放
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 1 : 10
+    const b = boundsOf()
+    const nudge = (dx: number, dy: number) => {
+      e.preventDefault()
+      setCrop(prev => clampCrop({ ...prev, x: prev.x + dx, y: prev.y + dy }, b))
+    }
+    if (e.key === 'ArrowLeft') {nudge(-step, 0)}
+    else if (e.key === 'ArrowRight') {nudge(step, 0)}
+    else if (e.key === 'ArrowUp') {nudge(0, -step)}
+    else if (e.key === 'ArrowDown') {nudge(0, step)}
+    else if (e.key === '+' || e.key === '=') {e.preventDefault(); setCrop(prev => zoomCrop(prev, prev.size * 1.1, b))}
+    else if (e.key === '-' || e.key === '_') {e.preventDefault(); setCrop(prev => zoomCrop(prev, prev.size * 0.9, b))}
+    else if (e.key === 'Escape') {onCancel()}
+  }
 
   const handleDone = async () => {
     const img = imgRef.current
@@ -121,46 +203,97 @@ function CropModal({ src, onDone, onCancel }: {
     onDone(dataUrl)
   }
 
+  // 缩放百分比（相对图片短边）
+  const zoomPct = imgLoaded && containerRef.current
+    ? zoomPercent(crop, boundsOf())
+    : 100
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    }}>
+    }} onKeyDown={(e) => { if (e.key === 'Escape') {onCancel()} }}>
       <div style={{
-        background: 'var(--surface-0)', borderRadius: 12, padding: 16, maxWidth: '90vw', maxHeight: '90vh',
+        background: 'var(--surface-0)', borderRadius: 12, padding: 16, maxWidth: '92vw', maxHeight: '92vh',
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>裁剪头像 — 拖动调整位置，滚轮调整大小</div>
-        <div
-          ref={containerRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={(e) => {
-            e.preventDefault()
-            setCrop(prev => ({
-              ...prev,
-              size: Math.max(40, Math.min(prev.size - e.deltaY * 0.5, 500)),
-            }))
-          }}
-          style={{ position: 'relative', cursor: 'crosshair', overflow: 'hidden', maxHeight: '60vh' }}
-        >
-          <img
-            ref={imgRef}
-            src={src}
-            alt="裁剪"
-            onLoad={() => { setImgLoaded(true); setTimeout(initCrop, 50) }}
-            style={{ maxWidth: '100%', display: 'block', userSelect: 'none', pointerEvents: 'none' }}
-          />
-          {imgLoaded && (
+        <div style={{ fontSize: 14, fontWeight: 600 }}>裁剪头像 — 拖动调整位置 · 滚轮 / +− 调整大小 · 方向键微调</div>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* 左：图片 + 圆形取景框 */}
+          <div
+            ref={containerRef}
+            tabIndex={0}
+            role="application"
+            aria-label="头像裁剪区域：拖动移动，滚轮缩放，方向键微调"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onKeyDown={handleKeyDown}
+            style={{
+              position: 'relative', cursor: 'crosshair', overflow: 'hidden',
+              maxHeight: '58vh', width: 'fit-content', lineHeight: 0,
+              borderRadius: 8, outline: 'none', flex: 'none',
+            }}
+          >
+            <img
+              ref={imgRef}
+              src={src}
+              alt="裁剪"
+              onLoad={() => { setImgLoaded(true); setTimeout(initCrop, 50) }}
+              style={{ maxWidth: '100%', maxHeight: '58vh', display: 'block', userSelect: 'none', pointerEvents: 'none' }}
+            />
+            {imgLoaded && (
+              <>
+                {/* 框外压暗 */}
+                <div style={{
+                  position: 'absolute', left: crop.x, top: crop.y,
+                  width: crop.size, height: crop.size,
+                  boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
+                  borderRadius: '50%', pointerEvents: 'none',
+                }} />
+                {/* 圆形取景框描边 */}
+                <div style={{
+                  position: 'absolute', left: crop.x, top: crop.y,
+                  width: crop.size, height: crop.size,
+                  border: '2px solid #fff', borderRadius: '50%', pointerEvents: 'none',
+                }} />
+                {/* 三分构图线（仅框内可见的两细线） */}
+                <div style={{
+                  position: 'absolute', left: crop.x, top: crop.y, width: crop.size, height: crop.size,
+                  borderRadius: '50%', overflow: 'hidden', pointerEvents: 'none',
+                }}>
+                  <div style={{ position: 'absolute', left: '33.33%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.55)' }} />
+                  <div style={{ position: 'absolute', left: '66.66%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.55)' }} />
+                  <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.55)' }} />
+                  <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.55)' }} />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 右：实时圆形预览 + 缩放控制 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 150 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>实时预览</div>
             <div style={{
-              position: 'absolute', left: crop.x, top: crop.y,
-              width: crop.size, height: crop.size,
-              border: '2px solid #fff', boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)',
-              borderRadius: 4, pointerEvents: 'none',
-            }} />
-          )}
+              width: PREVIEW_SIZE, height: PREVIEW_SIZE, borderRadius: '50%', overflow: 'hidden',
+              border: '1.5px solid var(--border-light)', background: 'var(--surface-100)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <canvas ref={previewRef} style={{ width: PREVIEW_SIZE, height: PREVIEW_SIZE, display: 'block' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={() => setCrop(p => zoomCrop(p, p.size * 0.9, boundsOf()))}
+                aria-label="缩小裁剪框"
+                style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border-light)', background: 'var(--surface-0)', cursor: 'pointer', fontSize: 15 }}>−</button>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 40, textAlign: 'center' }}>{zoomPct}%</span>
+              <button onClick={() => setCrop(p => zoomCrop(p, p.size * 1.1, boundsOf()))}
+                aria-label="放大裁剪框"
+                style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border-light)', background: 'var(--surface-0)', cursor: 'pointer', fontSize: 15 }}>＋</button>
+              <button onClick={initCrop}
+                style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-light)', background: 'var(--surface-0)', cursor: 'pointer', fontSize: 11, color: 'var(--text-secondary)' }}>重置</button>
+            </div>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onCancel} style={{

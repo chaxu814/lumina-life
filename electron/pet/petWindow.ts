@@ -164,6 +164,8 @@ export interface PetPrefs {
   micDevice?: string          // 麦克风设备 ID
   playbackDevice?: string     // 播放设备 ID
   ttsEngine?: 'edge-tts' | 'indextts'  // TTS 引擎选择
+  /** ♿ 字号缩放（更多设置 → 无障碍）：1 / 1.25 / 1.5。桌宠独立聊天窗跟随 */
+  fontScale?: number
   life?: {                    // v0.2 生命感增强开关（隐私默认保守）
     screenGate?: boolean      // 屏幕感知节流（dHash 帧差，稳定画面不问 VLM，省 token）
     presence?: boolean        // 摄像头在场感知（默认关，需显式授权、仅本地、指示灯）
@@ -196,6 +198,7 @@ const DEFAULT_PREFS: PetPrefs = {
   autoTransform: true, mergeMessages: false, focusMode: true, privacyMode: false,
   screenShare: false, voiceRecognition: false, micDevice: '', playbackDevice: '',
   ttsEngine: 'edge-tts',
+  fontScale: 1,               // ♿ 字号缩放（与主窗口「无障碍 → 字号缩放」同源）
   life: { screenGate: true, presence: false, wakeWord: false, fullDuplex: false },
   catpaw: { master: false, kbm: false, browser: false, perception: true, hud: true, desktop: false, plugins: false },
   secretary: {
@@ -235,6 +238,8 @@ export function updatePetPrefs(patch: Partial<PetPrefs>): PetPrefs {
   s.prefs = next
   writePersistedPetState(s)
   if (petWindow && !petWindow.isDestroyed()) {petWindow.webContents.send('pet:prefs-changed', next)}
+  // ♿ 字号缩放等偏好同步推给独立聊天窗（pet-chat.html 监听同一频道）
+  if (petChatWindow && !petChatWindow.isDestroyed()) {petChatWindow.webContents.send('pet:prefs-changed', next)}
   return next
 }
 let petConfigLoaded = false

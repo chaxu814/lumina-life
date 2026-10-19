@@ -92,7 +92,7 @@ export default function SettingsA11y() {
         />
       </SettingSection>
 
-      <SettingSection title="🔠 字号缩放" desc="整体放大界面文字。桌宠气泡与托盘菜单跟随同一 --font-scale 变量。">
+      <SettingSection title="🔠 字号缩放" desc="主界面全部文字（聊天 / 面板 / 设置）与桌宠聊天窗同步缩放；图标与头像保持原始尺寸，布局自动重排。">
         <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="字号缩放">
           {scales.map((s) => {
             const active = a11y.fontScale === s.value
@@ -113,6 +113,9 @@ export default function SettingsA11y() {
               </button>
             )
           })}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>
+          改完立即生效，无需重启。125% / 150% 下部分密集面板需要滚动查看——这是字号变大后的正常重排。
         </div>
       </SettingSection>
 
