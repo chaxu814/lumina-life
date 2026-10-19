@@ -130,11 +130,20 @@ function main() {
   }
   console.log('[postinstall] 原生模块需对齐到 Electron ABI：', pre.missing.join('; '))
 
-  const isWin = process.platform === 'win32'
-  const cmd = isWin ? 'npx.cmd' : 'npx'
-  const args = ['electron-builder', 'install-app-deps']
-  console.log('[postinstall] 运行：', cmd, args.join(' '))
-  const r = spawnSync(cmd, args, { stdio: 'inherit', shell: false })
+  // 【2026-10-20 修正】不能 spawn 'npx.cmd'（Windows + shell:false 会 EINVAL——
+  // Node 20+ 对 .cmd 的安全限制），且 PATH 上的 npx 在打包/受限环境下不可靠。
+  // 直接用当前 Node 跑 electron-builder 的 CLI 入口，跨平台无 shell 依赖。
+  const ebCli = path.join(process.cwd(), 'node_modules', 'electron-builder', 'cli.js')
+  const args = [ebCli, 'install-app-deps']
+  if (!fs.existsSync(ebCli)) {
+    console.warn('[postinstall] 未找到 electron-builder CLI，跳过对齐（请先 npm install）')
+    return
+  }
+  console.log('[postinstall] 运行：', process.execPath, args.join(' '))
+  const r = spawnSync(process.execPath, args, { stdio: 'inherit', shell: false })
+  if (r.error) {
+    console.warn('[postinstall] 启动重编进程失败：', r.error.message)
+  }
   if (r.status !== 0) {
     console.warn('\n[postinstall] ⚠ 原生模块自动对齐未完成（不阻断本次安装，但桌面运行前需修复）：')
     console.warn('  最常见原因：本机缺少 C/C++ 编译工具链或 Python 3。请按以下步骤准备后重跑：\n')
