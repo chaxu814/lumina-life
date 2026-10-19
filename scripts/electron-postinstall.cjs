@@ -8,6 +8,13 @@
 // 失败不致命：CI 会在打包阶段显式 rebuild，纯 Node 跑测试也对 better-sqlite3 做了
 // 优雅降级，所以这里任何异常都只告警、不阻断 npm install（进程始终 exit 0）。
 //
+// v0.3 修正（2026-10-20）：
+//   旧版「.node 文件存在即跳过」的判定是错的：npm ci 后 better-sqlite3 必然
+//   带一份 Node ABI 的预编译件，导致 Electron 永远加载失败、记忆系统静默降级
+//   （冒烟测试实测：fresh clone 的 doctor 报「记忆系统 Cannot find module」）。
+//   现改为 dlopen 实测 ABI：能加载=Node ABI（需重编），版本不匹配=已对齐（跳过）。
+//   CI 测试 job 可设 LUMINA_NATIVE_ABI=node 保留 Node ABI。
+//
 // v0.2 增强：
 //   1) 先探测 better-sqlite3 是否已有预编译/已编译好的 .node——有就直接跳过，
 //      避免在没装 C/C++ 工具链的机器上白白触发 node-gyp 编译而报错刷屏。
@@ -53,17 +60,49 @@ function nativeTargets() {
   ]
 }
 
-/** 检查每个原生模块是否已有可用的 .node 二进制；返回 { ok: 全部就绪, missing: [...] } */
+/**
+ * 探测单个 .node 的 ABI 归属。
+ *
+ * 【为什么不能只看文件存在】2026-10-20 冒烟测试实测：fresh clone 跑完
+ * npm ci 后 better-sqlite3 的 build/Release/better_sqlite3.node 一定存在
+ * （better-sqlite3 自己的 install 脚本会装 Node ABI 的预编译件），
+ * 于是旧版「存在即跳过」的判断永远成立 → Electron 永远加载不了它 →
+ * 记忆系统静默降级。判定依据改为**实际 dlopen**：
+ *   · 在 Node 下能加载 → 这是 Node ABI，对 Electron 是错的 → 需要 rebuild
+ *   · 在 Node 下报 NODE_MODULE_VERSION 不匹配 → 已按 Electron ABI 编译 → 就绪
+ */
+function probeAbi(absPath) {
+  try {
+    process.dlopen({ exports: {} }, absPath)
+    return { exists: true, nodeAbi: true, electronAligned: false, detail: 'Node ABI（需为 Electron 重编）' }
+  } catch (err) {
+    const msg = String((err && err.message) || err)
+    if (/NODE_MODULE_VERSION|different Node\.js version|compiled against a different/i.test(msg)) {
+      return { exists: true, nodeAbi: false, electronAligned: true, detail: 'Electron ABI（已对齐）' }
+    }
+    // 其他加载错误（缺 DLL/权限等）：保守视为未对齐，交给 rebuild 尝试修复
+    return { exists: true, nodeAbi: false, electronAligned: false, detail: msg.slice(0, 120) }
+  }
+}
+
+/** 检查每个原生模块是否已按 Electron ABI 就绪；返回 { ok, missing, details } */
 function detectPrebuilt() {
   const nm = path.join(process.cwd(), 'node_modules')
   const missing = []
+  const details = []
   for (const t of nativeTargets()) {
     const abs = path.join(nm, t.rel)
     if (!fs.existsSync(abs)) {
-      missing.push(t.name)
+      missing.push(t.name + '（文件缺失）')
+      continue
+    }
+    const probe = probeAbi(abs)
+    details.push(`${t.name}: ${probe.detail}`)
+    if (!probe.electronAligned) {
+      missing.push(t.name + '（' + probe.detail + '）')
     }
   }
-  return { ok: missing.length === 0, missing }
+  return { ok: missing.length === 0, missing, details }
 }
 
 function main() {
@@ -72,15 +111,24 @@ function main() {
     console.log('[postinstall] LUMINA_SKIP_REBUILD=1，跳过原生模块 Electron 对齐')
     return
   }
-
-  // 1) 先探测预编译/已编译产物：已有就无需再编译，直接跳过——
-  //    否则在没装工具链的机器上 electron-builder install-app-deps 必然失败刷屏。
-  const pre = detectPrebuilt()
-  if (pre.ok) {
-    console.log('[postinstall] ✔ 检测到原生模块预编译产物（better_sqlite3.node），跳过 Electron 对齐')
+  // 明确声明本机以 Node 运行（CI 测试 job / 纯 vitest 环境）：保留 Node ABI，
+  // 否则重编成 Electron ABI 后 Node 测试只能走 JSON 兜底，原生路径失去覆盖。
+  if (process.env.LUMINA_NATIVE_ABI === 'node') {
+    console.log('[postinstall] LUMINA_NATIVE_ABI=node，保留 Node ABI（适用于 CI 测试 / 纯 Node 运行）')
     return
   }
-  console.log('[postinstall] 未检测到原生模块预编译产物，尝试对齐到 Electron ABI：', pre.missing.join(', '))
+
+  // 1) 按 ABI 探测：只有**确认已按 Electron 编译**才跳过。
+  //    仅判断文件存在是错的——npm ci 后 Node ABI 预编译件必然存在（见 probeAbi 注释）。
+  const pre = detectPrebuilt()
+  if (pre.details && pre.details.length) {
+    for (const d of pre.details) console.log('[postinstall]   · ' + d)
+  }
+  if (pre.ok) {
+    console.log('[postinstall] ✔ 原生模块已按 Electron ABI 对齐，跳过重编')
+    return
+  }
+  console.log('[postinstall] 原生模块需对齐到 Electron ABI：', pre.missing.join('; '))
 
   const isWin = process.platform === 'win32'
   const cmd = isWin ? 'npx.cmd' : 'npx'

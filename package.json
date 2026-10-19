@@ -40,6 +40,8 @@
     "lint:ratchet:update": "node scripts/lint-ratchet.cjs --update",
     "check:circular": "node scripts/check-circular.cjs",
     "check:circular:update": "node scripts/check-circular.cjs --update",
+    "check:bundle-requires": "node scripts/check-bundle-requires.cjs out/main",
+    "check:bundle-requires:update": "node scripts/check-bundle-requires.cjs out/main --update",
     "typecheck": "tsc --noEmit --strict",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

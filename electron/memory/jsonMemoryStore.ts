@@ -28,21 +28,25 @@ import {
   type RelationshipEventQuery,
   type RelationshipEvent,
 } from './relationshipEvents'
+import type {
+  FactEntry,
+  ReflectionEntry,
+  PersonaTraits,
+  UserProfile,
+  MemoryConfig,
+  StructuredMemory,
+  FactSource,
+} from './memoryStore'
+// 值符号从 factCore 导入：不能从 memoryStore 取——那会与 memoryStore 的静态
+// import（兜底存储）形成运行时环；类型不受影响，编译期擦除。
 import {
-  type FactEntry,
-  type ReflectionEntry,
-  type PersonaTraits,
-  type UserProfile,
-  type MemoryConfig,
-  type StructuredMemory,
-  type FactSource,
   normalizeFactContent,
   factContentKey,
   resolveConfidence,
   markUnverifiedFact,
   DEFAULT_FACT_SOURCE,
   LEGACY_CONFIDENCE_CAP,
-} from './memoryStore'
+} from './factCore'
 
 interface FragmentRow { id: number; type: string; content: string; created_at: string; updated_at: string; metadata?: string }
 interface ConversationRow { id: number; session_id: string; role: string; content: string; tool_calls?: string; created_at: string }

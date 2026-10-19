@@ -24,6 +24,11 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      # 测试 job 以 Node 运行 vitest：保留 Node ABI 的原生模块
+      # （postinstall 默认会把 better-sqlite3 对齐到 Electron ABI，见 scripts/electron-postinstall.cjs）
+      LUMINA_NATIVE_ABI: node
+
     defaults:
       run:
         shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
@@ -266,3 +271,30 @@ jobs:
 
   # release 已迁移到独立工作流 .github/workflows/release.yml
   # （三平台打包 + Windows/macOS 签名 + 公证，tag v* 或手动触发）
+
+  # ── 打包产物守卫（2026-10-20 新增）────────────────────────────
+  # 为什么单独一个 job：check-bundle-requires 必须跑在**真实构建产物**上，
+  # 而 test job 跑的是源码（vitest），没有 out/。历史上正是因为这个缺口，
+  # delegationManager 的坏 require 在 187 个测试全绿时把打包版团队功能打废。
+  bundle:
+    runs-on: ubuntu-latest
+    env:
+      LUMINA_NATIVE_ABI: node
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (production)
+        run: npm run build
+
+      - name: Check bundled relative requires (ratcheted)
+        run: npm run check:bundle-requires

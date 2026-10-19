@@ -1,6 +1,23 @@
 {
-  "updatedAt": "2026-10-04",
-  "total": 38,
+  "updatedAt": "2026-10-20",
+  "total": 56,
+  "history": [
+    {
+      "date": "2026-10-04",
+      "total": 38,
+      "note": "首次登记（scripts/check-bundle-requires.cjs 初版）"
+    },
+    {
+      "date": "2026-10-14",
+      "total": 57,
+      "note": "旧 out/main 早于 billing/moodstats/decision 等功能重建，扫到这些模块里既有的懒加载 require"
+    },
+    {
+      "date": "2026-10-20",
+      "total": 56,
+      "note": "jsonMemoryStore 改静态 import（57→56）；按全量干净构建重采 specs（新增 approvalService/dayreplay/internPool/taskBoard/petWindow/tools.impl.* 等已提交功能的存量 require）"
+    }
+  ],
   "accepted": {
     "./core/agentOrchestrator": "有意 catch：与 DelegationManager 成环，靠双向登记解，已在 delegationManager.ts:1299 写明"
   },
@@ -12,36 +29,54 @@
     "../agentRelationships",
     "../agentSkills",
     "../agentTeamManager",
+    "../approvalService",
     "../autoUpdater",
+    "../billing/budgetGuardian",
+    "../billing/usageLedger",
+    "../dayreplay",
+    "../delegationManager",
     "../hooks/hookManager",
     "../luckyModeIntegration",
     "../mailStore",
     "../memory/memoryStore",
     "../messageQueue",
+    "../orchestration/emotionAudit",
+    "../orchestration/internPool",
+    "../orchestration/taskBoard",
+    "../orchestration/theaterBridge",
+    "../pet/agentStateBridge",
+    "../pet/petWindow",
     "../proactiveEngine",
+    "../pythonManager",
     "../skills/skillsLoader",
     "../sync/syncConfig",
+    "../tools/impl/calendar",
+    "../tools/impl/sandboxAudit",
+    "../tools/impl/todo",
+    "../tools/impl/weatherBrief",
     "../whisper/sttModelIpc",
     "./agentStateBridge",
     "./api/server",
+    "./billing/budgetGuardian",
+    "./billing/usageLedger",
     "./core/agentOrchestrator",
-    "./core/llmProvider",
     "./gaming/gameActions",
     "./loopEngineering",
     "./memory/layeredMemory",
     "./memory/layeredMemoryAdapter",
     "./memory/memoryStore",
-    "./orchestration/routingDecider",
     "./pet/intentDispatcher",
     "./pet/petMemoryBridge",
     "./plugin.json",
     "./prompts/systemPrompt",
     "./pushState",
     "./pythonManager",
+    "./register",
     "./sceneDetector",
     "./skillLoader",
     "./teamProactiveSystem",
     "./tokenEstimator",
-    "./tools/impl/cron"
+    "./tools/impl/cron",
+    "./usageLedger"
   ]
 }
