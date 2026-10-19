@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: LuminaLife
-  text: Agent 桌宠 · 多模态 · 全栈
-  tagline: 基于 Electron + React 的 AI Agent 多模态桌宠 —— 让 LLM 在桌面上「活」过来。
+  text: 有身体的团队 Agent · 多模态 · 全栈
+  tagline: 常驻桌面的三 Agent 团队（Lumina / Yak / 热茶）——拟人形象 + 真实执行 + 安全审批，让 LLM 在桌面上「活」过来并且真的干活。
   image:
     src: /logo.png
     alt: LuminaLife
@@ -66,7 +66,7 @@ lumina-life/
 │   ├── security/              # 双层安全审查
 │   └── core/platform/         # Windows / macOS / Linux 适配层
 ├── src/                       # 渲染进程（React 19 + Zustand）
-├── tests/                     # 305 文件 / 4575 用例（Vitest）
+├── tests/                     # 308 文件 / 4607 用例（Vitest）
 ├── agents/                    # 三个 Agent 的配置（工具白/黑名单）
 ├── skills/                    # 技能目录
 ├── docs/                      # 文档站（VitePress）

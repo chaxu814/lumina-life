@@ -51,6 +51,11 @@ jobs:
         run: npx tsc --noEmit
         # 主类型检查为合入门禁：tsc 必须零错误（严格模式检查仍保留在 lint job 作为参考）
 
+      - name: Check circular dependencies (runtime, ratcheted)
+        # 运行时循环依赖棘轮门禁：不得新增环（基线 scripts/circular-baseline.json）。
+        # 口径与决策依据见 scripts/check-circular.cjs 文件头。
+        run: npm run check:circular
+
       - name: Run tests
         run: npx vitest run --reporter=verbose
 

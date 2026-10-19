@@ -12,6 +12,7 @@
 
 import { spawn, ChildProcess } from 'child_process'
 import type { ToolDef, ToolResult } from '../types'
+import { mcpInitializeHandshake } from '../../mcpProtocol'
 
 // ═══════════════════════════════════════════════════════════
 // MCP 客户端核心
@@ -113,17 +114,23 @@ class MCPClient {
         console.log(`[MCP:${this.config.name}] 进程退出: ${code}`)
       })
 
-      // 发送 initialize 请求
+      // 发送 initialize 请求（版本协商 + 降级重试，见 mcpProtocol.ts）
       const timeout = setTimeout(() => {
         reject(new Error(`MCP 服务器 "${this.config.name}" 连接超时`))
       }, 10000)
 
-      this.sendRequest('initialize', {
-        protocolVersion: '2024-11-05',
-        capabilities: { tools: {} },
-        clientInfo: { name: 'lumina-mcp-client', version: '1.0.0' },
-      }).then(() => {
+      mcpInitializeHandshake(this.config.name, (protocolVersion) =>
+        this.sendRequest('initialize', {
+          protocolVersion,
+          capabilities: { tools: {} },
+          clientInfo: { name: 'lumina-mcp-client', version: '1.0.0' },
+        }),
+      ).then((handshake) => {
         clearTimeout(timeout)
+        if (!handshake.ok) {
+          reject(new Error(`MCP 服务器 "${this.config.name}" 握手失败：协议版本不被接受`))
+          return
+        }
         this.connected = true
         console.log(`[MCP:${this.config.name}] 已连接`)
         resolve()

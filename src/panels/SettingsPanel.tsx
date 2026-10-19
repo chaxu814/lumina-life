@@ -1979,6 +1979,9 @@ function AccessControlSettings() {
                 <input type="text" value={editForm?.allowedDangerousTools?.join(', ') || ''}
                   onChange={e => setEditForm({ ...editForm, allowedDangerousTools: toArray(e.target.value) })}
                   style={inputStyle} placeholder="file_write, file_edit, shell_exec" />
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                  ⓘ 展示字段：运行时工具闸门以 rolePolicy（Yak=可写可执行 / 热茶=只读）为唯一事实源，此处修改不实时生效；如需收权请改 AGENTS.md 角色口径。
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11 }}>
@@ -1998,7 +2001,7 @@ function AccessControlSettings() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px', fontSize: 11, color: 'var(--text-secondary)' }}>
               <div>📖 读取路径: <strong>{perm.allowedReadPaths?.length === 1 && perm.allowedReadPaths[0] === '*' ? '全部' : perm.allowedReadPaths?.length > 0 ? (perm.allowedReadPaths?.slice(0, 3).join(', ') + (perm.allowedReadPaths?.length > 3 ? ' …' : '')) : '无'}</strong></div>
               <div>✏️ 写入路径: <strong>{perm.allowedWritePaths?.length === 1 && perm.allowedWritePaths[0] === '*' ? '全部' : perm.allowedWritePaths?.length > 0 ? (perm.allowedWritePaths?.slice(0, 2).join(', ') + (perm.allowedWritePaths?.length > 2 ? ' …' : '')) : '❌ 禁止写'}</strong></div>
-              <div>🔧 危险工具: <strong>{perm.allowedDangerousTools?.length === 1 && perm.allowedDangerousTools[0] === '*' ? '全部' : perm.allowedDangerousTools?.slice(0, 3).join(', ') || '无'}</strong></div>
+              <div>🔧 危险工具<sup title="展示字段，运行时闸门见 rolePolicy">ⓘ</sup>: <strong>{perm.allowedDangerousTools?.length === 1 && perm.allowedDangerousTools[0] === '*' ? '全部' : perm.allowedDangerousTools?.slice(0, 3).join(', ') || '无'}</strong></div>
               <div>🌐 网络: <strong>{perm.networkAccess ? '✅ 允许' : '❌ 禁止'}</strong></div>
               <div>💻 Shell: <strong>{perm.shellAccess ? '✅ 允许' : '❌ 禁止'}</strong></div>
             </div>

@@ -269,3 +269,11 @@ docs/gaming-autoplay-evidence/
 
 # 本地打包日志（Tee 临时输出）
 /pack-win-log*.txt
+
+# ── 桌宠渲染器生成物（npm run build:pet-life/voice/vrm/mmd 重建，勿入库）──
+#   源码在 electron/pet/life|lifeSpeech|vrm|mmd/，产物由 prebuild 生成；
+#   入库会造成「改了源码生成物不更新」与仓库体积膨胀（2.5MB）。
+/electron/pet/assets/pet-life.js
+/electron/pet/assets/pet-voice.js
+/electron/pet/assets/pet-vrm.js
+/electron/pet/assets/pet-mmd.js

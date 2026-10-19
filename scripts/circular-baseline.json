@@ -1,0 +1,23 @@
+{
+  "generatedBy": "scripts/check-circular.cjs --update",
+  "note": "运行时循环依赖基线（type-only 不计）。门禁：不得新增环；拆环后请 --update 并说明。",
+  "baseline": {
+    "electron": [
+      "electron/agentRunner.ts > electron/delegationManager.ts",
+      "electron/tools/impl/newsCollector.ts > electron/tools/impl/newsCollectorHn.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/devCompanion.ts > electron/delegationManager.ts",
+      "electron/pet/intentDispatcher.ts > electron/proactive/orchestrator.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/runSubagents.ts > electron/orchestration/internPool.ts > electron/delegationManager.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/team.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/team.ts > electron/delegationManager.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/teamCollab.ts > electron/team/adversarialReview.ts > electron/delegationManager.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/teamCollab.ts > electron/team/adversarialReview.ts > electron/team/dynamicWorker.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/impl/teamCollab.ts > electron/tools/impl/phaseGateDelegate.ts > electron/delegationManager.ts",
+      "electron/agentRunner.ts > electron/tools/index.ts > electron/tools/skillSystem.ts > electron/tools/impl/socialEngine.ts > electron/core/agentOrchestrator.ts > electron/delegationManager.ts",
+      "electron/tools/impl/socialEngine.ts > electron/tools/skillSystem.ts",
+      "electron/delegationManager.ts > electron/orchestration/phaseGate.ts > electron/orchestration/yakParallel.ts"
+    ],
+    "src": []
+  },
+  "count": 13
+}

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4575%20passing%20%2F%20305%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4575 tests passing across 305 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4607%20passing%20%2F%20308%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4607 tests passing across 308 test files"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
@@ -54,8 +54,8 @@
 | 🟡 | **测试套件对负载敏感（flaky）** | 已修复一批「源码重构后测试未同步」的确定性失败（5 条，见下方 Quality Gates）；剩余个别时序测试在**慢机/并发下**仍可能间歇失败——套件不再声称「永远全绿」 | 持续收敛 |
 | 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
 | 🟡 | **无第三方技能生态** | 技能市场通道已通；`electron/skills/` 有 **13 个示例技能**、根 `skills/` 有 **7 个智能技能**，但**没有第三方技能可装** | 待社区 |
-| 🟡 | **`agentRunner.ts` 单文件 4149 行**（含空行；非空 3856 行） | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
-| 🔵 | **5477 条 `no-explicit-any` warning** | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
+| 🟡 | **`agentRunner.ts` 单文件 4171 行**（含空行；非空约 3856 行，2026-10-20 实测） | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
+| 🔵 | **5487 条 ESLint warning**（其中 `no-explicit-any` 3340 条） | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
 | 🔵 | **Chromium sandbox 为 `false`** | 渲染进程安全由**应用层**承担（rolePolicy + securityGuard + sandboxRules + 审批流），**不是**浏览器沙箱；文档已按此更正 | 已澄清 |
 
 > 💡 **在 Windows + LM Studio 上遇到「很卡 / 首 token 很慢」？先跑 `lumina health`（或界面「更多设置 → 诊断工具 → 🩺 模型体检」）。**
@@ -360,7 +360,7 @@ Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有�
 
 把这句话拆开看，就是市面上两类常见产品的形态：
 
-- **有形象的 AI 伴侣 / 桌宠**：能聊天、能卖萌、能换表情，但你让它「把这个文件整理好、把这个 bug 修掉、盯着这个任务跑完」，它做不到——表情与真实的执行过程是脱节的，她只是在「演」一个在干活的角色。
+- **有形象的 AI 伴侣 / 桌宠**：能聊天、能卖萌、能换表情，2026 年的一批新品（AIRI、Project N.E.K.O. 等）还加上了实时语音与游戏协同——但你让它「把这个文件整理好、把这个 bug 修掉、盯着这个任务跑完」，它仍然做不到：表情与真实的执行过程是脱节的，她只是在「演」一个在干活的角色。
 - **有 Agent 能力的工具 / 编码工作台**：能调用工具、能执行命令、能跑子任务，但没有形象、没有情绪、没有「她在你桌面上陪着你」的感觉，任务之外对你这个人一无所知。
 
 Lumina 要做的，是把这两件事合在同一个常驻桌面进程里：**她的表情与动作来自真实的任务执行状态，她的情绪能真实收紧她手里的权限，而她干活的全过程对你透明可见。**
@@ -413,7 +413,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 | 闸门 | 命令 | 实测结果 |
 |---|---|---|
-| 测试套件 | `npm test` | **305 个测试文件 · 4575 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
+| 测试套件 | `npm test` | **308 个测试文件 · 4607 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
 | 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
 | 代码规范 | `npm run lint` | **0 error / 5477 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
 | CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
@@ -421,7 +421,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 > ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
 > 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
-> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 305 文件 / 4575 通过 / 0 失败。
+> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 308 文件 / 4607 通过 / 0 失败。
 > 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
 > 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
 
@@ -472,7 +472,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：305 文件 · 4575 用例通过 / 1 skipped / 0 失败**（本机实测；
+Linux 为 roadmap。**测试规模：308 文件 · 4607 用例通过 / 1 skipped / 0 失败**（本机实测；
 ⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
 `tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
@@ -481,7 +481,7 @@ Linux 为 roadmap。**测试规模：305 文件 · 4575 用例通过 / 1 skipped
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：305 文件 / 4575 passed / 1 skipped
+npx vitest run             # 预期：308 文件 / 4607 passed / 1 skipped
 node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
 ```</sub>
 
@@ -853,7 +853,7 @@ lumina-life/
 | 自动更新 Auto Update | electron-updater (GitHub Releases) |
 | 协议支持 Protocols | MCP (Model Context Protocol) |
 | 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **305 文件 / 4575 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| 测试规模 Tests | **308 文件 / 4607 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
 
 ---
 

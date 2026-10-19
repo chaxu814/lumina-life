@@ -121,7 +121,7 @@ lumina-life/
 │   ├── hooks/  data/  i18n/  lib/  utils/  styles/  types/
 │   └── assets/                   #    静态资源（lumina-avatar.png 等）
 │
-├── tests/                        # 🧪 Vitest（305 个测试文件 / 4,575 用例，扁平命名）
+├── tests/                        # 🧪 Vitest（308 个测试文件 / 4,607 用例，扁平命名）
 │   ├── *.test.ts                 #    与被测模块同名（agentRunner.test.ts…）
 │   └── fixtures/  gaming/  onboarding/  customAgent/
 │

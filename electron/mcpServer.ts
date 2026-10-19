@@ -12,6 +12,8 @@
 //   - 设计工具 (Figma)
 //
 // 协议：JSON-RPC 2.0 over stdio/SSE/http
+// 版本：initialize 握手走 mcpProtocol.ts 的协商 + 降级链，
+//       不再硬编码单一 protocolVersion。
 // ============================================================
 
 import * as cp from 'child_process'
@@ -20,6 +22,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import http from 'http'
 import https from 'https'
+import { mcpInitializeHandshake } from './mcpProtocol'
 
 // ═══════════════════════════════════════════════════════════
 // 命令解析 — 修复 npx/uvx 等工具在 Electron 子进程中找不到的问题
@@ -212,15 +215,17 @@ export class MCPClient {
       return { success: false, error: spawnError }
     }
 
-    // 初始化握手
+    // 初始化握手（版本协商 + 降级重试，见 mcpProtocol.ts）
     try {
-      const initResult = await this.sendStdio(id, 'initialize', {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: { name: 'Lumina', version: '3.11.0' },
-      })
+      const handshake = await mcpInitializeHandshake(id, (protocolVersion) =>
+        this.sendStdio(id, 'initialize', {
+          protocolVersion,
+          capabilities: {},
+          clientInfo: { name: 'Lumina', version: '3.11.0' },
+        }),
+      )
 
-      if (!initResult || initResult.error) {
+      if (!handshake.ok) {
         this.disconnect(id)
         return { success: false }
       }
@@ -240,13 +245,15 @@ export class MCPClient {
   private async connectHttp(id: string, config: MCPServerConfig): Promise<{ success: boolean; tools?: MCPTool[] }> {
     // SSE 模式：先建立连接获取 session
     const endpoint = config.url!
-    const response = await this.httpJsonRpc(endpoint, 'initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 'Lumina', version: '3.11.0' },
-    })
+    const handshake = await mcpInitializeHandshake(id, (protocolVersion) =>
+      this.httpJsonRpc(endpoint, 'initialize', {
+        protocolVersion,
+        capabilities: {},
+        clientInfo: { name: 'Lumina', version: '3.11.0' },
+      }),
+    )
 
-    if (!response || response.error) {return { success: false }}
+    if (!handshake.ok) {return { success: false }}
 
     const toolsResult = await this.httpJsonRpc(endpoint, 'tools/list', {})
     const tools: MCPTool[] = toolsResult?.tools || []

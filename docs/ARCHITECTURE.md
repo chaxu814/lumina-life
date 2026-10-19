@@ -255,7 +255,7 @@ nomic-embed-text 或外部 embedding 服务）为**可选且默认关闭**。
 | 债务 | 规模 | 状态 |
 |---|---:|---|
 | `agentRunner.ts` 单文件巨大 | 173 KB | 单文件承载 ReAct 主循环，对外部贡献者是劝退级别。已拆出 `agentRunner.constants.ts`，主文件仍需进一步拆分 |
-| 循环依赖已断一处 | — | v3.34 已把 `registerAllTools()` 从 `agentRunner` 模块顶层移入构造函数（`registrationFlag.ts` 承载标志位）。建议引入 `madge` / `dependency-cruiser` 做持续检测 |
+| 循环依赖：已有门禁，存量 13 个运行时环（棘轮锁定） | 13 环 | v3.34 已把 `registerAllTools()` 从 `agentRunner` 模块顶层移入构造函数（`registrationFlag.ts` 承载标志位）。**2026-10-19**：引入 `scripts/check-circular.cjs`（madge，`skipTypeImports` 口径，CI 门禁 `npm run check:circular`）—— 实测 electron/ 13 个运行时环、src/ 0；多为「tools 注册表 ↔ 消费 impl」结构，靠函数内惰性单例规避 init 期 TDZ。基线锁存于 `scripts/circular-baseline.json`，只减不增。拆环是 P2 重构项（与 agentRunner 拆分同风险级），不阻塞发布 |
 | `electron/channels/adapters/` 默认关闭、未经真机验证 | 11 文件 | **接线是存在的**（`main.ts` 用 `await import()` 动态装载桥接器，打包器会内联，7 个适配器都有真实实现）。真实缺口是：适配器仅在配置 `enabled: true` 时启动，用户必须自己配凭据；且未做过端到端真机验证。**2026-10-04 更正**：此前这里写的是「未接线」，是因为项目里有一批检查 grep 静态 import，而这里用的是动态 import —— 扫不到就误判成没接线了 |
 | `electron/mission/` 零引用 | 5 文件 / 767 行 | 完整无引用 |
 | ~~`electron/mcp/mcpConfigLoader.ts` 未接线~~ | — | **2026-10-19 更正：该目录已在死代码清理中删除**。MCP 实际实现位于 `electron/mcpServer.ts` 与 `tools/impl/mcp.ts`（客户端工具 `mcp_connect` / `mcp_call_tool` 等已注册可用） |
