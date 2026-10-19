@@ -57,7 +57,7 @@ lumina-life/
 │   ├── main.ts                # 入口（窗口、IPC、tray）
 │   ├── agentRunner.ts         # Agent 主循环（ReAct）
 │   ├── delegationManager.ts   # 委派编排 + 自动验证修复闭环
-│   ├── tools/                 # 132 个工具（registry + impl/）
+│   ├── tools/                 # 139 个工具（registry + impl/）
 │   ├── team/                  # 团队：动态雇工 / 对抗评审 / 自主性 / 教学
 │   ├── orchestration/         # 任务看板 / 阶段门控 / 路由 / 并行引擎
 │   ├── memory/                # 三层记忆 + 混合召回 + 防幻觉
@@ -66,7 +66,7 @@ lumina-life/
 │   ├── security/              # 双层安全审查
 │   └── core/platform/         # Windows / macOS / Linux 适配层
 ├── src/                       # 渲染进程（React 19 + Zustand）
-├── tests/                     # 2472 个测试用例（Vitest）
+├── tests/                     # 305 文件 / 4575 用例（Vitest）
 ├── agents/                    # 三个 Agent 的配置（工具白/黑名单）
 ├── skills/                    # 技能目录
 ├── docs/                      # 文档站（VitePress）
@@ -86,7 +86,7 @@ lumina-life/
 | 主动发言 | ✅ | 门控 + 配额 + 退避 + 夜间勿扰 + 精力兜底 |
 | Computer Use | ✅ | 截图 / OCR / 键鼠 / UIA 元素树 / 隐私遮罩 |
 | 安全沙箱 | ✅ | 双层审查（26 条命令规则）+ 审批流 + 权限白名单 |
-| 工具系统 | ✅ | 132 个工具，三档模式按需加载 + MCP + 技能商店 |
+| 工具系统 | ✅ | 139 个工具，三档模式按需加载 + MCP + 技能商店 |
 | 桌面自动化 | ✅ | 跨平台适配层（**仅 Windows 实机验证**） |
 | 游戏陪伴 | ⚠️ 可选扩展 | Minecraft / Factorio，需额外安装插件 |
 | 语音输入输出 | ✅ | Whisper ONNX 本地识别 + 多 provider TTS |

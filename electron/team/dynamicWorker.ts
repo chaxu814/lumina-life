@@ -65,7 +65,6 @@ const BASE_BLOCKED = [
   'screenshot', 'ocr',
   'desktop_see', 'desktop_act', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_screen_size', 'desktop_scan',
   'hearing_start', 'hearing_stop', 'hearing_status', 'hearing_transcript',
-  'keyboard_press', 'keyboard_type',
   'mail_send', 'mail_list', 'mail_mark_read',
   'mcp_connect', 'mcp_list_servers', 'mcp_list_tools', 'mcp_call_tool',
   'skill_run', 'use_skill', 'install_skill', 'quick_setup',

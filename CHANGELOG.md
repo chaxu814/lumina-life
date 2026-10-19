@@ -1,3 +1,55 @@
+## [Unreleased] — 品牌形象升级 + 发布前评测 P0 修复 (2026-10-19)
+
+> 来源：2026-10-19 深度测评报告的 P0 清单（评测报告见工作区，不随仓库分发）。
+> 测试基线：**305 文件 / 4575 用例通过 / 1 skipped / 0 失败**，`tsc --strict` 0 error，eslint 0 error。
+
+### 品牌形象
+
+- **Lumina 头像换正式立绘**：新增 `src/assets/lumina-avatar.png`（512×512，源图 1440×1440）
+  - 新增共享组件 `src/components/PersonaAvatar.tsx`：`personaId === 'lumina'` 时渲染立绘，其余成员继续用 emoji
+  - 覆盖：聊天消息头像 / 思考指示器 / 流式气泡（ChatPanel 3 处）、顶栏人格标签（TopBar）、
+    人格卡片（AgentPanel）、团队群聊 feed（GroupChatView）、桌宠独立聊天窗头部与消息头像（pet-chat.html）
+  - 抽组件的原因：此前每处都手写 `persona?.icon || '🐱'`，立绘上线漏改任何一处都会「一半🐱一半照片」
+- **应用 logo 全量替换**：`resources/icon.png`（512）、`icon-16.png`、`icon-32.png`、
+  `icon.ico`（16/32/48/256 多尺寸重制）、`public/icon.png`（256，渲染层 favicon）、
+  `docs/public/logo.png`（512，文档站 hero）——全部来自同一张源图
+
+### 发布阻断项（P0，来自 2026-10-19 测评）
+
+- **修 `doctor` 工具完整性误报**：`cli/doctor.ts` 旧实现按 `impl/` 下的**文件名**判断
+  （`webSearch.ts` / `memory.ts` / `fileReadWrite.ts`），而这些文件早已改名/拆分，
+  导致「139 个工具全部注册通过」与「0/9 核心工具就绪」同时出现。
+  改为按**注册表工具名**校验（`getToolNames` + `validateToolRegistry`），
+  核心 9 项：`shell_exec / web_search / web_fetch / browser / memory_search /
+  file_read / file_write / cron_schedule / git_status`。
+- **修 CLI 参数解析**：`electron . --cli doctor` 的 argv 是 `[exe, '.', '--cli', 'doctor']`，
+  旧实现只认 `.js/.mjs/.cjs` 结尾的脚本路径，`.` 被当成命令名 →
+  `npm run doctor` 报「未知命令: .」。现在 `.` / `..` 也视作脚本路径。
+- **`lumina agent status` 无参默认列出全部**（README 示例就是无参调用，旧实现直接失败）。
+- **`lumina health` 配置回退**：`.env` 里通常只有 provider + Key（没有 `LLM_MODEL/LLM_BASE_URL`），
+  旧实现直接报「未能读取到 LLM 配置」；现在回退到 Agent 配置（与 doctor / 应用内同一事实源），
+  并给出「去设置里配一个模型」的可操作引导。
+- **清理 toolset 死引用**：`oath` 工具组置空（被 MCP / calendar_* 取代）、
+  `input` 组改指真实的 `desktop_key / desktop_type`、移除 `oath_*` 在 CORE_TOOLS
+  与并行分类表中的残留、移除 `tools/index.ts` 里 oath/keyboard 的死 import、
+  移除 worker 黑名单里的 `keyboard_press/keyboard_type`。
+  启动日志不再刷「跳过未注册工具 oath_make/appointment_*/keyboard_*」。
+
+### 文档校正（P0）
+
+- `docs/DEVELOPER.md` 项目结构按 HEAD 实测重写（旧版 `electron/lumina-core/`、
+  `electron/services/`、`src/components/ChatWindow/`、`src/store/`、`tests/unit/`
+  等目录根本不存在）；Node 要求 18→20。
+- `CONTRIBUTING.md` 结构段同步重写；`88+ 工具`→139、`23 个面板`→47；
+  样式说明改为 UnoCSS；Node ≥18→≥20。
+- `docs/BENCHMARKS.md` 测试数 292/4235 → 305/4575；实测日期 10-14 → 10-19。
+- `README.md` 徽章与质量门禁表 296/4309 → 305/4575；eslint warning 5542 → 5477（清理死 import 再降 14）。
+- `docs/ARCHITECTURE.md` 更正 `electron/mcp/mcpConfigLoader.ts`（该目录已删除，
+  MCP 实际在 `mcpServer.ts` + `tools/impl/mcp.ts`）。
+- `docs/index.md` 工具数 132→139、测试用例 2472→305 文件/4575 用例。
+
+---
+
 ## [Unreleased] — 发布前阻断项修复 + 5 项创新功能落地 (2026-10-05)
 
 > 对应已归档的旧评测文档第七节的 P0~P2 清单。

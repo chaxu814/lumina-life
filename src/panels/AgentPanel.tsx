@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../stores/appStore'
 import { IconPlus, IconCheck } from '../components/Icons'
+import PersonaAvatar from '../components/PersonaAvatar'
 import RoleConfigPanel from '../components/RoleConfigPanel'
 
 const DEFAULT_PERSONAS = [
@@ -99,7 +100,9 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
                     cursor: 'pointer', transition: 'all var(--transition-fast)',
                     position: 'relative',
                   }}>
-                  <span style={{ fontSize: 26 }}>{p.icon}</span>
+                  {p.id === 'lumina'
+                    ? <PersonaAvatar personaId="lumina" size={26} />
+                    : <span style={{ fontSize: 26 }}>{p.icon}</span>}
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{p.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{p.desc}</div>

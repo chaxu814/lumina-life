@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import { getPersona } from '../data/personas'
 import { IconSmile, IconWifi, IconWifiOff } from './Icons'
+import PersonaAvatar from './PersonaAvatar'
 import ModeIndicator from './ModeIndicator'  // 🆕 v2.0: 场景模式指示器
 import {
   getEmotion, getNamedEmotion, setEmotion, getAgentStatus, getStatusLabel,
@@ -109,6 +110,7 @@ export default function TopBar() {
 
   // 🔥 当前人格
   const persona = getPersona(activePersona, agentConfig.customPersonas)
+  // 2026-10-19：Lumina 用立绘头像（emoji 在正式立绘面前显得敷衍），其余成员不变
   const personaLabel = persona ? `${persona.icon} ${persona.name}` : '🐱 Lumina'
 
   // 🆕 团队状态（从 Sidebar 搬过来）
@@ -198,8 +200,10 @@ export default function TopBar() {
           <span style={{ fontSize: 12, lineHeight: 1 }}>🛡️</span>
           <span>{t('topbar.sandbox')}</span>
         </div>}
-        {!compact && <div className="topbar-stat" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
-          <span style={{ fontSize: 12 }}>{personaLabel}</span>
+        {!compact && <div className="topbar-stat" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {persona?.id === 'lumina'
+            ? <><PersonaAvatar personaId="lumina" size={16} /><span style={{ fontSize: 12 }}>{persona.name}</span></>
+            : <span style={{ fontSize: 12 }}>{personaLabel}</span>}
         </div>}
 
         {/* 🆕 团队状态（名字+情绪上下对齐） */}

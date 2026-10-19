@@ -93,6 +93,12 @@
     background: linear-gradient(135deg, #4a9eff, #6bb5ff);
     display: flex; align-items: center; justify-content: center; font-size: 16px;
     box-shadow: 0 2px 8px rgba(74,158,255,0.3);
+    overflow: hidden; flex: none;
+  }
+  /* 2026-10-19：Lumina 立绘头像（正式形象，源图 assets/lumina-avatar.png） */
+  #chat-panel .cp-head .cp-avatar img,
+  #chat-panel .cp-msg.pet .cp-msg-avatar img {
+    width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;
   }
   #chat-panel .cp-head .cp-name { display: flex; flex-direction: column; gap: 1px; }
   #chat-panel .cp-head .cp-name b { font-weight: 700; font-size: 13px; }
@@ -822,7 +828,7 @@
     </div>
 
     <button class="cp-tb-title" id="tb-title" data-tip="切换对话">
-      <span class="cp-avatar">🐱</span>
+      <span class="cp-avatar"><img src="./assets/lumina-avatar.png" alt="Lumina" /></span>
       <span class="cp-name">Lumina Virtual Pet</span>
       <span class="cp-chev">›</span>
     </button>
@@ -1120,9 +1126,13 @@ function addChatMsg(role, text) {
   d.className = 'cp-msg ' + role;
   if (role === 'pet') {
     // 结构：头像在气泡外，正文包在 .cp-bubble 里（见上方「AI 消息气泡」样式注释）
+    // 2026-10-19：Lumina 立绘头像（同 .cp-head，assets/lumina-avatar.png）
     const av = document.createElement('span');
     av.className = 'cp-msg-avatar';
-    av.textContent = '🐱';
+    const avImg = document.createElement('img');
+    avImg.src = './assets/lumina-avatar.png';
+    avImg.alt = '';
+    av.appendChild(avImg);
     const bubble = document.createElement('div');
     bubble.className = 'cp-bubble';
     // 🔧 2026-10-18：助手回复走 Markdown 渲染。

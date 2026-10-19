@@ -82,14 +82,10 @@ import {
 } from './impl/ocr'
 // LSP 代码智能
 import { astSearchDef, astSearchHandler, lspSymbolsDef, lspSymbolsHandler, lspReferencesDef, lspReferencesHandler } from './impl/lsp'
-// Oath / Appointment (v2.3)
-import {
-  oathMakeDef, oathMake,
-  oathListDef, oathList,
-  oathFulfillDef, oathFulfill,
-  appointmentSetDef, appointmentSet,
-  appointmentListDef, appointmentList,
-} from './impl/oath'
+// 2026-10-19：移除 oath / appointment / keyboard 的死 import。
+//   这三组工具的注册早已被注释掉（oath 被 MCP 取代、keyboard 合并进 desktopType/desktopKey），
+//   但 import 一直留着——启动时 registry 仍按旧名单解析，打出一串
+//   「跳过未注册工具 oath_make/keyboard_press」噪音日志，掩盖真实告警。
 // MCP (v2.4)
 import {
   mcpListServersDef, mcpListServers,
@@ -105,7 +101,6 @@ import { createSkillRunDef, skillRunHandler, useSkillDef, useSkillHandler } from
 // ══════════════════════════════════════════════════════════
 
 // 键盘控制
-import { keyboardPressDef, keyboardPress, keyboardTypeDef, keyboardType } from './impl/keyboard'
 // 天气
 import { weatherDef, weather } from './impl/weather'
 // 网页抓取

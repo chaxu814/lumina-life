@@ -87,8 +87,26 @@ export async function handleModelHealth(_args: string[]): Promise<{ ok: boolean;
   }
 
   const cfg = readLlmConfig()
-  const model = opt('model') || cfg?.model
-  const baseUrl = opt('baseUrl') || cfg?.baseUrl
+  let model = opt('model') || cfg?.model
+  let baseUrl = opt('baseUrl') || cfg?.baseUrl
+
+  // 2026-10-19：.env 里通常只有 provider + API Key（没有 LLM_MODEL/LLM_BASE_URL），
+  // 于是 health 直接报「未能读取到 LLM 配置」——但应用/doctor 明明认识这套配置。
+  // 回退到 Agent 配置（与 doctor、应用内同一事实源），取第一个已配置的 Agent。
+  if (!model || !baseUrl) {
+    try {
+      const { getAgentConfig } = await import('../agentConfig')
+      const mgr = getAgentConfig()
+      for (const id of ['lumina', 'yak', 'recha'] as const) {
+        const c = mgr.get(id)
+        if (c?.model && c?.endpoint) {
+          model = model || c.model
+          baseUrl = baseUrl || c.endpoint
+          break
+        }
+      }
+    } catch { /* Agent 配置不可读时继续走下面的报错分支 */ }
+  }
 
   if (!model || !baseUrl) {
     const msg = [
@@ -96,8 +114,9 @@ export async function handleModelHealth(_args: string[]): Promise<{ ok: boolean;
       '',
       '请任选一种方式指定：',
       '  lumina health --model <模型名> --baseUrl <API 地址>',
+      '  或在应用内「设置 → LLM 配置」里配置一个可用模型（推荐，health/doctor 会自动复用）',
       '',
-      `已尝试读取的位置：\n  ${path.join(process.cwd(), '.env')}\n  ${path.join(process.cwd(), 'userData', 'config.json')}`,
+      `已尝试读取的位置：\n  ${path.join(process.cwd(), '.env')}\n  ${path.join(process.cwd(), 'userData', 'config.json')}\n  Agent 配置（lumina / yak / recha）`,
     ].join('\n')
     return { ok: false, error: msg }
   }

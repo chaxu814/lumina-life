@@ -52,7 +52,7 @@ npm run dev
 
 | 工具 | 版本要求 | 说明 |
 |------|---------|------|
-| Node.js | ≥ 18.0.0 | 推荐 v20 LTS 或 v24 |
+| Node.js | ≥ 20.0.0 | 推荐 v20 LTS 或 v22（package.json `engines` 口径） |
 | npm | ≥ 9 | 随 Node 自带 |
 | Git | ≥ 2.30 | 版本管理 |
 | Windows | 10+ | 目前仅支持 Windows |
@@ -80,28 +80,34 @@ npm run doctor       # 系统诊断
 
 ## 📁 项目结构
 
+> 2026-10-19 按 HEAD 实测校正。完整版（含每个目录的职责）见
+> [docs/DEVELOPER.md](docs/DEVELOPER.md#-项目结构深度解析)。
+
 ```
 lumina-life/
-├── electron/           # 主进程 (Node.js)
-│   ├── agentRunner.ts          # Agent 执行引擎
-│   ├── agentSocialEngine.ts    # 团队社交引擎
-│   ├── memory/                 # 记忆系统（SQLite + 向量检索）
-│   ├── tools/                  # 88+ 工具注册与执行
+├── electron/           # 主进程（约 14.8 万行）
+│   ├── agentRunner.ts          # ReAct 主循环（4,171 行）
+│   ├── delegationManager.ts    # 委托 + 五阶段门控
+│   ├── agentTeamPersonas.ts    # 三 Agent 人格（唯一事实源）
+│   ├── rolePolicy.ts           # 角色工具硬闸门
 │   ├── securityGuard.ts        # 分级安全审查
-│   ├── prompts/                # 提示词系统
-│   ├── cli/                    # 命令行接口
-│   └── ipc/                    # IPC 通信桥
-├── src/                # 渲染进程 (React 19)
-│   ├── panels/                 # 23 个功能面板
+│   ├── memory/                 # 记忆（SQLite + BM25/TF-IDF RRF）
+│   ├── tools/                  # 139 个已注册工具（registry + impl/）
+│   ├── team/                   # 对抗评审 / 动态雇工 / 任务板
+│   ├── orchestration/          # 路由 / 复杂度 / 阶段门 / 验证闭环
+│   ├── pet/                    # 桌宠五形态 + 独立聊天窗
+│   ├── cli/  api/  channels/   # CLI / REST API / IM 渠道
+│   └── ipc/                    # 27 个 IPC 通道
+├── src/                # 渲染进程（React 19 + Zustand 5 + UnoCSS）
+│   ├── panels/                 # 47 个功能面板
 │   ├── components/             # 通用 UI 组件
 │   ├── stores/                 # Zustand 状态管理
-│   └── styles/                 # 样式文件
-├── tests/              # 测试文件
-├── skills/             # 技能目录（可安装扩展）
-└── knowledge/          # 知识库
+│   └── styles/                 # UnoCSS / 全局样式
+├── tests/              # Vitest（305 文件 / 4,575 用例，扁平命名）
+├── skills/             # 7 个智能技能（SKILL.md 目录式）
+├── python/             # 可选语音/向量服务
+└── docs/               # VitePress 文档站
 ```
-
-> 详细架构请阅读 [README.md](README.md)。
 
 ---
 
@@ -120,7 +126,7 @@ lumina-life/
 
 - **函数组件** + Hook，不使用 Class 组件
 - **状态管理**: Zustand（全局）/ useState（局部）
-- **样式**: CSS Modules 或 Tailwind（如果项目已配置）
+- **样式**: UnoCSS（`uno.config.ts`）+ 组件内联样式，不使用 Tailwind
 
 ### 提交信息
 

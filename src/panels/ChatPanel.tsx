@@ -20,6 +20,7 @@ import { ttsEngine } from '../services/ttsEngine'
 import { proactiveChat } from '../services/proactiveChat'
 import { getDisabledToolNames } from '../stores/appStore'
 import PersonalityConflictAlert from '../components/PersonalityConflictAlert'
+import PersonaAvatar from '../components/PersonaAvatar'
 import DecisionDebateCard from './DecisionCard'
 import {
   IconBrain, IconClipboard, IconFolder, IconHourglass, IconLeaf, IconMic, IconMonitor,
@@ -2149,7 +2150,7 @@ export default function ChatPanel() {
                   ? (profile.avatar
                       ? <img src={profile.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : '👤')
-                  : currentPersona?.icon || '🐱'}
+                  : <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={32} style={{ width: '100%', height: '100%' }} />}
               </div>
               <div style={{
                 maxWidth: '72%', minWidth: 0,
@@ -2388,7 +2389,7 @@ export default function ChatPanel() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 14, flexShrink: 0,
               }}>
-                {currentPersona?.icon || '🐱'}
+                <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={28} style={{ width: '100%', height: '100%' }} />
               </div>
               <div>
                 <div style={{
@@ -2420,9 +2421,9 @@ export default function ChatPanel() {
                 background: 'var(--surface-50)',
                 border: `1.5px solid ${getAgentRole(selectedRole).color}33`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
+                flexShrink: 0, overflow: 'hidden',
               }}>
-                {currentPersona?.icon || '🐱'}
+                <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={32} style={{ width: '100%', height: '100%' }} />
               </div>
               <div style={{
                 maxWidth: '72%', background: 'var(--surface-50)',

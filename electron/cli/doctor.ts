@@ -9,6 +9,12 @@ import { execSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+// 工具完整性检查改为查**注册表**而不是查文件名。
+// 旧实现按 `impl/` 目录里是否存在 webSearch.ts / memory.ts / fileReadWrite.ts 判断，
+// 而这些文件早已改名/拆分（fileReadWrite → fileRead + fileWrite，memory → memory_v2），
+// 于是 139 个工具全部注册通过的同时，诊断报告却打印「0/9 核心工具就绪」——
+// 诊断工具自己先坏了。注册表才是「工具是否可用」的唯一事实源。
+import { getToolNames, validateToolRegistry } from '../tools/registry'
 
 export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data?: any; error?: string }> {
   const checks: { name: string; pass: boolean; detail: string }[] = []
@@ -214,26 +220,28 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
     checks.push({ name: '记忆系统', pass: false, detail: err.message })
   }
   // ══════════════════════════════════════════════════════════════
-  // 11. 🆕 工具加载完整性
+  // 11. 🆕 工具加载完整性（按注册表校验，2026-10-19 修正）
   // ══════════════════════════════════════════════════════════════
   try {
-    const toolsDir = path.join(__dirname, '..', 'tools', 'impl')
-    let implFiles: string[] = []
-    try { implFiles = fs.readdirSync(toolsDir).filter(f => f.endsWith('.ts') && !f.includes('.bak')) } catch { /*无目录*/ }
-
-    // 主要工具列表（不强制全部存在，只检查核心）
-    const coreTools = ['shell.ts', 'webSearch.ts', 'webFetch.ts', 'contentCollector.ts',
-      'browser.ts', 'memory.ts', 'fileReadWrite.ts', 'cron.ts', 'git.ts']
-    const missing = coreTools.filter(t => !implFiles.includes(t))
-    const found = coreTools.filter(t => implFiles.includes(t))
+    const names = getToolNames()
+    // 核心工具按**工具名**校验：这些是 agent 档日常可用的底线能力
+    const coreTools = [
+      'shell_exec', 'web_search', 'web_fetch', 'browser', 'memory_search',
+      'file_read', 'file_write', 'cron_schedule', 'git_status',
+    ]
+    const missing = coreTools.filter(t => !names.has(t))
+    const registry = validateToolRegistry()
+    const registryIssue = [...registry.missingDefs, ...registry.missingImpls]
 
     checks.push({
       name: '工具完整性',
-      pass: missing.length === 0,
-      detail: `${found.length}/${coreTools.length} 核心工具就绪${missing.length ? ` ❌ 缺失: ${missing.join(', ')}` : ''}`,
+      pass: missing.length === 0 && registry.ok,
+      detail: `核心 ${coreTools.length - missing.length}/${coreTools.length} 就绪 · 注册表 ${names.size} 个工具`
+        + (missing.length ? ` ❌ 缺失: ${missing.join(', ')}` : '')
+        + (!registry.ok ? ` ❌ 注册表异常: ${registryIssue.join(', ')}` : ''),
     })
   } catch (err: any) {
-    checks.push({ name: '工具完整性', pass: true, detail: `检查跳过: ${err.message}` })
+    checks.push({ name: '工具完整性', pass: false, detail: `检查异常: ${err.message}` })
   }
   // ══════════════════════════════════════════════════════════════
   // 12. v3.34: agent.json 工具白名单是否真的生效

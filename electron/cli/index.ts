@@ -104,9 +104,14 @@ const COMMANDS: CliCommand[] = [
 
 async function runCLI(argv: string[]): Promise<void> {
   // 找到脚本路径的索引 (electron exe 之后、第一个非-electron-flag 参数)
-  let startIdx = 1  // 默认跳过 exe 路径
+  //
+  // 2026-10-19 修复：`electron . --cli doctor` 传进来的是 `[exe, '.', '--cli', 'doctor']`，
+  // 旧实现只认 .js/.mjs/.cjs 结尾的脚本路径，`.` 不匹配 → 被当成命令名 →
+  // `npm run doctor` 报「未知命令: .」。现在把 `.` / `..`（app 目录）也视作脚本路径。
+  let startIdx = 1
   for (let i = 1; i < argv.length; i++) {
-    if (argv[i].endsWith('.js') || argv[i].endsWith('.mjs') || argv[i].endsWith('.cjs')) {
+    const a = argv[i]
+    if (a === '.' || a === '..' || a.endsWith('.js') || a.endsWith('.mjs') || a.endsWith('.cjs')) {
       startIdx = i + 1  // 跳过脚本路径本身
       break
     }

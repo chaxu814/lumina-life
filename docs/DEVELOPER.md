@@ -24,7 +24,7 @@
 
 | 依赖 | 最低版本 | 推荐版本 | 用途 |
 |------|---------|---------|------|
-| Node.js | 18.x | 22.x | 运行时 |
+| Node.js | 20.x | 22.x | 运行时（package.json `engines` 要求 ≥20） |
 | npm | 9.x | 10.x | 包管理 |
 | Git | 2.30+ | 2.40+ | 版本控制 |
 | Python | 3.10（可选） | 3.12 | 语音/向量功能 |
@@ -72,73 +72,79 @@ pip install -r python/requirements.txt
 
 ## 📁 项目结构深度解析
 
+> ⚠️ **2026-10-19 按 HEAD 实测重写。** 旧版本描述的 `electron/lumina-core/`、
+> `electron/services/`、`src/components/ChatWindow/`、`src/store/`、`tests/unit/`
+> 等目录**在当前仓库中不存在**——照着旧结构找文件会直接迷路。
+> 以下是 `git ls-files` 核对过的真实结构（仅列主要目录）。
+
 ```
 lumina-life/
-├── electron/                    # 👈 核心：主进程（Node.js 层）
-│   ├── main.ts                  #    入口：BrowserWindow、IPC、tray
-│   ├── preload.ts               #    预加载脚本（contextBridge）
-│   ├── lumina-core/             #    Agent 引擎核心
-│   │   ├── agent.ts             #       Agent 生命周期
-│   │   ├── agent-pool.ts        #       Agent 池管理
-│   │   ├── chat-engine.ts       #       LLM 对话引擎
-│   │   ├── emotion-system.ts    #       5维情绪系统
-│   │   └── intimacy-system.ts   #       亲密度系统
-│   ├── services/                #    后台服务
-│   │   ├── memory/              #       记忆系统（SQLite + 向量）
-│   │   ├── security/            #       沙箱 + 审批流
-│   │   ├── cron/                #       定时任务
-│   │   └── mcp/                 #       MCP 协议集成
-│   ├── tools/                   #    🔧 工具系统
-│   │   ├── registry.ts          #       工具注册表
-│   │   ├── index.ts             #       工具路由
-│   │   ├── schema.ts            #       参数 Schema
-│   │   └── impl/                #       88+ 工具实现
-│   │       ├── file.ts          #       · 文件读写
-│   │       ├── web.ts           #       · 搜索 / 抓取
-│   │       ├── tool_agent.ts    #       · Agent 间通信
-│   │       └── whisper.ts       #       · 语音识别
-│   ├── ipc/                     #    进程间通信
-│   └── utils/                   #    通用工具
+├── electron/                     # 👈 主进程（约 14.8 万行，577 个受控文件）
+│   ├── main.ts                   #    入口：BrowserWindow、IPC、tray、CLI/API 分流
+│   ├── preload.ts                #    预加载脚本（contextBridge）
+│   ├── agentRunner.ts            #    ReAct 主循环（4,171 行，见「已知技术债」）
+│   ├── agentRunner.*.ts          #    已拆出的常量/预处理/文本/工具选择
+│   ├── delegationManager.ts      #    委托主流程 + 五阶段门控 phaseGatedDelegate
+│   ├── agentTeamPersonas.ts      #    三 Agent 人格与 system prompt（唯一事实源）
+│   ├── agentConfig.ts            #    每 Agent 独立 LLM 配置
+│   ├── agentPool.ts              #    Agent 实例池与生命周期
+│   ├── agentSocialEngine.ts      #    群聊 / 早安仪式 / 朋友圈
+│   ├── rolePolicy.ts             #    角色工具硬闸门（YAK_ALLOW / RECHA_ALLOW）
+│   ├── securityGuard.ts          #    消息/参数级安全审查（6 级 × 10 类）
+│   ├── sandboxRules.ts           #    shell 命令规则库（BLOCK/CRITICAL/WARN）
+│   ├── tools/                    #    🔧 工具系统
+│   │   ├── registry.ts           #       注册表 / 分档 / 执行与重试
+│   │   ├── toolRouter.ts         #       每轮按需裁剪工具子集
+│   │   ├── types.ts              #       ToolDef 范式
+│   │   └── impl/                 #       80 个实现文件 / 139 个已注册工具
+│   ├── team/                     #    团队能力（对抗评审/动态雇工/任务板/邮箱…）
+│   ├── orchestration/            #    编排（路由/复杂度/阶段门/验证闭环/并行）
+│   ├── memory/                   #    记忆（SQLite + BM25/TF-IDF RRF + 证据桥）
+│   ├── proactive/                #    主动性引擎（门控/退避/未完话题）
+│   ├── pet/                      #    桌宠五形态渲染 + 状态桥 + 独立聊天窗
+│   ├── cli/                      #    命令行（doctor/health/chat/tool/agent/memory…）
+│   ├── api/                      #    REST API 路由
+│   ├── channels/                 #    IM 渠道适配（7 个，默认关闭）
+│   ├── security/                 #    命令策略 / 静态扫描 / 威胁情报
+│   ├── permission/               #    权限分级与审批
+│   ├── ipc/                      #    27 个主进程 ↔ 渲染通道
+│   ├── core/                     #    LLM provider / ReAct 引擎 / 平台适配
+│   └── agents/                   #    内置 Agent 的身份文件（AGENTS/SOUL/PROFILE/MEMORY）
 │
-├── src/                         # 👈 渲染进程（React 19）
-│   ├── App.tsx                  #    根组件
-│   ├── main.tsx                 #    入口
-│   ├── components/              #    23 个面板组件
-│   │   ├── ChatWindow/          #       聊天窗口
-│   │   ├── AgentPanel/          #       Agent 面板
-│   │   ├── MemoryPanel/         #       记忆面板
-│   │   ├── EmotionDisplay/      #       情绪显示
-│   │   └── SecurityPanel/       #       安全中心
-│   ├── store/                   #    Zustand 状态管理
-│   ├── hooks/                   #    自定义 Hooks
-│   └── styles/                  #    样式（Tailwind?）
+├── src/                          # 👈 渲染进程（React 19 + Zustand 5 + UnoCSS，约 5.5 万行）
+│   ├── App.tsx                   #    根组件
+│   ├── main.tsx                  #    入口
+│   ├── panels/                   #    功能面板（47 个：Chat/Settings/GroupChat/…）
+│   ├── components/               #    通用组件（Icons / PersonaAvatar / TopBar…）
+│   ├── stores/                   #    Zustand 状态（appStore / agentRuntimeStore…）
+│   ├── services/                 #    前端服务（LLM 持久化 / TTS / STT…）
+│   ├── hooks/  data/  i18n/  lib/  utils/  styles/  types/
+│   └── assets/                   #    静态资源（lumina-avatar.png 等）
 │
-├── tests/                       # 🧪 测试
-│   ├── unit/                    #    单元测试
-│   ├── integration/             #    集成测试
-│   └── e2e/                     #    E2E 测试
+├── tests/                        # 🧪 Vitest（305 个测试文件 / 4,575 用例，扁平命名）
+│   ├── *.test.ts                 #    与被测模块同名（agentRunner.test.ts…）
+│   └── fixtures/  gaming/  onboarding/  customAgent/
 │
-├── skills/                      # 📦 技能商店
-│   └── ...                      #    社区技能包
+├── skills/                       # 📦 7 个智能技能（SKILL.md 目录式）
+├── docs/                         # 📖 文档站（VitePress，42 个受控文件）
+│   ├── .vitepress/               #    站点配置
+│   ├── ARCHITECTURE.md           #    架构与已知技术债（发布前必读）
+│   ├── BENCHMARKS.md             #    质量基准与实测口径
+│   ├── API.md                    #    REST API 文档
+│   ├── DEVELOPER.md              #    👈 你在这里
+│   └── FAQ.md / INSTALL.md / TROUBLESHOOTING.md / ROADMAP.md
 │
-├── knowledge/                   # 📚 知识库
+├── python/                       # 🐍 可选语音/向量服务（edge-tts / whisper / embedding）
+├── scripts/                      # 构建、门禁、一次性工具（lint 棘轮 / bundle-requires）
+├── public/                       # 渲染层静态资源（favicon 等）
+├── resources/                    # 应用图标与打包资源（icon.ico / icon.png / icon-16/32）
 │
-├── docs/                        # 📖 文档站（VitePress）
-│   ├── .vitepress/
-│   ├── index.md
-│   ├── API.md                   #    REST API 文档
-│   ├── ARCHITECTURE.md          #    架构设计
-│   ├── DEVELOPER.md             #    👈 你在这里
-│   ├── FAQ.md                   #    常见问题
-│   └── TROUBLESHOOTING.md       #    故障排除
-│
-├── dist/                        # 打包输出
-├── out/                         # 编译输出
-│
-├── package.json
+├── out/                          # 编译输出（electron-vite，gitignore）
+├── dist/                         # 打包输出（electron-builder，gitignore）
+├── package.json                  # 脚本 + electron-builder 配置（无独立 builder yml）
 ├── tsconfig.json
-├── electron-vite.config.ts
-└── electron-builder.yml
+├── electron.vite.config.ts
+└── vitest.config.ts
 ```
 
 ---

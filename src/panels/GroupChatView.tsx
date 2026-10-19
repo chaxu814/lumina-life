@@ -12,6 +12,7 @@ import { isLocalInferenceRuntime } from '../services/isLocalEndpoint'
 import { useTaskWorkspace } from '../stores/taskWorkspaceStore'
 // 📋 任务工作区的开合状态来自同一个 store，所以「任务派发中心」旁边
 import AgentTaskBoard from '../components/AgentTaskBoard'
+import PersonaAvatar from '../components/PersonaAvatar'
 import ThinkingStepList from '../components/ThinkingStepList'
 import AgentMoments from '../components/AgentMoments'
 import { sttService, type STTStatus } from '../services/sttService'
@@ -5339,7 +5340,12 @@ export default function GroupChatView() {
               border: `1.5px solid ${
                 m.from === 'lumina' ? '#FFD4D4' : m.from === 'recha' ? '#D4E8FF' : m.from === 'yak' ? '#D4FFD6' : 'var(--border-light)'
               }`,
-            }}>{m.fromIcon}</div>
+            }}>
+              {/* 2026-10-19：Lumina 群聊头像也换成立绘 */}
+              {m.from === 'lumina'
+                ? <PersonaAvatar personaId="lumina" size={32} style={{ width: '100%', height: '100%' }} />
+                : m.fromIcon}
+            </div>
             <div style={{ maxWidth: '72%' }}>
               <div style={{
                 fontSize: 12, color: m.from === 'lumina' ? '#FF6B6B' : m.from === 'recha' ? '#448AFF' : m.from === 'yak' ? '#43A047' : '#3b82f6',

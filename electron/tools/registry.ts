@@ -264,9 +264,12 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
     tools: ['ocr', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_screen_size'],
   },
 
+  // 2026-10-19：oath / appointment 工具已整体移除（被 MCP 与 calendar_* 取代，
+  //   tools/impl/oath.ts 不再注册）。保留空 toolset 只为兼容外部按名字引用，
+  //   不再让启动日志每次都报「跳过未注册工具 oath_make/...」。
   oath: {
-    description: '誓约与预约',
-    tools: ['oath_make', 'oath_list', 'oath_fulfill', 'appointment_set', 'appointment_list'],
+    description: '誓约与预约（已废弃：改用 calendar_* / MCP）',
+    tools: [],
   },
 
   mcp: {
@@ -301,8 +304,8 @@ export const TOOLSETS: Record<string, ToolsetDef> = {
   },
 
   input: {
-    description: '键盘模拟 — 按键和文本输入',
-    tools: ['keyboard_press', 'keyboard_type'],
+    description: '键盘模拟 — 按键和文本输入（keyboard_* 已合并进 desktop_key / desktop_type）',
+    tools: ['desktop_key', 'desktop_type'],
   },
 
   proactive: {
@@ -734,7 +737,7 @@ const READ_ONLY_TOOLS = new Set<string>([
   'memory_search', 'memory_chat_search', 'memory_recall', 'memory_list',
   'proactive_status', 'team_status', 'team_list', 'agent_status',
   'todo_list', 'calendar_list', 'skill_search', 'skill_list', 'code_daily_generate',
-  'creator_outline', 'social_engine', 'time_capsule', 'pomodoro_status', 'oath_make',
+  'creator_outline', 'social_engine', 'time_capsule', 'pomodoro_status',
   'deep_research', 'weather_brief', 'desktop_tidy_scan', 'developer_companion_check',
   'desktop_scan_hardware', 'process_list', 'window_list', 'run_subagents_status',
 ])
@@ -1063,7 +1066,6 @@ export function areToolsIndependent(tool1: string, tool2: string): boolean {
     datetime: 'system', screenshot: 'system', clipboard_get: 'system', clipboard_set: 'system',
     system_info: 'system', notification: 'system', open_file: 'system',
     ocr: 'desktop', desktop_click: 'desktop', desktop_type: 'desktop', desktop_key: 'desktop',
-    oath_make: 'oath', oath_list: 'oath', oath_fulfill: 'oath',
     git_status: 'git', git_commit: 'git', git_log: 'git', git_diff: 'git',
     shell_exec: 'shell',
     mcp_connect: 'mcp', mcp_list_servers: 'mcp', mcp_list_tools: 'mcp', mcp_call_tool: 'mcp',

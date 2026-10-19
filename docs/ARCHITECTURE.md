@@ -258,7 +258,7 @@ nomic-embed-text 或外部 embedding 服务）为**可选且默认关闭**。
 | 循环依赖已断一处 | — | v3.34 已把 `registerAllTools()` 从 `agentRunner` 模块顶层移入构造函数（`registrationFlag.ts` 承载标志位）。建议引入 `madge` / `dependency-cruiser` 做持续检测 |
 | `electron/channels/adapters/` 默认关闭、未经真机验证 | 11 文件 | **接线是存在的**（`main.ts` 用 `await import()` 动态装载桥接器，打包器会内联，7 个适配器都有真实实现）。真实缺口是：适配器仅在配置 `enabled: true` 时启动，用户必须自己配凭据；且未做过端到端真机验证。**2026-10-04 更正**：此前这里写的是「未接线」，是因为项目里有一批检查 grep 静态 import，而这里用的是动态 import —— 扫不到就误判成没接线了 |
 | `electron/mission/` 零引用 | 5 文件 / 767 行 | 完整无引用 |
-| `electron/mcp/mcpConfigLoader.ts` 未接线 | 4 KB | 声明式 MCP 配置未接入 |
+| ~~`electron/mcp/mcpConfigLoader.ts` 未接线~~ | — | **2026-10-19 更正：该目录已在死代码清理中删除**。MCP 实际实现位于 `electron/mcpServer.ts` 与 `tools/impl/mcp.ts`（客户端工具 `mcp_connect` / `mcp_call_tool` 等已注册可用） |
 | `electron/persona/subPersona.ts` 无消费者 | 9 KB | feature flag `personality.subPersona` 开了也没人读 |
 | `tools/impl/duo` 类工具的 `dangerous` 标记 | — | 建议随 CI 加静态检查 |
 | 覆盖率门禁范围窄 | 17 文件 | `agentRunner` / `delegationManager` / `memoryStore` 三大核心均在门禁之外 |

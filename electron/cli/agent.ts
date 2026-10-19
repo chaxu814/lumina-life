@@ -18,6 +18,21 @@ export async function handleAgent(args: string[]): Promise<{ ok: boolean; data?:
     }
   }
 
+  // status 不带 agentId 时默认列出全部——README 的示例就是 `lumina agent status`，
+  // 旧实现要求必须带 ID，照着文档敲会直接失败（2026-10-19 修）。
+  if (subcmd === 'status' && args.length < 2) {
+    const { getAgentConfig } = await import('../agentConfig')
+    const config = getAgentConfig()
+    const statuses = config.getAllStatus()
+    const lines = statuses.map(s =>
+      `  ${s.icon || '🤖'} ${s.id.padEnd(12)} ${s.name.padEnd(10)} ${s.configured ? '✅ 已配置' : '❌ 未配置'} 模型: ${s.model || '-'}`
+    )
+    return {
+      ok: true,
+      data: `Agent 状态:\n${lines.join('\n')}\n\n共 ${statuses.length} 个 Agent（想看单个请用: lumina agent status <agentId>）`,
+    }
+  }
+
   if (subcmd === 'status' && args.length >= 2) {
     const agentId = args[1]
     const { getAgentConfig } = await import('../agentConfig')
