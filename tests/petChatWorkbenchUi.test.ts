@@ -169,7 +169,7 @@ describe('顶栏 — 左中右三段式', () => {
 
   it('窄窗（≤380px）有兜底：收起标题文字', () => {
     expect(html).toMatch(/@media\s*\(max-width:\s*380px\)/)
-    const mq = html.match(/@media\s*\(max-width:\s*380px\)\s*\{([\s\S]*?)\n  \}/)
+    const mq = html.match(/@media\s*\(max-width:\s*380px\)\s*\{([\s\S]*?)\n {2}\}/)
     expect(mq).toBeTruthy()
     expect(mq![1]).toMatch(/\.cp-name\s*\{\s*display:\s*none/)
   })
