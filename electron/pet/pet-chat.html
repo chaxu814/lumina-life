@@ -95,8 +95,8 @@
     box-shadow: 0 2px 8px rgba(74,158,255,0.3);
     overflow: hidden; flex: none;
   }
-  /* 2026-10-19：Lumina 立绘头像（正式形象，源图 assets/lumina-avatar.png） */
-  #chat-panel .cp-head .cp-avatar img,
+  /* 2026-10-19：Lumina 立绘头像（正式形象，源图 assets/lumina-avatar.png）。
+     消息气泡头像 24px 圆形；标题栏（.cp-tb-title，替代旧 .cp-head）20px 圆徽见下方规则。 */
   #chat-panel .cp-msg.pet .cp-msg-avatar img {
     width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;
   }
@@ -433,7 +433,15 @@
     -webkit-app-region: no-drag;
   }
   #chat-panel .cp-tb-title:hover { background: rgba(15,25,45,0.05); }
-  #chat-panel .cp-tb-title .cp-avatar { font-size: 14px; line-height: 1; }
+  /* 2026-10-19：Lumina 立绘头像——标题栏 20px 圆徽（emoji 时代这里只有 font-size: 14） */
+  #chat-panel .cp-tb-title .cp-avatar {
+    font-size: 14px; line-height: 1;
+    width: 20px; height: 20px; border-radius: 50%; overflow: hidden;
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+  }
+  #chat-panel .cp-tb-title .cp-avatar img {
+    width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;
+  }
   #chat-panel .cp-tb-title .cp-name {
     font-size: 13px; font-weight: 600; letter-spacing: .1px;
     /* min-width:0 是 flex 子项能收缩到省略号的前提（默认 min-width:auto 不肯缩） */
