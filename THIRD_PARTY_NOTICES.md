@@ -95,6 +95,31 @@ Lumina Life 在仓库中包含以下第三方运行时资源。感谢这些项�
 | --- | --- | --- |
 | 得意黑 Smiley Sans | `public/fonts/SmileySans-Oblique.ttf` | SIL Open Font License 1.1 |
 
+## 图标
+
+界面图标集中在 `src/components/Icons.tsx`，分三批来源：
+
+| 批次 | 代表图标 | 来源 / 许可 |
+| --- | --- | --- |
+| `SvgGame` 填充图标 | `IconMessageCircle` / `IconSettings` / `IconShield` / `IconZap` / `IconClock` / `IconUser` 等约 20 个 | **Game-Icon-Pack**（作者 Nieobie），**CC0 1.0 Universal**。https://github.com/nieobie/game-icon-pack |
+| `Svg` 早期线性图标（2.0 描边） | `IconBot` / `IconSliders` / `IconBarChart` | 本项目自绘，随项目许可（AGPL-3.0 OR Apache-2.0） |
+| `SvgLine` 线性图标（1.7 描边） | `IconSparkles` / `IconBrain` / `IconPaperclip` / `IconMonitor` / `IconLeaf` 等 22 个 | 本项目自绘，随项目许可 |
+
+桌宠小窗 `electron/pet/pet-chat.html` 的 20 个 `<symbol>` 精灵图标与上表第三批**同源**（path 数据复用），不额外计一份。
+
+**Game-Icon-Pack 的许可结论（2026-10-19 核对）**
+
+- 仓库根目录 `LICENSE` 为 **CC0 1.0 Universal** 全文；README 写明
+  "Feel free to use, modify, share, and distribute these icons for personal,
+  commercial, educational, or any other purpose."
+- 商用 ✅ / 修改 ✅ / 再分发（含打进安装包）✅ / **署名不强制**（作者原话是 optional）
+- CC0 无 copyleft 传染性，并入 AGPL-3.0 / Apache-2.0 项目**无冲突**
+- ⚠️ CC0 只处分**著作权**，不处分商标权（CC0 正文第 4(a) 条）。
+  若某个图标本身是第三方品牌标识，商标风险与 CC0 无关 —— 本项目涉及的品牌类图标
+  （如 Discord）为自绘且仅用于「连接到该服务」的功能指示，属指示性使用。
+
+> 虽然署名可选，仍建议在发布页的致谢里提一句 Game-Icon-Pack —— 成本为零，对作者是正反馈。
+
 ## 其他依赖
 
 npm 依赖的完整列表与许可见 `package.json` / `package-lock.json`，可在发布前用
