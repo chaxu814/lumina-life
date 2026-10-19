@@ -124,6 +124,15 @@ shots/
 !electron/pet/assets/**/*.png
 !electron/pet/assets/**/*.jpg
 !electron/pet/assets/**/*.jpeg
+# 例外：渲染层源码目录里的静态资源（PersonaAvatar.tsx 等 import 的立绘/图标）
+# ⚠️ 2026-10-20 修复：src/assets/lumina-avatar.png 曾被 *.png 误伤导致
+# fresh clone 构建失败（rollup: Could not resolve "../assets/lumina-avatar.png"）。
+# 新增渲染资源必须同步确认这里能放行——冒烟测试（clone→build）是唯一可靠验证。
+!src/assets/**/*.png
+!src/assets/**/*.jpg
+!src/assets/**/*.jpeg
+!src/assets/**/*.svg
+!src/assets/**/*.webp
 # 例外：README / 文档用的品牌图与截图
 !docs/**/*.png
 !docs/**/*.jpg
