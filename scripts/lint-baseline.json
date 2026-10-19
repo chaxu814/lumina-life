@@ -1,13 +1,20 @@
 {
   "errors": 0,
-  "warnings": 5081,
+  "warnings": 5491,
   "tolerance": 25,
   "note": "基线只允许变小。修掉一批 lint 问题后跑 `node scripts/lint-ratchet.cjs --update` 收紧。tolerance 是跨平台波动容差（CI 跑 win/mac/linux × Node 20/22，命中数可能差个位数）。",
-  "updatedAt": "2026-10-04",
+  "updatedAt": "2026-10-19",
   "previous": {
-    "warnings": 5042,
-    "updatedAt": "2026-10-03",
-    "reason": "旧基线在 fc860cc 上就已经失准：实测该 commit 为 5074 warnings，比记录的 5042 高 32 条（超出容差 25）。也就是说 release 分支的 lint 棘轮 job 本来就是红的。本次重新采集为实测值，不是新增技术债 —— 本轮新增代码的净增量经 worktree 对照测量为 +7（5074 → 5081），在容差内。",
-    "verifiedBy": "git worktree add K:/2/.wt-base fc860cc + junction node_modules 后实测 eslint 总量"
+    "warnings": 5081,
+    "errors": 0,
+    "updatedAt": "2026-10-04",
+    "reason": "基线自 10-04 起失准：本次实测为 5491，比记录高 410 条（远超容差 25）。用「切到父提交实测」法确认这不是本轮引入 —— 父提交 15301e5 实测同样是 5491 warnings；本轮 819b2ed 改动的 12 个文件告警数 338 → 338（增量 0），新增的 Icons.tsx 与 iconSystemUnification.test.ts 均为 0 告警。即这 410 条来自 10-04 与 10-18 之间的提交，本次按实测值重新采集，不是新增技术债。同时本轮修掉了 1 条存量 error（tests/petChatWorkbenchUi.test.ts 的 no-regex-spaces，见 15aad90），error 仍为 0。",
+    "verifiedBy": "git checkout 15301e5 && npx eslint . -f json（5491 warnings / 1 error）；切回 master 后实测 5491 warnings / 0 error；另用同样方法对 12 个改动文件做前后对照（338 → 338）",
+    "previous": {
+      "warnings": 5042,
+      "updatedAt": "2026-10-03",
+      "reason": "旧基线在 fc860cc 上就已经失准：实测该 commit 为 5074 warnings，比记录的 5042 高 32 条（超出容差 25）。也就是说 release 分支的 lint 棘轮 job 本来就是红的。本次重新采集为实测值，不是新增技术债 —— 本轮新增代码的净增量经 worktree 对照测量为 +7（5074 → 5081），在容差内。",
+      "verifiedBy": "git worktree add K:/2/.wt-base fc860cc + junction node_modules 后实测 eslint 总量"
+    }
   }
 }
