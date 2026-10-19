@@ -2137,9 +2137,9 @@ export default function ChatPanel() {
               flexDirection: isUser ? 'row-reverse' : 'row',
               alignItems: 'flex-start', gap: 8,
             }}>
-              {/* 头像：32px 圆形浅底 + 角色色描边（2026-10-18 对齐团队群聊） */}
+              {/* 头像：40px 圆形浅底 + 角色色描边（2026-10-18 对齐团队群聊；2026-10-19 30→40 放大） */}
               <div style={{
-                width: 32, height: 32, borderRadius: 16, fontSize: 18,
+                width: 40, height: 40, borderRadius: 20, fontSize: 22,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0, overflow: 'hidden',
                 background: isUser ? 'var(--accent-50)' : 'var(--surface-50)',
@@ -2150,7 +2150,7 @@ export default function ChatPanel() {
                   ? (profile.avatar
                       ? <img src={profile.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : '👤')
-                  : <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={32} style={{ width: '100%', height: '100%' }} />}
+                  : <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={40} style={{ width: '100%', height: '100%' }} />}
               </div>
               <div style={{
                 maxWidth: '72%', minWidth: 0,
@@ -2384,12 +2384,12 @@ export default function ChatPanel() {
               marginBottom: 8,
             }}>
               <div style={{
-                width: 28, height: 28, borderRadius: 14,
+                width: 34, height: 34, borderRadius: 17,
                 background: '#f472b6', color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, flexShrink: 0,
+                fontSize: 15, flexShrink: 0,
               }}>
-                <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={28} style={{ width: '100%', height: '100%' }} />
+                <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={34} style={{ width: '100%', height: '100%' }} />
               </div>
               <div>
                 <div style={{
@@ -2417,13 +2417,13 @@ export default function ChatPanel() {
               animation: 'fadeInUp 0.2s ease',
             }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 16, fontSize: 18,
+                width: 40, height: 40, borderRadius: 20, fontSize: 22,
                 background: 'var(--surface-50)',
                 border: `1.5px solid ${getAgentRole(selectedRole).color}33`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0, overflow: 'hidden',
               }}>
-                <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={32} style={{ width: '100%', height: '100%' }} />
+                <PersonaAvatar personaId={currentPersona?.id} icon={currentPersona?.icon} size={40} style={{ width: '100%', height: '100%' }} />
               </div>
               <div style={{
                 maxWidth: '72%', background: 'var(--surface-50)',

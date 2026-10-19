@@ -208,8 +208,11 @@ describe('Agent 消息渲染对齐团队群聊', () => {
     expect(block).toMatch(/fontSize: 14, lineHeight: 1\.7/)
   })
 
-  it('头像 32px 圆形浅底 + 角色色描边', () => {
-    expect(block).toMatch(/width: 32, height: 32, borderRadius: 16/)
+  // 2026-10-19：32px → 40px（用户反馈立绘头像偏小，「所有头像调大一点点」）。
+  // 同步放大的还有：思考指示器 28→34、流式气泡 32→40、顶栏 16→20、
+  // Agent 面板卡 26→32、群聊 32→40、桌宠标题栏 20→24、桌宠气泡 24→28。
+  it('头像 40px 圆形浅底 + 角色色描边', () => {
+    expect(block).toMatch(/width: 40, height: 40, borderRadius: 20/)
     expect(block).toMatch(/background: isUser \? 'var\(--accent-50\)' : 'var\(--surface-50\)'/)
     expect(block).toMatch(/getAgentRole\(selectedRole\)\.color\}33/)
   })

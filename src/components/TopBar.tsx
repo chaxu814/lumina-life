@@ -202,7 +202,7 @@ export default function TopBar() {
         </div>}
         {!compact && <div className="topbar-stat" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           {persona?.id === 'lumina'
-            ? <><PersonaAvatar personaId="lumina" size={16} /><span style={{ fontSize: 12 }}>{persona.name}</span></>
+            ? <><PersonaAvatar personaId="lumina" size={20} /><span style={{ fontSize: 12 }}>{persona.name}</span></>
             : <span style={{ fontSize: 12 }}>{personaLabel}</span>}
         </div>}
 

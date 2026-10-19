@@ -5332,7 +5332,7 @@ export default function GroupChatView() {
             animationDelay: `${Math.min(i * 30, 300)}ms`,
           }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 16, fontSize: 18,
+              width: 40, height: 40, borderRadius: 20, fontSize: 22,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
               fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
@@ -5343,7 +5343,7 @@ export default function GroupChatView() {
             }}>
               {/* 2026-10-19：Lumina 群聊头像也换成立绘 */}
               {m.from === 'lumina'
-                ? <PersonaAvatar personaId="lumina" size={32} style={{ width: '100%', height: '100%' }} />
+                ? <PersonaAvatar personaId="lumina" size={40} style={{ width: '100%', height: '100%' }} />
                 : m.fromIcon}
             </div>
             <div style={{ maxWidth: '72%' }}>

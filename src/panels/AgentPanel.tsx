@@ -101,7 +101,7 @@ export default function AgentPanel({ embedded }: { embedded?: boolean } = {}) {
                     position: 'relative',
                   }}>
                   {p.id === 'lumina'
-                    ? <PersonaAvatar personaId="lumina" size={26} />
+                    ? <PersonaAvatar personaId="lumina" size={32} />
                     : <span style={{ fontSize: 26 }}>{p.icon}</span>}
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{p.name}</div>
