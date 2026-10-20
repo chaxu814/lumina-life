@@ -55,6 +55,8 @@ import {
   detectMentionInReply,
 } from '../services/conversationDynamics'
 import ChatComposer from '../components/ChatComposer'
+import RecommendationBar from '../components/RecommendationBar'
+import { useNewsRecommendations } from '../hooks/useNewsRecommendations'
 import TaskDispatcher from '../components/TaskDispatcher'
 import DecisionCard, { type DecisionRequest } from '../components/DecisionCard'
 import SubagentCards from '../components/SubagentCards'
@@ -144,11 +146,24 @@ export default function ChatPanel() {
   /** 🔧 动态快捷指令 — 每次进入空对话时从池中随机挑 3 个 */
   const [dynamicPrompts, setDynamicPrompts] = useState<string[]>([])
 
+  // 📰 「为你推荐」—— 最近资讯（主进程 10 分钟缓存，失败时回落到动态提示）
+  //    2026-10-20：用户反馈原来那三个固定气泡「太死板」，改成打开就能看到
+  //    当天真实热点；点一条直接让 Lumina 去解读，而不是只发一句预设话术。
+  const recs = useNewsRecommendations(5)
+
   /** 从池中随机选 N 个不重复的提示 */
   const pickRandomPrompts = useCallback((pool: string[], n = 3) => {
     const shuffled = [...pool].sort(() => Math.random() - 0.5)
     return shuffled.slice(0, n)
   }, [])
+
+  /** 点一条推荐：带上链接让 Lumina 真去读，而不是只回一句空话 */
+  const openRecommendation = (rec: { title: string; url: string; source: string }) => {
+    const prompt = rec.url
+      ? `帮我看看这条资讯讲了什么，挑重点说，并说说它可能对我有什么影响：${rec.title}${rec.source ? `（${rec.source}）` : ''}\n${rec.url}`
+      : rec.title
+    handleSendRef.current?.(prompt)
+  }
 
   // ── ?ref 跟踪最新值，避免 useEffect([]) 闭包过期（必须声明在 mode 之后）──
   const latestRef = useRef({ activeConversationId, isProcessing, mode, selectedRole } as const)
@@ -2074,43 +2089,8 @@ export default function ChatPanel() {
                 </div>
               </div>
 
-              {/* 快捷指令气泡 — 动态推荐 + 点击直接发送 */}
-              <div style={{
-                display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-                gap: 8, marginTop: 20, maxWidth: 500, margin: '20px auto 0',
-              }}>
-                {(dynamicPrompts.length > 0 ? dynamicPrompts : getAgentRole(selectedRole).quickPrompts).map((prompt, i) => (
-                  <button key={`${selectedRole}-${i}`}
-                    onClick={() => {
-                      // 🔧 点击直接发送，不填输入框
-                      handleSendWithText(prompt)
-                    }}
-                    style={{
-                      animation: `chipSlide 0.4s ease both`,
-                      animationDelay: `${300 + i * 80}ms`,
-                      padding: '8px 16px', borderRadius: 20, cursor: 'pointer',
-                      border: `1px solid ${getAgentRole(selectedRole).color}30`,
-                      background: 'var(--surface-50)',
-                      color: getAgentRole(selectedRole).color,
-                      fontSize: 12, fontWeight: 500,
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.background = 'var(--surface-100)'
-                      ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.background = 'var(--surface-50)'
-                      ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-                    }}
-                  >
-                    ✨ {prompt}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                点击快捷指令即可发送 · 🎤 语音也可以哦
+              <div style={{ marginTop: 16, fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+                直接输入，或从下方「为你推荐」挑一条 · 🎤 语音也可以
               </div>
             </div>
           )}
@@ -2529,6 +2509,7 @@ export default function ChatPanel() {
               {
                 key: 'enhance', icon: <IconSparkles size={16} />,
                 label: promptEnhancing ? '正在增强…' : '增强提示词',
+                shortLabel: promptEnhancing ? '增强中' : '增强',
                 hint: input.trim() ? undefined : '先写点内容',
                 disabled: !input.trim() || promptEnhancing,
                 onClick: () => { void handleEnhancePrompt() },
@@ -2545,28 +2526,39 @@ export default function ChatPanel() {
                 ],
               },
               {
-                key: 'thinking', icon: <IconBrain size={16} />, label: '思考',
+                key: 'thinking', icon: <IconBrain size={16} />, label: '思考', shortLabel: '思考',
                 toggle: { on: thinkingMode, onChange: setThinkingMode },
               },
               {
-                key: 'emoji', icon: <IconSmile size={16} />, label: '表情',
+                key: 'emoji', icon: <IconSmile size={16} />, label: '表情', shortLabel: '表情',
                 onClick: () => setShowEmojiPicker(true),
               },
               {
-                key: 'file', icon: <IconPaperclip size={16} />, label: '文件',
+                key: 'file', icon: <IconPaperclip size={16} />, label: '文件', shortLabel: '文件',
                 hint: attachments.length > 0 ? `${attachments.length} 个` : undefined,
                 onClick: () => fileInputRef.current?.click(),
               },
               {
-                key: 'voice', icon: <IconMic size={16} />, label: '实时语音对话', dividerBefore: true,
+                key: 'voice', icon: <IconMic size={16} />, label: '实时语音对话', shortLabel: '语音', dividerBefore: true,
                 toggle: { on: realtimeVoiceActive, onChange: (v) => { void toggleRealtimeVoice(v) } },
               },
               {
-                key: 'cu', icon: <IconMonitor size={16} />, label: 'AI 操作电脑',
+                key: 'cu', icon: <IconMonitor size={16} />, label: 'AI 操作电脑', shortLabel: '操作电脑',
                 toggle: { on: computerUseActive, onChange: (v) => { void toggleComputerUse(v) } },
               },
               { key: 'capsule', icon: <IconHourglass size={16} />, label: '胶囊', onClick: handleCapsule },
             ]}
+            inlineKeys={['enhance', 'thinking', 'emoji', 'file', 'voice', 'cu']}
+            aboveCard={messages.length === 0 && !isProcessing ? (
+              <RecommendationBar
+                items={recs.items}
+                loading={recs.loading}
+                onReload={(force) => { void recs.reload(force) }}
+                onPickNews={openRecommendation}
+                onPickPrompt={(p) => handleSendRef.current?.(p)}
+                fallbackPrompts={dynamicPrompts.length > 0 ? dynamicPrompts : getAgentRole(selectedRole).quickPrompts}
+              />
+            ) : null}
             sending={isProcessing}
             canSend={!!input.trim() && !isProcessing}
             onSend={handleSend}

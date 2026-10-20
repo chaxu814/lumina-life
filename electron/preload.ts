@@ -1425,6 +1425,14 @@ const api = {
 
   // 新闻采集与推送（已有 IPC handler）
   newsCollect: () => ipcRenderer.invoke('news:collect') as Promise<any>,
+  /** 「为你推荐」轻量榜单（10 分钟缓存，不跑 LLM 筛选） */
+  newsRecommend: (opts?: { limit?: number; force?: boolean }) => ipcRenderer.invoke('news:recommend', opts) as Promise<{
+    ok: boolean
+    cached?: boolean
+    stale?: boolean
+    items: Array<{ title: string; url: string; source: string; category: string; pubDate: string; hotScore: number }>
+    error?: string
+  }>,
   newsPushToMail: () => ipcRenderer.invoke('news:push-to-mail') as Promise<{ ok: boolean; count?: number; error?: string }>,
   newsCollectAndPush: () => ipcRenderer.invoke('news:collect-and-push') as Promise<any>,
 

@@ -1571,6 +1571,47 @@ ipcMain.handle('news:collect', async () => {
   }
 })
 
+// ─── 「为你推荐」轻量通道（2026-10-20）───────────────────────
+// 为什么单开一条：news:collect 会跑 LLM 筛选（数秒到数十秒），聊天页每次
+// 打开都调它会把输入栏卡住。这里只取原始榜单 + 10 分钟缓存、不跑 LLM，
+// 保证「打开就有」；需要精选时仍走 news:collect / 邮件推送那条链路。
+let _recommendCache: { at: number; items: Array<{ title: string; url: string; source: string; category: string; pubDate: string; hotScore: number }> } | null = null
+const RECOMMEND_TTL_MS = 10 * 60 * 1000
+
+ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boolean }) => {
+  const limit = Math.max(1, Math.min(8, opts?.limit || 5))
+  const fresh = !!_recommendCache && Date.now() - _recommendCache.at < RECOMMEND_TTL_MS
+  if (fresh && !opts?.force && _recommendCache) {
+    return { ok: true, cached: true, items: _recommendCache.items.slice(0, limit) }
+  }
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('采集超时')), 15000)
+    })
+    const all = await Promise.race([collectAll(), timeout])
+    const items = all
+      .filter((i: NewsItem) => i?.title && i?.url)
+      .sort((a: NewsItem, b: NewsItem) => (b.hotScore || 0) - (a.hotScore || 0))
+      .slice(0, 8)
+      .map((i: NewsItem) => ({
+        title: i.title,
+        url: i.url,
+        source: i.source,
+        category: i.category,
+        pubDate: i.pubDate,
+        hotScore: i.hotScore,
+      }))
+    if (items.length) {_recommendCache = { at: Date.now(), items }}
+    return { ok: true, cached: false, items: items.slice(0, limit) }
+  } catch (err: any) {
+    if (_recommendCache) {
+      return { ok: true, cached: true, stale: true, items: _recommendCache.items.slice(0, limit) }
+    }
+    console.warn('[news:recommend] 采集失败:', err?.message || err)
+    return { ok: false, error: err?.message || '采集失败', items: [] }
+  }
+})
+
 // 推送新闻到邮箱
 ipcMain.handle('news:push-to-mail', async () => {
   try {

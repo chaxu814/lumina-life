@@ -393,3 +393,146 @@
   line-height: 1;
 }
 .hd-chip-txt { line-height: 1; }
+
+/* ══════════════════════════════════════════════════════════════
+   平铺工具栏 + 「为你推荐」（2026-10-20）
+   用户反馈：「更多」点开才看见太绕；参考豆包把高频功能摊成一行，
+   资讯推荐要「打开就有、每天不一样」，不能是写死的三个气泡。
+   ══════════════════════════════════════════════════════════════ */
+
+.cc-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cc-tools::-webkit-scrollbar { display: none; }
+
+.cc-tool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.cc-tool:hover { background: var(--surface-100); color: var(--text-primary); }
+.cc-tool.on { background: #eff6ff; color: #2563eb; }
+
+.cc-tool.off { opacity: 0.42; cursor: default; }
+.cc-tool.off:hover { background: transparent; color: var(--text-secondary); }
+
+.cc-tool-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.cc-tool-label { line-height: 1; }
+
+.cc-tool-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex: none;
+}
+
+.cc-tool-dot.on { background: #2563eb; }
+
+/* ── 「为你推荐」 ── */
+.cc-recs { margin-bottom: 8px; }
+
+.cc-recs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px 6px;
+  font-size: 11.5px;
+  color: var(--text-tertiary, #9aa1ad);
+}
+
+.cc-recs-refresh {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #9aa1ad);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.cc-recs-refresh:hover { background: var(--surface-100); color: var(--text-primary); }
+.cc-recs-refresh:disabled { opacity: 0.5; cursor: default; }
+
+.cc-recs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cc-rec {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.cc-rec:hover { background: var(--surface-50); border-color: #93c5fd; }
+
+.cc-rec-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-rec-src {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-tertiary, #9aa1ad);
+}
+
+.cc-recs-skel {
+  padding: 8px 2px;
+  font-size: 11.5px;
+  color: var(--text-tertiary, #9aa1ad);
+}
+
+/* 暗色主题：平铺工具与推荐的选中/悬停色（浅色底在深色下会刺眼） */
+[data-theme="dark"] .cc-tool.on {
+  background: rgba(59, 130, 246, 0.16);
+  color: #7cb3ff;
+}
+
+[data-theme="dark"] .cc-tool-dot { background: #4b5563; }
+[data-theme="dark"] .cc-tool-dot.on { background: #7cb3ff; }
+[data-theme="dark"] .cc-rec:hover { border-color: rgba(124, 179, 255, 0.45); }
+[data-theme="dark"] .cc-rec-src { color: #6f7683; }

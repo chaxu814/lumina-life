@@ -28,6 +28,8 @@ export interface ComposerMenuItem {
   /** 线性图标节点（2026-10-18：从 emoji 字符串改为 ReactNode，尺寸由 size 控制） */
   icon: React.ReactNode
   label: string
+  /** 平铺到工具栏时用的短标签（不填则用 label）。2026-10-20 新增 */
+  shortLabel?: string
   /** 右侧灰字：快捷键 / 当前值 / 数量 */
   hint?: string
   onClick?: () => void
@@ -69,10 +71,18 @@ export interface ChatComposerProps {
   searchPlaceholder?: string
 
   moreItems?: ComposerMenuItem[]
+  /**
+   * 要**平铺**到输入栏下方的项（key 列表）。未列出的项仍收在「更多」弹层里。
+   * 2026-10-20：用户反馈「更多」点开才看见太绕，主流产品（豆包等）是平铺一行。
+   */
+  inlineKeys?: string[]
   /** 「对话 ›」胶囊（Lumina Agent 用来切会话，群聊不需要） */
   convSlot?: React.ReactNode
   /** 输入框右下角的模型选择器 */
   modelSlot?: React.ReactNode
+
+  /** 输入卡片**上方**的自定义区块（「为你推荐」等）。2026-10-20 新增 */
+  aboveCard?: React.ReactNode
 
   sending?: boolean
   canSend?: boolean
@@ -96,6 +106,7 @@ export default function ChatComposer(props: ChatComposerProps) {
     attachments = [], onRemoveAttachment, onPickFiles, onScreenshot, onSearch,
     searchPlaceholder = '搜索…',
     moreItems = [], convSlot, modelSlot,
+    inlineKeys = [], aboveCard,
     sending, canSend, onSend, onAbort,
     overlay, hint, footerNote,
   } = props
@@ -142,9 +153,16 @@ export default function ChatComposer(props: ChatComposerProps) {
   const showPlus = !disabled
   const sendable = !!canSend
 
+  // 平铺 / 收纳的划分：inlineKeys 里有的进工具栏，其余仍收在「更多」。
+  // 用 key 而不是位置，避免调用方调整顺序时把某两项对调错位。
+  const inlineSet = new Set(inlineKeys)
+  const inlineItems = moreItems.filter(i => inlineSet.has(i.key))
+  const overflowItems = moreItems.filter(i => !inlineSet.has(i.key))
+
   return (
     <div className="cc-root" ref={rootRef}>
       {hint}
+      {aboveCard}
 
       <div className={'cc-card' + (disabled ? ' cc-card-disabled' : '')}>
         {/* ── 附件条 ── */}
@@ -204,7 +222,7 @@ export default function ChatComposer(props: ChatComposerProps) {
           </div>
         </div>
 
-        {/* ── 底部一行：+ ｜ 对话 ｜ 更多 ── */}
+        {/* ── 底部一行：+ ｜ 对话 ｜ 平铺工具 ｜ 更多 ── */}
         <div className="cc-foot">
           {showPlus && (
             <button type="button" className={'cc-plus' + (pop === 'plus' ? ' open' : '')}
@@ -215,7 +233,23 @@ export default function ChatComposer(props: ChatComposerProps) {
             </button>
           )}
           {convSlot}
-          {moreItems.length > 0 && (
+          {inlineItems.length > 0 && (
+            <div className="cc-tools">
+              {inlineItems.map(item => (
+                <button type="button" key={item.key}
+                  className={'cc-tool'
+                    + (item.active || item.toggle?.on ? ' on' : '')
+                    + (item.disabled ? ' off' : '')}
+                  title={item.hint ? `${item.label} · ${item.hint}` : item.label}
+                  onClick={() => runItem(item)}>
+                  <span className="cc-tool-ico">{item.icon}</span>
+                  <span className="cc-tool-label">{item.shortLabel || item.label}</span>
+                  {item.toggle && <span className={'cc-tool-dot' + (item.toggle.on ? ' on' : '')} />}
+                </button>
+              ))}
+            </div>
+          )}
+          {overflowItems.length > 0 && (
             <button type="button" className={'cc-pill' + (pop === 'more' ? ' on' : '')}
               onClick={() => togglePop('more')} title="更多功能">
               更多<span className="cc-chev">›</span>
@@ -252,11 +286,11 @@ export default function ChatComposer(props: ChatComposerProps) {
           </div>
         )}
 
-        {/* ── 「更多」弹层 ── */}
+        {/* ── 「更多」弹层（只放未平铺的项） ── */}
         {pop === 'more' && (
           <div className="cc-pop" style={{ left: 34, width: 262 }}>
             <div className="cc-pop-head">更多</div>
-            {moreItems.map(item => (
+            {overflowItems.map(item => (
               <React.Fragment key={item.key}>
                 {item.dividerBefore && <div className="cc-pop-sep" />}
                 <div className={'cc-pop-row' + (item.active ? ' on' : '') + (item.disabled ? ' off' : '')}>

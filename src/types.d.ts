@@ -520,6 +520,17 @@ declare global {
         error?: string
       }>
       newsPushToMail: () => Promise<{ ok: boolean; count?: number; error?: string }>
+      /** 「为你推荐」轻量榜单（10 分钟缓存，不跑 LLM 筛选） */
+      newsRecommend: (opts?: { limit?: number; force?: boolean }) => Promise<{
+        ok: boolean
+        cached?: boolean
+        stale?: boolean
+        items: Array<{
+          title: string; url: string; source: string
+          category: string; pubDate: string; hotScore: number
+        }>
+        error?: string
+      }>
 
       // 渠道配置
       channelGetConfigs: () => Promise<Array<{

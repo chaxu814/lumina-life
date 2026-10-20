@@ -37,6 +37,8 @@ import {
   SPARK_NOTE_SUFFIX,
 } from '../services/conversationDynamics'
 import ChatComposer from '../components/ChatComposer'
+import RecommendationBar from '../components/RecommendationBar'
+import { useNewsRecommendations } from '../hooks/useNewsRecommendations'
 import {
   IconBrain, IconClipboard, IconFlower, IconFolder, IconHourglass, IconLeaf, IconMessageCircle,
   IconMic, IconMonitor, IconPaperclip, IconPlus, IconSmile, IconSparkles, IconSpeaker, IconUser,
@@ -3917,6 +3919,14 @@ export default function GroupChatView() {
 
   // 用 ref 跟踪最新的 send，供 setTimeout 闭包使用
   const sendRef = useRef(send)
+  // 📰 「为你推荐」（2026-10-20）：打开空对话就能看到当天热点
+  const recs = useNewsRecommendations(5)
+  /** 把一段文本当作输入发出去（推荐项/回落提示词共用；沿用快捷指令的 80ms 等待渲染） */
+  const sendRecommendationText = (text: string) => {
+    setInput(text)
+    setTimeout(() => { sendRef.current?.() }, 80)
+  }
+
   sendRef.current = send
 
   const triggerDecision = useCallback(async () => {
@@ -5249,51 +5259,12 @@ export default function GroupChatView() {
                 {card.desc}
                 {agent && <span> {agent.icon} {agent.name} 已就位</span>}
               </p>
-              {/* 快捷指令按钮 */}
-              <div style={{
-                display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap', justifyContent: 'center',
-              }}>
-                {card.quickPrompts.slice(0, 3).map((prompt, i) => (
-                  <button
-                    key={i}
-                    className="ready-chip"
-                    onClick={() => {
-                      // 🆕 v9.2: 记住用户选择的任务类型，send() 会优先用它路由到正确的 Agent
-                      pendingTaskTypeRef.current = card.id
-                      // 设置输入文本，等待 React 渲染后再触发 send()
-                      setInput(prompt)
-                      setShowRoleSelector(false)
-                      setTimeout(() => { sendRef.current() }, 60)
-                    }}
-                    style={{
-                      padding: '9px 20px', borderRadius: 22,
-                      border: 'none',
-                      background: `${card.color}12`,
-                      color: card.color, fontSize: 13, fontWeight: 600,
-                      cursor: 'pointer', transition: 'all 0.2s',
-                      animation: `readyChip 0.4s ease ${0.35 + i * 0.08}s both`,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = `${card.color}22`
-                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.03)'
-                      e.currentTarget.style.boxShadow = `0 4px 14px ${card.color}30`
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = `${card.color}12`
-                      e.currentTarget.style.transform = 'translateY(0) scale(1)'
-                      e.currentTarget.style.boxShadow = 'none'
-                    }}
-                  >
-                    ✨ {prompt}
-                  </button>
-                ))}
-              </div>
               {/* 提示文字 */}
               <p style={{
                 margin: '16px 0 0', fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center',
                 animation: 'readySlideUp 0.4s ease 0.6s both',
               }}>
-                点击快捷指令即可发送 · 也可以直接输入消息
+                从下方「为你推荐」挑一条，或直接输入消息
               </p>
               {/* 简约提示条 */}
               <div style={{
@@ -5599,6 +5570,7 @@ export default function GroupChatView() {
             {
               key: 'enhance', icon: <IconSparkles size={16} />,
               label: promptEnhancing ? '正在增强…' : '增强提示词',
+              shortLabel: promptEnhancing ? '增强中' : '增强',
               hint: input.trim() ? undefined : '先写点内容',
               disabled: !input.trim() || promptEnhancing,
               onClick: () => { void enhancePrompt() },
@@ -5615,28 +5587,41 @@ export default function GroupChatView() {
               ],
             },
             {
-              key: 'thinking', icon: <IconBrain size={16} />, label: '思考',
+              key: 'thinking', icon: <IconBrain size={16} />, label: '思考', shortLabel: '思考',
               toggle: { on: thinkingMode, onChange: setThinkingMode },
             },
             {
-              key: 'emoji', icon: <IconSmile size={16} />, label: '表情',
+              key: 'emoji', icon: <IconSmile size={16} />, label: '表情', shortLabel: '表情',
               onClick: () => setShowEmoji(true),
             },
             {
-              key: 'file', icon: <IconPaperclip size={16} />, label: '文件',
+              key: 'file', icon: <IconPaperclip size={16} />, label: '文件', shortLabel: '文件',
               hint: gcAttachments.length > 0 ? `${gcAttachments.length} 个` : undefined,
               onClick: () => fileInputRef.current?.click(),
             },
             {
-              key: 'voice', icon: <IconMic size={16} />, label: '实时语音对话', dividerBefore: true,
+              key: 'voice', icon: <IconMic size={16} />, label: '实时语音对话', shortLabel: '语音', dividerBefore: true,
               toggle: { on: realtimeVoiceActive, onChange: (v) => { void toggleRealtimeVoice(v) } },
             },
             {
-              key: 'cu', icon: <IconMonitor size={16} />, label: 'AI 操作电脑',
+              key: 'cu', icon: <IconMonitor size={16} />, label: 'AI 操作电脑', shortLabel: '操作电脑',
               toggle: { on: computerUseActive, onChange: (v) => { void toggleComputerUse(v) } },
             },
             { key: 'capsule', icon: <IconHourglass size={16} />, label: '胶囊', onClick: handleCapsule },
           ]}
+          inlineKeys={['enhance', 'thinking', 'emoji', 'file', 'voice', 'cu']}
+          aboveCard={messages.filter(m => m.from === 'user').length === 0 && !sending ? (
+            <RecommendationBar
+              items={recs.items}
+              loading={recs.loading}
+              onReload={(force) => { void recs.reload(force) }}
+              onPickNews={(rec) => sendRecommendationText(
+                `帮我看看这条资讯讲了什么，挑重点说，并说说它可能对我有什么影响：${rec.title}${rec.source ? `（${rec.source}）` : ''}\n${rec.url}`,
+              )}
+              onPickPrompt={sendRecommendationText}
+              fallbackPrompts={(TASK_TYPE_CARDS.find(c => c.id === selectedRole)?.quickPrompts) || []}
+            />
+          ) : null}
           sending={sending}
           canSend={!sending && !!input.trim()}
           onSend={send}
