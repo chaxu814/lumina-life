@@ -481,11 +481,12 @@
 .cc-recs-refresh:hover { background: var(--surface-100); color: var(--text-primary); }
 .cc-recs-refresh:disabled { opacity: 0.5; cursor: default; }
 
-/* 气泡流式排列：宽度由文字决定，不撑满整行 */
+/* 竖向一条一条排；气泡宽度由文字决定（左对齐，不撑满整行） */
 .cc-recs-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
 }
 
 .cc-rec {

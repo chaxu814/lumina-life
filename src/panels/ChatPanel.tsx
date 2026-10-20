@@ -149,7 +149,7 @@ export default function ChatPanel() {
   // 📰 「为你推荐」—— 最近资讯（主进程 10 分钟缓存，失败时回落到动态提示）
   //    2026-10-20：用户反馈原来那三个固定气泡「太死板」，改成打开就能看到
   //    当天真实热点；点一条直接让 Lumina 去解读，而不是只发一句预设话术。
-  const recs = useNewsRecommendations(4)
+  const recs = useNewsRecommendations(5)
 
   /** 从池中随机选 N 个不重复的提示 */
   const pickRandomPrompts = useCallback((pool: string[], n = 3) => {
