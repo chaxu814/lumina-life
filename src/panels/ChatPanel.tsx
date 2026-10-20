@@ -2553,6 +2553,7 @@ export default function ChatPanel() {
               <RecommendationBar
                 items={recs.items}
                 loading={recs.loading}
+                smart={recs.smart}
                 onReload={(force) => { void recs.reload(force) }}
                 onPickNews={openRecommendation}
                 onPickPrompt={(p) => handleSendRef.current?.(p)}

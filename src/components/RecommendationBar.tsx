@@ -2,8 +2,9 @@
 // components/RecommendationBar.tsx — 输入栏上方的「为你推荐」
 //
 // 2026-10-20：替代原来写死的三个快捷气泡（用户评价「太死板」）。
-// 有真实资讯就展示资讯（标题 + 来源，点一条让 Lumina 去读）；
-// 没有（离线/采集失败）就回落到动态快捷指令，保证这一栏不空着。
+// 两段式展示：先出原始热榜（秒开），LLM 精选返回后原地替换，
+// 每条带一句「为什么推荐给你」，标题旁标「AI 精选」。
+// 没有资讯（离线/采集失败）时回落到动态快捷指令，保证这一栏不空着。
 //
 // 只负责展示与回调，数据来自 useNewsRecommendations，样式在 composer.css。
 // ============================================================
@@ -14,6 +15,8 @@ import type { RecommendationItem } from '../hooks/useNewsRecommendations'
 export interface RecommendationBarProps {
   items: RecommendationItem[]
   loading: boolean
+  /** 是否已拿到 AI 精选结果 */
+  smart?: boolean
   onReload: (force?: boolean) => void
   /** 点一条资讯 */
   onPickNews: (item: RecommendationItem) => void
@@ -24,12 +27,15 @@ export interface RecommendationBarProps {
 }
 
 export default function RecommendationBar(props: RecommendationBarProps) {
-  const { items, loading, onReload, onPickNews, onPickPrompt, fallbackPrompts = [] } = props
+  const { items, loading, smart, onReload, onPickNews, onPickPrompt, fallbackPrompts = [] } = props
 
   return (
     <div className="cc-recs">
       <div className="cc-recs-head">
-        <span>为你推荐</span>
+        <span className="cc-recs-title">
+          为你推荐
+          {smart && <em className="cc-recs-badge">AI 精选</em>}
+        </span>
         <button type="button" className="cc-recs-refresh" title="换一批"
           disabled={loading}
           onClick={() => onReload(true)}>↻</button>
@@ -40,8 +46,12 @@ export default function RecommendationBar(props: RecommendationBarProps) {
         <div className="cc-recs-list">
           {items.map((rec, i) => (
             <button type="button" className="cc-rec" key={`${rec.title}-${i}`}
-              title={rec.title} onClick={() => onPickNews(rec)}>
-              <span className="cc-rec-title">{rec.title}</span>
+              title={rec.reason ? `${rec.title}\n${rec.reason}` : rec.title}
+              onClick={() => onPickNews(rec)}>
+              <span className="cc-rec-main">
+                <span className="cc-rec-title">{rec.title}</span>
+                {rec.reason && <span className="cc-rec-reason">{rec.reason}</span>}
+              </span>
               {rec.source && <span className="cc-rec-src">{rec.source}</span>}
             </button>
           ))}
@@ -51,7 +61,9 @@ export default function RecommendationBar(props: RecommendationBarProps) {
           {fallbackPrompts.map((p, i) => (
             <button type="button" className="cc-rec" key={`fallback-${i}`}
               title={p} onClick={() => onPickPrompt(p)}>
-              <span className="cc-rec-title">{p}</span>
+              <span className="cc-rec-main">
+                <span className="cc-rec-title">{p}</span>
+              </span>
             </button>
           ))}
         </div>

@@ -531,6 +531,18 @@ declare global {
         }>
         error?: string
       }>
+      /** 「为你推荐」AI 精选（LLM 按兴趣重排，后台异步） */
+      newsRecommendSmart: (opts?: { limit?: number; force?: boolean }) => Promise<{
+        ok: boolean
+        cached?: boolean
+        reason?: string
+        items: Array<{
+          title: string; url: string; source: string
+          category: string; pubDate: string; hotScore: number
+          reason: string; score: number
+        }>
+        error?: string
+      }>
 
       // 渠道配置
       channelGetConfigs: () => Promise<Array<{

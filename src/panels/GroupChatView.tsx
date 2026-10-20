@@ -5614,6 +5614,7 @@ export default function GroupChatView() {
             <RecommendationBar
               items={recs.items}
               loading={recs.loading}
+              smart={recs.smart}
               onReload={(force) => { void recs.reload(force) }}
               onPickNews={(rec) => sendRecommendationText(
                 `帮我看看这条资讯讲了什么，挑重点说，并说说它可能对我有什么影响：${rec.title}${rec.source ? `（${rec.source}）` : ''}\n${rec.url}`,

@@ -1433,6 +1433,17 @@ const api = {
     items: Array<{ title: string; url: string; source: string; category: string; pubDate: string; hotScore: number }>
     error?: string
   }>,
+  /** 「为你推荐」AI 精选：LLM 按兴趣重排 + 推荐理由（后台异步，失败返回空） */
+  newsRecommendSmart: (opts?: { limit?: number; force?: boolean }) => ipcRenderer.invoke('news:recommend:smart', opts) as Promise<{
+    ok: boolean
+    cached?: boolean
+    reason?: string
+    items: Array<{
+      title: string; url: string; source: string; category: string
+      pubDate: string; hotScore: number; reason: string; score: number
+    }>
+    error?: string
+  }>,
   newsPushToMail: () => ipcRenderer.invoke('news:push-to-mail') as Promise<{ ok: boolean; count?: number; error?: string }>,
   newsCollectAndPush: () => ipcRenderer.invoke('news:collect-and-push') as Promise<any>,
 

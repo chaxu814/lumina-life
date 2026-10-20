@@ -21,7 +21,7 @@ import {
 } from '../decisionService'
 import { stateFilePath } from '../core/pathsFallback'
 import { collectAll } from '../tools/impl/newsCollector'
-import { filterWithLLM } from '../tools/impl/newsFilter'
+import { filterWithLLM, DEFAULT_INTERESTS } from '../tools/impl/newsFilter'
 import { deduplicate, assembleDigestBody } from '../tools/impl/newsDigest'
 import { enrichItemsBackground } from '../tools/impl/newsEnricher'
 import { type NewsItem } from '../tools/impl/newsCollector'
@@ -1609,6 +1609,79 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
     }
     console.warn('[news:recommend] 采集失败:', err?.message || err)
     return { ok: false, error: err?.message || '采集失败', items: [] }
+  }
+})
+
+// ─── 「为你推荐」第二阶段：AI 精选（2026-10-20）────────────
+// 第一阶段（news:recommend）秒出原始热榜，保证「打开就有」；
+// 这一阶段在后台用 LLM 按用户兴趣重排并给推荐理由，渲染层拿到后原地替换。
+// 为什么分两段：单次 LLM 调用 2–20s，不能让输入栏等它。
+let _smartCache: { at: number; items: Array<Record<string, unknown>> } | null = null
+const SMART_TTL_MS = 10 * 60 * 1000
+
+ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force?: boolean }) => {
+  const limit = Math.max(1, Math.min(8, opts?.limit || 5))
+  const fresh = !!_smartCache && Date.now() - _smartCache.at < SMART_TTL_MS
+  if (fresh && !opts?.force && _smartCache) {
+    return { ok: true, cached: true, items: _smartCache.items.slice(0, limit) }
+  }
+
+  try {
+    const pm = getProviderManager?.()
+    const activeConfig = pm?.getActiveConfig?.()
+    if (!activeConfig?.config?.baseUrl) {
+      return { ok: false, reason: 'no-llm', items: [] }
+    }
+
+    const pool = await Promise.race([
+      collectAll(),
+      new Promise<never>((_, reject) => { setTimeout(() => reject(new Error('采集超时')), 15000) }),
+    ])
+    // 候选池放宽到 40 条：给 LLM 足够的选择空间，避免只剩热榜前几名
+    const candidates = pool.filter((i: NewsItem) => i?.title && i?.url).slice(0, 40)
+    if (candidates.length === 0) {return { ok: false, error: '无候选', items: [] }}
+
+    const provider = new LLMProvider({
+      baseUrl: activeConfig.config.baseUrl,
+      apiKey: activeConfig.config.apiKey || '',
+      model: activeConfig.config.model,
+      maxContextTokens: activeConfig.config.maxContextTokens || 256000,
+    })
+    const llmCall = async (systemPrompt: string, userContent: string) => {
+      const res = await provider.call({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        maxTokens: 4096,
+        temperature: 0.3,
+      })
+      return res.text || ''
+    }
+
+    // 兴趣来源：新闻早报配置优先，没有就用内置默认画像
+    let interests = DEFAULT_INTERESTS
+    try {
+      const cfg = getNewsDigestScheduler()?.getConfig?.()
+      if (cfg?.interests) {interests = cfg.interests}
+    } catch { /* 配置读取失败不影响推荐 */ }
+
+    const filtered = await filterWithLLM(candidates, llmCall, { interests, maxItems: limit, minScore: 40 })
+    const items = filtered.map(f => ({
+      title: f.item.title,
+      url: f.item.url,
+      source: f.item.source,
+      category: f.item.category,
+      pubDate: f.item.pubDate,
+      hotScore: f.item.hotScore,
+      reason: f.reason || f.oneLiner || '',
+      score: f.relevanceScore,
+    }))
+    if (items.length) {_smartCache = { at: Date.now(), items }}
+    return { ok: true, cached: false, items: items.slice(0, limit) }
+  } catch (err: any) {
+    console.warn('[news:recommend:smart] AI 精选失败，保留原始热榜:', err?.message || err)
+    return { ok: false, error: err?.message || 'AI 精选失败', items: _smartCache?.items.slice(0, limit) || [] }
   }
 })
 

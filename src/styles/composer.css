@@ -536,3 +536,40 @@
 [data-theme="dark"] .cc-tool-dot.on { background: #7cb3ff; }
 [data-theme="dark"] .cc-rec:hover { border-color: rgba(124, 179, 255, 0.45); }
 [data-theme="dark"] .cc-rec-src { color: #6f7683; }
+
+/* AI 精选标记 + 推荐理由（两段式的慢段结果） */
+.cc-recs-title { display: inline-flex; align-items: center; gap: 6px; }
+
+.cc-recs-badge {
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #6d5bd0;
+  background: rgba(109, 91, 208, 0.1);
+  border: 1px solid rgba(109, 91, 208, 0.25);
+}
+
+.cc-rec-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cc-rec-reason {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--text-tertiary, #9aa1ad);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .cc-recs-badge {
+  color: #b3a8ff;
+  background: rgba(124, 108, 255, 0.14);
+  border-color: rgba(124, 108, 255, 0.3);
+}
