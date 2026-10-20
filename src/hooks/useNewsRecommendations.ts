@@ -19,9 +19,15 @@
 //
 // 为什么抽成 hook：Agent 聊天与团队群聊两个面板都要用，逻辑（延迟拉取、
 // 并发锁、失败清空、手动换一批、话题切换重置）完全一致，复制两份必然漂移。
+// 【开关（2026-10-20 补）】
+//   整个功能挂在 featureFlag `news.recommend` 下（默认开）。关闭后：
+//   渲染层清空榜单不再拉取，主进程 news:recommend* 直接回 disabled ——
+//   离线/计量网络/隐私敏感用户不会因为「打开聊天页」而被外联。
+//   设置页改动会通过 `lumina:flag-changed` 事件即时广播，无需重开窗口。
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { getFlag, onFlagChanged } from '../services/featureFlagsClient'
 
 export interface RecommendationItem {
   title: string
@@ -64,13 +70,33 @@ export function useNewsRecommendations(
   /** 上次拿到 AI 精选的时间：超过 10 分钟允许静默重跑（与主进程缓存 TTL 对齐） */
   const smartAtRef = useRef(0)
   const SMART_TTL_MS = 10 * 60 * 1000
+  /** 功能开关：关闭时不发任何 IPC（主进程也会再拦一层） */
+  const [enabled, setEnabled] = useState<boolean>(() => getFlag('news.recommend'))
+
+  // 设置页改了开关 → 立刻生效：关掉清空榜单并置 smartRef 阻止慢段；
+  // 重新打开则把状态复位，让下面的 effect 重新拉一轮。
+  useEffect(() => onFlagChanged('news.recommend', v => {
+    setEnabled(v)
+    if (!v) {
+      setItems([])
+      setSmart(false)
+      setTopicLabel(null)
+      smartRef.current = true
+      loadedRef.current = false
+    } else {
+      smartRef.current = false
+      loadedRef.current = false
+    }
+  }), [])
 
   /** 慢段：LLM 按兴趣重排 + 推荐理由（后台跑，失败静默保留快段结果） */
   const loadSmart = useCallback(async (force = false) => {
+    if (!getFlag('news.recommend')) {return}
     if (smartRef.current) {return}
     smartRef.current = true
     try {
       const r = await window.luminaAPI?.newsRecommendSmart?.({ limit, force, topic: topicRef.current })
+      if (!getFlag('news.recommend')) {return}
       if (r?.ok && Array.isArray(r.items) && r.items.length > 0) {
         setItems(r.items.map(i => ({
           title: i.title,
@@ -89,6 +115,7 @@ export function useNewsRecommendations(
   }, [limit])
 
   const reload = useCallback(async (force = false) => {
+    if (!getFlag('news.recommend')) {setItems([]); return}
     if (loadingRef.current) {return}
     loadingRef.current = true
     setLoading(true)
@@ -125,7 +152,9 @@ export function useNewsRecommendations(
 
   // 延迟拉取 / 话题切换：不和首屏渲染抢资源；话题变化（切角色）时清空旧榜单重拉。
   // 只自动拉一次（per topic），之后靠 ↻ / 回到窗口。
+  // 开关关闭时直接 return：不设 timer、不发 IPC，等于这个功能不存在。
   useEffect(() => {
+    if (!enabled) {return}
     // 话题切换：清掉上一个话题的榜单与标记，确保重新拉到对应榜单
     loadedRef.current = false
     smartRef.current = false
@@ -134,11 +163,12 @@ export function useNewsRecommendations(
     setTopicLabel(null)
     const t = setTimeout(() => { void reload() }, autoDelay)
     return () => clearTimeout(t)
-  }, [topic, reload, autoDelay])
+  }, [enabled, topic, reload, autoDelay])
 
   // 回到窗口时静默刷新：用户切出去再回来，看到的是「当前」而不是几小时前的榜单。
   // 不强制（force=false）：主进程有 10 分钟缓存，新鲜时直接返回缓存，不会真的重抓。
   useEffect(() => {
+    if (!enabled) {return}
     const onVisible = () => {
       if (document.visibilityState !== 'visible') {return}
       if (!loadedRef.current) {return}
@@ -150,7 +180,7 @@ export function useNewsRecommendations(
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
-  }, [reload])
+  }, [enabled, reload])
 
   return { items, loading, smart, topicLabel, reload }
 }

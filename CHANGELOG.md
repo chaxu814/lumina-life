@@ -1,7 +1,47 @@
+## [Unreleased] — 首屏体验 + 发布前披露补齐 (2026-10-20)
+
+> 测试基线：**310 文件 / 4632 用例通过 / 1 skipped / 0 失败**，`tsc --strict` 0 error，eslint 0 error，
+> `check:circular` 13 环、`check:bundle-requires` 56 条（均与基线一致）。
+> 本条目对应的 9 个产品提交（`95858db` … `11bcf5d`）此前未记账，2026-10-20 晚一并补齐；
+> 同时补上 2026-10-20 终局复核提出的三项「披露类」缺口（外联开关 / 预算闸门 / 文档）。
+
+### 首屏体验
+
+- **「为你推荐」资讯栏**（替代空对话里三个写死的气泡）
+  - 两段式：快段秒出原始热榜（10 分钟缓存、同源最多 2 条），慢段后台用 LLM 按兴趣重排并给理由，
+    拿到后原地替换；慢段失败/未配模型/离线时静默保留快段，用户无感
+  - 7 类任务画像（日常/学习/写作/代码/商业/情报/办公）映射到 `{categories, interests}`，
+    Agent 角色 id 经 ALIAS 归一；主进程按话题分 Map 缓存，切角色不串榜
+  - 点一条 = 把「标题 + 链接」直接发给 Lumina；回到窗口静默刷新（10 分钟缓存兜底）
+  - 选品规则抽成纯函数 `electron/news/recommendSelect.ts`（原来埋在 ipcMain.handle 里，无法单测）
+- **输入栏工具平铺**：`ChatComposer` 新增 `inlineKeys`，把高频 6 项摊到输入框下方一行，
+  窄屏横向滚动，未列出的仍收进「更多」
+
+### 发布前披露补齐（来自 2026-10-20 终局复核）
+
+- **「为你推荐」可关闭**：新增 feature flag `news.recommend`（默认开）
+  - 关闭后主进程 `news:recommend*` 直接返回 `reason:'disabled'`，**不发起任何外部请求、不调用模型**
+  - 渲染层不渲染资讯与刷新按钮，只保留静态提示词；设置页改动经 `lumina:flag-changed` 事件即时生效
+  - README 补「外联透明」一行 + 19 个域名清单与关闭方法
+- **慢段接入预算闸门**：`news:recommend:smart` 调 LLM 前先问
+  `budgetGuardian.allowNonEssentialCall()`；被拒返回 `reason:'budget'` 并保留快段。
+  此前只记账（`usageLedger`）不拦截——预算耗尽后这条后台调用仍会跑
+- **CLI / API 模式禁用硬件加速**：`--cli` / `--api` 启动时 `app.disableHardwareAcceleration()`
+  + `--disable-gpu`；Dockerfile 同步加 `--disable-gpu`。修复无交互桌面/容器环境下
+  GPU 进程连续崩溃导致 Chromium `FATAL` 退出（`lumina chat` exit 3）
+- **CLI 容忍未知全局选项**：`electron . --disable-gpu --cli chat …` 不再报「未知命令: --disable-gpu」，
+  改为提示「已忽略未知全局选项」
+- **doctor 新增「生效配置路径」**：直接打印实际生效的 `agent-llm-configs.json` 绝对路径。
+  仓库内有一份同名 json、userData 又有 `Lumina Life` / `lumina-life` 两个目录，
+  「改了配置不生效」几乎都是改错了文件
+- **新增 25 个单测**：`tests/recommendTopics.test.ts`（7 类型映射 / ALIAS 归一 / 缓存 key）、
+  `tests/recommendSelect.test.ts`（脏数据过滤 / 话题加权不排他 / 同源上限 / 补齐 / 不变性）
+
 ## [Unreleased] — 品牌形象升级 + 发布前评测 P0 修复 (2026-10-19)
 
 > 来源：2026-10-19 深度测评报告的 P0 清单（评测报告见工作区，不随仓库分发）。
-> 测试基线：**305 文件 / 4575 用例通过 / 1 skipped / 0 失败**，`tsc --strict` 0 error，eslint 0 error。
+> 测试基线（**当时**口径，已被 2026-10-20 条目取代）：305 文件 / 4575 用例通过 / 1 skipped / 0 失败，
+> `tsc --strict` 0 error，eslint 0 error。
 
 ### 品牌形象
 

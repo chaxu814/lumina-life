@@ -158,6 +158,23 @@ export async function handleDoctor(_args: string[]): Promise<{ ok: boolean; data
     checks.push({ name: 'Agent 配置', pass: false, detail: err.message })
   }
   // ══════════════════════════════════════════════════════════════
+  // 7b. 生效的配置文件路径（2026-10-20 新增）
+  //     「改了配置不生效」绝大多数是改错了文件：仓库内有一份同名 json，
+  //     userData 又有 Lumina Life / lumina-life 两个目录。直接报绝对路径。
+  // ══════════════════════════════════════════════════════════════
+  try {
+    const { getAgentConfig } = await import('../agentConfig')
+    const p = getAgentConfig().getConfigPath()
+    const exists = p ? fs.existsSync(p) : false
+    checks.push({
+      name: '生效配置路径',
+      pass: true,
+      detail: exists ? p : `${p}（文件尚未生成，保存一次模型配置后创建）`,
+    })
+  } catch (err: any) {
+    checks.push({ name: '生效配置路径', pass: true, detail: `读取失败: ${err.message}` })
+  }
+  // ══════════════════════════════════════════════════════════════
   // 8. 🆕 LLM 连接测试（只做配置检查，不做真实请求以免耗时）
   // ══════════════════════════════════════════════════════════════
   try {

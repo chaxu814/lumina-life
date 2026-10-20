@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4607%20passing%20%2F%20308%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4607 tests passing across 308 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4632%20passing%20%2F%20310%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4632 tests passing across 310 test files"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
@@ -55,6 +55,7 @@
 | 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
 | 🟡 | **无第三方技能生态** | 技能市场通道已通；`electron/skills/` 有 **13 个示例技能**、根 `skills/` 有 **7 个智能技能**，但**没有第三方技能可装** | 待社区 |
 | 🟡 | **`agentRunner.ts` 单文件 4171 行**（含空行；非空约 3856 行，2026-10-20 实测） | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
+| 🔵 | **「为你推荐」的 AI 精选依赖已配置模型** | 未配模型 / 离线 / 预算已收紧时只显示原始热榜（快段），不会报错也不会空着；想完全不要这个功能可在设置里关闭 | 设计如此 |
 | 🔵 | **5487 条 ESLint warning**（其中 `no-explicit-any` 3340 条） | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
 | 🔵 | **Chromium sandbox 为 `false`** | 渲染进程安全由**应用层**承担（rolePolicy + securityGuard + sandboxRules + 审批流），**不是**浏览器沙箱；文档已按此更正 | 已澄清 |
 
@@ -352,6 +353,17 @@ agent 档近万 tokens、developer 档 1.2 万 tokens，**每一次模型调用�
 技能可经内置商店安装 / 卸载 —— 但 **生态目前是空的**，没有第三方技能。<br>
 <sub>Skills installable via the built-in store — but the ecosystem is currently empty (no third-party skills yet).</sub>
 
+### 🗞️ 为你推荐 · 打开就有内容，不用先想问题
+
+空对话时输入框上方会显示一条资讯栏，解决的是「打开应用不知道问什么」这个真实卡点：
+
+- **两段式**：先秒出原始热榜（毫秒级、10 分钟缓存），再在后台用 LLM 按你的兴趣重排并给一句推荐理由（拿到后原地替换，不卡输入栏）。
+- **跟任务类型走**：日常聊天 / 学习辅导 / 写作创作 / 代码开发 / 商业设计 / 情报监控 / 职场办公，7 类各有分类偏好与兴趣描述——选「代码开发」看到的是 AI 编程与开源项目，选「情报监控」看到的是融资、芯片、政策。
+- **点一条就发给她**：标题 + 链接直接进对话，不用复制粘贴。
+- **可关**：设置 → 隐私与开关 → 关闭「为你推荐」，关闭后不发任何请求（外联域名见[铁则四](#-铁则四安全不是选项是默认值)）。
+
+<sub>每 10 分钟最多刷新一次；离线/采集失败时静默回落到静态提示词，不会弹错。</sub>
+
 ---
 
 ## 💡 Why Lumina? · 为什么选 Lumina
@@ -413,7 +425,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 | 闸门 | 命令 | 实测结果 |
 |---|---|---|
-| 测试套件 | `npm test` | **308 个测试文件 · 4607 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
+| 测试套件 | `npm test` | **310 个测试文件 · 4632 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
 | 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
 | 代码规范 | `npm run lint` | **0 error / 5477 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
 | CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
@@ -421,7 +433,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 > ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
 > 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
-> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 308 文件 / 4607 通过 / 0 失败。
+> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 310 文件 / 4632 通过 / 0 失败。
 > 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
 > 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
 
@@ -472,7 +484,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：308 文件 · 4607 用例通过 / 1 skipped / 0 失败**（本机实测；
+Linux 为 roadmap。**测试规模：310 文件 · 4632 用例通过 / 1 skipped / 0 失败**（本机实测；
 ⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
 `tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
@@ -481,7 +493,7 @@ Linux 为 roadmap。**测试规模：308 文件 · 4607 用例通过 / 1 skipped
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：308 文件 / 4607 passed / 1 skipped
+npx vitest run             # 预期：310 文件 / 4632 passed / 1 skipped
 node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
 ```</sub>
 
@@ -778,10 +790,22 @@ Lumina 记得你。每次对话都是你们关系的延续，不是从头开始�
 |---------|------|
 | 🛡️ 沙箱模式 | 双层审查：消息/参数级（6×10）+ 命令级（32 条规则，4 档分级） |
 | 📋 审批流 | 高风险操作需要用户手动确认 |
-| 🔒 隐私优先 | 所有数据本地存储，不上传云端 |
+| 🔒 隐私优先 | 记忆、人格文件、对话摘要只存本机，不上传；模型推理按你配置走（云端服务商 / 本地模型） |
+| 🌐 外联透明 | 唯一会**主动**外联的是「为你推荐」资讯栏（19 个公开 RSS/热榜站点，可在设置里一键关闭）；其余网络请求都由你的操作触发 |
 | 🔑 API Key 隔离 | LLM Key 与应用权限分离 |
 | 🚚 数据导出/导入 | 本机记忆一键打包为 zip（manifest + 人读 memory.md + 每表 JSON），导入时按主键去重、绝不覆盖现有数据 |
 | 🎛️ 功能开关 | 设置页可逐项开关全部新能力（实验项默认关）；`mode.minimal` 精简模式只露「会主动找你 · 真记得你 · 安全帮你干一件事」 |
+
+> **关于「为你推荐」的外联（如实说明）**
+>
+> 聊天页输入框上方的资讯栏会在打开页面约 1 秒后，向你机器外的**公开**站点取榜单：
+> 36氪、Solidot、少数派、开源中国、TechCrunch、The Verge、Hugging Face、OpenAI Blog、
+> Google AI Blog、MIT Tech Review、arXiv（cs.ai/cl/lg/cv）、百度热搜、GitHub Trending、
+> 东方财富快讯、金十快讯、Hacker News——**只取公开标题/链接，不发送任何关于你的数据**。
+> 随后若你配置了模型，会把「候选标题 + 兴趣描述」发给你自己的模型服务商做精选排序。
+>
+> **不想要？** 设置 → 隐私与开关 → 关闭「为你推荐」。关闭后主进程不再发起任何请求、
+> 不再调用模型，该位置只保留几条静态提示词。（离线/计量网络/代理环境建议关闭。）
 
 ### 🏅 铁则五：开源是承诺，不是营销
 
@@ -853,7 +877,7 @@ lumina-life/
 | 自动更新 Auto Update | electron-updater (GitHub Releases) |
 | 协议支持 Protocols | MCP (Model Context Protocol) |
 | 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **308 文件 / 4607 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| 测试规模 Tests | **310 文件 / 4632 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
 
 ---
 

@@ -545,6 +545,18 @@ class AgentConfigManager {
     return { ...this._configs }
   }
 
+  /**
+   * 当前**实际生效**的配置文件绝对路径（2026-10-20 新增）。
+   *
+   * 为什么需要暴露：仓库内也有一份同名 `agent-llm-configs.json`，加上
+   * userData 存在 `Lumina Life`（打包版）与 `lumina-life`（dev 版）两个目录，
+   * 排障时「改了配置不生效」几乎全是改错了文件。doctor 直接打印这个路径，
+   * 比任何文档都省事。
+   */
+  getConfigPath(): string {
+    return this._configPath
+  }
+
   /** 返回所有 agent 的配置状态摘要 */
   getAllStatus(): Array<{
     id: AgentId

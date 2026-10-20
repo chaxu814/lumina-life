@@ -11,7 +11,7 @@
 | 门禁 | 命令 | 口径 | 实测结果 |
 |---|---|---|---|
 | 类型检查 | `npm run typecheck`（`tsc --noEmit --strict`） | strict 模式 0 错误 | 0 错误，约 1 分钟 |
-| 单元测试 | `npm run test`（`vitest run`） | 不许 skip 新增用例 | 308 个测试文件，4607 通过 / 1 既有跳过，约 50 秒 |
+| 单元测试 | `npm run test`（`vitest run`） | 不许 skip 新增用例 | 310 个测试文件，4632 通过 / 1 既有跳过，约 50 秒 |
 | 静态检查 | `npm run lint`（`eslint .`） | 0 error | 0 error |
 
 任何一道门禁变红，发布分支不许合入。

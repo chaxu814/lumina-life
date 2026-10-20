@@ -66,7 +66,7 @@ lumina-life/
 │   ├── security/              # 双层安全审查
 │   └── core/platform/         # Windows / macOS / Linux 适配层
 ├── src/                       # 渲染进程（React 19 + Zustand）
-├── tests/                     # 308 文件 / 4607 用例（Vitest）
+├── tests/                     # 310 文件 / 4632 用例（Vitest）
 ├── agents/                    # 三个 Agent 的配置（工具白/黑名单）
 ├── skills/                    # 技能目录
 ├── docs/                      # 文档站（VitePress）

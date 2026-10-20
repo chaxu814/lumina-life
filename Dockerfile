@@ -42,6 +42,9 @@ VOLUME ["/data"]
 EXPOSE 3456
 
 # xvfb-run 提供虚拟显示，Electron 以 API 模式常驻
+# --disable-gpu：容器里没有真实 GPU，xvfb 也不提供硬件加速；不禁用的话
+# Chromium 会反复重启 GPU 进程，累计崩溃后整个进程 FATAL 退出（2026-10-20 实测）。
+# 应用层在 --api 模式下也会调 app.disableHardwareAcceleration()，这里是双保险。
 CMD ["xvfb-run", "-a", "--server-args=-screen 0 1024x768x24", \
-     "node_modules/electron/dist/electron", "--no-sandbox", \
+     "node_modules/electron/dist/electron", "--no-sandbox", "--disable-gpu", \
      "out/main/index.js", "--api"]

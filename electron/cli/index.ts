@@ -117,7 +117,22 @@ async function runCLI(argv: string[]): Promise<void> {
     }
   }
   // 过滤掉 --cli 和 --headless (它们可能在任意位置)
-  const args = argv.slice(startIdx).filter(a => a !== '--cli' && a !== '--headless' && a !== '--no-sandbox')
+  const rawArgs = argv.slice(startIdx).filter(a => a !== '--cli' && a !== '--headless' && a !== '--no-sandbox')
+  // 2026-10-20：Chromium / Electron 的开关（--disable-gpu、--inspect、--user-data-dir=…
+  // 等）会被原样带进 argv。旧逻辑把第一个这样的参数当成子命令 →
+  // `electron . --disable-gpu --cli chat "…"` 报「未知命令: --disable-gpu」。
+  // 现在跳过所有「以 - 开头且不是已知全局选项」的前导参数，并明确告知。
+  const GLOBAL_OPTS = new Set(['--help', '-h', '--version', '-v'])
+  const skipped: string[] = []
+  let cursor = 0
+  while (cursor < rawArgs.length && rawArgs[cursor].startsWith('-') && !GLOBAL_OPTS.has(rawArgs[cursor])) {
+    skipped.push(rawArgs[cursor])
+    cursor++
+  }
+  if (skipped.length > 0) {
+    console.error(`ℹ️  已忽略未知全局选项: ${skipped.join(' ')}（可用 --help 查看支持的选项）`)
+  }
+  const args = rawArgs.slice(cursor)
   const startTime = Date.now()
 
   // --help

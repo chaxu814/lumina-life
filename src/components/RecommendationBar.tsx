@@ -11,6 +11,7 @@
 
 import React from 'react'
 import type { RecommendationItem } from '../hooks/useNewsRecommendations'
+import { getFlag } from '../services/featureFlagsClient'
 
 export interface RecommendationBarProps {
   items: RecommendationItem[]
@@ -30,6 +31,25 @@ export interface RecommendationBarProps {
 
 export default function RecommendationBar(props: RecommendationBarProps) {
   const { items, loading, smart, topicLabel, onReload, onPickNews, onPickPrompt, fallbackPrompts = [] } = props
+
+  // 开关关闭（设置 → 隐私与开关 → 为你推荐）：不再展示资讯与刷新按钮，
+  // 只保留几条静态提示词，避免这一栏整个消失、输入区上方突然空一块。
+  // 注意：真正的网络拦截在主进程与 hook 里各有一道，这里只是不渲染。
+  if (!getFlag('news.recommend')) {
+    if (fallbackPrompts.length === 0) {return null}
+    return (
+      <div className="cc-recs">
+        <div className="cc-recs-list">
+          {fallbackPrompts.map((p, i) => (
+            <button type="button" className="cc-rec" key={`fallback-off-${i}`}
+              title={p} onClick={() => onPickPrompt(p)}>
+              <span className="cc-rec-title">{p}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="cc-recs">

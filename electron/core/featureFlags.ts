@@ -57,7 +57,12 @@ export type FeatureKey =
   | 'rituals.nightReview'
   | 'rituals.morningBriefing'
   | 'decision.enabled'
-  | 'handover.enabled';
+  | 'handover.enabled'
+  // 🆕 「为你推荐」（输入栏上方资讯栏）
+  //   为什么给它一个开关：它会在打开聊天页时向 19 个第三方站点取 RSS/热榜，
+  //   慢段还会调一次 LLM。默认开（开箱体验），但离线/计量网络/隐私敏感用户
+  //   必须能一键关掉——关掉后主进程直接返回 disabled，渲染层不渲染该栏。
+  | 'news.recommend';
 
 const DEFAULTS: Record<FeatureKey, boolean> = {
   // F1：7×8 威胁分类规则库——随代码落地即开（规则库是纯增量，不改旧路径）
@@ -115,6 +120,10 @@ const DEFAULTS: Record<FeatureKey, boolean> = {
   'decision.enabled': false,
   // 交班模式（加密卡片+二维码+局域网 H5）：关闭时 generate/save 回 disabled。
   'handover.enabled': false,
+  // 「为你推荐」：默认开。它只读公开热榜/RSS，不发送任何用户数据；
+  // 但慢段会把「候选标题 + 兴趣描述」发给用户自己配置的模型，且会外联第三方站点，
+  // 因此必须可关（关闭后主进程 news:recommend* 直接回 disabled，不产生任何请求）。
+  'news.recommend': true,
 };
 
 const overrides: Partial<Record<FeatureKey, boolean>> = {};

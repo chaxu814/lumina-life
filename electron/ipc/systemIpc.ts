@@ -23,6 +23,9 @@ import { stateFilePath } from '../core/pathsFallback'
 import { collectAll } from '../tools/impl/newsCollector'
 import { filterWithLLM, DEFAULT_INTERESTS } from '../tools/impl/newsFilter'
 import { resolveRecommendTopic, topicCacheKey } from '../news/recommendTopics'
+import { selectRecommendations } from '../news/recommendSelect'
+import { isEnabled } from '../core/featureFlags'
+import { getBudgetGuardian } from '../billing/budgetGuardian'
 import { deduplicate, assembleDigestBody } from '../tools/impl/newsDigest'
 import { enrichItemsBackground } from '../tools/impl/newsEnricher'
 import { type NewsItem } from '../tools/impl/newsCollector'
@@ -1582,6 +1585,8 @@ const _recommendCache = new Map<string, { at: number; items: RecommendRow[] }>()
 const RECOMMEND_TTL_MS = 10 * 60 * 1000
 
 ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boolean; topic?: string }) => {
+  // 开关关闭：不发任何网络请求、不读缓存（用户明确说了不要这个功能）
+  if (!isEnabled('news.recommend')) {return { ok: false, reason: 'disabled', items: [] }}
   const limit = Math.max(1, Math.min(8, opts?.limit || 5))
   const topicKey = topicCacheKey(opts?.topic)
   const topic = resolveRecommendTopic(opts?.topic)
@@ -1596,33 +1601,8 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
     })
     const all = await Promise.race([collectAll(), timeout])
 
-    // 话题加权：同分类优先（+1000），再按热度排；不做硬过滤，
-    // 否则某个话题当天没有对应分类时会整块空掉。
-    const catSet = new Set(topic?.categories || [])
-    const sorted = all
-      .filter((i: NewsItem) => i?.title && i?.url)
-      .sort((a: NewsItem, b: NewsItem) => {
-        const aw = catSet.has(a.category) ? 1000 : 0
-        const bw = catSet.has(b.category) ? 1000 : 0
-        return (bw + (b.hotScore || 0)) - (aw + (a.hotScore || 0))
-      })
-
-    // 来源分散：同一来源最多 2 条，避免整屏都是 Hacker News 英文标题
-    const picked: NewsItem[] = []
-    const perSource = new Map<string, number>()
-    for (const it of sorted) {
-      if (picked.length >= 8) {break}
-      const used = perSource.get(it.source) || 0
-      if (used >= 2) {continue}
-      perSource.set(it.source, used + 1)
-      picked.push(it)
-    }
-    if (picked.length < 8) {
-      for (const it of sorted) {
-        if (picked.length >= 8) {break}
-        if (!picked.includes(it)) {picked.push(it)}
-      }
-    }
+    // 话题加权 + 同源最多 2 条 + 不足时放宽，规则本身在 news/recommendSelect.ts（有单测）
+    const picked = selectRecommendations(all, { categories: topic?.categories, poolSize: 8 })
 
     const items: RecommendRow[] = picked.map((i: NewsItem) => ({
       title: i.title,
@@ -1651,6 +1631,7 @@ const _smartCache = new Map<string, { at: number; items: Array<Record<string, un
 const SMART_TTL_MS = 10 * 60 * 1000
 
 ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force?: boolean; topic?: string }) => {
+  if (!isEnabled('news.recommend')) {return { ok: false, reason: 'disabled', items: [] }}
   const limit = Math.max(1, Math.min(8, opts?.limit || 5))
   const topicKey = topicCacheKey(opts?.topic)
   const topic = resolveRecommendTopic(opts?.topic)
@@ -1666,6 +1647,16 @@ ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force
     if (!activeConfig?.config?.baseUrl) {
       return { ok: false, reason: 'no-llm', items: [] }
     }
+
+    // 预算闸门（2026-10-20 补）：这条 LLM 调用由「打开窗口 / 切话题 / 回窗」触发，
+    // 属于**后台主动调用**，不是用户当轮的请求 —— 必须和 proactive 用同一判据。
+    // 此前只记账（llmProvider.recordUsage）不拦截，预算耗尽后它照跑。
+    try {
+      const verdict = getBudgetGuardian().allowNonEssentialCall()
+      if (!verdict.allowed) {
+        return { ok: false, reason: 'budget', items: cached?.items.slice(0, limit) || [], topic: topic?.label }
+      }
+    } catch { /* 预算模块异常不阻塞推荐（宁可多花一点，也别让功能无故消失） */ }
 
     const pool = await Promise.race([
       collectAll(),

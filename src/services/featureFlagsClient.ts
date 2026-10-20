@@ -29,6 +29,7 @@ export type RendererFlagKey =
   | 'memory.cjkDict'
   | 'onboarding.privacy'
   | 'mode.minimal'
+  | 'news.recommend'
 
 /** 渲染端回退默认值（与主进程 DEFAULTS 对齐；IPC 就绪后以主进程为准） */
 const CLIENT_DEFAULTS: Record<RendererFlagKey, boolean> = {
@@ -50,6 +51,7 @@ const CLIENT_DEFAULTS: Record<RendererFlagKey, boolean> = {
   'memory.cjkDict': true,
   'onboarding.privacy': true,
   'mode.minimal': false,
+  'news.recommend': true,
 }
 
 /** 给「功能开关」UI 用的中文名与说明 */
@@ -71,6 +73,7 @@ export const FLAG_META: Array<{ key: RendererFlagKey; name: string; desc: string
   { key: 'pet.vrmExpressive', name: 'VRM 情绪动作(beta)', desc: '与 Live2D 对等前保持 beta、默认关', group: '桌宠' },
   { key: 'personality.subPersona', name: '副人格(实验)', desc: '长期记忆+情绪驱动的人格漂移，实验性默认关', group: '实验' },
   { key: 'onboarding.privacy', name: '隐私引导', desc: '首次启动展示「你的数据在哪」', group: '隐私' },
+  { key: 'news.recommend', name: '为你推荐', desc: '打开聊天页时取公开热榜/RSS（19 个站点）并按话题精选；关闭后不再外联、不再调 LLM', group: '隐私' },
   { key: 'mode.minimal', name: '精简模式', desc: 'v0.1 公开版只露：聊天+情绪 / 记忆 / 一键办事', group: '发布' },
 ]
 
@@ -122,6 +125,10 @@ export function isMinimalMode(): boolean {
 export async function setFlagRemote(key: RendererFlagKey, value: boolean): Promise<boolean> {
   cache[key] = value
   writeLocalMirror()
+  // 广播给已经挂载的组件（设置页改了开关，聊天页要立刻生效，不必等重开窗口）
+  try {
+    window.dispatchEvent(new CustomEvent('lumina:flag-changed', { detail: { key, value } }))
+  } catch { /* 非浏览器环境 */ }
   const api = (window as any).luminaAPI
   try {
     if (api && typeof api.featureFlagsSet === 'function') {
@@ -129,6 +136,19 @@ export async function setFlagRemote(key: RendererFlagKey, value: boolean): Promi
     }
   } catch { /* 未接线：仅本地 */ }
   return value
+}
+
+/** 订阅开关变化（组件卸载时调用返回的 off） */
+export function onFlagChanged(
+  key: RendererFlagKey,
+  cb: (value: boolean) => void,
+): () => void {
+  const handler = (e: Event) => {
+    const d = (e as CustomEvent<{ key: RendererFlagKey; value: boolean }>).detail
+    if (d?.key === key) {cb(!!d.value)}
+  }
+  try { window.addEventListener('lumina:flag-changed', handler) } catch { /* noop */ }
+  return () => { try { window.removeEventListener('lumina:flag-changed', handler) } catch { /* noop */ } }
 }
 
 /** 导出全量（供设置页渲染） */

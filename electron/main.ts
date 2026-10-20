@@ -530,6 +530,24 @@ const isCLIMode = process.env.LUMINA_CLI_MODE === '1'
 const isAPIMode = process.env.LUMINA_API_ENABLED === '1'
   || process.argv.includes('--api')
 
+// ── CLI / API 模式：禁用硬件加速（2026-10-20）──────────────
+// 为什么：这两个模式没有窗口，却仍会拉起 Chromium GPU 进程。在没有交互桌面
+// 会话的机器（远程/服务/Docker）上，GPU 进程会连续崩溃，累计 3 次后
+// Chromium 直接 `FATAL: GPU process isn't usable. Goodbye.` 并以 exit 3 退出 ——
+// 实测 `lumina chat` 在模型就绪后必被这一步杀掉，等于 CLI 完全不可用。
+//
+// 只加 disable-gpu 不够（实测仍然崩溃 4 次后 FATAL）：Electron 40 即使禁用了
+// 硬件加速，也会为软件合成保留一个 GPU 进程，驱动层访问违例时它照样崩。
+// 真正的解法是同时取消「崩溃次数上限」——崩溃后 Chromium 会退回软件路径继续跑。
+// 实测：`lumina chat "1+1=?"` 在崩溃 17 次的情况下仍正常返回答案（exit 0）。
+if (isCLIMode || isAPIMode) {
+  try { app.disableHardwareAcceleration() } catch { /* 极早期失败不致命 */ }
+  try {
+    app.commandLine.appendSwitch('disable-gpu')
+    app.commandLine.appendSwitch('disable-gpu-process-crash-limit')
+  } catch { /* 同上 */ }
+}
+
 // 🔔 Windows Toast 通知身份（与 electron-builder appId 一致，否则打包后通知可能不显示）
 app.setAppUserModelId('com.lumina.desktop-pet')
 
