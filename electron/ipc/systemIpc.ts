@@ -1589,18 +1589,37 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
       setTimeout(() => reject(new Error('采集超时')), 15000)
     })
     const all = await Promise.race([collectAll(), timeout])
-    const items = all
+    const sorted = all
       .filter((i: NewsItem) => i?.title && i?.url)
       .sort((a: NewsItem, b: NewsItem) => (b.hotScore || 0) - (a.hotScore || 0))
-      .slice(0, 8)
-      .map((i: NewsItem) => ({
-        title: i.title,
-        url: i.url,
-        source: i.source,
-        category: i.category,
-        pubDate: i.pubDate,
-        hotScore: i.hotScore,
-      }))
+
+    // 来源分散：同一来源最多 2 条。否则 AI 类 RSS（基础分 80）会把整块占满，
+    // 用户看到的就是清一色 Hacker News 英文标题（2026-10-20 实测反馈）。
+    const picked: NewsItem[] = []
+    const perSource = new Map<string, number>()
+    for (const it of sorted) {
+      if (picked.length >= 8) {break}
+      const used = perSource.get(it.source) || 0
+      if (used >= 2) {continue}
+      perSource.set(it.source, used + 1)
+      picked.push(it)
+    }
+    // 来源太少时补齐，别让列表短一截
+    if (picked.length < 8) {
+      for (const it of sorted) {
+        if (picked.length >= 8) {break}
+        if (!picked.includes(it)) {picked.push(it)}
+      }
+    }
+
+    const items = picked.map((i: NewsItem) => ({
+      title: i.title,
+      url: i.url,
+      source: i.source,
+      category: i.category,
+      pubDate: i.pubDate,
+      hotScore: i.hotScore,
+    }))
     if (items.length) {_recommendCache = { at: Date.now(), items }}
     return { ok: true, cached: false, items: items.slice(0, limit) }
   } catch (err: any) {
@@ -1638,7 +1657,7 @@ ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force
       new Promise<never>((_, reject) => { setTimeout(() => reject(new Error('采集超时')), 15000) }),
     ])
     // 候选池放宽到 40 条：给 LLM 足够的选择空间，避免只剩热榜前几名
-    const candidates = pool.filter((i: NewsItem) => i?.title && i?.url).slice(0, 40)
+    const candidates = pool.filter((i: NewsItem) => i?.title && i?.url).slice(0, 24)
     if (candidates.length === 0) {return { ok: false, error: '无候选', items: [] }}
 
     const provider = new LLMProvider({
@@ -1677,8 +1696,9 @@ ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force
       reason: f.reason || f.oneLiner || '',
       score: f.relevanceScore,
     }))
-    if (items.length) {_smartCache = { at: Date.now(), items }}
-    return { ok: true, cached: false, items: items.slice(0, limit) }
+    // 少于 3 条不替换：宁可保留快段的完整榜单，也不要只剩两条
+    if (items.length >= 3) {_smartCache = { at: Date.now(), items }}
+    return { ok: items.length >= 3, cached: false, items: items.slice(0, limit) }
   } catch (err: any) {
     console.warn('[news:recommend:smart] AI 精选失败，保留原始热榜:', err?.message || err)
     return { ok: false, error: err?.message || 'AI 精选失败', items: _smartCache?.items.slice(0, limit) || [] }

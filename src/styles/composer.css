@@ -454,15 +454,15 @@
 
 .cc-tool-dot.on { background: #2563eb; }
 
-/* ── 「为你推荐」 ── */
-.cc-recs { margin-bottom: 8px; }
+/* ── 「为你推荐」（2026-10-20 二次调整：整体收小、气泡按文字自适应） ── */
+.cc-recs { margin-bottom: 6px; }
 
 .cc-recs-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 2px 6px;
-  font-size: 11.5px;
+  margin: 0 2px 5px;
+  font-size: 11px;
   color: var(--text-tertiary, #9aa1ad);
 }
 
@@ -471,9 +471,9 @@
   background: transparent;
   color: var(--text-tertiary, #9aa1ad);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
-  padding: 3px 5px;
+  padding: 2px 4px;
   border-radius: 6px;
   transition: background 0.12s, color 0.12s;
 }
@@ -481,70 +481,56 @@
 .cc-recs-refresh:hover { background: var(--surface-100); color: var(--text-primary); }
 .cc-recs-refresh:disabled { opacity: 0.5; cursor: default; }
 
+/* 气泡流式排列：宽度由文字决定，不撑满整行 */
 .cc-recs-list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .cc-rec {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  padding: 8px 12px;
+  max-width: 100%;
+  padding: 4px 9px;
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--surface-0);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 11.5px;
+  line-height: 1.35;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-.cc-rec:hover { background: var(--surface-50); border-color: #93c5fd; }
+.cc-rec:hover {
+  background: var(--surface-50);
+  border-color: #93c5fd;
+  color: var(--text-primary);
+}
 
 .cc-rec-title {
-  flex: 1;
-  min-width: 0;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cc-rec-src {
-  flex: none;
-  font-size: 10.5px;
-  color: var(--text-tertiary, #9aa1ad);
-}
-
 .cc-recs-skel {
-  padding: 8px 2px;
-  font-size: 11.5px;
+  padding: 4px 2px;
+  font-size: 11px;
   color: var(--text-tertiary, #9aa1ad);
 }
-
-/* 暗色主题：平铺工具与推荐的选中/悬停色（浅色底在深色下会刺眼） */
-[data-theme="dark"] .cc-tool.on {
-  background: rgba(59, 130, 246, 0.16);
-  color: #7cb3ff;
-}
-
-[data-theme="dark"] .cc-tool-dot { background: #4b5563; }
-[data-theme="dark"] .cc-tool-dot.on { background: #7cb3ff; }
-[data-theme="dark"] .cc-rec:hover { border-color: rgba(124, 179, 255, 0.45); }
-[data-theme="dark"] .cc-rec-src { color: #6f7683; }
 
 /* AI 精选标记 + 推荐理由（两段式的慢段结果） */
 .cc-recs-title { display: inline-flex; align-items: center; gap: 6px; }
 
 .cc-recs-badge {
   font-style: normal;
-  font-size: 10px;
+  font-size: 9.5px;
   line-height: 1;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 999px;
   color: #6d5bd0;
   background: rgba(109, 91, 208, 0.1);

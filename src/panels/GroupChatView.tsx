@@ -3920,7 +3920,7 @@ export default function GroupChatView() {
   // 用 ref 跟踪最新的 send，供 setTimeout 闭包使用
   const sendRef = useRef(send)
   // 📰 「为你推荐」（2026-10-20）：打开空对话就能看到当天热点
-  const recs = useNewsRecommendations(5)
+  const recs = useNewsRecommendations(4)
   /** 把一段文本当作输入发出去（推荐项/回落提示词共用；沿用快捷指令的 80ms 等待渲染） */
   const sendRecommendationText = (text: string) => {
     setInput(text)

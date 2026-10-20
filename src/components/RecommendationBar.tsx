@@ -46,13 +46,9 @@ export default function RecommendationBar(props: RecommendationBarProps) {
         <div className="cc-recs-list">
           {items.map((rec, i) => (
             <button type="button" className="cc-rec" key={`${rec.title}-${i}`}
-              title={rec.reason ? `${rec.title}\n${rec.reason}` : rec.title}
+              title={rec.reason ? `${rec.title}\n${rec.reason}${rec.source ? `\n—— ${rec.source}` : ''}` : rec.title}
               onClick={() => onPickNews(rec)}>
-              <span className="cc-rec-main">
-                <span className="cc-rec-title">{rec.title}</span>
-                {rec.reason && <span className="cc-rec-reason">{rec.reason}</span>}
-              </span>
-              {rec.source && <span className="cc-rec-src">{rec.source}</span>}
+              <span className="cc-rec-title">{rec.title}</span>
             </button>
           ))}
         </div>
@@ -61,9 +57,7 @@ export default function RecommendationBar(props: RecommendationBarProps) {
           {fallbackPrompts.map((p, i) => (
             <button type="button" className="cc-rec" key={`fallback-${i}`}
               title={p} onClick={() => onPickPrompt(p)}>
-              <span className="cc-rec-main">
-                <span className="cc-rec-title">{p}</span>
-              </span>
+              <span className="cc-rec-title">{p}</span>
             </button>
           ))}
         </div>
