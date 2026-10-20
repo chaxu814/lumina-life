@@ -1426,18 +1426,20 @@ const api = {
   // 新闻采集与推送（已有 IPC handler）
   newsCollect: () => ipcRenderer.invoke('news:collect') as Promise<any>,
   /** 「为你推荐」轻量榜单（10 分钟缓存，不跑 LLM 筛选） */
-  newsRecommend: (opts?: { limit?: number; force?: boolean }) => ipcRenderer.invoke('news:recommend', opts) as Promise<{
+  newsRecommend: (opts?: { limit?: number; force?: boolean; topic?: string }) => ipcRenderer.invoke('news:recommend', opts) as Promise<{
     ok: boolean
     cached?: boolean
     stale?: boolean
+    topic?: string
     items: Array<{ title: string; url: string; source: string; category: string; pubDate: string; hotScore: number }>
     error?: string
   }>,
   /** 「为你推荐」AI 精选：LLM 按兴趣重排 + 推荐理由（后台异步，失败返回空） */
-  newsRecommendSmart: (opts?: { limit?: number; force?: boolean }) => ipcRenderer.invoke('news:recommend:smart', opts) as Promise<{
+  newsRecommendSmart: (opts?: { limit?: number; force?: boolean; topic?: string }) => ipcRenderer.invoke('news:recommend:smart', opts) as Promise<{
     ok: boolean
     cached?: boolean
     reason?: string
+    topic?: string
     items: Array<{
       title: string; url: string; source: string; category: string
       pubDate: string; hotScore: number; reason: string; score: number

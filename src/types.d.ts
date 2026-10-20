@@ -521,10 +521,11 @@ declare global {
       }>
       newsPushToMail: () => Promise<{ ok: boolean; count?: number; error?: string }>
       /** 「为你推荐」轻量榜单（10 分钟缓存，不跑 LLM 筛选） */
-      newsRecommend: (opts?: { limit?: number; force?: boolean }) => Promise<{
+      newsRecommend: (opts?: { limit?: number; force?: boolean; topic?: string }) => Promise<{
         ok: boolean
         cached?: boolean
         stale?: boolean
+        topic?: string
         items: Array<{
           title: string; url: string; source: string
           category: string; pubDate: string; hotScore: number
@@ -532,10 +533,11 @@ declare global {
         error?: string
       }>
       /** 「为你推荐」AI 精选（LLM 按兴趣重排，后台异步） */
-      newsRecommendSmart: (opts?: { limit?: number; force?: boolean }) => Promise<{
+      newsRecommendSmart: (opts?: { limit?: number; force?: boolean; topic?: string }) => Promise<{
         ok: boolean
         cached?: boolean
         reason?: string
+        topic?: string
         items: Array<{
           title: string; url: string; source: string
           category: string; pubDate: string; hotScore: number

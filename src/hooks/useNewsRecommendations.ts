@@ -1,5 +1,5 @@
 // ============================================================
-// hooks/useNewsRecommendations.ts — 「为你推荐」数据源（两段式）
+// hooks/useNewsRecommendations.ts — 「为你推荐」数据源（两段式 + 话题画像）
 //
 // 2026-10-20：用户反馈空对话那三个写死的气泡「太死板」，要求像豆包那样
 // 打开就能看到最近/最新资讯。
@@ -11,8 +11,14 @@
 //      推荐理由（2–20s），拿到后**原地替换**，不阻塞输入栏。
 //   慢段失败（没配模型/超时/离线）就保留快段结果，用户无感。
 //
+// 【话题画像（2026-10-20 补）】
+//   传入 topic（任务类型 id，如 'code'/'intel'，或 Agent 角色 id 经 ALIAS
+//   归一）后，快段按该话题的分类偏好加权排序、慢段按该话题的兴趣描述打分，
+//   从而「选代码开发」和「选情报监控」看到的推荐是不同的。
+//   不同话题分缓存（主进程按 topic 分 Map），切换角色会重新拉取对应榜单。
+//
 // 为什么抽成 hook：Agent 聊天与团队群聊两个面板都要用，逻辑（延迟拉取、
-// 并发锁、失败清空、手动换一批）完全一致，复制两份必然漂移。
+// 并发锁、失败清空、手动换一批、话题切换重置）完全一致，复制两份必然漂移。
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -21,6 +27,8 @@ export interface RecommendationItem {
   title: string
   url: string
   source: string
+  /** 新闻分类（快段也有，可用于调试/未来展示） */
+  category?: string
   /** AI 精选给出的推荐理由（慢段才有；快段为空） */
   reason?: string
 }
@@ -30,18 +38,29 @@ export interface UseNewsRecommendations {
   loading: boolean
   /** 是否已拿到 AI 精选结果（用于在标题旁标「AI 精选」） */
   smart: boolean
+  /** 当前生效的话题画像标签（如「代码开发」），无话题为 null */
+  topicLabel: string | null
   /** 手动换一批（force=true 绕过主进程缓存，两段都重跑） */
   reload: (force?: boolean) => Promise<void>
 }
 
-export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecommendations {
+export function useNewsRecommendations(
+  limit = 5,
+  topic?: string,
+  autoDelay = 800,
+): UseNewsRecommendations {
   const [items, setItems] = useState<RecommendationItem[]>([])
   const [loading, setLoading] = useState(false)
   const [smart, setSmart] = useState(false)
+  const [topicLabel, setTopicLabel] = useState<string | null>(null)
   // 用 ref 做并发锁与「只自动拉一次」的标记：state 异步生效，挡不住同 tick 重入
   const loadingRef = useRef(false)
   const loadedRef = useRef(false)
   const smartRef = useRef(false)
+  // topic 用 ref 读取，保证 reload/loadSmart 闭包永远拿到最新话题，
+  // 即便它们因 limit 变化被重建，topic 也不会过期。
+  const topicRef = useRef(topic)
+  topicRef.current = topic
   /** 上次拿到 AI 精选的时间：超过 10 分钟允许静默重跑（与主进程缓存 TTL 对齐） */
   const smartAtRef = useRef(0)
   const SMART_TTL_MS = 10 * 60 * 1000
@@ -51,15 +70,17 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
     if (smartRef.current) {return}
     smartRef.current = true
     try {
-      const r = await window.luminaAPI?.newsRecommendSmart?.({ limit, force })
+      const r = await window.luminaAPI?.newsRecommendSmart?.({ limit, force, topic: topicRef.current })
       if (r?.ok && Array.isArray(r.items) && r.items.length > 0) {
         setItems(r.items.map(i => ({
           title: i.title,
           url: i.url,
           source: i.source,
+          category: i.category,
           reason: i.reason || '',
         })))
         setSmart(true)
+        if (r.topic) {setTopicLabel(r.topic)}
         smartAtRef.current = Date.now()
       }
     } catch {
@@ -76,9 +97,16 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
       setSmart(false)
     }
     try {
-      const r = await window.luminaAPI?.newsRecommend?.({ limit, force })
+      const r = await window.luminaAPI?.newsRecommend?.({ limit, force, topic: topicRef.current })
       if (r?.ok && Array.isArray(r.items) && r.items.length > 0) {
-        setItems(r.items.map(i => ({ title: i.title, url: i.url, source: i.source })))
+        // 快段返回类型无 reason 字段（只有慢段 AI 精选才有），这里只取基础字段
+        setItems(r.items.map(i => ({
+          title: i.title,
+          url: i.url,
+          source: i.source,
+          category: i.category,
+        })))
+        if (r.topic) {setTopicLabel(r.topic)}
       } else {
         setItems([])
       }
@@ -95,12 +123,18 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
     }
   }, [limit, loadSmart])
 
-  // 延迟拉取：不和首屏渲染抢资源；只自动拉一次，之后靠 ↻ / 回到窗口
+  // 延迟拉取 / 话题切换：不和首屏渲染抢资源；话题变化（切角色）时清空旧榜单重拉。
+  // 只自动拉一次（per topic），之后靠 ↻ / 回到窗口。
   useEffect(() => {
-    if (loadedRef.current) {return}
+    // 话题切换：清掉上一个话题的榜单与标记，确保重新拉到对应榜单
+    loadedRef.current = false
+    smartRef.current = false
+    setSmart(false)
+    setItems([])
+    setTopicLabel(null)
     const t = setTimeout(() => { void reload() }, autoDelay)
     return () => clearTimeout(t)
-  }, [reload, autoDelay])
+  }, [topic, reload, autoDelay])
 
   // 回到窗口时静默刷新：用户切出去再回来，看到的是「当前」而不是几小时前的榜单。
   // 不强制（force=false）：主进程有 10 分钟缓存，新鲜时直接返回缓存，不会真的重抓。
@@ -118,5 +152,5 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
     }
   }, [reload])
 
-  return { items, loading, smart, reload }
+  return { items, loading, smart, topicLabel, reload }
 }

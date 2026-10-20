@@ -3920,7 +3920,9 @@ export default function GroupChatView() {
   // 用 ref 跟踪最新的 send，供 setTimeout 闭包使用
   const sendRef = useRef(send)
   // 📰 「为你推荐」（2026-10-20）：打开空对话就能看到当天热点
-  const recs = useNewsRecommendations(5)
+  // topic 传 selectedRole（任务类型卡 id，如 'code'/'intel'），
+  // 直接命中 recommendTopics.ts 的话题画像，使推荐偏向该类型。
+  const recs = useNewsRecommendations(5, selectedRole ?? undefined)
   /** 把一段文本当作输入发出去（推荐项/回落提示词共用；沿用快捷指令的 80ms 等待渲染） */
   const sendRecommendationText = (text: string) => {
     setInput(text)
@@ -5615,6 +5617,7 @@ export default function GroupChatView() {
               items={recs.items}
               loading={recs.loading}
               smart={recs.smart}
+              topicLabel={recs.topicLabel}
               onReload={(force) => { void recs.reload(force) }}
               onPickNews={(rec) => sendRecommendationText(
                 `帮我看看这条资讯讲了什么，挑重点说，并说说它可能对我有什么影响：${rec.title}${rec.source ? `（${rec.source}）` : ''}\n${rec.url}`,

@@ -22,6 +22,7 @@ import {
 import { stateFilePath } from '../core/pathsFallback'
 import { collectAll } from '../tools/impl/newsCollector'
 import { filterWithLLM, DEFAULT_INTERESTS } from '../tools/impl/newsFilter'
+import { resolveRecommendTopic, topicCacheKey } from '../news/recommendTopics'
 import { deduplicate, assembleDigestBody } from '../tools/impl/newsDigest'
 import { enrichItemsBackground } from '../tools/impl/newsEnricher'
 import { type NewsItem } from '../tools/impl/newsCollector'
@@ -1575,26 +1576,38 @@ ipcMain.handle('news:collect', async () => {
 // 为什么单开一条：news:collect 会跑 LLM 筛选（数秒到数十秒），聊天页每次
 // 打开都调它会把输入栏卡住。这里只取原始榜单 + 10 分钟缓存、不跑 LLM，
 // 保证「打开就有」；需要精选时仍走 news:collect / 邮件推送那条链路。
-let _recommendCache: { at: number; items: Array<{ title: string; url: string; source: string; category: string; pubDate: string; hotScore: number }> } | null = null
+type RecommendRow = { title: string; url: string; source: string; category: string; pubDate: string; hotScore: number }
+// 缓存按话题分开：选「代码开发」和「情报监控」必须拿到各自的榜单
+const _recommendCache = new Map<string, { at: number; items: RecommendRow[] }>()
 const RECOMMEND_TTL_MS = 10 * 60 * 1000
 
-ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boolean }) => {
+ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boolean; topic?: string }) => {
   const limit = Math.max(1, Math.min(8, opts?.limit || 5))
-  const fresh = !!_recommendCache && Date.now() - _recommendCache.at < RECOMMEND_TTL_MS
-  if (fresh && !opts?.force && _recommendCache) {
-    return { ok: true, cached: true, items: _recommendCache.items.slice(0, limit) }
+  const topicKey = topicCacheKey(opts?.topic)
+  const topic = resolveRecommendTopic(opts?.topic)
+  const cached = _recommendCache.get(topicKey)
+  const fresh = !!cached && Date.now() - cached.at < RECOMMEND_TTL_MS
+  if (fresh && !opts?.force && cached) {
+    return { ok: true, cached: true, items: cached.items.slice(0, limit), topic: topic?.label }
   }
   try {
     const timeout = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('采集超时')), 15000)
     })
     const all = await Promise.race([collectAll(), timeout])
+
+    // 话题加权：同分类优先（+1000），再按热度排；不做硬过滤，
+    // 否则某个话题当天没有对应分类时会整块空掉。
+    const catSet = new Set(topic?.categories || [])
     const sorted = all
       .filter((i: NewsItem) => i?.title && i?.url)
-      .sort((a: NewsItem, b: NewsItem) => (b.hotScore || 0) - (a.hotScore || 0))
+      .sort((a: NewsItem, b: NewsItem) => {
+        const aw = catSet.has(a.category) ? 1000 : 0
+        const bw = catSet.has(b.category) ? 1000 : 0
+        return (bw + (b.hotScore || 0)) - (aw + (a.hotScore || 0))
+      })
 
-    // 来源分散：同一来源最多 2 条。否则 AI 类 RSS（基础分 80）会把整块占满，
-    // 用户看到的就是清一色 Hacker News 英文标题（2026-10-20 实测反馈）。
+    // 来源分散：同一来源最多 2 条，避免整屏都是 Hacker News 英文标题
     const picked: NewsItem[] = []
     const perSource = new Map<string, number>()
     for (const it of sorted) {
@@ -1604,7 +1617,6 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
       perSource.set(it.source, used + 1)
       picked.push(it)
     }
-    // 来源太少时补齐，别让列表短一截
     if (picked.length < 8) {
       for (const it of sorted) {
         if (picked.length >= 8) {break}
@@ -1612,7 +1624,7 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
       }
     }
 
-    const items = picked.map((i: NewsItem) => ({
+    const items: RecommendRow[] = picked.map((i: NewsItem) => ({
       title: i.title,
       url: i.url,
       source: i.source,
@@ -1620,11 +1632,11 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
       pubDate: i.pubDate,
       hotScore: i.hotScore,
     }))
-    if (items.length) {_recommendCache = { at: Date.now(), items }}
-    return { ok: true, cached: false, items: items.slice(0, limit) }
+    if (items.length) {_recommendCache.set(topicKey, { at: Date.now(), items })}
+    return { ok: true, cached: false, items: items.slice(0, limit), topic: topic?.label }
   } catch (err: any) {
-    if (_recommendCache) {
-      return { ok: true, cached: true, stale: true, items: _recommendCache.items.slice(0, limit) }
+    if (cached) {
+      return { ok: true, cached: true, stale: true, items: cached.items.slice(0, limit), topic: topic?.label }
     }
     console.warn('[news:recommend] 采集失败:', err?.message || err)
     return { ok: false, error: err?.message || '采集失败', items: [] }
@@ -1635,14 +1647,17 @@ ipcMain.handle('news:recommend', async (_e, opts?: { limit?: number; force?: boo
 // 第一阶段（news:recommend）秒出原始热榜，保证「打开就有」；
 // 这一阶段在后台用 LLM 按用户兴趣重排并给推荐理由，渲染层拿到后原地替换。
 // 为什么分两段：单次 LLM 调用 2–20s，不能让输入栏等它。
-let _smartCache: { at: number; items: Array<Record<string, unknown>> } | null = null
+const _smartCache = new Map<string, { at: number; items: Array<Record<string, unknown>> }>()
 const SMART_TTL_MS = 10 * 60 * 1000
 
-ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force?: boolean }) => {
+ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force?: boolean; topic?: string }) => {
   const limit = Math.max(1, Math.min(8, opts?.limit || 5))
-  const fresh = !!_smartCache && Date.now() - _smartCache.at < SMART_TTL_MS
-  if (fresh && !opts?.force && _smartCache) {
-    return { ok: true, cached: true, items: _smartCache.items.slice(0, limit) }
+  const topicKey = topicCacheKey(opts?.topic)
+  const topic = resolveRecommendTopic(opts?.topic)
+  const cached = _smartCache.get(topicKey)
+  const fresh = !!cached && Date.now() - cached.at < SMART_TTL_MS
+  if (fresh && !opts?.force && cached) {
+    return { ok: true, cached: true, items: cached.items.slice(0, limit), topic: topic?.label }
   }
 
   try {
@@ -1656,7 +1671,6 @@ ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force
       collectAll(),
       new Promise<never>((_, reject) => { setTimeout(() => reject(new Error('采集超时')), 15000) }),
     ])
-    // 候选池放宽到 40 条：给 LLM 足够的选择空间，避免只剩热榜前几名
     const candidates = pool.filter((i: NewsItem) => i?.title && i?.url).slice(0, 24)
     if (candidates.length === 0) {return { ok: false, error: '无候选', items: [] }}
 
@@ -1678,12 +1692,15 @@ ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force
       return res.text || ''
     }
 
-    // 兴趣来源：新闻早报配置优先，没有就用内置默认画像
-    let interests = DEFAULT_INTERESTS
-    try {
-      const cfg = getNewsDigestScheduler()?.getConfig?.()
-      if (cfg?.interests) {interests = cfg.interests}
-    } catch { /* 配置读取失败不影响推荐 */ }
+    // 兴趣来源：任务类型画像优先（用户选了「代码开发」就按编程偏好打分）；
+    // 没有话题时才用新闻早报配置 / 内置画像。
+    let interests = topic?.interests || DEFAULT_INTERESTS
+    if (!topic) {
+      try {
+        const cfg = getNewsDigestScheduler()?.getConfig?.()
+        if (cfg?.interests) {interests = cfg.interests}
+      } catch { /* 配置读取失败不影响推荐 */ }
+    }
 
     const filtered = await filterWithLLM(candidates, llmCall, { interests, maxItems: limit, minScore: 40 })
     const items = filtered.map(f => ({
@@ -1697,11 +1714,11 @@ ipcMain.handle('news:recommend:smart', async (_e, opts?: { limit?: number; force
       score: f.relevanceScore,
     }))
     // 少于 3 条不替换：宁可保留快段的完整榜单，也不要只剩两条
-    if (items.length >= 3) {_smartCache = { at: Date.now(), items }}
-    return { ok: items.length >= 3, cached: false, items: items.slice(0, limit) }
+    if (items.length >= 3) {_smartCache.set(topicKey, { at: Date.now(), items })}
+    return { ok: items.length >= 3, cached: false, items: items.slice(0, limit), topic: topic?.label }
   } catch (err: any) {
     console.warn('[news:recommend:smart] AI 精选失败，保留原始热榜:', err?.message || err)
-    return { ok: false, error: err?.message || 'AI 精选失败', items: _smartCache?.items.slice(0, limit) || [] }
+    return { ok: false, error: err?.message || 'AI 精选失败', items: cached?.items.slice(0, limit) || [] }
   }
 })
 

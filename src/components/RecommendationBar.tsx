@@ -17,6 +17,8 @@ export interface RecommendationBarProps {
   loading: boolean
   /** 是否已拿到 AI 精选结果 */
   smart?: boolean
+  /** 当前话题画像标签（如「代码开发」）；无话题为 null */
+  topicLabel?: string | null
   onReload: (force?: boolean) => void
   /** 点一条资讯 */
   onPickNews: (item: RecommendationItem) => void
@@ -27,13 +29,14 @@ export interface RecommendationBarProps {
 }
 
 export default function RecommendationBar(props: RecommendationBarProps) {
-  const { items, loading, smart, onReload, onPickNews, onPickPrompt, fallbackPrompts = [] } = props
+  const { items, loading, smart, topicLabel, onReload, onPickNews, onPickPrompt, fallbackPrompts = [] } = props
 
   return (
     <div className="cc-recs">
       <div className="cc-recs-head">
         <span className="cc-recs-title">
           为你推荐
+          {topicLabel && <em className="cc-recs-topic">{topicLabel}</em>}
           {smart && <em className="cc-recs-badge">AI 精选</em>}
         </span>
         <button type="button" className="cc-recs-refresh" title="换一批"

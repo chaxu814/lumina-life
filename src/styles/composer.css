@@ -538,6 +538,18 @@
   border: 1px solid rgba(109, 91, 208, 0.25);
 }
 
+/* 当前话题画像标签（如「代码开发」）：告诉用户推荐已偏向所选类型 */
+.cc-recs-topic {
+  font-style: normal;
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: #1f8a4c;
+  background: rgba(31, 138, 76, 0.1);
+  border: 1px solid rgba(31, 138, 76, 0.25);
+}
+
 .cc-rec-main {
   flex: 1;
   min-width: 0;
@@ -559,4 +571,10 @@
   color: #b3a8ff;
   background: rgba(124, 108, 255, 0.14);
   border-color: rgba(124, 108, 255, 0.3);
+}
+
+[data-theme="dark"] .cc-recs-topic {
+  color: #6ee7a0;
+  background: rgba(31, 138, 76, 0.16);
+  border-color: rgba(31, 138, 76, 0.35);
 }

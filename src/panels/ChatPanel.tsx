@@ -149,7 +149,9 @@ export default function ChatPanel() {
   // 📰 「为你推荐」—— 最近资讯（主进程 10 分钟缓存，失败时回落到动态提示）
   //    2026-10-20：用户反馈原来那三个固定气泡「太死板」，改成打开就能看到
   //    当天真实热点；点一条直接让 Lumina 去解读，而不是只发一句预设话术。
-  const recs = useNewsRecommendations(5)
+  // topic 传 selectedRole（Agent 角色 id，如 'general'/'developer'），
+  // 经 recommendTopics.ts 的 ALIAS 归一成话题画像，使推荐偏向该角色偏好。
+  const recs = useNewsRecommendations(5, selectedRole)
 
   /** 从池中随机选 N 个不重复的提示 */
   const pickRandomPrompts = useCallback((pool: string[], n = 3) => {
@@ -2554,6 +2556,7 @@ export default function ChatPanel() {
                 items={recs.items}
                 loading={recs.loading}
                 smart={recs.smart}
+                topicLabel={recs.topicLabel}
                 onReload={(force) => { void recs.reload(force) }}
                 onPickNews={openRecommendation}
                 onPickPrompt={(p) => handleSendRef.current?.(p)}
