@@ -42,6 +42,9 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
   const loadingRef = useRef(false)
   const loadedRef = useRef(false)
   const smartRef = useRef(false)
+  /** 上次拿到 AI 精选的时间：超过 10 分钟允许静默重跑（与主进程缓存 TTL 对齐） */
+  const smartAtRef = useRef(0)
+  const SMART_TTL_MS = 10 * 60 * 1000
 
   /** 慢段：LLM 按兴趣重排 + 推荐理由（后台跑，失败静默保留快段结果） */
   const loadSmart = useCallback(async (force = false) => {
@@ -57,6 +60,7 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
           reason: i.reason || '',
         })))
         setSmart(true)
+        smartAtRef.current = Date.now()
       }
     } catch {
       // 保留快段结果，不打扰用户
@@ -85,16 +89,34 @@ export function useNewsRecommendations(limit = 5, autoDelay = 800): UseNewsRecom
       setLoading(false)
       loadedRef.current = true
       // 快段渲染完再跑慢段（不 await：不阻塞 UI）
+      // 非强制刷新时，慢段结果超过 10 分钟才重跑（与主进程缓存 TTL 对齐）
+      if (Date.now() - smartAtRef.current > SMART_TTL_MS) {smartRef.current = false}
       void loadSmart(force)
     }
   }, [limit, loadSmart])
 
-  // 延迟拉取：不和首屏渲染抢资源；只自动拉一次，之后靠 ↻
+  // 延迟拉取：不和首屏渲染抢资源；只自动拉一次，之后靠 ↻ / 回到窗口
   useEffect(() => {
     if (loadedRef.current) {return}
     const t = setTimeout(() => { void reload() }, autoDelay)
     return () => clearTimeout(t)
   }, [reload, autoDelay])
+
+  // 回到窗口时静默刷新：用户切出去再回来，看到的是「当前」而不是几小时前的榜单。
+  // 不强制（force=false）：主进程有 10 分钟缓存，新鲜时直接返回缓存，不会真的重抓。
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') {return}
+      if (!loadedRef.current) {return}
+      void reload(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [reload])
 
   return { items, loading, smart, reload }
 }
