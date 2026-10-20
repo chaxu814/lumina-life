@@ -471,19 +471,19 @@ function registerContextMenu(mainWindow: BrowserWindow): void {
         { label: '复制', role: 'copy' },
         { type: 'separator' },
         {
-          label: '??Lumina 翻译',
+          label: '交给 Lumina 翻译',
           click: () => mainWindow.webContents.send('menu:lumina-task', {
             task: 'translate', text: selectionText.trim(),
           }),
         },
         {
-          label: '??Lumina 总结',
+          label: '交给 Lumina 总结',
           click: () => mainWindow.webContents.send('menu:lumina-task', {
             task: 'summarize', text: selectionText.trim(),
           }),
         },
         {
-          label: '??Lumina 解释',
+          label: '交给 Lumina 解释',
           click: () => mainWindow.webContents.send('menu:lumina-task', {
             task: 'explain', text: selectionText.trim(),
           }),
@@ -592,7 +592,9 @@ app.whenReady().then(async () => {
     initApprovalService({ enabled: false })
     const agentConfig = initAgentConfig()
     initOrchestrator()
-    console.log('[main] Agent 配置已加??', agentConfig.getAllStatus().length)
+    // 2026-10-20：原文是「已加??」——中文在历史上被错误转码后写进了源码（不是控制台渲染问题），
+    // 打印出来就是乱码。顺手修掉。
+    console.log('[main] Agent 配置已加载:', agentConfig.getAllStatus().length)
     // 运行 CLI (直接传入 process.argv，由 runCLI 自行解析)
     const { default: runCLI } = await import('./cli/index')
     await runCLI(process.argv)
@@ -669,7 +671,7 @@ const orch = getOrchestrator()
       orch.registerRunner(id, runner)
       console.log(`[main] 🚀 ${member?.icon} ${id} 独立 Runner 已创建（${member?.name}，disabledTools=${disabledTools.length}）`)
     } else {
-      console.log(`[main] ⏭️ ${id} 未配??LLM，跳??Runner 创建`)
+      console.log(`[main] ⏭️ ${id} 未配置 LLM，跳过 Runner 创建`)
     }
   }
 
@@ -683,7 +685,7 @@ for (const { id } of orch.listRunners()) {
     }
     console.log('[main] 🏊 Agent 常驻池已初始')
   } catch (err: any) {
-    console.warn(`[main] ⚠️ Agent 常驻池启动可?? ${err.message}`)
+    console.warn(`[main] ⚠️ Agent 常驻池启动可能失败: ${err.message}`)
   }
 
   // ── v8.0: 初始化 API 服务 (如果启用) ──────────────
@@ -697,7 +699,7 @@ for (const { id } of orch.listRunners()) {
       await api.start()
       console.log(`[main] 🌐 API 服务器已启动: http://${apiHost}:${apiPort}`)
     } catch (err: any) {
-      console.error(`[main] ⚠️ API 服务器启动失?? ${err.message}`)
+      console.error(`[main] ⚠️ API 服务器启动失败 ${err.message}`)
     }
   }
 
@@ -756,12 +758,13 @@ for (const { id } of orch.listRunners()) {
     })
     console.log('[main] 🔧 F12 开发者工具快捷键已注')
   } catch (e) {
-    console.warn('[main] ⚠️ F12 快捷键注册失??', e)
+    console.warn('[main] ⚠️ F12 快捷键注册失败', e)
   }
 
   // 3. 注册所??IPC handler
   registerAgentIpc(mainWindow)
-  registerCommandHandlers()                           // 🆕 v3.5: 斜杠命令处理??  registerSkillMarketIpc()                            // 🆕 v3.5: Skill 市场 IPC
+  registerCommandHandlers()                           // 🆕 v3.5: 斜杠命令处理器
+  registerSkillMarketIpc()                            // 🆕 v3.5: Skill 市场 IPC
   registerObservabilityIpc()                           // 🔬 记忆审判台 + 团队泳道画布 IPC
   registerComputerUseIpc()                            // 🖥??v3.10: 桌面操控 IPC
   registerGitAgentIpc()                               // 📝 v3.11: Git Agent IPC
@@ -769,8 +772,10 @@ for (const { id } of orch.listRunners()) {
   registerDeepResearchIpc()                           // 🔬 v3.11: Deep Research IPC
   registerCodingModeIpc()                             // 🆕 v3.5: Coding Mode IPC
   registerLuckyModeIpc()                              // 🍀 v1.0: Lucky 模式 IPC
-  initLuckyModeIntegration()                          // 🍀 Lucky 模式深度集成初始??  registerDiagnosticsIpc(mainWindow)                  // 🆕 v3.5: 诊断面板 IPC
-  startConfigWatcher(__dirname)                        // 🆕 v3.5: 配置热重??  registerMemoryIpc()
+  initLuckyModeIntegration()                          // 🍀 Lucky 模式深度集成初始化
+  registerDiagnosticsIpc(mainWindow)                  // 🆕 v3.5: 诊断面板 IPC
+  startConfigWatcher(__dirname)                        // 🆕 v3.5: 配置热重载
+  registerMemoryIpc()
   registerBridgeIpc(mainWindow)
   registerSystemIpc(mainWindow)
   registerSttModelIpc(() => mainWindow)          // 🎙 离线语音模型（whisper-base 多语种/中文）
@@ -863,7 +868,8 @@ const socialLlmCall = async (
   }
   initTeamSocialEngine(socialLlmCall)
 
-  // 3.6 📬 Agent 邮箱初始??  initMailStore()
+  // 3.6 📬 Agent 邮箱初始化
+  initMailStore()
 
   // 3.6.1 📨 v3.9.1: 智能邮件调度??(早安摘要/Token告警/安全告警)
   initSmartMailDispatcher()
@@ -1115,7 +1121,7 @@ try {
             mainWindow?.webContents.send('navigate', 'news')
           })
         } catch (e) {
-          console.warn('[main] 通知发送失??', e)
+          console.warn('[main] 通知发送失败', e)
         }
       }
     })
@@ -1540,7 +1546,7 @@ const sessionManager = getSessionManager()
   // 启动时恢复未完成 session
   const recovered = sessionManager.recoverIncompleteSessions()
   if (recovered.length > 0) {
-    console.log(`[SessionManager] 恢复??${recovered.length} 个未完成??session`)
+    console.log(`[SessionManager] 恢复了 ${recovered.length} 个未完成的 session`)
     mainWindow?.webContents.send('session:recovered', recovered)
   }
 
@@ -1567,7 +1573,7 @@ const sessionManager = getSessionManager()
       const pool = getSkillPool()
       const workspaceId = p.args[0] || 'default'
       const skills = pool.listWorkspaceSkills(workspaceId)
-      if (skills.length === 0) {return { success: true, message: `workspace "${workspaceId}" 中没有安??skills。` }}
+      if (skills.length === 0) {return { success: true, message: `workspace "${workspaceId}" 中没有安装 skills。` }}
       const list = skills.map(s => `${s.emoji} **${s.name}** v${s.version} ??${s.description}`).join('\n')
       return { success: true, message: `## ${workspaceId} ??Skills\n\n${list}` }
     },
@@ -1602,13 +1608,13 @@ const sessionManager = getSessionManager()
     },
     approve: async (p) => {
       const result = getApprovalService().approve(p.args[0])
-      if (!result) {return { success: false, message: `审批失败: 未找??ID "${p.args[0]}" 或已过期。` }}
-      return { success: true, message: `已批准操?? ${result.toolName}` }
+      if (!result) {return { success: false, message: `审批失败: 未找到 ID "${p.args[0]}" 或已过期。` }}
+      return { success: true, message: `已批准操作 ${result.toolName}` }
     },
     deny: async (p) => {
       const result = getApprovalService().deny(p.args[0], '用户拒绝')
-      if (!result) {return { success: false, message: `拒绝失败: 未找??ID "${p.args[0]}" 或已过期。` }}
-      return { success: true, message: `已拒绝操?? ${result.toolName}` }
+      if (!result) {return { success: false, message: `拒绝失败: 未找到 ID "${p.args[0]}" 或已过期。` }}
+      return { success: true, message: `已拒绝操作 ${result.toolName}` }
     },
     plan: async (p) => {
       mainWindow?.webContents.send('command:create-plan', p.args.join(' '))
@@ -1625,7 +1631,7 @@ const sessionManager = getSessionManager()
     export: async (p) => {
       const format = p.args[0] || 'markdown'
       mainWindow?.webContents.send('command:export', format)
-      return { success: true, message: `正在导出??${format} 格式...` }
+      return { success: true, message: `正在导出 ${format} 格式...` }
     },
   })
 
