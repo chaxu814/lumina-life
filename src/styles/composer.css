@@ -487,22 +487,24 @@
 .cc-recs-refresh:hover { background: var(--surface-100); color: var(--text-primary); }
 .cc-recs-refresh:disabled { opacity: 0.5; cursor: default; }
 
-/* 竖向一条一条排，align-items: stretch 让卡片撑满父容器宽度（豆包同款） */
+/* 竖向一条一条排，条目随文字宽度（左对齐），不撑满——和豆包一致 */
 .cc-recs-list {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 6px;
 }
 
-/* 2026-10-20 四改——对齐豆包：圆角描边卡片 + 整宽 + 标题最多 2 行可读。
-   外层 .cc-recs 没有任何边框/底色（框已经在三改里去掉了，这里再确认一次） */
+/* 2026-10-20 五改——对齐豆包：每条是「随文字宽度」的小圆角胶囊，
+   左对齐、不撑满整行；上一版做成 width:100% 整宽卡片，整块显得太大 */
 .cc-rec {
-  display: block;
-  width: 100%;
-  padding: 9px 12px;
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  max-width: 100%;
+  padding: 7px 13px;
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--surface-0);
   color: var(--text-secondary);
   font-family: inherit;
@@ -519,15 +521,13 @@
   color: var(--text-primary);
 }
 
-/* 标题最多 2 行，超过用省略号；中英文混排允许换行 */
+/* 单行、随文字宽；只有超长（>340px）才省略，保持和豆包一致的紧凑感 */
 .cc-rec-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
+  max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 .cc-recs-skel {
