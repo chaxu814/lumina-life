@@ -11,7 +11,6 @@ import './styles/theater-feed.css'  // 🎭 团队可见性剧场（创新功能
 import './styles/theme-vars.css'       // 🎨 主题皮肤生态：语义化 CSS 变量
 import './styles/a11y-high-contrast.css' // ♿ 高对比度主题 + 字号缩放（创新提案 7）
 import './styles/composer.css'          // ⌨️ 统一输入栏（Agent / 团队群聊 / 桌宠同款观感）
-import './styles/chat-hero.css'         // 🏠 空会话落地页（大标题 + 对话/工作 分段 + 为你推荐）
 import './i18n'  // 🌐 i18n 初始化
 import 'uno.css' // ⚡ UnoCSS
 import './stores/loopStore' // 🔁 Loop 引擎自启动（Phase 1）

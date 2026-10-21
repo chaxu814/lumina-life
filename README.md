@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4632%20passing%20%2F%20310%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4632 tests passing across 310 test files"></a>
+  <a href="#-quality-gates"><img src="https://img.shields.io/badge/tests-4637%20passing%20%2F%20311%20files-4c1?style=flat-square&labelColor=1a1a2e" alt="4637 tests passing across 311 test files"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/tsc--strict-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="tsc --strict: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/eslint-0%20errors-4c1?style=flat-square&labelColor=1a1a2e" alt="eslint: 0 errors"></a>
   <a href="#-quality-gates"><img src="https://img.shields.io/badge/CI-3%20OS%20%C3%97%202%20Node-4c1?style=flat-square&labelColor=1a1a2e" alt="CI matrix: 3 OS x 2 Node versions"></a>
@@ -355,7 +355,7 @@ agent 档近万 tokens、developer 档 1.2 万 tokens，**每一次模型调用�
 
 ### 🗞️ 为你推荐 · 打开就有内容，不用先想问题
 
-空对话页会先给你一个「有什么我能帮你的吗？」的落地页：标题下是**对话 / 工作**分段，再往下是「为你推荐」资讯栏，解决的是「打开应用不知道问什么」这个真实卡点：
+空对话时，欢迎屏下方会显示「为你推荐」资讯栏，解决的是「打开应用不知道问什么」这个真实卡点：
 
 - **两段式**：先秒出原始热榜（毫秒级、10 分钟缓存），再在后台用 LLM 按你的兴趣重排并给一句推荐理由（拿到后原地替换，不卡输入栏）。
 - **跟任务类型走**：日常聊天 / 学习辅导 / 写作创作 / 代码开发 / 商业设计 / 情报监控 / 职场办公，7 类各有分类偏好与兴趣描述——选「代码开发」看到的是 AI 编程与开源项目，选「情报监控」看到的是融资、芯片、政策。
@@ -425,7 +425,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 | 闸门 | 命令 | 实测结果 |
 |---|---|---|
-| 测试套件 | `npm test` | **310 个测试文件 · 4632 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
+| 测试套件 | `npm test` | **311 个测试文件 · 4637 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
 | 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
 | 代码规范 | `npm run lint` | **0 error / 5477 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
 | CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
@@ -433,7 +433,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 
 > ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
 > 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
-> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 310 文件 / 4632 通过 / 0 失败。
+> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 311 文件 / 4637 通过 / 0 失败。
 > 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
 > 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
 
@@ -484,7 +484,7 @@ Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再�
 | 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
 
 <sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：310 文件 · 4632 用例通过 / 1 skipped / 0 失败**（本机实测；
+Linux 为 roadmap。**测试规模：311 文件 · 4637 用例通过 / 1 skipped / 0 失败**（本机实测；
 ⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
 `tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
 零违规，warning 用棘轮制只允许变小。
@@ -493,7 +493,7 @@ Linux 为 roadmap。**测试规模：310 文件 · 4632 用例通过 / 1 skipped
 
 ```bash
 npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：310 文件 / 4632 passed / 1 skipped
+npx vitest run             # 预期：311 文件 / 4637 passed / 1 skipped
 node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
 ```</sub>
 
@@ -877,7 +877,7 @@ lumina-life/
 | 自动更新 Auto Update | electron-updater (GitHub Releases) |
 | 协议支持 Protocols | MCP (Model Context Protocol) |
 | 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **310 文件 / 4632 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| 测试规模 Tests | **311 文件 / 4637 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
 
 ---
 

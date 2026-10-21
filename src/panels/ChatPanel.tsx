@@ -55,7 +55,6 @@ import {
   detectMentionInReply,
 } from '../services/conversationDynamics'
 import ChatComposer from '../components/ChatComposer'
-import ChatHero from '../components/ChatHero'
 import RecommendationBar from '../components/RecommendationBar'
 import { useNewsRecommendations } from '../hooks/useNewsRecommendations'
 import TaskDispatcher from '../components/TaskDispatcher'
@@ -2070,11 +2069,38 @@ export default function ChatPanel() {
         {/* ── Messages ── */}
         <div ref={chatScrollRef} onScroll={handleChatScroll} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
           {messages.length === 0 && !isProcessing && (
-            <ChatHero
-              tabs={[{ key: 'general', label: '对话' }, { key: 'colleague', label: '工作' }]}
-              activeTab={selectedRole === 'general' ? 'general' : selectedRole === 'colleague' ? 'colleague' : ''}
-              onTabChange={(k) => selectAgentRole(k)}
-            >
+            <>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 60, fontSize: 14 }}>
+              <style>{`
+                @keyframes welcomePop { 0% { opacity: 0; transform: scale(0.8) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+                @keyframes chipSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+              `}</style>
+              {/* 角色图标 + 欢迎语 */}
+              <div style={{ animation: 'welcomePop 0.5s ease both' }}>
+                <div style={{
+                  fontSize: 52, marginBottom: 10,
+                  filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.08))',
+                }}>{getAgentRole(selectedRole).icon}</div>
+                <div style={{
+                  fontSize: 17, fontWeight: 700,
+                  color: getAgentRole(selectedRole).color,
+                  marginBottom: 6,
+                }}>
+                  {getAgentRole(selectedRole).name} 已就绪
+                </div>
+                <div style={{
+                  marginTop: 4, fontSize: 13, color: 'var(--text-secondary)',
+                  maxWidth: 360, margin: '0 auto', lineHeight: 1.6,
+                }}>
+                  {getAgentRole(selectedRole).welcomeMsg}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+                直接输入，或从下方「为你推荐」挑一条 · 🎤 语音也可以
+              </div>
+            </div>
+            <div style={{ padding: '0 2px 8px' }}>
               <RecommendationBar
                 compact
                 items={recs.items}
@@ -2086,7 +2112,8 @@ export default function ChatPanel() {
                 onPickPrompt={(p) => handleSendRef.current?.(p)}
                 fallbackPrompts={dynamicPrompts.length > 0 ? dynamicPrompts : getAgentRole(selectedRole).quickPrompts}
               />
-            </ChatHero>
+            </div>
+            </>
           )}
 
           {messages.map((msg, i) => {
