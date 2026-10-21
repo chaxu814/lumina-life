@@ -37,6 +37,7 @@ import {
   SPARK_NOTE_SUFFIX,
 } from '../services/conversationDynamics'
 import ChatComposer from '../components/ChatComposer'
+import ChatHero from '../components/ChatHero'
 import RecommendationBar from '../components/RecommendationBar'
 import { useNewsRecommendations } from '../hooks/useNewsRecommendations'
 import {
@@ -5215,74 +5216,27 @@ export default function GroupChatView() {
       <div ref={scrollContainerRef} onScroll={handleScroll}
         style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
         {/* 🎯 选中角色后的欢迎氛围屏 */}
-        {teamTab === 'chat' && selectedRole && messages.filter(m => m.from === 'user').length === 0 && (() => {
-          const card = TASK_TYPE_CARDS.find(c => c.id === selectedRole)
-          if (!card) {return null}
-          const agent = TEAM_MEMBERS.find(m => m.id === getRecommendedAgent(selectedRole))
-          return (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              padding: '30px 20px 20px',
-            }}>
-              <style>{`
-                @keyframes readyPop {
-                  0% { opacity: 0; transform: scale(0.6) rotate(-10deg); }
-                  60% { transform: scale(1.15) rotate(4deg); }
-                  100% { opacity: 1; transform: scale(1) rotate(0); }
-                }
-                @keyframes readySlideUp {
-                  0% { opacity: 0; transform: translateY(16px); }
-                  100% { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes readyChip {
-                  0% { opacity: 0; transform: translateY(10px) scale(0.9); }
-                  100% { opacity: 1; transform: translateY(0) scale(1); }
-                }
-                @keyframes readyPulse {
-                  0%, 100% { box-shadow: 0 0 0 0 ${card.color}20; }
-                  50% { box-shadow: 0 0 16px 4px ${card.color}25; }
-                }
-              `}</style>
-              <div style={{
-                fontSize: 52, marginBottom: 10,
-                animation: 'readyPop 0.6s cubic-bezier(0.22,1,0.36,1) both',
-                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.12))',
-              }}>{card.icon}</div>
-              <h3 style={{
-                margin: 0, fontSize: 20, fontWeight: 800, color: card.color,
-                animation: 'readySlideUp 0.5s ease 0.1s both',
-              }}>
-                {card.name} 已就绪
-              </h3>
-              <p style={{
-                margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center',
-                animation: 'readySlideUp 0.5s ease 0.2s both',
-              }}>
-                {card.desc}
-                {agent && <span> {agent.icon} {agent.name} 已就位</span>}
-              </p>
-              {/* 提示文字 */}
-              <p style={{
-                margin: '16px 0 0', fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center',
-                animation: 'readySlideUp 0.4s ease 0.6s both',
-              }}>
-                从下方「为你推荐」挑一条，或直接输入消息
-              </p>
-              {/* 简约提示条 */}
-              <div style={{
-                marginTop: 12, padding: '7px 16px',
-                background: 'var(--surface-100)', borderRadius: 8,
-                border: '1px solid var(--border-light)',
-                fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center',
-                lineHeight: 1.6, maxWidth: 420,
-                animation: 'readySlideUp 0.4s ease 0.7s both',
-              }}>
-                💡 直接发消息，{agent?.name || 'Lumina'} 会帮你处理<br/>
-                💡 输入 @{agent?.name || 'Lumina'} 指定回复者
-              </div>
-            </div>
-          )
-        })()}
+        {teamTab === 'chat' && selectedRole && messages.filter(m => m.from === 'user').length === 0 && (
+          <ChatHero
+            tabs={[{ key: 'chat', label: '对话' }, { key: 'work', label: '工作' }]}
+            activeTab={selectedRole === 'work' ? 'work' : selectedRole === 'chat' ? 'chat' : ''}
+            onTabChange={(k) => setSelectedRole(k as TaskType)}
+          >
+            <RecommendationBar
+              compact
+              items={recs.items}
+              loading={recs.loading}
+              smart={recs.smart}
+              topicLabel={recs.topicLabel}
+              onReload={(force) => { void recs.reload(force) }}
+              onPickNews={(rec) => sendRecommendationText(
+                `帮我看看这条资讯讲了什么，挑重点说，并说说它可能对我有什么影响：${rec.title}${rec.source ? `（${rec.source}）` : ''}\n${rec.url}`,
+              )}
+              onPickPrompt={sendRecommendationText}
+              fallbackPrompts={(TASK_TYPE_CARDS.find(c => c.id === selectedRole)?.quickPrompts) || []}
+            />
+          </ChatHero>
+        )}
         {/* 选中角色后隐藏初始系统欢迎消息 */}
         {/* 折叠提示：让「隐藏」是可见的行为，而不是像消息丢了 */}
         {hiddenCount > 0 && (
@@ -5556,7 +5510,7 @@ export default function GroupChatView() {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
           }}
           onPaste={e => handlePasteInsert(e, input, setInput)}
-          placeholder={llmReady ? '发消息... @Lumina @热茶 @Yak 指定回复者 （Shift+Enter 换行）' : '发消息...（模拟模式，配置LLM后解锁真实对话）'}
+          placeholder={llmReady ? '发消息…  输入 @ 可指定回复者' : '发消息…（模拟模式，配置 LLM 后解锁真实对话）'}
           textareaRef={gcTextareaRef}
           textareaKey={`gc-input-${inputKey}`}
           minHeight={72}
@@ -5612,20 +5566,6 @@ export default function GroupChatView() {
             { key: 'capsule', icon: <IconHourglass size={16} />, label: '胶囊', onClick: handleCapsule },
           ]}
           inlineKeys={['enhance', 'thinking', 'emoji', 'file', 'voice', 'cu']}
-          aboveCard={messages.filter(m => m.from === 'user').length === 0 && !sending ? (
-            <RecommendationBar
-              items={recs.items}
-              loading={recs.loading}
-              smart={recs.smart}
-              topicLabel={recs.topicLabel}
-              onReload={(force) => { void recs.reload(force) }}
-              onPickNews={(rec) => sendRecommendationText(
-                `帮我看看这条资讯讲了什么，挑重点说，并说说它可能对我有什么影响：${rec.title}${rec.source ? `（${rec.source}）` : ''}\n${rec.url}`,
-              )}
-              onPickPrompt={sendRecommendationText}
-              fallbackPrompts={(TASK_TYPE_CARDS.find(c => c.id === selectedRole)?.quickPrompts) || []}
-            />
-          ) : null}
           sending={sending}
           canSend={!sending && !!input.trim()}
           onSend={send}

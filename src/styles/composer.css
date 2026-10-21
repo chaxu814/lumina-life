@@ -17,7 +17,7 @@
   border-radius: 20px;
   background: var(--surface-0);
   box-shadow: 0 2px 10px rgba(15, 25, 45, 0.05);
-  padding: 10px 12px 8px;
+  padding: 12px 14px 10px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -94,7 +94,7 @@
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--text-primary);
   resize: none;
@@ -166,8 +166,8 @@
 .cc-foot {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .cc-plus {
@@ -415,14 +415,14 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 8px;
+  gap: 6px;
+  padding: 6px 9px;
   border: none;
   background: transparent;
   border-radius: 9px;
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -454,10 +454,10 @@
 
 .cc-tool-dot.on { background: #2563eb; }
 
-/* ── 「为你推荐」（2026-10-20 四改：对齐豆包卡片样式）
-   外层无边框、无底色，只有与输入栏的间距——避免视觉上又包了一个框 */
+/* ── 「为你推荐」（2026-10-21 六改：进空会话落地页，对齐豆包）
+   不再钉在输入框上方，而是和标题同处一个内容列；外层仍无边框/底色 */
 .cc-recs {
-  margin: 0 0 8px;
+  margin: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -467,8 +467,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 2px 5px;
-  font-size: 11px;
+  margin: 0 0 10px;
+  padding: 0 2px;
+  font-size: 12.5px;
   color: var(--text-tertiary, #9aa1ad);
 }
 
@@ -485,6 +486,9 @@
 }
 
 .cc-recs-refresh:hover { background: var(--surface-100); color: var(--text-primary); }
+/* 豆包没有常驻的刷新按钮：默认隐去，鼠标移到推荐区才出现，避免右侧飘一个孤立符号 */
+.cc-recs-refresh { opacity: 0; transition: opacity 0.15s, background 0.12s, color 0.12s; }
+.cc-recs:hover .cc-recs-refresh, .cc-recs-refresh:focus-visible { opacity: 0.75; }
 .cc-recs-refresh:disabled { opacity: 0.5; cursor: default; }
 
 /* 竖向一条一条排，条目随文字宽度（左对齐），不撑满——和豆包一致 */
@@ -492,39 +496,40 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 8px;
 }
 
-/* 2026-10-20 五改——对齐豆包：每条是「随文字宽度」的小圆角胶囊，
-   左对齐、不撑满整行；上一版做成 width:100% 整宽卡片，整块显得太大 */
+/* 2026-10-21 六改——豆包同款「圆角胶囊」：白底、浅描边、高度约 38px，
+   宽度随文字（max 100%），不再用 14px 小圆角显得像卡片 */
 .cc-rec {
   display: inline-flex;
   align-items: center;
   width: auto;
   max-width: 100%;
-  padding: 7px 13px;
-  border: 1px solid var(--border-light);
-  border-radius: 14px;
-  background: var(--surface-0);
-  color: var(--text-secondary);
+  padding: 9px 16px;
+  border: 1px solid var(--border-light, #e5e7eb);
+  border-radius: 999px;
+  background: var(--surface-0, #fff);
+  color: var(--text-primary);
   font-family: inherit;
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.35;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
 }
 
 .cc-rec:hover {
   background: var(--surface-50);
-  border-color: #93c5fd;
+  border-color: #bfdbfe;
   color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
-/* 单行、随文字宽；只有超长（>340px）才省略，保持和豆包一致的紧凑感 */
+/* 单行、随文字宽；只有超长（>520px）才省略 */
 .cc-rec-title {
   display: block;
-  max-width: 340px;
+  max-width: 520px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

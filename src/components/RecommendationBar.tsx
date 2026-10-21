@@ -27,10 +27,15 @@ export interface RecommendationBarProps {
   onPickPrompt: (text: string) => void
   /** 无资讯时的回落提示词 */
   fallbackPrompts?: string[]
+  /**
+   * 紧凑版（2026-10-21）：放在空会话落地页里时只保留「为你推荐 + ↻ + 胶囊」，
+   * 隐藏话题/AI 精选徽章——豆包的推荐区只有一行小标题，徽章会显得吵。
+   */
+  compact?: boolean
 }
 
 export default function RecommendationBar(props: RecommendationBarProps) {
-  const { items, loading, smart, topicLabel, onReload, onPickNews, onPickPrompt, fallbackPrompts = [] } = props
+  const { items, loading, smart, topicLabel, onReload, onPickNews, onPickPrompt, fallbackPrompts = [], compact } = props
 
   // 开关关闭（设置 → 隐私与开关 → 为你推荐）：不再展示资讯与刷新按钮，
   // 只保留几条静态提示词，避免这一栏整个消失、输入区上方突然空一块。
@@ -56,8 +61,8 @@ export default function RecommendationBar(props: RecommendationBarProps) {
       <div className="cc-recs-head">
         <span className="cc-recs-title">
           为你推荐
-          {topicLabel && <em className="cc-recs-topic">{topicLabel}</em>}
-          {smart && <em className="cc-recs-badge">AI 精选</em>}
+          {!compact && topicLabel && <em className="cc-recs-topic">{topicLabel}</em>}
+          {!compact && smart && <em className="cc-recs-badge">AI 精选</em>}
         </span>
         <button type="button" className="cc-recs-refresh" title="换一批"
           disabled={loading}

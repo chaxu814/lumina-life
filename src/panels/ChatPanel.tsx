@@ -55,6 +55,7 @@ import {
   detectMentionInReply,
 } from '../services/conversationDynamics'
 import ChatComposer from '../components/ChatComposer'
+import ChatHero from '../components/ChatHero'
 import RecommendationBar from '../components/RecommendationBar'
 import { useNewsRecommendations } from '../hooks/useNewsRecommendations'
 import TaskDispatcher from '../components/TaskDispatcher'
@@ -1357,6 +1358,22 @@ export default function ChatPanel() {
     padding: 0, color: 'var(--text-secondary)',
   }
 
+  // 2026-10-21：抽出来给「对话 / 工作」分段控件与角色选择卡共用，
+  // 避免两处各写一份「切角色 + 找最近会话 / 新建会话」的逻辑而漂移。
+  const selectAgentRole = (roleId: string) => {
+    setSelectedRole(roleId)
+    setRolePickerOpen(false)
+    setAgentConfig({ lastRole: roleId })
+    const curState = useStore.getState()
+    const roleConvs = curState.conversations.filter(c => c.roleId === roleId)
+    if (roleConvs.length > 0) {
+      const lastUsed = roleConvs.sort((a, b) => b.createdAt - a.createdAt)[0]
+      switchConversation(lastUsed.id)
+    } else {
+      createConversation(undefined, roleId)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--surface-0)' }}>
       {/* 🆕 v3.0: 副人格冲突弹幕 */}
@@ -2003,19 +2020,7 @@ export default function ChatPanel() {
                       boxShadow: active ? `0 4px 16px ${role.color}25` : '0 1px 6px rgba(0,0,0,0.04)',
                       position: 'relative', overflow: 'hidden',
                     }}
-                    onClick={() => {
-                      setSelectedRole(role.id)
-                      setRolePickerOpen(false)
-                      setAgentConfig({ lastRole: role.id })
-                      const curState = useStore.getState()
-                      const roleConvs = curState.conversations.filter(c => c.roleId === role.id)
-                      if (roleConvs.length > 0) {
-                        const lastUsed = roleConvs.sort((a, b) => b.createdAt - a.createdAt)[0]
-                        switchConversation(lastUsed.id)
-                      } else {
-                        createConversation(undefined, role.id)
-                      }
-                    }}
+                    onClick={() => selectAgentRole(role.id)}
                   >
                     {active && (
                       <div style={{ position: 'absolute', top: 7, right: 9, width: 19, height: 19, borderRadius: 10, background: role.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, animation: 'roleCardIn 0.3s ease' }}>✓</div>
@@ -2065,36 +2070,23 @@ export default function ChatPanel() {
         {/* ── Messages ── */}
         <div ref={chatScrollRef} onScroll={handleChatScroll} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
           {messages.length === 0 && !isProcessing && (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 60, fontSize: 14 }}>
-              <style>{`
-                @keyframes welcomePop { 0% { opacity: 0; transform: scale(0.8) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
-                @keyframes chipSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-              `}</style>
-              {/* 角色图标 + 欢迎语 */}
-              <div style={{ animation: 'welcomePop 0.5s ease both' }}>
-                <div style={{
-                  fontSize: 52, marginBottom: 10,
-                  filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.08))',
-                }}>{getAgentRole(selectedRole).icon}</div>
-                <div style={{
-                  fontSize: 17, fontWeight: 700,
-                  color: getAgentRole(selectedRole).color,
-                  marginBottom: 6,
-                }}>
-                  {getAgentRole(selectedRole).name} 已就绪
-                </div>
-                <div style={{
-                  marginTop: 4, fontSize: 13, color: 'var(--text-secondary)',
-                  maxWidth: 360, margin: '0 auto', lineHeight: 1.6,
-                }}>
-                  {getAgentRole(selectedRole).welcomeMsg}
-                </div>
-              </div>
-
-              <div style={{ marginTop: 16, fontSize: 11.5, color: 'var(--text-tertiary)' }}>
-                直接输入，或从下方「为你推荐」挑一条 · 🎤 语音也可以
-              </div>
-            </div>
+            <ChatHero
+              tabs={[{ key: 'general', label: '对话' }, { key: 'colleague', label: '工作' }]}
+              activeTab={selectedRole === 'general' ? 'general' : selectedRole === 'colleague' ? 'colleague' : ''}
+              onTabChange={(k) => selectAgentRole(k)}
+            >
+              <RecommendationBar
+                compact
+                items={recs.items}
+                loading={recs.loading}
+                smart={recs.smart}
+                topicLabel={recs.topicLabel}
+                onReload={(force) => { void recs.reload(force) }}
+                onPickNews={openRecommendation}
+                onPickPrompt={(p) => handleSendRef.current?.(p)}
+                fallbackPrompts={dynamicPrompts.length > 0 ? dynamicPrompts : getAgentRole(selectedRole).quickPrompts}
+              />
+            </ChatHero>
           )}
 
           {messages.map((msg, i) => {
@@ -2489,7 +2481,7 @@ export default function ChatPanel() {
             onKeyDown={handleKeyDown}
             placeholder={
               isProcessing ? 'Lumina 正在回复，你可以先打草稿等待' :
-              `${getAgentRole(selectedRole).icon} ${getAgentRole(selectedRole).name} · ${getAgentRole(selectedRole).desc}`
+              `给 ${getAgentRole(selectedRole).name} 发消息…`
             }
             textareaRef={inputRef}
             minHeight={52}
@@ -2551,18 +2543,6 @@ export default function ChatPanel() {
               { key: 'capsule', icon: <IconHourglass size={16} />, label: '胶囊', onClick: handleCapsule },
             ]}
             inlineKeys={['enhance', 'thinking', 'emoji', 'file', 'voice', 'cu']}
-            aboveCard={messages.length === 0 && !isProcessing ? (
-              <RecommendationBar
-                items={recs.items}
-                loading={recs.loading}
-                smart={recs.smart}
-                topicLabel={recs.topicLabel}
-                onReload={(force) => { void recs.reload(force) }}
-                onPickNews={openRecommendation}
-                onPickPrompt={(p) => handleSendRef.current?.(p)}
-                fallbackPrompts={dynamicPrompts.length > 0 ? dynamicPrompts : getAgentRole(selectedRole).quickPrompts}
-              />
-            ) : null}
             sending={isProcessing}
             canSend={!!input.trim() && !isProcessing}
             onSend={handleSend}
