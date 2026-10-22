@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion-3%20continuous%20values%20%C2%B7%205%20expressions-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
-  <img src="https://img.shields.io/badge/Tools-139%20registered%20%2F%20~32--50%20per%20turn-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="139 tools registered, ~32-50 exposed per turn">
+  <img src="https://img.shields.io/badge/Tools-142%20registered%20%2F%20~32--50%20per%20turn-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="142 tools registered, ~32-50 exposed per turn">
   <img src="https://img.shields.io/badge/Computer%20Use-%E2%9C%85-00d2d3?style=for-the-badge&labelColor=1a1a2e" alt="Computer Use">
   <img src="https://img.shields.io/badge/license-AGPL_3.0_%7C_Apache_2.0-eccc68?style=for-the-badge&labelColor=1a1a2e" alt="License (AGPL-3.0 OR Apache-2.0)">
 </p>
@@ -306,10 +306,10 @@ Live2D / VRM 需要会 Blender、会绑 3D 模型 —— 这把绝大多数想�
 
 ---
 
-### 🔧 139 Built-in Tools · 按需筛选（另可经 MCP / 技能市场扩展）
+### 🔧 142 Built-in Tools · 按需筛选（另可经 MCP / 技能市场扩展）
 
-<sub>**三个口径都给你，不合并**：注册表实际注册并通过校验 **139** 个。
-按模式分档：`developer` 档候选 **139** 个（全开）、`agent`（日常）档候选 **135** 个、
+<sub>**三个口径都给你，不合并**：注册表实际注册并通过校验 **142** 个。
+按模式分档：`developer` 档候选 **142** 个（全开）、`agent`（日常）档候选 **138** 个、
 `chat` 档静态 TOOLSETS 表为 0，但实际经 `CHAT_MODE_TOOLS` 注入 **11** 个（文件只读 / 记忆 / 搜索 / 委托）。
 
 但**每一轮真正发给模型的只有一小撮** —— `electron/tools/toolRouter.ts` 会按
@@ -669,10 +669,13 @@ lumina skill        # 管理技能
 lumina cron         # 定时任务
 ```
 
-> 💡 确保 `lumina.cmd` 所在目录已加入系统 PATH：
+> 💡 **已安装版**：`lumina.cmd` 随安装包放在 `<安装目录>\resources\`（默认 `C:\Program Files\Lumina Life\resources\`）。
+> 把该目录加入 PATH 后即可在任意终端用 `lumina ...`（它会调用同目录上一层的 `Lumina Life.exe` 进入 CLI 模式）：
 > ```cmd
 > setx PATH "%PATH%;C:\Program Files\Lumina Life\resources"
 > ```
+> 不加 PATH 也能用：直接运行 `"C:\Program Files\Lumina Life\Lumina Life.exe" --cli doctor`。
+> **开发态**请用 `npm run cli -- <命令>` 或 `npm run doctor`，不要用上面的安装路径。
 
 ### REST API
 
@@ -830,7 +833,7 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
-│  │  139 tools · MCP          │  Plugin SDK · Skill Store      │ │
+│  │  142 tools · MCP          │  Plugin SDK · Skill Store      │ │
 │  └──────────────────────┼──────────────────────────────────┘ │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Memory · Security · Session · Approval · Cron          │ │
@@ -886,7 +889,7 @@ lumina-life/
 完整版见 **[docs/ROADMAP.md](docs/ROADMAP.md)**（含已知缺口表与认领指引）。
 
 **✅ 当前开发版（v0.1.0-preview）**
-三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 主要表现 + 亲密度 + 昼/夜两档，底层 9 标签）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 139 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
+三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 主要表现 + 亲密度 + 昼/夜两档，底层 9 标签）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 142 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
 
 **✅ 已完成的发布加固**
 - [x] 原生模块 ABI 与 Electron 对齐（CI 有门禁，不再出现「测试绿、真机炸」）

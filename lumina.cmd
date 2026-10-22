@@ -26,7 +26,14 @@ if "%1"=="" (
 
 set SCRIPT_DIR=%~dp0
 
-:: 查找 Electron 可执行文件
+:: 打包态判定：本脚本随安装包落在 <resources>\，同层应存在 app.asar。
+:: 安装后的 exe 会自动加载 app.asar，只需带 --cli，不再外部传 asar 内部路径。
+if exist "%SCRIPT_DIR%app.asar" (
+    set ELECTRON_PATH=%SCRIPT_DIR%..\Lumina Life.exe
+    goto :run-packaged
+)
+
+:: 开发态：electron 来自 node_modules。
 set ELECTRON_PATH=
 if exist "%SCRIPT_DIR%node_modules\.bin\electron.cmd" set ELECTRON_PATH=%SCRIPT_DIR%node_modules\.bin\electron.cmd
 if exist "%SCRIPT_DIR%node_modules\electron\dist\electron.exe" set ELECTRON_PATH=%SCRIPT_DIR%node_modules\electron\dist\electron.exe
@@ -39,8 +46,6 @@ if "%ELECTRON_PATH%"=="" (
         exit /b 1
     )
 )
-
-:: 计算入口路径
 set MAIN_ENTRY=%SCRIPT_DIR%out\main\index.js
 
 if not exist "%MAIN_ENTRY%" (
@@ -48,5 +53,12 @@ if not exist "%MAIN_ENTRY%" (
     echo   [期望路径] %MAIN_ENTRY%
     exit /b 1
 )
-
 "%ELECTRON_PATH%" --no-sandbox "%MAIN_ENTRY%" --cli %*
+goto :eof
+
+:run-packaged
+if not exist "%ELECTRON_PATH%" (
+    echo [错误] 未找到应用本体: %ELECTRON_PATH%
+    exit /b 1
+)
+"%ELECTRON_PATH%" --no-sandbox --cli %*

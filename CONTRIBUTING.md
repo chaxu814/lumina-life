@@ -206,6 +206,36 @@ Signed-off-by: 您的姓名 <您的邮箱@example.com>
 
 ---
 
+## 🚦 维护者推送安全（Maintainer Push Safety）
+
+> 这一节只对仓库 owner / 有推送权限的维护者有效。外部贡献者走 Fork + PR，不受影响。
+
+**只允许显式推送主分支：**
+
+```bash
+git push origin master
+```
+
+**严禁：**
+
+- `git push --all` —— 会把本地所有分支（含历史快照/备份分支）一次性推上去。
+- `git push --mirror` —— 会用本地 refs 覆盖远端，最危险。
+- 推送任何本地备份/快照分支：`tmp-backup`、`*-backup`、`legacy-init-snapshot`、
+  以及任何名字像 `archive/*`、`init-*`、`*-snapshot` 的本地分支。这些分支里可能含
+  早期的内部人格/提示词文档（非 API key，但不公开），仅供本地回滚参考。
+
+**推送前自检：**
+
+```bash
+git branch --list            # 看清楚本地有哪些分支
+git push origin master       # 只推 master，推完到 GitHub 核对远端分支列表
+```
+
+如果不小心推了备份分支：到 GitHub 仓库 → Branches 删掉该远端分支，并视为该分支内容
+已公开（内部提示词等敏感设计应按整改记录走 filter-repo 清理历史，而非仅删分支）。
+
+---
+
 ## 🧪 测试指南
 
 ```bash
