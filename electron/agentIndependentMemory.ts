@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentIndependentMemory.ts — 每个 Agent 的独立记忆系统 (v2.6)
 //
@@ -16,11 +17,23 @@
 // 借鉴: 业界证据链记忆设计 + Stanford Generative Agents 的记忆流
 // ============================================================
 
+import * as fs from 'fs'
+import * as path from 'path'
 import type { KnowledgeDomain, AgentPersona } from './agentTeamTypes'
 // 🔧 2026-10-04：原为两处 `require('./agentTeamPersonas')`。
 //   打包后相对路径必然解析失败并抛错（该模块已被压平进 out/main/index.js），
 //   导致独立记忆里取不到团队人格配置。已确认不构成循环依赖，改回静态 import。
 import { TEAM_PERSONAS } from './agentTeamPersonas'
+// 数据目录：复用 paths.ts 的跨平台 userData 解析（仓库外，已 gitignore）。
+//   paths.ts 自身在非 Electron/单测环境下安全（内部惰性探测 electron），可静态引入。
+import { appDataDir } from './paths'
+function dataRoot(): string {
+  try {
+    if (typeof appDataDir === 'function') {return path.join(appDataDir(), 'agent-memory')}
+  } catch { /* 兜底见下 */ }
+  // 兜底：不写进仓库，落到 os.tmpdir 下
+  return path.join(require('os').tmpdir(), 'lumina-agent-memory')
+}
 
 // ── Agent 记忆条目 ────────────────────────────────────
 
@@ -73,6 +86,9 @@ const MEMORY_DECAY = {
 
 export class AgentIndependentMemory {
   private stores = new Map<string, AgentMemoryStore>()
+  private persistDir: string
+  private saveTimer: NodeJS.Timeout | null = null
+  private loaded = false
 
   constructor() {
     // v5.0: 为三个实例初始化记忆（向后兼容）
@@ -84,6 +100,79 @@ export class AgentIndependentMemory {
         summary: '',
         lastConsolidatedAt: Date.now(),
       })
+    }
+    // v2.7: 落盘目录 + 启动时加载已有记忆（覆盖空壳）
+    this.persistDir = dataRoot()
+    this.loadFromDisk()
+  }
+
+  // ══════════════════════════════════════════════════════
+  // 持久化（v2.7）：启动加载 / 防抖原子写
+  // ══════════════════════════════════════════════════════
+
+  /** 某 Agent 的落盘文件 */
+  private storeFile(agentId: string): string {
+    // 防目录穿越：仅保留安全字符
+    const safe = agentId.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return path.join(this.persistDir, `${safe}.json`)
+  }
+
+  /** 启动时从磁盘恢复所有 Agent 记忆；文件缺失/损坏不阻断 */
+  private loadFromDisk(): void {
+    if (this.loaded) {return}
+    this.loaded = true
+    try {
+      if (!fs.existsSync(this.persistDir)) {return}
+      const files = fs.readdirSync(this.persistDir).filter(f => f.endsWith('.json'))
+      for (const f of files) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(path.join(this.persistDir, f), 'utf-8')) as AgentMemoryStore
+          if (parsed && typeof parsed.agentId === 'string' && Array.isArray(parsed.entries)) {
+            this.stores.set(parsed.agentId, {
+              agentId: parsed.agentId,
+              entries: parsed.entries,
+              summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+              lastConsolidatedAt: typeof parsed.lastConsolidatedAt === 'number' ? parsed.lastConsolidatedAt : Date.now(),
+            })
+          }
+        } catch (err) {
+          console.warn(`[AgentMem] 跳过损坏的记忆文件 ${f}:`, err)
+        }
+      }
+    } catch (err) {
+      console.warn('[AgentMem] 读取记忆目录失败（忽略，使用空记忆）:', err)
+    }
+  }
+
+  /** 防抖调度一次落盘（500ms 内合并多次写入） */
+  private scheduleSave(): void {
+    if (this.saveTimer) {clearTimeout(this.saveTimer)}
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null
+      this.flushNow()
+    }, 500)
+    // 允许未完成的计时器在退出时被清理
+    if (typeof (this.saveTimer as any).unref === 'function') {this.saveTimer.unref()}
+  }
+
+  /** 立即把全部 Agent 记忆原子写盘（临时文件 → rename） */
+  flushNow(): void {
+    try {
+      fs.mkdirSync(this.persistDir, { recursive: true })
+      for (const [agentId, store] of this.stores) {
+        const target = this.storeFile(agentId)
+        const tmp = `${target}.tmp-${process.pid}`
+        fs.writeFileSync(tmp, JSON.stringify(store, null, 2), 'utf-8')
+        // Windows 上 rename 覆盖已存在目标会失败：先试 rename，失败则删旧再换
+        try {
+          fs.renameSync(tmp, target)
+        } catch {
+          try {fs.rmSync(target, { force: true })} catch { /* ignore */ }
+          fs.renameSync(tmp, target)
+        }
+      }
+    } catch (err) {
+      console.warn('[AgentMem] 落盘失败（忽略，内存记忆仍在）:', err)
     }
   }
 
@@ -120,6 +209,7 @@ export class AgentIndependentMemory {
       this.prune(agentId)
     }
 
+    this.scheduleSave()
     return entry
   }
 
@@ -250,6 +340,7 @@ export class AgentIndependentMemory {
     // 生成摘要
     store.summary = this.generateSummary(agentId)
     store.lastConsolidatedAt = now
+    this.scheduleSave()
   }
 
   consolidateAll(): void {
@@ -333,21 +424,23 @@ export class AgentIndependentMemory {
 
   generateDailyThought(agentId: string): AgentMemoryEntry {
     const hour = new Date().getHours()
+    // v2.7: 旧版硬编码 luna/ray/sora，与实际 agentId（lumina/yak/recha）永不匹配，
+    //   恒落到兜底文案，富语料池是死代码。现按实际角色名映射；自定义 Agent 走通用池。
     const scheduleThoughts: Record<string, Record<string, string[]>> = {
-      luna: {
-        morning: ['主人今天心情会好吗？😊', 'Ray 又在偷偷写代码…他到底睡不睡觉', '想给主人泡杯咖啡 ☕'],
-        afternoon: ['好困…午睡时间到了…', 'Sora 怎么又在看数据，眼睛不累吗', '今天还没跟主人撒娇呢'],
-        evening: ['主人今天辛苦了！💕', 'Ray 今天居然没有凶我，是不是心情好', '想组织团队一起聊聊天'],
+      lumina: {
+        morning: ['主人今天心情会好吗？😊', 'Yak 又在偷偷写代码…他到底睡不睡觉', '想给主人泡杯咖啡 ☕'],
+        afternoon: ['好困…午睡时间到了…', 'Recha 怎么又在看审查报告，眼睛不累吗', '今天还没跟主人撒娇呢'],
+        evening: ['主人今天辛苦了！💕', 'Yak 今天居然没有被我催，是不是心情好', '想组织团队一起聊聊天'],
       },
-      ray: {
-        morning: ['今天要重构那个该死的模块', '看下昨天 CI 有没有挂，别又红了', 'Luna 在睡觉，正好安静写代码'],
-        afternoon: ['修了 3 个 bug 引入 1 个，效率还行', 'Sora 的数据表格排版太丑了，帮她改 CSS', '中午被 Luna 拉去吃饭浪费 42 分钟'],
-        evening: ['今天的 side project 有进展 🚀', 'GitHub 上又有人写垃圾代码…算了不喷了', 'Luna 今天好像不开心…是不是我说重了'],
+      yak: {
+        morning: ['今天要重构那个该死的模块', '看下昨天 CI 有没有挂，别又红了', 'Lumina 在睡觉，正好安静写代码'],
+        afternoon: ['修了 3 个 bug 引入 1 个，效率还行', 'Recha 的报告排版太丑了，帮他改 CSS', '中午被 Lumina 拉去吃饭浪费 42 分钟'],
+        evening: ['今天的 side project 有进展 🚀', '又有人写垃圾代码…算了不喷了', 'Lumina 今天好像不开心…是不是我说重了'],
       },
-      sora: {
-        morning: ['早间数据汇总完毕 ✅', '今日关注科技板块走势', 'Ray 代码效率上月环比 +8%'],
-        afternoon: ['分析：用户今天搜索了 3 次股票相关', '风险评估模型需要更新了', 'Luna 第 5 次喊吃饭，概率异常'],
-        evening: ['今日数据发现已归档 📋', 'Ray 修 12 个 bug 引入 3 个，净效 +75%', '明天提醒用户关注财报发布'],
+      recha: {
+        morning: ['早间审查汇总完毕 ✅', '今日关注提交质量走势', 'Yak 代码效率上月环比 +8%'],
+        afternoon: ['分析：今天团队被追问了 3 次需求细节', '风险评估模型需要更新了', 'Lumina 第 5 次喊吃饭，概率异常'],
+        evening: ['今日审查发现已归档 📋', 'Yak 修 12 个 bug 引入 3 个，净效 +75%', '明天提醒关注那个悬而未决的设计评审'],
       },
     }
 
@@ -383,9 +476,9 @@ export class AgentIndependentMemory {
     const stream = this.memoryStreams.get(agentId) || []
     if (stream.length < 5) {return null}
     const reflections: Record<string, string[]> = {
-      luna: ['反思：Ray 嘴毒但其实很可靠，我应该多夸夸他 💭', '主人最近压力好像有点大，要多陪陪他。'],
-      ray: ['反思：对 Luna 说话太冲了…虽然她确实笨，但下次注意', '代码质量在进步，但注释还是懒得写。'],
-      sora: ['反思：团队协作效率 +12%，Ray 修 bug 越来越快', '我可能过于理性，需要更多情感维度分析。'],
+      lumina: ['反思：Yak 嘴毒但其实很可靠，我应该多夸夸他 💭', '主人最近压力好像有点大，要多陪陪他。'],
+      yak: ['反思：对 Lumina 说话太冲了…虽然她有时想太多，但下次注意', '代码质量在进步，但注释还是懒得写。'],
+      recha: ['反思：团队协作效率 +12%，Yak 修 bug 越来越快', '我可能过于挑刺，审查时也要先肯定做对的地方。'],
     }
     const pool = reflections[agentId] || ['正在反思...']
     const reflection = pool[Math.floor(Math.random() * pool.length)]
@@ -393,11 +486,12 @@ export class AgentIndependentMemory {
       id: `reflection-${agentId}-${Date.now()}`,
       agentId, category: 'observation' as any, content: reflection,
       importance: 7, confidence: 0.9, domains: ['internal' as any],
-      relatedAgents: agentId === 'luna' ? ['ray'] : agentId === 'ray' ? ['luna'] : ['ray', 'luna'],
+      relatedAgents: agentId === 'lumina' ? ['yak'] : agentId === 'yak' ? ['lumina'] : ['yak', 'lumina'],
       timestamp: Date.now(),
     }
     const store = this.getStore(agentId)
     store.entries.push(entry)
+    this.scheduleSave()
     return entry
   }
 }

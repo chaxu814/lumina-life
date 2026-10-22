@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // skillsLoader.ts — 技能目录加载器 (v14.0, QwenPaw 风格)
 //
@@ -25,6 +26,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import type { ToolDef } from '../tools/types'
+// paths.ts 自身在非 Electron/单测环境下安全（内部惰性探测 electron），可静态引入。
+import { appDataDir } from '../paths'
 
 const SKILLS_DIR = path.resolve(__dirname, '..', 'skills')
 
@@ -40,7 +43,6 @@ const SKILLS_DIR = path.resolve(__dirname, '..', 'skills')
 function getUserSkillsDir(): string {
   try {
     // 复用 paths.ts 的优雅解析（Electron 可用时返回 app.getPath('userData')）
-    const { appDataDir } = require('../paths')
     if (typeof appDataDir === 'function') {
       return path.join(appDataDir(), 'skills')
     }
@@ -99,8 +101,53 @@ function firstTitle(md: string): string {
   return m ? m[1].trim() : ''
 }
 
+// ============================================================
+// 标准 SKILL.md 识别（v16.0）：YAML frontmatter + 正文指令
+//   - 现有私有格式（无 frontmatter）原样照旧加载，行为不变。
+//   - 若文件以 `---\n...\n---\n` 开头，则按标准 Skill 协议解析
+//     name/description 等元数据 + 正文指令，二者自动判别并存。
+//   - 不引入 yaml 依赖：frontmatter 为简单 `key: value` 行。
+// ============================================================
+
+export interface ParsedFrontmatter {
+  /** 解析出的元数据（name/description/...） */
+  attrs: Record<string, string>
+  /** 去掉 frontmatter 后的正文（指令） */
+  body: string
+  /** 是否命中标准 frontmatter */
+  matched: boolean
+}
+
+/** 解析 YAML frontmatter（轻量 key: value）。未命中时 matched=false。 */
+export function parseFrontmatter(md: string): ParsedFrontmatter {
+  if (!md.startsWith('---')) {
+    return { attrs: {}, body: md, matched: false }
+  }
+  const end = md.indexOf('\n---', 3)
+  if (end < 0) {
+    return { attrs: {}, body: md, matched: false }
+  }
+  const head = md.slice(3, end).trim()
+  const body = md.slice(end + 4).replace(/^\r?\n/, '')
+  const attrs: Record<string, string> = {}
+  for (const rawLine of head.split('\n')) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) {continue}
+    const idx = line.indexOf(':')
+    if (idx <= 0) {continue}
+    const key = line.slice(0, idx).trim()
+    let val = line.slice(idx + 1).trim()
+    // 去引号
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1)
+    }
+    if (key) {attrs[key] = val}
+  }
+  return { attrs, body, matched: true }
+}
+
 export interface SkillManifest {
-  /** 技能名称 = 目录名 */
+  /** 技能名称 = 目录名（frontmatter.name 存在时优先用之） */
   name: string
   /** SKILL.md 的完整内容 */
   description: string
@@ -108,6 +155,10 @@ export interface SkillManifest {
   tools: string[]
   /** 技能目录路径 */
   dir: string
+  /** v16.0: 标准 frontmatter 元数据（私有格式为空对象） */
+  frontmatter: Record<string, string>
+  /** v16.0: 正文指令（去掉 frontmatter 后）；无 frontmatter 时等于完整 md */
+  instructions: string
 }
 
 /** 从 SKILL.md 内容中提取工具列表（解析 Markdown 表格的 `|名称|描述|` 行） */
@@ -164,12 +215,17 @@ function loadSingleSkill(skillDir: string): SkillManifest | null {
   try {
     const mdContent = fs.readFileSync(skillFile, 'utf-8')
     const tools = extractToolNames(mdContent)
+    // 标准 SKILL.md：识别 frontmatter；未命中时 attrs 为空、instructions=全文，行为与旧版一致
+    const fm = parseFrontmatter(mdContent)
+    const finalName = fm.matched && fm.attrs.name ? fm.attrs.name : name
 
     return {
-      name,
+      name: finalName,
       description: mdContent,
       tools,
       dir: skillDir,
+      frontmatter: fm.attrs,
+      instructions: fm.body,
     }
   } catch (err) {
     console.warn(`[SkillsLoader] 加载技能 "${name}" 失败:`, err)
