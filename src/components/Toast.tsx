@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // Toast.tsx — 轻量提示组件 (v2.14)
 // ============================================================
 import React, { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export interface ToastItem { id: number; message: string; type?: 'success' | 'error' | 'info' | 'warning' }
 
@@ -69,6 +71,7 @@ interface ConfirmProps {
 }
 
 export function ConfirmDialog({ visible, title, message, onConfirm, onCancel }: ConfirmProps) {
+  const { t } = useTranslation()
   if (!visible) {return null}
 
   return (
@@ -88,12 +91,12 @@ export function ConfirmDialog({ visible, title, message, onConfirm, onCancel }: 
           <button onClick={onCancel} style={{
             padding: '7px 16px', borderRadius: 8, border: '1px solid var(--border-light)',
             background: 'var(--surface-100)', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)',
-          }}>取消</button>
+          }}>{t('common.cancel')}</button>
           <button onClick={onConfirm} style={{
             padding: '7px 16px', borderRadius: 8, border: 'none',
             background: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 600,
             color: '#fff',
-          }}>确认删除</button>
+          }}>{t('common.confirm_delete')}</button>
         </div>
       </div>
     </div>

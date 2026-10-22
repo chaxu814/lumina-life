@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/ToolExecutionFeed.tsx — 工具执行反馈
 //
@@ -10,9 +11,12 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTaskWorkspace, summarizeArgs, type ToolCallRecord } from '../stores/taskWorkspaceStore'
+import SearchModeBadge, { extractSearchMode, isSearchTool } from './SearchModeBadge'
 
 const ToolExecutionFeed: React.FC = () => {
+  const { t } = useTranslation()
   const toolCalls = useTaskWorkspace((s) => s.toolCalls)
   const activeConvId = useTaskWorkspace((s) => s.activeConversationId)
   const collapsedSections = useTaskWorkspace((s) => s.collapsedSections)
@@ -50,9 +54,9 @@ const ToolExecutionFeed: React.FC = () => {
       <div
         className="tw-section-title tw-section-toggleable"
         onClick={() => toggleSection('tools')}
-        title={toolsCollapsed ? '展开' : '折叠'}
+        title={toolsCollapsed ? t('toolfeed.expand') : t('toolfeed.collapse')}
       >
-        工具执行
+        {t('toolfeed.title')}
         {items.length > 0 && <span className="tw-section-count">{items.length}</span>}
         {running && <span className="tw-running-dot" />}
         <span className={`tw-chevron ${toolsCollapsed ? 'collapsed' : ''}`}>▾</span>
@@ -61,9 +65,9 @@ const ToolExecutionFeed: React.FC = () => {
         <button
           className="tw-clear-btn"
           onClick={() => { setManuallyCleared(true); setOpenDetail(null) }}
-          title="清空当前会话的工具列表"
+          title={t('toolfeed.clear_title')}
         >
-          清空
+          {t('toolfeed.clear')}
         </button>
       )}
     </div>
@@ -75,7 +79,7 @@ const ToolExecutionFeed: React.FC = () => {
         {header}
         {!toolsCollapsed && (
           <div className="tw-empty">
-            {manuallyCleared ? '已清空' : '暂无工具调用'}
+            {manuallyCleared ? t('toolfeed.cleared') : t('toolfeed.empty')}
           </div>
         )}
       </div>
@@ -113,23 +117,26 @@ const ToolExecutionFeed: React.FC = () => {
                 {item.args != null && (
                   <span className="tw-tool-args">{summarizeArgs(item.args, 48)}</span>
                 )}
+                {isSearchTool(item.name) && extractSearchMode(item.result) && (
+                  <SearchModeBadge mode={extractSearchMode(item.result)!} />
+                )}
               </div>
               {openDetail === item.id && (
                 <div className="tw-tool-detail">
                   {item.args != null && (
                     <div className="tw-tool-detail-row">
-                      <span className="tw-tool-detail-key">参数</span>
+                      <span className="tw-tool-detail-key">{t('toolfeed.detail_args')}</span>
                       <span className="tw-tool-detail-val">{summarizeArgs(item.args, 400)}</span>
                     </div>
                   )}
                   {item.result != null && (
                     <div className="tw-tool-detail-row">
-                      <span className="tw-tool-detail-key">结果</span>
+                      <span className="tw-tool-detail-key">{t('toolfeed.detail_result')}</span>
                       <span className="tw-tool-detail-val">{summarizeArgs(item.result, 400)}</span>
                     </div>
                   )}
                   <div className="tw-tool-detail-row">
-                    <span className="tw-tool-detail-key">开始</span>
+                    <span className="tw-tool-detail-key">{t('toolfeed.detail_started')}</span>
                     <span className="tw-tool-detail-val">{new Date(item.startedAt).toLocaleTimeString()}</span>
                   </div>
                 </div>
@@ -138,7 +145,7 @@ const ToolExecutionFeed: React.FC = () => {
           ))}
           {items.length > 5 && (
             <button className="tw-tool-toggle" onClick={() => setExpandedAll(!expandedAll)}>
-              {expandedAll ? '收起' : `展开全部 ${items.length} 条`}
+              {expandedAll ? t('toolfeed.collapse_all') : t('toolfeed.expand_all', { count: items.length })}
             </button>
           )}
         </div>

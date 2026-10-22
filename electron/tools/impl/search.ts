@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/search.ts — 多引擎网页搜索工具 (v6.0)
 //
@@ -1079,6 +1080,54 @@ interface EngineEntry {
   execute: (q: string, c: number) => Promise<string>
 }
 
+// ═══════════════════════════════════════════════════════════
+// 可选真后端（Tavily / SerpAPI）—— 环境变量门控，无 key 不启用
+//
+// 设计原则：
+//   - 不引入付费硬依赖：未配置 SEARCH_BACKEND 或对应 key 时，完全不影响
+//     现有 bing/baidu/google/bingrss 离线 HTML 抓取栈。
+//   - 结果与离线栈走同一个 normalizeResults，输出格式一致。
+//   - 结果带 mode=live 标记，供上层/UI 区分实时 API 与离线抓取。
+// ═══════════════════════════════════════════════════════════
+
+function resolveLiveBackend(): 'tavily' | 'serpapi' | null {
+  const backend = (process.env.SEARCH_BACKEND || '').toLowerCase()
+  if (backend === 'tavily' && process.env.TAVILY_API_KEY) {return 'tavily'}
+  if (backend === 'serpapi' && process.env.SERPAPI_KEY) {return 'serpapi'}
+  return null
+}
+
+async function searchTavily(query: string, count: number): Promise<string> {
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query, max_results: count }),
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) {throw new Error(`Tavily HTTP ${res.status}`)}
+  const data = await res.json()
+  const results = (data?.results || []).map((r: any) => ({
+    title: String(r.title || ''),
+    link: String(r.url || ''),
+    desc: String(r.content || '').slice(0, 220),
+  }))
+  return normalizeResults(results, count, query)
+}
+
+async function searchSerpApi(query: string, count: number): Promise<string> {
+  const apiKey = encodeURIComponent(process.env.SERPAPI_KEY || '')
+  const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&num=${count}&api_key=${apiKey}`
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
+  if (!res.ok) {throw new Error(`SerpAPI HTTP ${res.status}`)}
+  const data = await res.json()
+  const results = (data?.organic_results || []).map((r: any) => ({
+    title: String(r.title || ''),
+    link: String(r.link || ''),
+    desc: String(r.snippet || '').slice(0, 220),
+  }))
+  return normalizeResults(results, count, query)
+}
+
 function buildEngineOrder(preferred: string, braveApiKey?: string): EngineEntry[] {
   const allEngines: Record<string, EngineEntry> = {
     bing:   { name: 'Bing',     execute: (q, c) => searchBing(q, c) },
@@ -1146,8 +1195,30 @@ export async function webSearch(args: Record<string, any>): Promise<ToolResult> 
     return {
       callId: '',
       ok: true,
-      content: `🔍 ${engine.toUpperCase()} 搜索: "${query}"\n\n${cached}\n\n（缓存结果）`,
+      content: `🔍 ${engine.toUpperCase()} 搜索: "${query}"\n\n${cached}\n\n（缓存结果，mode=offline）`,
       durationMs: Date.now() - start,
+    }
+  }
+
+  // 🆕 可选真后端（Tavily/SerpAPI）：环境变量门控，命中即走实时 API。
+  //   失败/无有效结果则静默回退下面的离线 HTML 抓取栈，绝不卡住用户。
+  const liveBackend = resolveLiveBackend()
+  if (liveBackend) {
+    try {
+      const liveContent = liveBackend === 'tavily'
+        ? await searchTavily(query, count)
+        : await searchSerpApi(query, count)
+      if (isValidResult(liveContent)) {
+        cacheSet(cacheKey, liveContent)
+        return {
+          callId: '',
+          ok: true,
+          content: `🔍 ${liveBackend === 'tavily' ? 'Tavily' : 'SerpAPI'} 实时搜索: "${query}"\n\n${liveContent}\n\n（mode=live，实时 API 结果）`,
+          durationMs: Date.now() - start,
+        }
+      }
+    } catch (e) {
+      console.warn(`[search] ⚠️ 真后端 ${liveBackend} 失败，回退离线栈:`, e instanceof Error ? e.message : e)
     }
   }
 
@@ -1206,10 +1277,12 @@ export async function webSearch(args: Record<string, any>): Promise<ToolResult> 
     : engine
 
   cacheSet(cacheKey, content)
+  // 搜索模式标记：指定引擎被回退替换记为 alias，否则记为离线抓取 offline。
+  const mode: 'offline' | 'alias' = usedEngine !== engine ? 'alias' : 'offline'
   return {
     callId: '',
     ok: true,
-    content: `🔍 ${usedEngine.toUpperCase()} 搜索: "${query}"\n\n${content}`,
+    content: `🔍 ${usedEngine.toUpperCase()} 搜索: "${query}"\n\n${content}\n\n（mode=${mode}）`,
     durationMs: Date.now() - start,
   }
 }
