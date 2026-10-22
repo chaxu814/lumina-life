@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tools/index.ts — 工具注册入口 (v3.6: 已注册 62+ 工具)
 // v3.6 新增: file_search（全盘递归搜索）+ disk_list（驱动器列表）
@@ -339,8 +340,11 @@ export function registerAllTools(): void {
     registerTool(def.def, def.handler)
   }
 
-  // 🆕 Voice Speak (Phase 3)
+  // 🆕 Voice (Phase 3) —— 此前只注册了 Speak，Transcribe/Record/Status 已实现却漏注册（死导入）
   registerTool(toolVoiceSpeak, async (args: any) => toolVoiceSpeak.handler!(args))
+  registerTool(toolVoiceTranscribe, async (args: any) => toolVoiceTranscribe.handler!(args))
+  registerTool(toolVoiceRecord, async (args: any) => toolVoiceRecord.handler!(args))
+  registerTool(toolVoiceStatus, async (args: any) => toolVoiceStatus.handler!(args))
 
   // 主动对话 (2 工具)
   for (const def of proactiveDefs) {

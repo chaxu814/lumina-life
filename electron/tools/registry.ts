@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // registry.ts — 工具注册中心 (v2.4)
 //
@@ -732,7 +733,7 @@ const READ_ONLY_TOOLS = new Set<string>([
   'file_list', 'file_read', 'file_search', 'ast_search', 'grep_search', 'glob_search', 'read_file',
   'web_search', 'web_fetch', 'browser', 'browser_cdp', 'content_collect', 'trafilatura_extract',
   'mcp_list_servers', 'mcp_list_tools', 'mcp_read_resource', 'mcp_search',
-  'ocr', 'desktop_see', 'screenshot', 'voice_transcribe', 'hearing_read',
+  'ocr', 'desktop_see', 'screenshot', 'voice_transcribe', 'voice_status', 'hearing_read',
   'weather', 'weather_get', 'bilibili_hot_search', 'news_collect', 'news_digest',
   'memory_search', 'memory_chat_search', 'memory_recall', 'memory_list',
   'proactive_status', 'team_status', 'team_list', 'agent_status',
