@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/v332MailStream.test.ts — v3.32 收口：
 //   拓扑工作台通讯流：私信+cc 副本去重、广播按 broadcastId 去重、

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // mailStore.ts — Agent 邮件存储 (v2.6)
 //

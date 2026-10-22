@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/newsOrganizer.test.ts
 // 覆盖「改造 3」：新闻分级 + agent 整理的解析与降级路径

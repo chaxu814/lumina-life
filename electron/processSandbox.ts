@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // processSandbox.ts — 🔄 A. 进程树隔离 / Job Object 管理 (v1.0)
 //

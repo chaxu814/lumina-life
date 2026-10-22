@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // orchestration/visibility.ts — 协作可见性分档（创新功能 3）
 //

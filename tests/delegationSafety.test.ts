@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // delegationSafety.test.ts — 委托防递归三层防护的验证（v3.34 新增）
 //

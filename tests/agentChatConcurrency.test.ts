@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentChatConcurrency.test.ts — 「聊天断断续续」并发根因回归
 //

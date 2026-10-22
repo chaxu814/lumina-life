@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // delegationManager.ts — Lumina 委托管理器 (Phase 1/2/3 循环升级)
 //

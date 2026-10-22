@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/decisionDebate.test.ts — 决策三栏（团队辩论可见化）单测
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // newsDigestScheduler.ts — 📡 新闻推送调度器 (v2.0)
 //

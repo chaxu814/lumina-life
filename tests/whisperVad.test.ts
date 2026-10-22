@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import { describe, it, expect } from 'vitest'
 import { analyzeFrame, NoiseGate } from '../electron/whisper/audioLevel'
 import { VoiceActivityDetector, type VadEvent } from '../electron/whisper/vad'

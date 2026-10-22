@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // src/panels/features/BudgetPanel.tsx — 预算守护者设置区
 //

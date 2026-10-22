@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/core/platform/platformFactory.ts — 平台适配器工厂 + 单例
 //

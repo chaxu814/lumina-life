@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // whisper/sttModelConfig.ts — 本地离线语音识别（STT）模型配置
 //

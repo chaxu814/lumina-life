@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teachRecorder.ts — v3.31 Teach 录制回放（P2，同类工程实践）
 //

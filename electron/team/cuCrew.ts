@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuCrew.ts — Computer Use 三人组：操作员 / 观察员 / 安全员 (v3.33)
 //

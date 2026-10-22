@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/petMarkdown.test.ts
 //
 // 2026-10-18（第十轮）桌宠聊天窗排版修复的守护测试。

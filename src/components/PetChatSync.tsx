@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * PetChatSync — 桌宠聊天 ↔ Lumina Agent 主聊天双向同步
  *

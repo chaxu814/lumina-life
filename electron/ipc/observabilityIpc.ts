@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ================================================================
 // ipc/observabilityIpc.ts — 记忆审判台 + 团队泳道画布 的 IPC
 //

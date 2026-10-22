@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/internRunConfig.test.ts — 缺口1: intern 路由到 buildRunConfig 不崩
 //   ① intern ID 能解析出 owner

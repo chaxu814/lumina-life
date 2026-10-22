@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // recoveryText.test.ts — 「恢复流程不能把内部诊断当回答」
 //

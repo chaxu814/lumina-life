@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/petChatSceneAndDelete.test.ts
 //
 // 2026-10-18（第九轮）两个用户可见故障的守护测试：

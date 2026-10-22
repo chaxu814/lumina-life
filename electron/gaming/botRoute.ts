@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/gaming/botRoute.ts — 路线2：Mineflayer 程序化控制（可选）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/platformCaps.ts — 桌宠窗口跨平台能力探测（纯逻辑 + 可单测）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/notificationPolicy.test.ts
 // 覆盖「改造 2」：分级弹窗策略 + SystemNotifier 的静默降级路径

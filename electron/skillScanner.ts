@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // skillScanner.ts — Skill 安全扫描器 (v1.0)
 //

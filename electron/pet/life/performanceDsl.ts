@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/performanceDsl.ts — 🎭 AI 表演 DSL（解析 / 校验 / 护栏）(v0.2)
 //

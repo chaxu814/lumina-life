@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * petChatOrchestrator — 桌宠聊天（pet-chat / pet-live2d）↔ 主 Agent 串行编排
  *

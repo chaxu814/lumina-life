@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // newstools/subscriptionManager.ts — 邮件订阅管理 v1.0
 //

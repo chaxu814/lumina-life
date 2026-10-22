@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teamCheckpoint.ts — 团队任务整轮 Diff 检查点 / 一键回滚 (v3.33)
 //

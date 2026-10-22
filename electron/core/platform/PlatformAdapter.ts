@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/core/platform/PlatformAdapter.ts — 跨平台桌面控制适配层（接口 + 共享工具）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentCompactor.ts — QwenPaw 风格上下文压缩器 (v9.0)
 //

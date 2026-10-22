@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentEmotion.ts — Agent 情绪状态机 (v2.14)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ProactiveToast.tsx — 主动引擎右上角弹窗 (v3.8.1)
 //

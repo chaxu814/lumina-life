@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/cuPermissions.test.ts — Computer Use 权限门纯决策测试 (v3.20)
 //

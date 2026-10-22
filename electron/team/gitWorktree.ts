@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // gitWorktree.ts — 任务隔离工作区 (v3.20, 同类工程实践：git worktree 隔离)
 //

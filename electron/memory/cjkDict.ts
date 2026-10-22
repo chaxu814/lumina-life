@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/cjkDict.ts — 零依赖中文词表分词增强 (v1.0)
 //

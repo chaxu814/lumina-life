@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/voice/voiceLoop.ts — 🎙 无障碍语音交互闭环（创新提案 7）
 //

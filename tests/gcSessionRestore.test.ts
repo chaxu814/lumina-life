@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // gcSessionRestore.test.ts — 从主进程日志恢复群聊会话
 //

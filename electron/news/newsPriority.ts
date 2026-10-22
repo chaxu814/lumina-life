@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // newsPriority.ts — 新闻分级：哪条值得弹系统通知（纯函数）
 //

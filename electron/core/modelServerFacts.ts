@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // core/modelServerFacts.ts — 问服务端要答案（纯解析，零 IO）
 //

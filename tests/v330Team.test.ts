@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/v330Team.test.ts — v3.30 团队系统纯逻辑
 // 覆盖：plan_approval、workflowScript DSL/调度/续跑、teach 转换、

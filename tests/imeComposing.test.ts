@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // imeComposing.test.ts — 中文输入法回车误提交（系统性缺陷回归）
 //

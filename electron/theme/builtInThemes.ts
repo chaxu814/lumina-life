@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // theme/builtInThemes.ts — 内置预设主题
 // 至少 3 个：默认浅色 / 默认深色 / 暗夜紫 / 薄荷绿 / 暖橙

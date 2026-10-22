@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tools/impl/openFile.ts — 智能文件/程序打开 (v3.6 重写)
 //

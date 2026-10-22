@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 临时渲染冒烟测试：拓扑组件在多任务/多 worker 数据下不崩
 import { describe, it, expect } from 'vitest'
 import React from 'react'

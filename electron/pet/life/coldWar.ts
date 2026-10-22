@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/coldWar.ts — 🧊 冷战 / 原谅状态机 (I2, v0.1)
 //

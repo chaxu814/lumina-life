@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/SkillMarketPanel.tsx — Skill 市场面板 (v3.10 → v2.17 白色主题)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/newsEnricher.ts — 新闻背景补充引擎 (v1.0)
 //

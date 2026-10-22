@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // utils/httpClient.ts — 统一 HTTP 客户端 (安全版)
 //

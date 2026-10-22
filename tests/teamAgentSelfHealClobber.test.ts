@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teamAgentSelfHealClobber.test.ts — 启动自愈反被全局同步覆盖（回归）
 //

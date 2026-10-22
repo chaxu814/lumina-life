@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // push/pushService.ts — 多渠道推送服务 v1.0
 //

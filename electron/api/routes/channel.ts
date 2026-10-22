@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // api/routes/channel.ts — 📡 渠道 Webhook API 路由 (Phase C)
 //

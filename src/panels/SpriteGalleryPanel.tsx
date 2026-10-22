@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // SpriteGalleryPanel.tsx — 🎨 桌宠工坊 · UGC 精灵表 (2026-10-07)
 //

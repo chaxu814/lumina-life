@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // security/signature.ts — ✍️ 技能包发布者签名校验 (v0.2 创新提案5)
 //

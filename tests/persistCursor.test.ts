@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // persistCursor.test.ts — 增量持久化游标（行为测试）
 //

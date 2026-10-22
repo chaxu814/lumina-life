@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teamProactiveSystem.ts — 团队级主动行为系统 (v2.6)
 //

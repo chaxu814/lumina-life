@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // shellFileWall.ts — 🧱 D. 文件围墙（OS 级路径锁）
 //

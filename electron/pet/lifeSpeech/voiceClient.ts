@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/lifeSpeech/voiceClient.ts — 🎙 桌宠全双工语音客户端（渲染侧 bundle）
 //

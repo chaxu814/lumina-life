@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // hybridMemoryRetrieval.ts — 混合记忆检索 (P4-4 / v6.2 真混合)
 //

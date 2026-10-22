@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ModeSettings.tsx — 场景模式设置面板 (v3.0)
 //

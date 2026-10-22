@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/system.ts — 系统信息/进程/通知/文件打开工具 (v3.2)
 // v3.2: openFile 重写 — 智能路径修复 + URL/文件/文件夹/应用全覆盖 + Electron + 系统命令双回退

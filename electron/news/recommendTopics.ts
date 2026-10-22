@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // news/recommendTopics.ts — 「为你推荐」的话题画像（7 个任务类型）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cli/doctor.ts — 系统诊断命令 (v2.0)
 //

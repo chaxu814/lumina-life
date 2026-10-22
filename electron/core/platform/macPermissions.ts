@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/core/platform/macPermissions.ts — macOS 失败诊断（错误串 → 授权指引）
 //

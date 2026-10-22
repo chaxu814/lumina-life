@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/rssParserClean.test.ts — RSS/Atom 文本清洗
 //

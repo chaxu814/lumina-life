@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/longConversation.test.ts — 长对话稳定性测试
 //
 // 模拟长对话场景，测试：

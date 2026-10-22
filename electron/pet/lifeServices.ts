@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/lifeServices.ts — 🔌 v0.2 生命感服务装配（主进程接线层）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/computerUse.ts — Computer Use agent 工具（编排层，v3.20）
 //

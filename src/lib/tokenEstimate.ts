@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // lib/tokenEstimate.ts — 前端侧的 Token 估算（与主进程同一套系数）
 //

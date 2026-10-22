@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // moodstats/snapshotStore.ts — 快照存储（纯逻辑 + 存储适配分层）
 //

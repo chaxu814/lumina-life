@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/vision/screenAwareness.ts — 👁️ 事件化屏幕感知 (v0.2)
 //

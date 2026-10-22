@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // sandboxRedirect.test.ts — 沙箱写入重定向的路径映射（v3.34 新增）
 //

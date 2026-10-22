@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import { describe, it, expect, vi } from 'vitest'
 import { VoiceLoop, type VoiceLoopDeps, type VoiceLoopState } from '../electron/voice/voiceLoop'
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // moodstats/exporter.ts — 快照明细 + 聚合统计的导出
 //

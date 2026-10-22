@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/vrm/vrmLayout.ts — VRM 桌宠布局的纯计算（无 three 依赖，可单测）
 //

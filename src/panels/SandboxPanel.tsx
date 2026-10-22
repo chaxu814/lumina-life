@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // SandboxPanel.tsx — 🔍 沙箱透明可视化（I5）
 //

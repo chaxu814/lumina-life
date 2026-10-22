@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/runtime.ts — 🎬 桌宠表演运行时（渲染侧高层封装，v0.2）
 //

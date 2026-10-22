@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // registrationFlag.ts — 工具注册标志位（零依赖叶子模块）
 //

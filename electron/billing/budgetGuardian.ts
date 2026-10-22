@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // billing/budgetGuardian.ts — 预算守护者（纯逻辑，可测）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // modelCompat.ts — 本地 / 异构 LLM 端点请求容错与能力自适应
 //

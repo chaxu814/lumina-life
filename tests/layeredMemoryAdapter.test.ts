@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/layeredMemoryAdapter.test.ts — 五层记忆适配器（用内存假 store，不碰原生 sqlite）
 import { describe, it, expect } from 'vitest'
 import { createMemoryStoreAdapter, layeredSourceFromStore } from '../electron/memory/layeredMemoryAdapter'

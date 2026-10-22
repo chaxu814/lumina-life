@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * Lumina Life 性能基准 — TypeScript 类型定义
  * 供 benchmark.js（CommonJS）与未来 TypeScript 基准扩展共用。

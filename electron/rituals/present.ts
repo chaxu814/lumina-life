@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // rituals/present.ts — 口播呈现链：TTS 播报 → 失败降级文字气泡 → 桌宠动作
 //

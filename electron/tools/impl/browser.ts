@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tool_browser.ts — Agent 联网浏览器工具 (v3.6)
 //

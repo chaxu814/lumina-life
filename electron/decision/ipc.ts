@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // decision/ipc.ts — 决策三栏的 IPC 与斜杠命令注册函数 (v1.0)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // orchestration/complexityAnalyzer.ts — 任务复杂度分析 (v1.0)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // channels/channelAgentBridge.ts — 📡 渠道↔Agent 消息桥接 (v14.x)
 //

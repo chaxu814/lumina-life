@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agent/answerEvidenceGuard.ts — 「无证据的事实断言」兜底（纯函数，可单测）
 //

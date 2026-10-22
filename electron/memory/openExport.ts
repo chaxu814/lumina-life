@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/openExport.ts — 跨 Agent 记忆互通的开放格式（创新功能 5）
 //

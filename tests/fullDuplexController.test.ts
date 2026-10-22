@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/fullDuplexController.test.ts — 全双工对话编排器
 // 用真实 LiveSpeechDirector 做 sendEvent 后端，假 bridge 模拟 LLM/TTS/打断

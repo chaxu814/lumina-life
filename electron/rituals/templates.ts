@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // rituals/templates.ts — 离线模板口播（纯函数，零依赖）
 //

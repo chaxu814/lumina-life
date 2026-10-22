@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/petMemoryBridge.ts — 🧠 记忆 → 桌宠大脑 桥接 (v0.2)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // chatPersistenceGuard.test.ts — 会话持久化不能静默失败
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * teamAgentRestartSim.test.ts — 模拟「保存 → 重启 → 重读」
  *

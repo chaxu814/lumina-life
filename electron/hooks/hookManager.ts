@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // hooks/hookManager.ts — Agent 生命周期 Hook 管理器 (v3.5)
 //

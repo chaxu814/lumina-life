@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/nativeBridge.test.ts — 原生模型协议桥接层
 // 用真实协议样例验证 OpenAI ↔ Anthropic / Gemini / Azure 的往返转换

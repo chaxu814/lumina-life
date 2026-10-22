@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // newsOrganizer.ts — 改造 3：让团队 agent 参与新闻整理
 //

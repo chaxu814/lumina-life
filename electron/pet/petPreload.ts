@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/petPreload.ts — 桌宠窗口受控 preload（安全加固 P1-4）
 //

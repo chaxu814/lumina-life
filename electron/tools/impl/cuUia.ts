@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuUia.ts — v3.31 Windows UI Automation 元素树（P2，同类工程实践）
 //

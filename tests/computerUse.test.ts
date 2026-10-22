@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/computerUse.test.ts — IPC 桌面操控引擎（外壳）单元测试
 //

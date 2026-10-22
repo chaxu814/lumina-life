@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agents/customAgentManager.ts — 自定义 Agent 管理器 (D1/D2/D3)
 //

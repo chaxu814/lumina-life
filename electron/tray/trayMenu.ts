@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // trayMenu.ts — 自定义圆角浮层托盘菜单（仿 ATK X1 Ultra 风格）
 //

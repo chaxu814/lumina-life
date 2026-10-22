@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // newstools/bilingualDigest.ts — 中英双语日报 v1.0
 //

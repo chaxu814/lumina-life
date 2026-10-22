@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/tray/macDock.ts — macOS 托盘/ Dock 差异适配
 //

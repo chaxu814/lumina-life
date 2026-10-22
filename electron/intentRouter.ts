@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // intentRouter.ts — 🧭 Agent 意图路由器 (v16.0-fix)
 //

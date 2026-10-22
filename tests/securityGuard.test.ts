@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/securityGuard.test.ts — SecurityGuard 单元测试
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SecurityGuard, GuardSeverity, ThreatCategory } from '../electron/securityGuard'

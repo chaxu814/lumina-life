@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // luckyModeService.ts — Lucky 模式前端服务 (v1.0)
 //

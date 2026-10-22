@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // persona/subPersona.ts — 🪞 副人格觉醒（最小真实机制，v0.1 实验）
 //

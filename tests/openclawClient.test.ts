@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/openclawClient.test.ts — OpenClaw 桥接客户端测试（注入假 fetch，无网络）
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { OpenClawClient, type FetchLike } from '../electron/channels/openclaw/openclawClient'

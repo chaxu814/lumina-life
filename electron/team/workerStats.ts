@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // workerStats.ts — 临时工绩效画像 / 易错档案 / 经验卡 (v3.33)
 //

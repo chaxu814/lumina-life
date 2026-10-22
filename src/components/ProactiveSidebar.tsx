@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ProactiveSidebar.tsx — 24/7 主动对话引擎控制面板
 // v2.9: 左侧栏专用，提供全部触发器管理和状态监控

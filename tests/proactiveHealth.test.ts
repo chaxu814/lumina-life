@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactiveHealth.test.ts — 🩺 健康关怀 + 🌙 夜间勿扰 + 🎯 hitArea 反应
 //

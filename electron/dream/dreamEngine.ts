@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // dream/dreamEngine.ts — 梦境系统 v1.2
 //

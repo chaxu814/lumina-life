@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/teamIpc.ts — 团队/模式系统 IPC 处理器 (v5.0)
 //

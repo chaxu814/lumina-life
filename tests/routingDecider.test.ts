@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // routingDecider.test.ts — 任务路由决策测试
 //
 // 这些用例锁住的是用户诉求「问什么就解决什么」里最容易翻车的一环：

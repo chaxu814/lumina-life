@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // decisionDebate.ts — 生活决策「三栏辩论」(决策三栏 v1.0)
 //

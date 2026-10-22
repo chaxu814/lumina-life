@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // onboarding/localModelDetector.ts — 引导向导本地模型探测 (Setup Wizard)
 //

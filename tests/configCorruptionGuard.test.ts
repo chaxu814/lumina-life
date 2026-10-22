@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/configCorruptionGuard.test.ts — 配置损坏不得被静默覆盖
 //

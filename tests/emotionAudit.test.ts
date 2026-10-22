@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/emotionAudit.test.ts
 //
 // 情绪收紧可审计层的契约测试。

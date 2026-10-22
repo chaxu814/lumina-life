@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/delegation.test.ts — 委托系统 + allowedTools 白名单强制 单元测试
 // 按 agentTeamPersonas.ts 实际 Persona 数据验证
 import { describe, it, expect, vi } from 'vitest'

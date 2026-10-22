@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/lifeSpeech/fullDuplexController.ts — 🎙 全双工对话编排器（渲染侧）
 //

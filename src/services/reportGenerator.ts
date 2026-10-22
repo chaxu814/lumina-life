@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // reportGenerator.ts — 📊 Lumina 日报/周报/月报自动生成 (v1.1)
 //

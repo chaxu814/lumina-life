@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // dynamicWorker.ts — 通用动态临时工 (v3.30, 同类工程实践：动态 N 成员)
 //

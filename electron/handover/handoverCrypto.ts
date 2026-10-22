@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // handover/handoverCrypto.ts — 交班卡片本地加密导出
 //

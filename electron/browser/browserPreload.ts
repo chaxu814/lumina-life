@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // browser/browserPreload.ts — 内置浏览器窗口（工具栏宿主页）的预加载
 //

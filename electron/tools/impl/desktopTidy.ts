@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/desktopTidy.ts — 桌面整理工具 (三段式: 扫描 → 方案 → 执行)
 //

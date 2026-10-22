@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // services/taskWorkspaceBridge.ts — 后台任务事件 → 任务工作区 store (v02)
 //

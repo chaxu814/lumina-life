@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { clsx } from 'clsx'
 import { IconRefresh, IconMail, IconSettings, IconCheck, IconPlay } from '../components/Icons'

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // nativeProtocol.test.ts — P1-3：主对话协议的 SSE 解析正确性
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // decisionService.test.ts — 决策征询系统测试
 //
 // 这里的测试重心不在「正常问答」，而在**异常路径**：

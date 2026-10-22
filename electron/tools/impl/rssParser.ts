@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/rssParser.ts — 轻量 RSS/Atom 解析器 (v1.0)
 //

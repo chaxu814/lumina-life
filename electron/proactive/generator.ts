@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/generator.ts — 🗣 主动台词现场生成（LLM 为主，模板兜底）
 //

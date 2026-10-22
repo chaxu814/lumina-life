@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // stores/taskWorkspaceStore.ts — Agent 团队任务工作区面板状态
 //

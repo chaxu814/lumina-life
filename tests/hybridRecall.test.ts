@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // hybridRecall.test.ts — BM25 + 余弦 RRF 融合检索测试
 //
 // 这些断言是「README 说的 RRF 融合是真的」的唯一证据。

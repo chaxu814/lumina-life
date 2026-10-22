@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // channels/adapters/dingtalk.ts — 📡 钉钉渠道适配器 (Phase C)
 //

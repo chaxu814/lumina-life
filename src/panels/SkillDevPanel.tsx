@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/SkillDevPanel.tsx — 技能开发工作台 v1.0
 //

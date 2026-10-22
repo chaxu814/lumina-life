@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // orchestration/routingDecider.ts — 任务路由决策（规则预筛 + LLM 仲裁）v1.0
 //

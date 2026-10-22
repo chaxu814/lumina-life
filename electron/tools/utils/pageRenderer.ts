@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * pageRenderer.ts —— 离屏真浏览器渲染（反爬 / JS 渲染站点的兜底）
  *

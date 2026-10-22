@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // petChatUi.test.ts — Live2D 聊天窗 UI 行为（2026-10-05）
 //

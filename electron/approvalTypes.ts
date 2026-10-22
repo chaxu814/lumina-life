@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // approvalTypes.ts — 审批流共享类型 (v8.0)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // api/mobilePage.ts — 手机远程访问 H5 页面 (v1.0)
 //

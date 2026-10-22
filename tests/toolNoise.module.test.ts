@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/toolNoise.module.test.ts — 直接测试从 agentRunner 抽取的真实 toolNoise 模块
 import { describe, it, expect } from 'vitest'
 import { cleanToolNoiseText, TOOL_NOISE_PATTERNS } from '../electron/agent/toolNoise'

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentSouls.ts — Agent 角色灵魂卡 (v2.8.3)
 //

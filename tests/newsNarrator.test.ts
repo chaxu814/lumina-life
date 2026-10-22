@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/newsNarrator.test.ts — 新闻叙述层（LLM 已接 / 未接 两条路）
 //

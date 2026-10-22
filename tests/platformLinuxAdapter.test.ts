@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/platformLinuxAdapter.test.ts — Linux 适配器能力分级与命令构造单测
 //

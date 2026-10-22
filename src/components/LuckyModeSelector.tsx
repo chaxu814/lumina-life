@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // LuckyModeSelector.tsx — Lucky 模式选择器 (v1.1)
 //
 // 聊天输入框下方的控制栏组件

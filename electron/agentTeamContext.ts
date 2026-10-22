@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentTeamContext.ts — 团队共享上下文管理器 (v3.0)
 //

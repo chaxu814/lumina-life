@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/PermissionSelector.tsx — 三档权限选择器 + 风险确认框
 //

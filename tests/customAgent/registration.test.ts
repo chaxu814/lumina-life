@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/customAgent/registration.test.ts — 自定义 Agent 注册到团队单测
 import { describe, it, expect, beforeEach } from 'vitest'
 import {

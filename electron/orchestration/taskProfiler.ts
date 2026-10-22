@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // orchestration/taskProfiler.ts — 任务类型识别 · 术有专攻 (v1.0)
 //

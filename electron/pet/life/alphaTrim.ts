@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/alphaTrim.ts — 🔍 按可见像素 alpha 测包围盒（alpha-trim 纯逻辑）
 //

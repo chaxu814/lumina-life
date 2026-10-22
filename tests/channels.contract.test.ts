@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/channels.contract.test.ts — 渠道适配器契约 + 失败安全
 //

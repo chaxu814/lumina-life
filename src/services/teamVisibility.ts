@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ================================================================
 // services/teamVisibility.ts — 群聊成员显示开关
 //

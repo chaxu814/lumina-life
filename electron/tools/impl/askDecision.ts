@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tools/impl/askDecision.ts — 「向用户征询决策」工具 (v1.0)
 //

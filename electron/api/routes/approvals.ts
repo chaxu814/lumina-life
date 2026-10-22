@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // api/routes/approvals.ts — 审批队列 REST 端点
 //

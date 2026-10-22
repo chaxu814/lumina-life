@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * petConversationDelete — 桌宠聊天窗「垃圾桶」的删除口径计算
  *

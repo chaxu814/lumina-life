@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import React, { useEffect, useRef, useState } from 'react'
 import {
   IconBarChart, IconFile, IconFolder, IconImage, IconMonitor, IconScissors, IconUpload,

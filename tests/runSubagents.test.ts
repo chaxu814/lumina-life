@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/runSubagents.test.ts — 缺口2: run_subagents 入口工具
 //   - owner 解析（ownerOfPersona / ALS）

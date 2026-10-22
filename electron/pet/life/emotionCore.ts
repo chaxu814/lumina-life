@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/emotionCore.ts — 🫀 统一情绪核心 (v0.2「生命感」升级)
 //

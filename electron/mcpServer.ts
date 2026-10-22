@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // mcpServer.ts — MCP (Model Context Protocol) 集成 (v3.11)
 //

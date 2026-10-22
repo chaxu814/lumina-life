@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/customAgent/configSchema.test.ts — agent.json 格式与默认值单测
 import { describe, it, expect } from 'vitest'
 import {

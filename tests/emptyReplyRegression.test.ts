@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/emptyReplyRegression.test.ts — 「暂时无法生成有效回复」故障回归
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // TeamTopologyView.tsx — v3.32 团队实时拓扑图（同类多 Agent 工作台）
 //

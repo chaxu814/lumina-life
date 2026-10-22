@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 //
 // 方案二：DNS 拦截（预留，覆盖裸 TCP 连接）
 //   不在白名单的域名解析到 127.0.0.1

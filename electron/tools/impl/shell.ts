@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/shell.ts — Shell 命令执行工具 (v5.0: 第三层沙箱 🧅)
 //

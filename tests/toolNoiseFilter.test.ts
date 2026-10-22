@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/toolNoiseFilter.test.ts — AgentRunner 工具调用噪声过滤器测试
 // 验证 stripFillerText / TOOL_NOISE_PATTERNS 等后处理逻辑
 import { describe, it, expect } from 'vitest'

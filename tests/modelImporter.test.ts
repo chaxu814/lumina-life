@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/modelImporter.test.ts — Live2D 形象导入器测试（内存 fs，不碰真实磁盘）
 import { describe, it, expect, vi } from 'vitest'
 import {

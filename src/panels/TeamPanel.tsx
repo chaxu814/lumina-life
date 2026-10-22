@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // TeamPanel.tsx — AI 小团队面板 (v2.7.1)
 // v9.3: + 动态团队管理（TeamRegistry 集成）

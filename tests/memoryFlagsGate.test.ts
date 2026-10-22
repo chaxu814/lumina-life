@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/memoryFlagsGate.test.ts — 「记忆与进化」两个开关真的拦住写入
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // lsp/astSearch.ts — AST 结构化代码搜索 (v3.5)
 //
@@ -6,9 +7,25 @@
 //   支持: 查找函数定义、类定义、import、export、调用关系
 // ============================================================
 
-import * as ts from 'typescript'
+// 仅引用类型：运行时按需懒加载，避免在未打包 typescript 的环境（如 MCP 发布版）
+// 于模块加载阶段直接 require 失败。
+import type * as ts from 'typescript'
 import * as fs from 'fs'
 import * as path from 'path'
+
+let cachedTs: typeof ts | null = null
+
+function loadTs(): typeof ts {
+  if (cachedTs) {return cachedTs}
+  try {
+    cachedTs = require('typescript') as typeof ts
+    return cachedTs
+  } catch {
+    throw new Error(
+      'AST 结构化搜索需要 TypeScript 编译器：开发环境已内置；在未打包 typescript 的环境（如 MCP 发布版）此能力不可用。',
+    )
+  }
+}
 
 export interface ASTSearchOptions {
   /** 搜索模式 */
@@ -39,6 +56,7 @@ export function astSearch(
   filePath: string,
   options: ASTSearchOptions = { pattern: 'all_symbols' },
 ): ASTSymbol[] {
+  const ts = loadTs()
   const absPath = path.resolve(filePath)
   if (!fs.existsSync(absPath)) {
     throw new Error(`文件不存在: ${absPath}`)

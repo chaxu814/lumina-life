@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/skillRuntimeIpc.ts — 🧪 第三方技能包运行时 IPC (v0.2 创新提案2+5)
 //

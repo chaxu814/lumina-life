@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 复现 2026-10-04 的真实故障：LM Studio 跑在 http://192.168.1.2:1234（漏了 /v1）
 // 应用拼出 /chat/completions 打到非 API 路径 → LM Studio 返回 HTTP 200 + 空 body
 // → streamText 全程为空 → `text: undefined` → 界面上「发不出消息」且无任何报错

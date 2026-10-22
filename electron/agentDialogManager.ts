@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentDialogManager.ts — Agent 原始对话归档管理器 (P4-1)
 //

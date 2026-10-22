@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // AgentMoments.tsx — 朋友圈 (v2.2)
 // 存储: SQLite（主）+ localStorage（备份兜底）

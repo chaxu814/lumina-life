@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // whisper/sttModelIpc.ts — 离线语音模型「就绪检测 + 一键下载」IPC
 //

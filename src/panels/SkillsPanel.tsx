@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import React, { useState, useEffect } from 'react'
 import { useStore } from '../stores/appStore'
 import { IconPlus } from '../components/Icons'

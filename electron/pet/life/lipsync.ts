@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/lipsync.ts — 👄 五元音口型同步 (v0.2)
 //

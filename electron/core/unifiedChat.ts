@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ⚠️ @deprecated（2026-09）未接入主链路，仅支持非流式纯文本，无工具调用 / 流式 / 视觉。
 //    主链路的统一出站/入站协议翻译已由 core/nativeBridge.ts + llmProvider.ts 承担（支持

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/resolveProactiveLLM.ts — 🔌 主动管线 LLM 配置 + 纯文本对话
 //

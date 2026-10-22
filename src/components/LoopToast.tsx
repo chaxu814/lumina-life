@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/LoopToast.tsx — Loop 完成 Toast 通知（Phase 4）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/scanRound2Findings.test.ts — 第二轮复核：6 处已修项回归防护
 //

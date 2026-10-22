@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // core/userDataPath.ts — 规范 userData 目录（纯函数，零副作用）
 //

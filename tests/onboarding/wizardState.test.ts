@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/onboarding/wizardState.test.ts — 向导状态机与持久化单测（内存 fs）
 import { describe, it, expect } from 'vitest'
 import {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/artifactIpc.ts — 任务工作区产物文件操作 IPC
 //

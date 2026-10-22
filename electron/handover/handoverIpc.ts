@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // handover/handoverIpc.ts — 交班模式 IPC 注册（导出注册函数，不改 preload）
 //

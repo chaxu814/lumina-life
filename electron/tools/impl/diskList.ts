@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/diskList.ts — 全盘驱动器列表 (v3.6: async I/O)
 //

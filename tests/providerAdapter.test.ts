@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/providerAdapter.test.ts — Provider 适配层单元测试
 import { describe, it, expect } from 'vitest'
 import {

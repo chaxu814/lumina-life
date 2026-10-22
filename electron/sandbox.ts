@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // sandbox.ts — 🧱 文件操作重定向层 / 虚拟围栏 (v1.0)
 //

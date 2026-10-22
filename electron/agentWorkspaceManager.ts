@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentWorkspaceManager.ts — Agent 工作区统一管理入口 (P3-1 ~ P3-5, P4-1 ~ P4-5)
 //

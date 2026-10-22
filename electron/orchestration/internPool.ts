@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // orchestration/internPool.ts — 通用子智能体（实习生）池 (v3.0)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/keyboard.ts — 键盘控制工具 (v2.5 / v2.10.1)
 //

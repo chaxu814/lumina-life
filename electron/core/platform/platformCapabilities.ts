@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/core/platform/platformCapabilities.ts — 全应用功能在各平台的可用矩阵
 //

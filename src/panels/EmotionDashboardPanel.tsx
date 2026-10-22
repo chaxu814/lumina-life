@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // EmotionDashboardPanel.tsx — 情绪仪表盘 (P2)
 // 展示所有 Agent 的情绪状态、趋势和互动关系

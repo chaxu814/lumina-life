@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/TheaterMount.tsx — 剧场容器（订阅主进程事件 + 控制可见性）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // news/recommendSelect.ts — 「为你推荐」快段的选品逻辑（纯函数）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/compactorKeepsConstraints.test.ts
 // 验证 agentCompactor 在结构化摘要中「强制保留用户约束」：
 //   1. 对话中途给出的格式 / 路径 / 否定约束能被抽出来（不只是最后几条）

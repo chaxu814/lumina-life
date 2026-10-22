@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/vrm/vrmRenderer.ts — VRM 3D 桌宠渲染器（three.js + @pixiv/three-vrm）
 //

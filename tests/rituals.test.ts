@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/rituals.test.ts — 仪式感闭环（睡前复盘 + 晨间简报）
 //

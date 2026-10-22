@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuVerify.ts — Computer Use 动作后验证 (v3.20, 同类工程实践：动作后验证)
 //

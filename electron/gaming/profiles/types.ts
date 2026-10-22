@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/gaming/profiles/types.ts — 通用多游戏 Profile 框架类型
 //

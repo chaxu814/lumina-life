@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/jsonMemoryStore.test.ts
 // 验证 JSON 兜底记忆存储：事实增删查 + 语义记忆 + 落盘持久化 + 重载

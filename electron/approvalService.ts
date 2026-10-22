@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // approvalService.ts — 危险操作审批流 (v8.0)
 //

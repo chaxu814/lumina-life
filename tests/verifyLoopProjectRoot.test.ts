@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/verifyLoopProjectRoot.test.ts — 自动验证闭环的两道防线
 //

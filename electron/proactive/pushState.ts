@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pushState.ts — AI 主动推送三维状态模型
 // 疲劳度 / 亲密度 / Lumina 精力，含衰减恢复曲线与持久化

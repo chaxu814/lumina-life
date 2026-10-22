@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/types.ts — 🧭 统一主动管线类型 (主动管线 v6.1)
 //

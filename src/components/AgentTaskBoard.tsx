@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // AgentTaskBoard.tsx — Agent Autonomous Task Board (v2.10.1)
 // Extracted from ChatPanel.tsx

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // Type declarations for screenshot-desktop (native C++ binding)
 // Used by proactiveEngine.ts, computerUse.ts, nativeScreenshot.ts
 

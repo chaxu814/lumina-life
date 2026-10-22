@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // Loop Engine Phase 1 冒烟测试 (node 环境, 无真实 LLM / fs)
 // 覆盖：创建→默认拆解→确认→运行循环→持久化→触发器

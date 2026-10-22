@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // llm/xmlToolCall.ts — XML 风格工具调用解析器（唯一事实源）
 //

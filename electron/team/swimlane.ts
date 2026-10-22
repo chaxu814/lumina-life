@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // swimlane.ts — 团队可观测性：依赖泳道画布 + Worktree 并行进度
 //

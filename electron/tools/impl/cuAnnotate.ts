@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuAnnotate.ts — Set-of-Mark 网格标注 / zoom 局部放大
 //

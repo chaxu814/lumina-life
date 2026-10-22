@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ⚠️ @deprecated（2026-09）未接入主链路，Anthropic 适配不完整（缺工具回合/多模态/流式/响应解析）。
 //    原生协议（Claude/Gemini/Azure）已由 core/nativeBridge.ts 统一实现并在 llmProvider 接线。

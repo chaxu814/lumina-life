@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // avatarCrop.test.ts — 头像裁剪纯函数单测（node 环境）
 //

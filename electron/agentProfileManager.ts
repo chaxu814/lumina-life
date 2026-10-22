@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentProfileManager.ts — Agent 独立配置管理器 (P3-1)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ciWorkflow.test.ts — CI 工作流配置的漂移守卫（v3.34 新增）
 //

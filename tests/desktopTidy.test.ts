@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/desktopTidy.test.ts — 桌面整理工具的安全回归
 //

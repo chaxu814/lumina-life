@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import * as crypto from 'crypto'
 
 // Shared with ProviderManager's existing on-disk v1 format. Keep format/key stable

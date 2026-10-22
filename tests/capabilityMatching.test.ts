@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // capabilityMatching.test.ts — 端到端能力匹配审查（2026-10-10）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * persistCursor — 增量持久化的游标计算（纯函数，可单测）
  *

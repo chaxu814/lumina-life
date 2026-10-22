@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/settings/BrowserLinksPanel.tsx — 内置浏览器与回复链接联动设置
 //

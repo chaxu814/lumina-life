@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/gaming/gameState.test.ts — VLM 输出解析为结构化 GameState
 // ============================================================

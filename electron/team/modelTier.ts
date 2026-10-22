@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // modelTier.ts — v3.30 小模型成本分级（同类工程实践）
 //

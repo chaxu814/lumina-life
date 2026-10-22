@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuPermissions.ts — Computer Use 权限门 (v3.20, 同类工程实践：四道关)
 //

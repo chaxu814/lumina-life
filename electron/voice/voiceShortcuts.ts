@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/voice/voiceShortcuts.ts — ⌨️ PTT 全局快捷键注册
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // core/promptEnhancer.ts — 草稿提示词润色（v3）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // selfKnowledge.ts — Agent 自我认知（单一事实源 · 动态）
 //

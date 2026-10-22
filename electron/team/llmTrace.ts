@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // llmTrace.ts — 团队任务追踪（v3.33，同类工程实践：任务通知 / trace）
 //

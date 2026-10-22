@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/subagentPool.test.ts — 通用子智能体池（InternPool v3.0）单测
 //

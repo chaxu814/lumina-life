@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/visibility.test.ts
 //
 // 可见性分档的契约测试。

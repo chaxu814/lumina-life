@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentRunner.constants.ts — Agent Runner 顶层常量/模式
 //

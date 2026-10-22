@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teamAutonomy.ts — 内驱力驱动的自领取团队 + 崩溃恢复 (v3.33)
 //

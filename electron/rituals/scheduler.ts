@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // rituals/scheduler.ts — 分钟级仪式调度器（纯逻辑，时钟可注入）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/fileRead.ts — 文件读取工具 (v4.0: 🧱 沙箱集成)
 //

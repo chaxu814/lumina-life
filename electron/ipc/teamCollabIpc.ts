@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/teamCollabIpc.ts — 团队协作 v3.20 IPC（信箱 / 任务板 / 动态 worker / CU 策略）
 //

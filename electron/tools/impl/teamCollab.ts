@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teamCollab.ts — 团队协作新工具 (v3.20, 同类工程实践：agent teams)
 //

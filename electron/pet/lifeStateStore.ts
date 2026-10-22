@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/lifeStateStore.ts — 内驱力 / 情绪持久化 (v0.1.1)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/platformMatrixLog.test.ts — CI 日志：打印当前 runner 的平台能力矩阵
 //

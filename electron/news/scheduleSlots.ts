@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // scheduleSlots.ts — 新闻推送时段解析（纯函数，零 Electron 依赖）
 //

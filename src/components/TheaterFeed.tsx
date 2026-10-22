@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/TheaterFeed.tsx — 团队可见性剧场 UI（创新功能 2）
 //

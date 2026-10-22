@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // NoteCycle.tsx — 记录→整理→回顾 闭环组件
 // 从 ToolboxPanel 提取，供 GroupChatView 复用

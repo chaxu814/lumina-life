@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/desktopScan.ts — 桌面快捷扫描 + 智能启动 (v3.6)
 //

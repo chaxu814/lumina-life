@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/faceRig.ts — 😊 面部 / 身体参数原语 (v0.2)
 //

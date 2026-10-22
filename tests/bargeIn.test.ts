@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/bargeIn.test.ts — 可打断语音控制器测试（注入时钟与假播放器）
 import { describe, it, expect, vi } from 'vitest'
 import { BargeInController } from '../electron/whisper/bargeIn'

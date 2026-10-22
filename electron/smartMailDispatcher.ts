@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // smartMailDispatcher.ts — 智能邮件调度器 (v1.1)
 //

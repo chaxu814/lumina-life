@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // asyncTaskManager.ts — 异步后台任务管理器 (P3-3, P4-2, P1-2)
 //

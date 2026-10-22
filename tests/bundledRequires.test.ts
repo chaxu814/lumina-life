@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // bundledRequires.test.ts — 打包产物的相对 require 守卫（v3.34 新增）
 //

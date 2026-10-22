@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentRunConfigPlumbing.test.ts — 「Agent 的上下文窗口真的传下去了吗」
 //

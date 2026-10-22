@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/macPermissions.test.ts — macOS 失败诊断 + 结构化降级单测
 //

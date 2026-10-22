@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // i18n/approval.ts — 审批流国际化字典 (v8.0)
 //

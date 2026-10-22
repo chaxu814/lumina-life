@@ -1,4 +1,5 @@
-﻿// ============================================================
+﻿// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
+// ============================================================
 // tests/gaming/focusRobustness.test.ts — 焦点鲁棒性
 //
 // 全部 mock getAdapter / exec / sleep，不真实操作系统窗口。

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // modelHealthReport.ts — 模型体检报告（2026-10-05）
 //

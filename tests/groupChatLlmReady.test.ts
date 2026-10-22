@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 回归覆盖：群聊就绪状态必须校验 Lumina Team Agent 的真实配置，
 // 本地可免 Key，但不能拿全局供应商或其它 Agent 的 Key 冒充。
 import { describe, it, expect } from 'vitest'

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/gaming/gameActions.test.ts — 统一动作分发 + 视觉路线映射
 //

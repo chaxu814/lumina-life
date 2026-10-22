@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/loopIpc.ts — Loop 任务磁盘持久化 IPC
 //

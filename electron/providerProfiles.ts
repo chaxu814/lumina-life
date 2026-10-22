@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // providerProfiles.ts — LLM Provider 能力档案 (v4.0)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // manualSystem.ts — 说明书/知识库系统 (v2.5)
 //

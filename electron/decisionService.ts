@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // decisionService.ts — Agent 主动向用户征询决策 (v1.0)
 //

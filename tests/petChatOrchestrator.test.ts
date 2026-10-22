@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/petChatOrchestrator.test.ts
 //
 // 桌宠聊天同步修复的核心单测（src/lib/petChatOrchestrator.ts）：

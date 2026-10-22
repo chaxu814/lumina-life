@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // rituals/index.ts — 仪式感闭环统一导出
 export type {
   DailyReplayLike,

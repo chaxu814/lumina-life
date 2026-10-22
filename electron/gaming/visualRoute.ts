@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/gaming/visualRoute.ts — 路线1：视觉路线（截图 + VLM + cuCore）
 //

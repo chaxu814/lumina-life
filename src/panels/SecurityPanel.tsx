@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // SecurityPanel.tsx — 🛡️ 安全中心 (v3.0)
 //

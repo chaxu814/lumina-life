@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/themeManager.test.ts — 主题管理器单测
 // 用内存 mock fs，覆盖 列表/应用/导入/导出/删除/校验

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/sync/syncConfig.ts — WebDAV 同步配置 + 加密密码管理（提案4）
 //

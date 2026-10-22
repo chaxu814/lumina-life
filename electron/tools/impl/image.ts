@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/image.ts - Screenshot/Clipboard/Image Generation (v3.0)
 // v3.0: Added image generation (OpenAI DALL-E)

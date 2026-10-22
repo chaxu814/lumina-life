@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // onboarding/llmReachability.ts — 运行时 LLM 端点可达性预检
 //

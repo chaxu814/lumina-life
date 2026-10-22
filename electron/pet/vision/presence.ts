@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/vision/presence.ts — 📷 摄像头「在场 / 注视 / 表情」隐私状态机 (v0.2)
 //

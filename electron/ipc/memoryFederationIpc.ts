@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/memoryFederationIpc.ts — 团队记忆共享 Federation IPC（提案3）
 //

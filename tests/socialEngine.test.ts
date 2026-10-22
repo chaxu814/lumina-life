@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/socialEngine.test.ts — 社交引擎 + 自发话题 单元测试
 import { describe, it, expect, vi } from 'vitest'
 

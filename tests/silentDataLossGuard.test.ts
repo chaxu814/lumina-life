@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/silentDataLossGuard.test.ts — 「加载失败不得伪装成空数据」
 //

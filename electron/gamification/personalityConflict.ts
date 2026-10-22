@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // gamification/personalityConflict.ts — 副人格觉醒 v1.0
 //

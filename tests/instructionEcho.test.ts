@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // instructionEcho.test.ts — 「队友接话时对着指令说话」
 //

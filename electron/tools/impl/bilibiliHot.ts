@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/bilibiliHot.ts — B站热搜/热门榜推送工具
 //

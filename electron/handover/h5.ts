@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // handover/h5.ts — 交班 H5 页面 + 局域网路由描述符
 //

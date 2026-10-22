@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/factCore.ts — 事实来源强度与内容指纹纯函数（v1.0 抽自 memoryStore.ts）
 //

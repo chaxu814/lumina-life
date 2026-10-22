@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // dayreplay/ipc.ts — Day Replay 的 IPC 频道注册
 //

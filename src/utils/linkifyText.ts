@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // utils/linkifyText.ts — 把纯文本里的 http/https 链接解析成可点击 token
 //

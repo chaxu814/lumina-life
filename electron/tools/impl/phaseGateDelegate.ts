@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // phaseGateDelegate.ts — 五阶段门控委托工具（v3.34 新增）
 //

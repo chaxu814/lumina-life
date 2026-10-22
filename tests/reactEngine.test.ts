@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/reactEngine.test.ts — 核心 ReAct 循环引擎测试
 // 之前 agentRunner（154KB）只配了一个 4.1KB 的"形状测试"，核心 ReAct 循环零覆盖。
 // 这里对抽出的 ReActEngine 做真正的行为测试：终态回复、工具调用→续跑、错误、

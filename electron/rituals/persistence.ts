@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // rituals/persistence.ts — 仪式配置与运行记录的 JSON 持久化
 //

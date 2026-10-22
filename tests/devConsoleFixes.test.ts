@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // devConsoleFixes.test.ts — dev 控制台报错修复的回归守卫
 //

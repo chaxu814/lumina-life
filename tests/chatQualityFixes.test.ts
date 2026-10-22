@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // chatQualityFixes.test.ts — 聊天质量审计 20 项修复的回归守卫
 //

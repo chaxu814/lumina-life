@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // src/panels/ProactiveSettingsPanel.tsx — AI 主动推送设置
 import React, { useState, useEffect } from 'react'
 

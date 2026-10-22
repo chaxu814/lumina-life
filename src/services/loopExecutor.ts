@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // services/loopExecutor.ts — 真实 LLM 子任务执行器
 //

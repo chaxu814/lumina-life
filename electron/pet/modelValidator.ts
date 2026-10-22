@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/modelValidator.ts — 🛡️ Live2D 模型包安全校验器 (v0.2 创新提案1)
 //

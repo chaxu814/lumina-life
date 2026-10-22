@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentRunner.toolSelection.ts — 每轮工具选择流水线（P2-10 纯搬移）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/sandboxRulesNormalize.test.ts — 命令归一化（编码伪装绕过）验收
 //

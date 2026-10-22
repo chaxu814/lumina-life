@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // gamification/quests.ts — 每日任务系统 v1.0 ⭐
 //

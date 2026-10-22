@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/unifiedChat.test.ts — 统一模型调用层测试（注入假 fetch）
 import { describe, it, expect } from 'vitest'
 import {

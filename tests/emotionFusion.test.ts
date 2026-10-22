@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/emotionFusion.test.ts — 连续情绪融合层测试（纯逻辑，无 Electron 依赖）
 import { describe, it, expect } from 'vitest'
 import {

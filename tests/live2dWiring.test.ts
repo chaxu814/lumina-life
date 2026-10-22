@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // live2dWiring.test.ts — 🔌 Live2D「AI 驱动身体」端到端接线契约
 //

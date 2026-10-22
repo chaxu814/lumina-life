@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/intentDispatcher.ts — 🎬 桌宠意图调度器 (Phase 1 · Week 1)
 //

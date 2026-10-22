@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/core/platform/platformStatus.ts — 能力运行时状态（结构化降级通道）
 //

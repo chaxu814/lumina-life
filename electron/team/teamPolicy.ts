@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // teamPolicy.ts — 关系进调度 / 聊天式审批 (v3.33)
 //

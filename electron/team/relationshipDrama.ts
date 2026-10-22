@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // team/relationshipDrama.ts — 🎭 团队关系剧本化 (I1, v0.1)
 //

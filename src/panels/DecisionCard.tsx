@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/DecisionCard.tsx — 决策三栏卡片 (DecisionDebateCard, v1.0)
 //

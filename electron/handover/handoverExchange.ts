@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // handover/handoverExchange.ts — 局域网交换码注册表（内存态）
 //

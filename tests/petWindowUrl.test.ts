@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/petWindowUrl.test.ts
 //
 // 回归测试：Live2D 不显示（%3F 编码 bug）。

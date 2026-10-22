@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/backoff.ts — ⏳ 主动发言退避（纯函数，零依赖，可单测）
 //

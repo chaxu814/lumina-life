@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/delegationContext.test.ts — 委托上下文传递 + 验证闭环 单元测试
 //
 // 覆盖问题 D：

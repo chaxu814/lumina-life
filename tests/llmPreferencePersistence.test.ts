@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 复现「最大输出 / 上下文窗口每次启动被打回固定值」
 //
 // 根因：syncProviderFromBackend 重建 providerConfigs 时，

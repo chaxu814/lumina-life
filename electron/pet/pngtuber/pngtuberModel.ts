@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/pngtuber/pngtuberModel.ts — 🖼 PNGTuber 模型定义与状态机 (v0.1)
 //

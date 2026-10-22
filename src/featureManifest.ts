@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // featureManifest.ts — 功能分级清单（单一事实来源）
 //

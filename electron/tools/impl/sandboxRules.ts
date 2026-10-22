@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // sandboxRules.ts — 智能沙箱威胁分类规则库（F1，零依赖纯函数，可单测）
 //

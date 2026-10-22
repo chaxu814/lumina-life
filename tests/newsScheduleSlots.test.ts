@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/newsScheduleSlots.test.ts
 // 覆盖「改造 1」的间隔调度逻辑与配置归一化

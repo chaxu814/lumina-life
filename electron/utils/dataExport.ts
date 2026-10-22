@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * dataExport.ts — 本地数据一键导出 / 导入（I6 隐私/自托管叙事）
  *

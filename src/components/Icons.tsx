@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // Lumina Life 2.0 — SVG Icons (inline, no dependencies)
 // 🎮 Game-Icon-Pack by Nieobie + Lumina Original

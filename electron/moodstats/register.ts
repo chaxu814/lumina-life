@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // moodstats/register.ts — 采集注册（唯一需要集成阶段接线的出口）
 //

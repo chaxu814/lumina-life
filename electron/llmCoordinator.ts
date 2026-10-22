@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // llmCoordinator.ts — 智能 LLM 调用协调器
 //

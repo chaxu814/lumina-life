@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // MomentsPanel.tsx — Agent 朋友圈 UI (v2.11)
 //

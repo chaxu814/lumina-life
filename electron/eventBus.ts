@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // eventBus.ts — 事件总线（借鉴 ZerolanLiveRobot 的 TypedEventEmitter）
 //

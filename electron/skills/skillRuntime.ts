@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // skills/skillRuntime.ts — 🧪 第三方技能运行时沙箱 (v0.2 创新提案2)
 //

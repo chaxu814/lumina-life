@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/llmProvider.test.ts — LLM Provider 单元测试
 // 覆盖：多 Provider 适配、重试、超时分类、流式解析、健康检查
 import { describe, it, expect, vi, beforeEach } from 'vitest'

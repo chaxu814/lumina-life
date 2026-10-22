@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // vitest.config.ts — Lumina 测试配置
 import { defineConfig } from 'vitest/config'
 import path from 'path'

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/ArtifactSelfTest.tsx — 产物渲染器 dev-only 自检组件
 //

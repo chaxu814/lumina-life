@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/rolePermissionsRouting.test.ts
 // 角色权限 / 工具白名单 / 委托路由 方向一致性测试

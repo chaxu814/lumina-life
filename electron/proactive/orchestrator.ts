@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/orchestrator.ts — 🧭 统一主动编排器（主动编排 v6.1）
 //

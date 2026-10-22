@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/affinityDecay.test.ts — 关系驱动的记忆衰减（创新功能 3）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/reproduceDegen.test.ts — 复现二次调用退化问题
 // 
 // 模拟 Lumina Team 群聊场景：

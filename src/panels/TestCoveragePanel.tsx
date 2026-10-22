@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/TestCoveragePanel.tsx — 测试覆盖体系 v1.0
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // Live2D 独立聊天窗与主动搭话选项的交互契约。
 // 桌宠是透明且可能穿透鼠标的窗口；可见卡片必须使窗口接管鼠标，
 // 用户点击选项后要打开聊天窗、显示所选内容并转发给主 Agent。

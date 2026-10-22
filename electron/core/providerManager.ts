@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // providerManager.ts — 统一 LLM Provider 配置管理器 (QwenPaw 风格)
 //

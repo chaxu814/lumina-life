@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/emotionalMemory.ts — 记忆的情绪维度（创新功能 2）
 //

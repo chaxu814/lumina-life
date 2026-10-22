@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/MemoryFederationPanel.tsx — 记忆共享设置页（提案3 Level 1）
 //

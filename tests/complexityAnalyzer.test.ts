@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // complexityAnalyzer.test.ts — 复杂度分析器回归测试
 //
 // v2 修复背景：旧版把 `整体|全面|大规模|重构|重新` 写成一条正则，

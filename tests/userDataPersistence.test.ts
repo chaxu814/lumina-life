@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // userDataPersistence.test.ts — 配置持久化 / 目录统一（2026-10-10）
 //

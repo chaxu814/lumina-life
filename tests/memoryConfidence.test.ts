@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/memoryConfidence.test.ts — 记忆可信度（防幻觉固化）回归测试
 //
 // 背景：旧实现里模型只要调一次 memory_save，就写进 confidence=1.0 / source='user_said'，

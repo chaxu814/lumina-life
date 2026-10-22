@@ -28,7 +28,8 @@
     "build:pet-life": "esbuild electron/pet/life/runtime.ts --bundle --format=iife --global-name=LuminaLife --charset=utf8 --outfile=electron/pet/assets/pet-life.js",
     "build:pet-voice": "esbuild electron/pet/lifeSpeech/voiceClient.ts --bundle --format=iife --global-name=LuminaVoice --charset=utf8 --external:electron --outfile=electron/pet/assets/pet-voice.js",
     "prebuild": "node scripts/prebuild-clean.cjs",
-    "build": "npm run build:pet-life && npm run build:pet-voice && npm run build:pet-vrm && npm run build:pet-mmd && electron-vite build",
+    "build:mcp-server": "esbuild electron/mcp/mcpServerEntry.ts --bundle --platform=node --format=cjs --target=node20 --packages=external --alias:electron=./electron/mcp/electronShim.ts --outfile=out/mcp-server/mcp-server.js",
+    "build": "npm run build:pet-life && npm run build:pet-voice && npm run build:pet-vrm && npm run build:pet-mmd && electron-vite build && npm run build:mcp-server",
     "preview": "electron-vite preview",
     "pack:win": "electron-vite build && electron-builder --win --x64",
     "pack:mac": "electron-vite build && electron-builder --mac --x64 --arm64",
@@ -125,6 +126,18 @@
       {
         "from": "electron/agents/lumina/AGENTS.md",
         "to": "AGENTS.md"
+      },
+      {
+        "from": "lumina.js",
+        "to": "lumina.js"
+      },
+      {
+        "from": "lumina.cmd",
+        "to": "lumina.cmd"
+      },
+      {
+        "from": "lumina-mcp.cjs",
+        "to": "lumina-mcp.cjs"
       }
     ],
     "files": [
@@ -139,6 +152,7 @@
       "!**/node_modules/@protobufjs/**",
       "!**/node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
       "!**/node_modules/onnxruntime-node/bin/napi-v3/linux/**",
+      "!**/node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**",
       "!**/node_modules/better-sqlite3/deps/**",
       "!**/node_modules/better-sqlite3/build/Release/obj/**",
       "!**/node_modules/better-sqlite3/build/Release/*.iobj",
@@ -148,7 +162,17 @@
       "!**/node_modules/better-sqlite3/build/Release/test_extension.node",
       "!**/node_modules/sharp/vendor/**/include/**",
       "!**/node_modules/sharp/**/*.lib",
-      "!**/node_modules/sharp/vendor/**/lib/**/*.def"
+      "!**/node_modules/sharp/vendor/**/lib/**/*.def",
+      "!**/node_modules/sharp/vendor/**/darwin/**",
+      "!**/node_modules/sharp/vendor/**/linux/**",
+      "!**/node_modules/sharp/vendor/**/win32/arm64/**",
+      "!**/node_modules/@xenova/transformers/src/**",
+      "!**/node_modules/@xenova/transformers/examples/**",
+      "!**/node_modules/@xenova/transformers/.cache/**",
+      "!**/node_modules/@xenova/transformers/dist/*.wasm",
+      "!**/node_modules/minecraft-data/minecraft-data/data/bedrock/**",
+      "!**/node_modules/**/*.map",
+      "!**/out/mcp-server/meta.json"
     ],
     "win": {
       "target": [

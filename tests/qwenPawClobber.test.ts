@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // qwenPawClobber.test.ts — QwenPaw 兼容不覆盖磁盘激活供应商 / 不污染 Team Agent (2026-10-11)
 //

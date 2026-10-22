@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // summarizer.ts — 结构化上下文压缩 (v2.7 重写)
 //

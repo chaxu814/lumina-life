@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // rolePolicyAccessControlParity.test.ts
 // 两套权限表的一致性守卫（v3.34 新增）

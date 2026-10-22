@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // moodstats/stats.ts — 分桶聚合与诚实报告（纯逻辑，重点测试）
 //

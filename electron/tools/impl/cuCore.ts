@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuCore.ts — Computer Use 共享执行内核（两套 CU 的单一事实源）
 //

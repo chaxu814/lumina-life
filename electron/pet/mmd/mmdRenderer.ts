@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/mmd/mmdRenderer.ts — MMD 桌宠渲染器入口（安全加固 P1-4）
 //

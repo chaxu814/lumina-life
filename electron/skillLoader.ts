@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // skillLoader.ts — 动态 Skill 加载系统 (v4.0)
 //

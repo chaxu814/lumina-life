@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // electron/gaming/antiCheat.ts — 反作弊游戏黑名单检测
 //

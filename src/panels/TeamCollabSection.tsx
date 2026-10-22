@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // TeamCollabSection.tsx — v3.30 团队协作中心
 // 共享任务板泳道（含 plan_approval）· 文件信箱 · 动态临时工 ·

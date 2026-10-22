@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 /**
  * contentExtractor.ts —— 零依赖的「正文提取」（Readability-lite）
  *

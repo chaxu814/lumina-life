@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentTeamTypes.ts — Agent 类型定义 (v6.0)
 //

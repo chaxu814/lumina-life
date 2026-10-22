@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactiveNotifier.ts — ProactiveEngine → Renderer 通知桥接 (v3.8.1)
 //

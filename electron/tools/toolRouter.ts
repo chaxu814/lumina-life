@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // toolRouter.ts — 工具按需筛选（2026-10-07）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // accessControl.ts — 🔒 Agent 权限与访问控制 (v16.0-fix)
 //

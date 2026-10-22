@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memoryManager.ts — 低风险常驻内存/CPU 治理（Electron 多进程结构下限之上）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentSocialEngine.ts — Agent 间社交对话引擎 (v6.0)
 //

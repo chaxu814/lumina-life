@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // GroupChatHistorySidebar.tsx — 群聊历史侧边栏 (v3.0)
 // Redesigned to match ChatPanel conversation list style

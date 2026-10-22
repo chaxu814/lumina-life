@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // injectionGuard.ts — 防注入系统 (v2.5)
 // ⚠️ v2.7: 此模块已标记为 deprecated，请使用 securityGuard.ts

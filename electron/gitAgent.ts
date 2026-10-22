@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // gitAgent.ts — Aider 式 Git 自动集成 (v3.11)
 //

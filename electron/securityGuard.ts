@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // securityGuard.ts — 消息/工具参数级安全审查 (v2.7)
 //

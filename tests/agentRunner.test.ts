@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/agentRunner.test.ts — AgentRunner 单元测试
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 

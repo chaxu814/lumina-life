@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // components/LinkifiedText.tsx — 把消息正文里的 URL 渲染成可点击链接
 //

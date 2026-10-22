@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/cuInputGuard.test.ts — v3.30 ForegroundLease 人机互斥纯逻辑
 // ============================================================

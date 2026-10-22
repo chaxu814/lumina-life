@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentConfig.ts — 独立 Agent LLM 配置管理器 (v14.0)
 //

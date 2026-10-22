@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // permission/permissionTier.ts — 三档权限（后端强制）
 //

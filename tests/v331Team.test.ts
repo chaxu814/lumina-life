@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/v331Team.test.ts — v3.31 收口：Teach 滚轮/打字（kd/ku 双沿）、
 // workflow when 条件 + retry 有界重试。

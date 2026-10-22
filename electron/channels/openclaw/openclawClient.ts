@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // channels/openclaw/openclawClient.ts — 🔌 OpenClaw 桥接客户端 (v0.1)
 //

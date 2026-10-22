@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/innerThoughts.ts — 🧠 内心独白（不说出口的潜台词）
 //

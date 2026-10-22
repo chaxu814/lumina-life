@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // hooks/useNewsRecommendations.ts — 「为你推荐」数据源（两段式 + 话题画像）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/lifeSpeech/sentenceSplitter.ts — ✂️ 流式中英分句 (v0.2)
 //

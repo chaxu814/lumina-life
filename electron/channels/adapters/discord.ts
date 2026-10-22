@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // channels/adapters/discord.ts — 📡 Discord 渠道适配器 (P2-1)
 //

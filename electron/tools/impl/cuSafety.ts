@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // cuSafety.ts — Computer Use 安全策略（零依赖纯函数，可单测）
 //

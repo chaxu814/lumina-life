@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tools/impl/approvalUI.ts — 工具审批 UI 交互 (v3.6)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // notificationPolicy.ts — 系统弹窗分级策略（纯函数，零 Electron 依赖）
 //

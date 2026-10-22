@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // toolAliasRedirect.test.ts — 反幻觉占位工具删除 + 别名重定向（2026-10-07）
 //

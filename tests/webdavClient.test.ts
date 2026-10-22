@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/webdavClient.test.ts — WebDAV 客户端单测（提案4）
 // 用 mock fetch 验证请求构造（PROPFIND/PUT/GET/DELETE/MKCOL）与 XML 解析。
 import { describe, it, expect, vi } from 'vitest'

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/scrollContext.ts — Scroll Context 索引化记忆 (P0-1)
 //

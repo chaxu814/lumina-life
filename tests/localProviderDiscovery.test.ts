@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/localProviderDiscovery.test.ts — 本地模型探测的纯逻辑
 // ============================================================

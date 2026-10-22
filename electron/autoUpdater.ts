@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // autoUpdater.ts — Electron 自动更新 (P2.3)
 //

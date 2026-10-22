@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // lib/avatarCrop.ts — 头像裁剪的纯计算（无 DOM/React 依赖）
 //

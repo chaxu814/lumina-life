@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/modelLibrary.ts — 📚 Live2D 模型库注册中心 (v0.2)
 //

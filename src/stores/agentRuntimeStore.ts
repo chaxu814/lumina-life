@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentRuntimeStore.ts — Agent 运行时状态（非持久化）
 //

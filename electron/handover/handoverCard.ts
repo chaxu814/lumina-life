@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // handover/handoverCard.ts — 交班快照卡聚合（纯逻辑，依赖可注入）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // securityGuardDestructive.test.ts — 毁灭性命令与路径分隔符绕过（2026-10-07）
 //

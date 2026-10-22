@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/fontConsistency.test.ts — 全局字体统一为微软雅黑（2026-10-11）
 //

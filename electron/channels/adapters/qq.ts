@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // channels/adapters/qq.ts — 📡 QQ 频道/群机器人适配器 V2
 //

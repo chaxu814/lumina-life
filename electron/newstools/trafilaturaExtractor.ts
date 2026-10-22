@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // newstools/trafilaturaExtractor.ts — Trafilatura 全文提取 v1.0
 //

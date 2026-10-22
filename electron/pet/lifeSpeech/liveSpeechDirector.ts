@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/lifeSpeech/liveSpeechDirector.ts — 🎬 全双工语音对话编排状态机 (v0.2)
 //

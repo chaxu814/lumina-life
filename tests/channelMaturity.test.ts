@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/channelMaturity.test.ts
 //
 // 渠道成熟度闸门的契约测试。

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // actionClaimGuard.test.ts — 「声称做了但没做」的检测（v3.34 新增）
 //

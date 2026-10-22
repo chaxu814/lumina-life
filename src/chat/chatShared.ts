@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // chatShared.ts — 团队群聊 & Agent 自主面板 共享类型/常量/状态
 // 提取自 ChatPanel.tsx (v2.10.1)

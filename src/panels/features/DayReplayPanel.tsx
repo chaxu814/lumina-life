@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/features/DayReplayPanel.tsx — Day Replay（可回放的一天）
 //

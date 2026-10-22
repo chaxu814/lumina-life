@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // sample-code.ts — Lumina 产物渲染器自检示例代码
 // 含 import / 函数 / 类 / 注释 / 字符串 / 数字 / async / await

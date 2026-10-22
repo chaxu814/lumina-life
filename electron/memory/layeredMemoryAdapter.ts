@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/layeredMemoryAdapter.ts — 把 MemoryStore 适配为五层记忆源
 //

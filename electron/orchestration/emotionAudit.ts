@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // orchestration/emotionAudit.ts — 情绪收紧的可审计层（创新功能 1）
 //

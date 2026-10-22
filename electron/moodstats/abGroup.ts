@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // moodstats/abGroup.ts — 情绪门控 A/B 实验分组
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/life/emotionExpressions.ts — 🎭 情绪外显 (I2, v0.1)
 //

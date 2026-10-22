@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/cuVerify.test.ts — Computer Use 动作后验证 (dHash) 纯函数测试
 // ============================================================

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/federation.test.ts — 团队记忆共享 Federation 单测（提案3 Level 1）
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import os from 'os'

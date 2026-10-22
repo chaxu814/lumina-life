@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/modelImporter.ts — 🐱 Live2D / PNGTuber 形象 UGC 导入器 (v0.2)
 //

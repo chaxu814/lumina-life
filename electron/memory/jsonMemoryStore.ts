@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // jsonMemoryStore.ts — MemoryStore 的纯 JSON 兜底实现
 //

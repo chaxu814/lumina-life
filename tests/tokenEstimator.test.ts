@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/tokenEstimator.test.ts — TokenEstimator 单元测试
 import { describe, it, expect } from 'vitest'
 import { TokenEstimator } from '../electron/tokenEstimator'

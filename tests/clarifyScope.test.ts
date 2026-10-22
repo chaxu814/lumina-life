@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/clarifyScope.test.ts — 模糊任务「先问再做」的行为边界
 //

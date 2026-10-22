@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 新需求（2026-10-04）：Lumina Live2D 窗口「只能在窗口内移动，不能全屏自定义拖动」
 //
 // 根因：不是窗口太小，也不是 clamp 把位置卡死了，而是

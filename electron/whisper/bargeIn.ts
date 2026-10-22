@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // whisper/bargeIn.ts — 🎙️ 可打断语音（barge-in）最小闭环控制器 (v0.1)
 //

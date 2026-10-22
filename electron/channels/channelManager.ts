@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // channels/channelManager.ts — 📡 渠道管理器 (Phase C)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // skillInstaller.ts — Skill 安装器 (v2.7: 接入 Skill Pool)
 //

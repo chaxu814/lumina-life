@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // shellMonitor.ts — 🔐 B. 资源配额监控（进程级）
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // knowledgeBase.ts — Lumina 知识库引擎 (v3.9)
 //

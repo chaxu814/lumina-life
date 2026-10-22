@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // AgentEmotionBar.tsx — Agent 情绪状态栏 (v2.13)
 //

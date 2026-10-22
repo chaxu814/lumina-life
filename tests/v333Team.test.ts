@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/v333Team.test.ts — v3.33 团队纵深：
 //   绩效画像/易错档案、内驱力自领取、CU 三人组、任务追踪、

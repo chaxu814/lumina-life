@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ═══════════════════════════════════════════════════════════
 // isLocalEndpoint.ts — 「这是不是本地 / 内网模型服务」判定的单一事实来源
 //

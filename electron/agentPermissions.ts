@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentPermissions.ts — 权限声明 + 工具检查（薄封装）
 //

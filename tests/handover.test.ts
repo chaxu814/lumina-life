@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/handover.test.ts — 交班模式单测
 // 覆盖：卡片聚合 / TTL 过期 / 加密往返与错误口令 / 篡改检测 /

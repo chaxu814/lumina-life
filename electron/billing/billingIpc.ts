@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // billing/billingIpc.ts — 预算守护的 IPC 层（budget:* 前缀）
 //

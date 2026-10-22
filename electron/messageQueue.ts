@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // messageQueue.ts — 统一消息队列 (v2.7)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/platformMacAdapter.test.ts — macOS 适配器命令构造单测
 //

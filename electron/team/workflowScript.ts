@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // workflowScript.ts — v3.30 模型现写 Workflow 脚本引擎（P2，同类工程实践）
 //

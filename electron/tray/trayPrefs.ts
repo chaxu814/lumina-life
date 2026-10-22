@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tray/trayPrefs.ts — 托盘菜单运行时开关的持久化
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // whisper/audioLevel.ts — 🎚️ 实时音频电平 / 自适应噪声门 (v0.2)
 //

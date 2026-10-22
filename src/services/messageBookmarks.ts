@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // messageBookmarks.ts — 消息收藏服务 (v2.14)
 //

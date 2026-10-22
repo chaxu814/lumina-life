@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // panels/FamilyTreePanel.tsx — Agent 家谱 v1.0
 //

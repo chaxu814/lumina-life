@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 复现截图里的问题：热茶的「思考过程」整段英文 + 身份元推理
 // 样本直接取自用户 2026-10-04 提供的真实截图，不是编造的。
 import { describe, it, expect } from 'vitest'

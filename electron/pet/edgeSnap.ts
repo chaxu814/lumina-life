@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/edgeSnap.ts — 屏幕边缘吸附 + 窥视 (peek) 纯几何函数
 //

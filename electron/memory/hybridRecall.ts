@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // memory/hybridRecall.ts — BM25 + 余弦 RRF 真融合检索 (v1.0)
 //

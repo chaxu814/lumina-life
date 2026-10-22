@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/emotionCausalityBridge.ts — 情绪因果链的接线层
 //

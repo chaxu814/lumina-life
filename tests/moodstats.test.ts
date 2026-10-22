@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/moodstats.test.ts — Mood × Productivity 看板核心逻辑测试
 //

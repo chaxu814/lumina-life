@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // chatCommands.ts — 聊天命令系统 (v2.7)
 //

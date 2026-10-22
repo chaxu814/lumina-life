@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/followupTopics.ts — 📮 该主动提起的旧事（记忆反思）
 //

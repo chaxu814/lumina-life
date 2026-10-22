@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/pngtuber/pngtuberRenderer.ts — 🖼 PNGTuber Canvas 渲染器 (v0.1)
 //

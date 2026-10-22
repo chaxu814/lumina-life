@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // agentRunner.preprocess.ts — 消息发送前的检索预处理
 //

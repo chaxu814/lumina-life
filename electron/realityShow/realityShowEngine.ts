@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // realityShow/realityShowEngine.ts — Agent 真人秀 v1.1
 //

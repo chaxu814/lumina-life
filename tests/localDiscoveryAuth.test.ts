@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // 复现 2026-10-04 的黄框问题：LM Studio 开启鉴权后，
 // 本地模型探测不带 Authorization 头 → /v1/models 返回 401
 // → 判定「本地没加载模型」→ localModelReady=false → llmReady=false

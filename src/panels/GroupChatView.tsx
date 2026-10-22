@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // GroupChatView.tsx — 团队群聊视图 (v2.11)
 // Extracted from ChatPanel.tsx (was 1500+ lines inline)

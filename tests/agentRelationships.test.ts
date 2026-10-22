@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/agentRelationships.test.ts — Agent 动态关系演化单测
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import os from 'os'

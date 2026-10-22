@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/fileSearchCount.test.ts — P3: file_search 计数模式精确性验证
 //
 // 【修复背景】

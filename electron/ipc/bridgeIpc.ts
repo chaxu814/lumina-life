@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/bridgeIpc.ts — Bridge / Window / Dialog / Export / App IPC
 // v2.7 升级: 集成消息队列

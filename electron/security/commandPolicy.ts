@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // security/commandPolicy.ts — 命令护栏演进框架（阶段 1 策略库）
 //

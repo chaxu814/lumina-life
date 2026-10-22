@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // api/server.ts — Lumina Life REST API 服务器 (v8.0)
 //

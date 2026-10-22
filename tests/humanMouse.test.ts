@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/humanMouse.test.ts — 拟人化鼠标移动单测
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {

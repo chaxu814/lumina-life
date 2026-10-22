@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/petWindow.ts — 桌宠模式 v2.0 (Plan C Phase 2)
 //

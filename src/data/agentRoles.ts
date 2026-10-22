@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // data/agentRoles.ts — Lumina Agent 角色定义 (Phase 2 升级)
 //

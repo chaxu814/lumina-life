@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // systemNotifier.ts — Electron 系统 Notification 适配层
 //

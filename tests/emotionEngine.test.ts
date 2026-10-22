@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/emotionEngine.test.ts — Agent 情绪引擎单元测试
 // 验证情绪更新、衰减、亲密度等核心逻辑
 import { describe, it, expect } from 'vitest'

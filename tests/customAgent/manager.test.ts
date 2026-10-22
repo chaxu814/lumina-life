@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/customAgent/manager.test.ts — 自定义 Agent CRUD 单测（内存 fs）
 import { describe, it, expect, beforeEach } from 'vitest'
 import {

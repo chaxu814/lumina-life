@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // modelHealthReport.test.ts — 模型体检报告的行为测试
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // rolePolicy.ts — 角色 → 工具权限 唯一事实源 (Single Source of Truth)
 //

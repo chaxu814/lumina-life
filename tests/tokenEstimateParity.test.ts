@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tokenEstimateParity.test.ts — 前端/主进程 token 估算一致性（P1-5）
 //

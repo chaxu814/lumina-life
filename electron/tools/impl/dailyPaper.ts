@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/dailyPaper.ts — Daily Paper 每日论文精选工具
 //

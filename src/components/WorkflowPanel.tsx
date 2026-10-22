@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // WorkflowPanel.tsx — 工作流模板面板 (v8.1)
 //

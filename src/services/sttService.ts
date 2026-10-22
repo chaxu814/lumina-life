@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // sttService.ts — 语音识别服务 (v2.11 增强)
 //

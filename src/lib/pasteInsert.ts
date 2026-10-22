@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // lib/pasteInsert.ts — 受控输入框的显式粘贴处理
 //

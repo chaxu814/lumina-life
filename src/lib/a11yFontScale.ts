@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // lib/a11yFontScale.ts — 字号缩放（无障碍）的行内 px 缩放器
 //

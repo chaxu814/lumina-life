@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tests/teamMailbox.test.ts — 团队文件信箱测试 (v3.20)
 //

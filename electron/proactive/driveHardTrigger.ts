@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/driveHardTrigger.ts — ⚡ 内驱力硬触发（纯函数，可单测）
 //

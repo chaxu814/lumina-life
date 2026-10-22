@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/agentIpc.ts — Agent + Skill + MCP + Orchestrator + Task IPC
 // v2.5 重构: 从 main.ts (1065行) 提取

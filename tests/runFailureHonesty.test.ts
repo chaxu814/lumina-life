@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // runFailureHonesty.test.ts — 失败文案必须如实归因（2026-10-07）
 //

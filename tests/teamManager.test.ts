@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/teamManager.test.ts — 团队管理器 + Agent关系 单元测试
 // 按 agentTeamPersonas.ts 实际 Persona 数据验证
 import { describe, it, expect, vi } from 'vitest'

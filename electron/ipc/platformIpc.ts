@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // ipc/platformIpc.ts — 平台能力矩阵 IPC（跨平台支持：能力分级、优雅降级）
 //

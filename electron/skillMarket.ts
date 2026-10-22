@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // skillMarket.ts — Lumina Skill 市场引擎 (v3.10 → v2.17)
 //

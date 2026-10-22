@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // proactive/unfinishedThread.ts — 🧵 未答话头（她问了、用户还没接）
 //

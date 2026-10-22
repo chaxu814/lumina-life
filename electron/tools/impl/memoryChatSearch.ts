@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // impl/memoryChatSearch.ts — 回忆书对话工具 v1.0
 //

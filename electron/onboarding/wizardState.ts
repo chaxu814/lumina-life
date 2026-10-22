@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // onboarding/wizardState.ts — 引导向导状态机与持久化 (Setup Wizard)
 //

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // tests/syncEngine.test.ts — 同步引擎单测（提案4）
 // 覆盖：AES-256-GCM round-trip、SHA-256、增量上传/下载、冲突检测。
 import { describe, it, expect, beforeEach } from 'vitest'

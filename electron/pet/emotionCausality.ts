@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pet/emotionCausality.ts — 🫀 情绪因果链 (Emotion Causality Chain)
 //
