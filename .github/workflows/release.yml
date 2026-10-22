@@ -74,8 +74,10 @@ jobs:
         run: |
           $bytes = [Convert]::FromBase64String($env:CSC_LINK)
           [IO.File]::WriteAllBytes("cert.pfx", $bytes)
-          # electron-builder 读绝对路径形式的 CSC_LINK
+          # electron-builder 读绝对路径形式的 CSC_LINK；密钥密码一并写入 GITHUB_ENV，
+          # 供后续 Build 步骤继承。这里只在 Windows job 写 CSC_*，避免污染 mac 签名。
           echo "CSC_LINK=$((Resolve-Path cert.pfx).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "CSC_KEY_PASSWORD=$env:CSC_KEY_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # ── macOS 签名 + 公证 ────────────────────────────────────
       # Secrets：
@@ -114,15 +116,15 @@ jobs:
         continue-on-error: true
 
       # ── 打包（electron-builder）─────────────────────────────
-      # 签名环境变量在这里统一注入：
-      #   Windows: CSC_LINK / CSC_KEY_PASSWORD（上方已把 pfx 落盘到 CSC_LINK）
-      #   macOS:   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID（自动公证）
-      #   Linux:   无需签名
+      # 签名环境变量注入分工：
+      #   Windows: CSC_LINK / CSC_KEY_PASSWORD 由上方 prepare 步骤写入 GITHUB_ENV
+      #            （仅 Windows job），这里不再统一注入，避免 Windows pfx 污染 mac 签名。
+      #   macOS:   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID（自动公证）；
+      #            证书走 keychain（prepare-mac 步骤导入），不设 CSC_LINK。
+      #   Linux:   无需签名。
       - name: Build & package
         run: npm run ${{ matrix.pack_script }}
         env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
