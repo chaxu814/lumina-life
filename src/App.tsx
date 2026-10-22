@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import React, { useEffect, useRef, useState } from 'react'
 import { applyFontScale, startFontScaleObserver } from './lib/a11yFontScale'
 import TopBar from './components/TopBar'
@@ -42,6 +43,7 @@ import Toast from './components/Toast'
 import { showToast } from './components/Toast'
 import ProactiveToast from './components/ProactiveToast'  // 🆕 v3.8.1
 import LoopToast from './components/LoopToast'  // 🔁 Phase 4: Loop 完成通知
+import TeamDegradedBanner from './components/TeamDegradedBanner'  // ⚠️ v0.1: 团队降级全局横幅
 import OnboardingWizard from './components/OnboardingWizard'  // 🆕 v1.0: 首次运行引导
 import ModeTransition from './components/ModeTransition'  // 🆕 v2.0: 场景模式过渡动画
 import PetChatSync from './components/PetChatSync'  // 🐾 桌宠聊天同步
@@ -474,6 +476,8 @@ export default function App() {
       {/* 🆕 v1.0: 首次运行引导 — 只在 firstRun=true 时渲染 */}
       <OnboardingWizard />
       <TopBar />
+      {/* ⚠️ v0.1: 团队降级横幅（TopBar 下方全局悬浮） */}
+      <TeamDegradedBanner />
       <ModeTransition>
         <div className="app-body">
           <Sidebar />

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import { contextBridge, ipcRenderer } from 'electron'
 
 // ─── 接口定义 ─────────────────────────────────────────────
@@ -443,6 +444,47 @@ const api = {
     ipcRenderer.on('theater:state', handler)
     return () => { ipcRenderer.removeListener('theater:state', handler) }
   },
+
+  // 📣 团队降级提示：后台成员未单独配 LLM，本轮由 Lumina 影子代执行。
+  //   返回取消订阅函数，与 onTheaterBeat 同一套写法。
+  onTeamDegraded: (callback: (notice: {
+    memberId: 'yak' | 'recha'
+    memberName: string
+    taskPreview: string
+    reason: string
+    ts: number
+  }) => void) => {
+    const handler = (_event: any, notice: any) => callback(notice)
+    ipcRenderer.on('team:degraded', handler)
+    return () => { ipcRenderer.removeListener('team:degraded', handler) }
+  },
+
+  // 📣 Python/语音节点状态（健康/缺失/能力位）。
+  onPythonStatus: (callback: (status: {
+    healthy: boolean
+    pythonPresent: boolean
+    tts: boolean
+    stt: boolean
+    embedding: boolean
+    message: string
+    docUrl: string
+    ts: number
+  }) => void) => {
+    const handler = (_event: any, status: any) => callback(status)
+    ipcRenderer.on('python:status', handler)
+    return () => { ipcRenderer.removeListener('python:status', handler) }
+  },
+  pythonGetStatus: () =>
+    ipcRenderer.invoke('python:get-status') as Promise<{
+      healthy: boolean
+      pythonPresent: boolean
+      tts: boolean
+      stt: boolean
+      embedding: boolean
+      message: string
+      docUrl: string
+      ts: number
+    }>,
 
   // ══════════════════════════════════════════════════════════
   // 🆕 v1.0 决策征询（ask_decision）—— agent 主动问用户「走哪条路」

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // Lumina Life 1.0 — 全局类型声明
 // ============================================================
@@ -689,6 +690,38 @@ declare global {
       webdavTestConnection: () => Promise<{ ok: boolean; status?: number; error?: string }>
       webdavRun: () => Promise<{ ok: boolean; report?: any; error?: string }>
       webdavResolveConflict: (relPath: string, choice: 'local' | 'remote' | 'merge') => Promise<{ ok: boolean; error?: string }>
+
+      // ⚠️ v0.1 团队降级 + Python 运行时状态（preload 按同名方法暴露）
+      /** 后台成员未配独立模型、本轮降级为 Lumina 代执行时主进程推送 */
+      onTeamDegraded: (callback: (payload: {
+        memberId: 'yak' | 'recha'
+        memberName: string
+        taskPreview?: string
+        reason?: string
+        ts: number
+      }) => void) => () => void
+      /** Python 节点健康/能力状态推送 */
+      onPythonStatus: (callback: (payload: {
+        healthy: boolean
+        pythonPresent: boolean
+        tts: boolean
+        stt: boolean
+        embedding: boolean
+        message?: string
+        docUrl?: string
+        ts: number
+      }) => void) => () => void
+      /** 拉取当前 Python 状态 */
+      pythonGetStatus: () => Promise<{
+        healthy: boolean
+        pythonPresent: boolean
+        tts: boolean
+        stt: boolean
+        embedding: boolean
+        message?: string
+        docUrl?: string
+        ts?: number
+      }>
     }
   }
 }

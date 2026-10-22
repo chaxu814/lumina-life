@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // main.ts ??Lumina Life 1.0 Electron 主进程（正式版）
 //
@@ -530,6 +531,11 @@ const isCLIMode = process.env.LUMINA_CLI_MODE === '1'
 const isAPIMode = process.env.LUMINA_API_ENABLED === '1'
   || process.argv.includes('--api')
 
+// 🧩 MCP 对外 server 模式：stdio JSON-RPC，不建窗口、不抢单实例锁。
+//   由外部 MCP host（如 Claude Desktop）按 --mcp-server 拉起。
+const isMcpServerMode = process.env.LUMINA_MCP_SERVER === '1'
+  || process.argv.includes('--mcp-server')
+
 // ── CLI / API 模式：禁用硬件加速（2026-10-20）──────────────
 // 为什么：这两个模式没有窗口，却仍会拉起 Chromium GPU 进程。在没有交互桌面
 // 会话的机器（远程/服务/Docker）上，GPU 进程会连续崩溃，累计 3 次后
@@ -540,7 +546,7 @@ const isAPIMode = process.env.LUMINA_API_ENABLED === '1'
 // 硬件加速，也会为软件合成保留一个 GPU 进程，驱动层访问违例时它照样崩。
 // 真正的解法是同时取消「崩溃次数上限」——崩溃后 Chromium 会退回软件路径继续跑。
 // 实测：`lumina chat "1+1=?"` 在崩溃 17 次的情况下仍正常返回答案（exit 0）。
-if (isCLIMode || isAPIMode) {
+if (isCLIMode || isAPIMode || isMcpServerMode) {
   try { app.disableHardwareAcceleration() } catch { /* 极早期失败不致命 */ }
   try {
     app.commandLine.appendSwitch('disable-gpu')
@@ -552,7 +558,8 @@ if (isCLIMode || isAPIMode) {
 app.setAppUserModelId('com.lumina.desktop-pet')
 
 // ── 单实例锁：防止双击启动多个实例 ──────────────────────
-const gotTheLock = app.requestSingleInstanceLock()
+// MCP server 模式是外部 host 按需拉起的独立 stdio 进程，不能因桌面端在跑就退出。
+const gotTheLock = isMcpServerMode || app.requestSingleInstanceLock()
 if (!gotTheLock) {
   console.log('[main] 已有实例在运行，退出当前实例')
   app.quit()
@@ -599,6 +606,21 @@ app.whenReady().then(async () => {
     const { default: runCLI } = await import('./cli/index')
     await runCLI(process.argv)
     app.quit()
+    return
+  }
+
+  // ── 🧩 MCP 对外 server 模式：stdio JSON-RPC，不建窗口 ──
+  //   外部 host（Claude Desktop 等）按 --mcp-server 拉起；
+  //   工具元数据/执行全部复用 registry，危险工具默认不暴露。
+  //   注意：此处不能 app.quit()——server 靠 stdin 保活，host 关闭 stdin 时自行退出。
+  if (isMcpServerMode) {
+    try {
+      const { startExposedMcpServer } = await import('./mcp/exposeMcpServer')
+      startExposedMcpServer()
+    } catch (err) {
+      process.stderr.write('[main] MCP server 启动失败: ' + (err as any)?.message + '\n')
+      app.exit(1)
+    }
     return
   }
 
@@ -735,6 +757,25 @@ for (const { id } of orch.listRunners()) {
 
   // 1. 窗口
   mainWindow = createWindow()
+
+  // 📣 提示事件总线 → 主窗口转发。窗口未就绪期间事件在 noticeBus 内缓存，
+  //   attach 时回放；转发时窗口必须存在且未销毁，否则安全跳过（留待下次）。
+  try {
+    const { noticeBus } = await import('./notice/noticeBus')
+    noticeBus.attachWindowForwarder((channel, payload) => {
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(channel, payload)
+        }
+      } catch { /* 窗口正在关闭，丢弃本条 */ }
+    })
+  } catch (e) { console.warn('[noticeBus] 窗口转发挂载失败（忽略）:', e) }
+
+  // 📣 python:get-status 同步查询通道（渲染层 onPythonStatus 之外可主动拉一次）
+  try {
+    const { registerPythonStatusIpc } = await import('./pythonManager')
+    registerPythonStatusIpc()
+  } catch (e) { console.warn('[pythonManager] IPC 注册失败（忽略）:', e) }
 
   // 2. 托盘 + 快捷??+ 右键菜单
   try { createTray() } catch { /* tray not available */ }

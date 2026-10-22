@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // tools/impl/team.ts — 团队/模式协作工具实现 (v8.0)
 //
@@ -17,6 +18,7 @@ import { MODE_CONFIGS } from '../../agentTeamPersonas'
 import type { AgentMode, TeamMemberId } from '../../agentTeamTypes'
 import { getDelegationManager } from '../../delegationManager'
 import { AgentRunner } from '../../agentRunner'
+import { noticeBus } from '../../notice/noticeBus'
 import { parseReviewVerdict, REVIEW_VERDICT_PROTOCOL } from './reviewVerdict'
 
 // ═══════════════════════════════════════════════════════════
@@ -298,6 +300,16 @@ async function runDelegateFallback(
       : '你是 Yak 📊，Lumina 团队的代码工程师。擅长写代码、调试、解释代码与代码审查。请给出可运行、结构清晰、带必要说明的方案与代码。'
 
   console.log(`[delegate_to] ⚠️ ${to} 未配置 LLM，降级为 Lumina 影子 ${to} 直接执行`)
+
+  // 📣 主动推送团队降级提示（不依赖主模型是否转述工具文案）。
+  // payload 形状见 notice/noticeBus.ts 的冻结契约。
+  noticeBus.emit('team:degraded', {
+    memberId: to === 'recha' ? 'recha' : 'yak',
+    memberName: to === 'recha' ? '热茶 🍵' : 'Yak 📊',
+    taskPreview: task.slice(0, 120),
+    reason: `后台成员「${to}」未单独配置 LLM，本轮由 Lumina 影子代执行，无独立第二双眼睛。`,
+    ts: Date.now(),
+  })
 
   try {
     const result: string = await AgentRunner.createWorker(

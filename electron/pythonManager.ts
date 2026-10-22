@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // pythonManager.ts — Lumina Python Agent Node 进程管理器
 //
@@ -14,7 +15,10 @@
 
 import { spawn, ChildProcess } from 'child_process'
 import { join } from 'path'
-import { app } from 'electron'
+import { existsSync } from 'fs'
+import { app, ipcMain } from 'electron'
+import { noticeBus } from './notice/noticeBus'
+import type { PythonStatusNotice } from './notice/noticeBus'
 
 // ── 配置 ────────────────────────────────────────────
 
@@ -40,6 +44,50 @@ const state: PythonManagerState = {
   healthy: false,
   restartAttempts: 0,
   healthCheckTimer: null,
+}
+
+// ── python:status 快照（主进程 → 渲染层提示通道）─────────────
+// 能力位由 /health 返回的 capabilities 尽力读取；读不到时按「节点懒加载、
+// 默认具备」上报 true。脚本缺失是确定事实，必须报 pythonPresent:false。
+let lastCapabilities = { tts: true, stt: true, embedding: true }
+let lastSnapshot: PythonStatusNotice | null = null
+
+function nodeScriptPath(): string {
+  return join(app.getAppPath(), 'python', 'run_node.py')
+}
+
+/** 构造当前状态快照。message/docUrl 由调用方按场景传入。 */
+export function getPythonStatusSnapshot(message = '', docUrl = ''): PythonStatusNotice {
+  const present = existsSync(nodeScriptPath())
+  const snap: PythonStatusNotice = {
+    healthy: state.healthy,
+    pythonPresent: present,
+    tts: lastCapabilities.tts,
+    stt: lastCapabilities.stt,
+    embedding: lastCapabilities.embedding,
+    message: message || (state.healthy
+      ? 'Python 语音节点运行正常'
+      : present ? 'Python 节点未就绪或不可达' : '未找到 python/run_node.py，语音功能不可用'),
+    docUrl: docUrl || 'https://github.com/lumina-life/lumina-life',
+    ts: Date.now(),
+  }
+  lastSnapshot = snap
+  return snap
+}
+
+/** 发射一条 python:status；同时缓存供 python:get-status 同步查询。 */
+function emitPythonStatus(message = '', docUrl = ''): PythonStatusNotice {
+  const snap = getPythonStatusSnapshot(message, docUrl)
+  noticeBus.emit('python:status', snap)
+  return snap
+}
+
+/** 注册 ipcMain.handle('python:get-status')——可重复注册安全（先卸后注）。 */
+export function registerPythonStatusIpc(): void {
+  try {
+    ipcMain.removeHandler('python:get-status')
+  } catch { /* 未注册过时 removeHandler 抛错，忽略 */ }
+  ipcMain.handle('python:get-status', () => getPythonStatusSnapshot())
 }
 
 // ── 工具函数 ────────────────────────────────────────
@@ -98,6 +146,15 @@ async function checkHealth(): Promise<boolean> {
     if (res.ok) {
       const data = await res.json()
       state.healthy = data.status === 'ok'
+      // 尽力读取能力位（节点可能不下发，保持上一次/默认值）
+      const caps = data?.capabilities
+      if (caps && typeof caps === 'object') {
+        lastCapabilities = {
+          tts: caps.tts !== false,
+          stt: caps.stt !== false,
+          embedding: caps.embedding !== false,
+        }
+      }
       return state.healthy
     }
   } catch {
@@ -109,19 +166,24 @@ async function checkHealth(): Promise<boolean> {
 
 /** 执行一次健康检查并输出日志 */
 async function healthCheckTick(): Promise<void> {
+  const prevHealthy = state.healthy
   const ok = await checkHealth()
-  if (!ok && state.running) {
+  // 心跳翻转（恢复/失联）时主动推送状态
+  if (ok && !prevHealthy) {
+    log('服务恢复健康 ✅')
+    emitPythonStatus('Python 语音节点已恢复健康')
+  } else if (!ok && prevHealthy) {
     warn(`健康检查失败: http://127.0.0.1:${PYTHON_NODE_PORT}`)
+    emitPythonStatus('Python 节点健康检查失败，正在尝试自动恢复')
     // 尝试自动恢复
     if (state.restartAttempts < MAX_RESTART_ATTEMPTS) {
       log(`尝试自动重启 (${state.restartAttempts + 1}/${MAX_RESTART_ATTEMPTS})...`)
       await restartPythonServices()
     } else {
       error(`已达最大重启次数 (${MAX_RESTART_ATTEMPTS})，停止自动恢复`)
+      emitPythonStatus(`连续 ${MAX_RESTART_ATTEMPTS} 次恢复失败，语音服务已停止`)
       stop()
     }
-  } else if (ok && !state.healthy) {
-    log('服务恢复健康 ✅')
   }
 }
 
@@ -192,7 +254,14 @@ export async function startPythonServices(): Promise<boolean> {
   await killProcessOnPort(PYTHON_WS_PORT)
 
   const pythonBin = await findPython()
-  const scriptPath = join(app.getAppPath(), 'python', 'run_node.py')
+  const scriptPath = nodeScriptPath()
+
+  // 脚本缺失：确定事实，立即报 pythonPresent:false 并放弃启动
+  if (!existsSync(scriptPath)) {
+    warn(`未找到 Python 节点脚本: ${scriptPath}，语音功能不可用`)
+    emitPythonStatus('未找到 python/run_node.py，语音/转录/Embedding 不可用')
+    return false
+  }
 
   log(`启动 Python Node: ${pythonBin} ${scriptPath} --http-port ${PYTHON_NODE_PORT} --ws-port ${PYTHON_WS_PORT} --lazy`)
 
@@ -234,6 +303,7 @@ export async function startPythonServices(): Promise<boolean> {
     proc.on('error', (err) => {
       error(`进程启动失败: ${err.message}`)
       state.running = false
+      emitPythonStatus(`Python 进程启动失败: ${err.message}`)
     })
 
     state.running = true
@@ -247,17 +317,20 @@ export async function startPythonServices(): Promise<boolean> {
         state.restartAttempts = 0
         // 启动心跳
         state.healthCheckTimer = setInterval(healthCheckTick, HEALTH_CHECK_INTERVAL_MS)
+        emitPythonStatus('Python 语音节点已就绪')
         return true
       }
     }
 
-    // 超时未就绪
+    // 超时未就绪（15s）
     warn('Python Node 启动超时，部分功能降级')
     state.healthy = false
+    emitPythonStatus('Python 节点 15 秒内未就绪，语音功能暂不可用')
     return false
   } catch (err: any) {
     error(`启动失败: ${err.message}`)
     state.running = false
+    emitPythonStatus(`Python 节点启动异常: ${err.message}`)
     return false
   }
 }

@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   IconBell, IconBot, IconBrain, IconClock, IconGlobe, IconHeart, IconLink, IconMobile,
-  IconPalette, IconSearch, IconShield, IconSpeaker,
+  IconPalette, IconSearch, IconShield, IconSpeaker, IconZap,
 } from './Icons'
 import SettingsPanel from '../panels/SettingsPanel'
 import SettingsLLM from '../panels/settings/SettingsLLM'
@@ -13,6 +14,7 @@ import SettingsLanguage from '../panels/settings/SettingsLanguage'
 import SettingsPush from '../panels/settings/SettingsPush'
 import SettingsPet from '../panels/settings/SettingsPet'
 import SettingsMemory from '../panels/settings/SettingsMemory'
+import SettingsPython from '../panels/settings/SettingsPython'  // 🐍 v0.1: Python/语音/向量状态
 // 🔧 2026-10-15：外观 / 浏览器 从「更多设置」搬到这里。
 //   此前两个弹窗并存导致同一个「外观」有两套完全不同的实现：
 //     · 这里 → SettingsAppearance（浅色/深色/跟随系统 + 简约模式）
@@ -38,6 +40,7 @@ const SIDEBAR_ITEMS = [
   { id: 'tasks', icon: <IconClock size={16} />, labelKey: 'settings.nav_tasks' },
   { id: 'pet', icon: <IconHeart size={16} />, labelKey: 'settings.nav_pet' },
   { id: 'memory', icon: <IconBrain size={16} />, labelKey: 'settings.nav_memory' },
+  { id: 'python', icon: <IconZap size={16} />, labelKey: 'settings.nav_python' },
 ] as const
 
 type SidebarId = (typeof SIDEBAR_ITEMS)[number]['id']
@@ -265,6 +268,7 @@ export default function SettingsModal({ open, onClose, initialTab }: SettingsMod
             {activeSection === 'language' && <SettingsLanguage />}
             {activeSection === 'pet' && <SettingsPet />}
             {activeSection === 'memory' && <SettingsMemory onClose={onClose} />}
+            {activeSection === 'python' && <SettingsPython />}
             {(activeSection === 'channels' || activeSection === 'security' || activeSection === 'tasks') && (
               <SettingsPanel embedded activeTab={activeSection} onNotice={null} />
             )}

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR Apache-2.0
 // ============================================================
 // OnboardingWizard.tsx — Lumina Life 首次运行引导向导 (v1.0)
 //
@@ -11,11 +12,24 @@
 //    全部文案走 i18n（onboarding.* 命名空间），默认简体中文。
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../stores/appStore'
 import type { LLMConfig } from '../stores/appStore'
 import { persistLLMConfig } from '../services/llmPersist'
+
+/** onboarding 阶段 Python 缺失提示卡的「不再提醒」开关持久化 key */
+const PYTHON_HINT_DISMISS_KEY = 'lumina_python_hint_dismissed'
+
+interface OnboardingPythonStatus {
+  healthy: boolean
+  pythonPresent: boolean
+  tts: boolean
+  stt: boolean
+  embedding: boolean
+  message?: string
+  docUrl?: string
+}
 
 type StepId = 'language' | 'welcome' | 'llm' | 'personality' | 'team' | 'done'
 
@@ -694,6 +708,30 @@ export default function OnboardingWizard() {
   const firstRun = useStore((s) => s.firstRun)
   const completeOnboarding = useStore((s) => s.completeOnboarding)
 
+  // 🐍 v0.1: 首次启动检测 Python 是否存在 —— 缺失时提示「语音/本地向量不可用」。
+  //   只在 onboarding 期间查一次，不阻断引导。
+  const [pyStatus, setPyStatus] = useState<OnboardingPythonStatus | null>(null)
+  const [pyDismissed, setPyDismissed] = useState<boolean>(() => {
+    try {return localStorage.getItem(PYTHON_HINT_DISMISS_KEY) === '1'} catch {return false}
+  })
+
+  useEffect(() => {
+    if (!firstRun) {return}
+    const api = window.luminaAPI as any
+    if (!api?.pythonGetStatus) {return}
+    let cancelled = false
+    api.pythonGetStatus().then((s: OnboardingPythonStatus) => {
+      if (!cancelled) {setPyStatus(s)}
+    }).catch(() => { /* 主进程未就绪时静默 */ })
+    return () => {cancelled = true}
+  }, [firstRun])
+
+  const togglePyDismissed = () => {
+    const next = !pyDismissed
+    setPyDismissed(next)
+    try {localStorage.setItem(PYTHON_HINT_DISMISS_KEY, next ? '1' : '0')} catch { /* 忽略 */ }
+  }
+
   // 已完成引导 → 不渲染
   if (!firstRun) {return null}
 
@@ -781,6 +819,38 @@ export default function OnboardingWizard() {
             />
           )}
         </div>
+
+        {/* 🐍 v0.1: Python 缺失提示卡 —— 仅在 pythonPresent=false 且未勾选不再提醒时显示 */}
+        {pyStatus && !pyStatus.pythonPresent && !pyDismissed && (
+          <div style={{
+            margin: '0 20px', padding: '10px 12px', borderRadius: 10,
+            background: 'var(--yellow-100)', border: '1px solid var(--yellow-300)',
+            fontSize: 11.5, lineHeight: 1.6, color: 'var(--text-primary)',
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              ⚠️ {t('onboarding.python_hint_title')}
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              {t('onboarding.python_hint_body')}
+            </div>
+            {pyStatus.docUrl && (
+              <button
+                onClick={() => window.luminaAPI?.openExternal?.(pyStatus.docUrl as string)}
+                style={{
+                  padding: '3px 10px', borderRadius: 6, cursor: 'pointer', marginBottom: 6,
+                  border: '1px solid var(--border-medium)', background: 'var(--surface-0)',
+                  color: 'var(--accent-600)', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+                }}
+              >
+                {t('onboarding.python_hint_doc')} ↗
+              </button>
+            )}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, userSelect: 'none' }}>
+              <input type="checkbox" checked={pyDismissed} onChange={togglePyDismissed} />
+              {t('onboarding.python_hint_dismiss')}
+            </label>
+          </div>
+        )}
 
         {/* 底部页码 */}
         <div style={{

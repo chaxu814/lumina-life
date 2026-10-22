@@ -77,6 +77,7 @@
     "nav_pet": "Desktop Pet",
     "nav_memory": "Memory & Evolution",
     "nav_language": "Language",
+    "nav_python": "Python Runtime",
     "lang_title": "🌐 Language / 语言",
     "lang_desc": "Choose Lumina's interface language. Defaults to Simplified Chinese; changes take effect immediately and are saved automatically.",
     "lang_zh": "简体中文",
@@ -366,8 +367,56 @@
     "done_ready_body_pre": "Lumina 🐱 is ready to work for you (",
     "done_ready_body_post": "), and the team behind her is in place. Go say your first words to her!",
     "done_tip_try": "💡 Try saying \"hello\"",
-    "done_tip_settings": "🔧 Change anything in Settings",
-    "done_cta": "🚀 Start chatting with Lumina!"
+    "done_tip_settings": "🔧 Tweak anything in Settings",
+    "done_cta": "🚀 Start chatting with Lumina!",
+
+    "python_hint_title": "Voice / local embeddings unavailable",
+    "python_hint_body": "No Python detected: TTS, STT and local vector search require you to install Python yourself first.",
+    "python_hint_doc": "View install guide",
+    "python_hint_dismiss": "Don't show again"
+  },
+  "banner": {
+    "title": "{{name}} has no dedicated model",
+    "body": "This turn is not real multi-agent collaboration — review has no independence",
+    "task_preview": "Task: {{task}}",
+    "count": "{{count}} degraded turn(s) this session",
+    "configure": "Configure →",
+    "close": "Dismiss",
+    "notification_title": "Lumina team degraded",
+    "notification_body": "{{name}} was handled by Lumina this turn; review has no independence.",
+    "toast_body": "⚠️ {{name}} has no dedicated model — handled by Lumina this turn"
+  },
+  "python": {
+    "title": "🐍 Python Runtime (voice / embeddings)",
+    "desc": "TTS, STT and local vector search all depend on a local Python install. When missing, these features stay silently unavailable — this panel shows the real status.",
+    "loading": "Checking…",
+    "present_ok": "✅ Python detected — voice/embeddings available",
+    "present_missing": "❌ No Python detected — voice & local embeddings unavailable",
+    "row_tts": "Speech synthesis (TTS)",
+    "row_stt": "Speech recognition (STT)",
+    "row_embedding": "Local embeddings",
+    "cap_on": "Available",
+    "cap_off": "Unavailable",
+    "doc_button": "View install guide"
+  },
+  "search": {
+    "mode_offline": "Offline mode",
+    "mode_alias": "Alias mode",
+    "mode_title": "Currently in {{mode}}: this search did not hit the network; results come from a local fallback"
+  },
+  "toolfeed": {
+    "title": "Tool execution",
+    "clear": "Clear",
+    "clear_title": "Clear this conversation's tool list",
+    "cleared": "Cleared",
+    "empty": "No tool calls yet",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "expand_all": "Expand all ({{count}})",
+    "collapse_all": "Collapse",
+    "detail_args": "Args",
+    "detail_result": "Result",
+    "detail_started": "Started"
   },
   "common": {
     "save": "Save",
@@ -381,6 +430,7 @@
     "unknown_error": "Unknown error",
     "connection_failed": "Connection failed",
     "save_failed": "Save failed",
+    "confirm_delete": "Confirm delete",
     "fetch_models_failed": "Failed to fetch model list — check API URL and key"
   }
 }

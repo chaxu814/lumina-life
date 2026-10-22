@@ -77,6 +77,7 @@
     "nav_pet": "桌宠",
     "nav_memory": "记忆与进化",
     "nav_language": "语言",
+    "nav_python": "Python 运行时",
     "lang_title": "🌐 语言 / Language",
     "lang_desc": "选择 Lumina 的界面语言。默认简体中文，切换后立即生效并自动保存。",
     "lang_zh": "简体中文",
@@ -367,7 +368,55 @@
     "done_ready_body_post": "），背后的团队也已就位。现在去跟她说第一句话吧！",
     "done_tip_try": "💡 试试说 \"你好\"",
     "done_tip_settings": "🔧 随时在设置里改配置",
-    "done_cta": "🚀 开始和 Lumina 聊天！"
+    "done_cta": "🚀 开始和 Lumina 聊天！",
+
+    "python_hint_title": "语音 / 本地向量暂不可用",
+    "python_hint_body": "未检测到 Python：语音合成、语音识别与本地向量检索需要你自行安装 Python 环境后才能使用。",
+    "python_hint_doc": "查看安装文档",
+    "python_hint_dismiss": "不再提醒"
+  },
+  "banner": {
+    "title": "{{name}} 未配置独立模型",
+    "body": "本轮没有真正的多 Agent 协作、审查不具备独立性",
+    "task_preview": "任务：{{task}}",
+    "count": "本会话已 {{count}} 次降级",
+    "configure": "去配置 →",
+    "close": "关闭提示",
+    "notification_title": "Lumina 团队降级提示",
+    "notification_body": "{{name}} 本轮由 Lumina 代执行，审查不具备独立性。",
+    "toast_body": "⚠️ {{name}} 未配置独立模型，本轮由 Lumina 代执行"
+  },
+  "python": {
+    "title": "🐍 Python 运行时（语音 / 向量）",
+    "desc": "Lumina 的语音合成（TTS）、语音识别（STT）与本地向量检索都依赖本机 Python 环境。缺失时这些能力会静默不可用——这里如实展示当前状态。",
+    "loading": "检测中…",
+    "present_ok": "✅ 已检测到 Python，语音/向量能力可用",
+    "present_missing": "❌ 未检测到 Python：语音与本地向量不可用",
+    "row_tts": "语音合成（TTS）",
+    "row_stt": "语音识别（STT）",
+    "row_embedding": "本地向量（Embedding）",
+    "cap_on": "可用",
+    "cap_off": "不可用",
+    "doc_button": "查看安装文档"
+  },
+  "search": {
+    "mode_offline": "离线模式",
+    "mode_alias": "别名模式",
+    "mode_title": "当前为{{mode}}：本次搜索未真实联网，结果来自本地兜底"
+  },
+  "toolfeed": {
+    "title": "工具执行",
+    "clear": "清空",
+    "clear_title": "清空当前会话的工具列表",
+    "cleared": "已清空",
+    "empty": "暂无工具调用",
+    "expand": "展开",
+    "collapse": "折叠",
+    "expand_all": "展开全部 {{count}} 条",
+    "collapse_all": "收起",
+    "detail_args": "参数",
+    "detail_result": "结果",
+    "detail_started": "开始"
   },
   "common": {
     "save": "保存",
@@ -381,6 +430,7 @@
     "unknown_error": "未知错误",
     "connection_failed": "连接失败",
     "save_failed": "保存失败",
+    "confirm_delete": "确认删除",
     "fetch_models_failed": "获取模型列表失败，请检查 API 地址和密钥"
   }
 }
