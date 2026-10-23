@@ -60,9 +60,9 @@ We don't sweep known issues into the issue tracker. Ahead of our first public re
 | 🟡 | **No in-app local inference** | You need an external LM Studio / Ollama; the app probes for them on launch but **will not auto-install** it | Not planned (see "Why Lumina") |
 | 🟡 | **No third-party skill ecosystem** | The skill store channel is open; `electron/skills/` ships **13 example skills** and the root `skills/` ships **7 smart skills**, but **there are no third-party skills to install yet** | Awaiting community |
 | 🟡 | **`agentRunner.ts` is a single 4171-line file** (incl. blanks; ~3856 non-blank, measured 2026-10-20) | LLM calls and the ReAct loop are coupled together, which hurts readability for outside contributors (tool-selection has already been split out into its own module) | Refactor after release |
-| 🔵 | **"For You" AI picks depend on a configured model** | With no model configured / offline / budget tightened, it just shows the raw hot list (the fast path) — no errors, no blank panel; you can turn the whole thing off in settings | By design |
 | 🔵 | **5487 ESLint warnings** (3340 of them `no-explicit-any`) | Not a release blocker; managed by a lint ratchet (`lint:ratchet`) that only goes down, never up | Ongoing |
 | 🔵 | **Chromium sandbox is `false`** | Renderer-process security is enforced at the **application layer** (rolePolicy + securityGuard + sandboxRules + approval flow), **not** by the browser sandbox; docs have been corrected to reflect this | Clarified |
+| 🔵 | **"For You" AI picks depend on a configured model** | With no model configured / offline / budget tightened, it just shows the raw hot list (the fast path) — no errors, no blank panel; you can turn the whole thing off in settings | By design |
 
 > 💡 **On Windows + LM Studio and it feels "laggy / slow to first token"? Run `lumina health` first** (or in the UI: "More settings → Diagnostics → 🩺 Model Checkup").
 > More often than not it will tell you exactly why: the context window you gave it is larger than the model can actually consume. This is a diagnostic we already fixed — but one you need to be able to see.
@@ -906,6 +906,26 @@ For enterprise integration, commercial product embedding, and closed-source depl
 > **The choice is yours.** Both licenses ship in the project root:
 > - [`LICENSE`](LICENSE) — AGPL-3.0
 > - [`LICENSE-APACHE`](LICENSE-APACHE) — Apache 2.0
+
+---
+
+## 👋 A Note from the Author
+
+This is my first open-source project on GitHub.
+
+I didn't start out trying to build a "framework" or a "platform." I just wanted something a lot of us quietly wish for: a companion that actually lives on your desktop — not a web page you visit, not a chatbot you close when you're done, but something that stays, notices things, and genuinely helps. Lumina is my attempt at that.
+
+Building her taught me more than I expected. I learned how to design an agent loop, how to make tools that fail honestly instead of pretending to work, how to keep personal data local, and — maybe most importantly — how to be honest about what isn't finished. You'll notice the Known Issues section is long. That's deliberate: I'd rather over-disclose than over-promise.
+
+A few honest things:
+
+- This is a one-person project built largely in spare time, so responses and fixes may be slow — please be patient.
+- It's not perfect, and it's not a finished product. I'm putting out a preview early because I believe real feedback matters more than my imagination.
+- If you take the time to open an issue, share an idea, or even just say hello in Discussions, it genuinely makes a difference.
+
+If Lumina made your desktop feel a little less lonely, or helped you get something done, that's already everything I hoped for. And if you build something with her — a custom agent, a skill, a new pet — I'd love to see it.
+
+Thank you for stopping by.
 
 ---
 
