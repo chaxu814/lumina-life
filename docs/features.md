@@ -1,90 +1,90 @@
-# 实验功能说明
+# Experimental Features
 
-> 这一页介绍 v0.1 随版本接线的六项新功能。它们都位于 **设置 → 实验功能**：
-> 除「预算守护者」默认开启外，其余五项**默认关闭**，你可以逐项打开或关闭。
-> 实验功能意味着：机制是真的、正在观察期，不会在未经同意的情况下默认打扰你。
-
----
-
-## 🛡️ 预算守护者（Budget Guardian）— 默认开启
-
-Lumina 后台会定期调 LLM（主动搭话、团队社交、仪式），账单会悄悄累积。预算守护者把这件事收进一个统一账本：
-
-- **统一记账**：所有 LLM 调用在调用层收口记账，优先使用模型返回的真实 usage；
-  拿不到 usage 时按模型规格**显式标注「估算」**，绝不把估算伪装成实测。
-- **可配置单价表**：内置 DeepSeek / 硅基流动 / 通义 / OpenAI 的 provider 单价，可在设置里调整。
-- **每日预算**：支持 ¥/天档位与自定义金额，每天 0 点自动重置。
-- **三级只收紧响应**：
-  - **80%**：温柔提醒，桌宠进入「精打细算」表现；
-  - **95%**：自动降级到更便宜的模型，并暂停非必要的后台调用；
-  - **100%**：只保留你主动发起的对话，后台一切自我调用停摆。
-
-**设计原则是「只收紧、不放宽」**——预算机制永远不会突破你设定的上限，也不会因为「今天心情好」而临时放行。每一步都留审计因果链，可在账本里回看。
+> This page covers the six new features wired up in v0.1. They all live under **Settings → Experimental Features**:
+> except for Budget Guardian (on by default), the other five are **off by default**, and you can toggle each one individually.
+> "Experimental" means: the mechanics are real, we're still in the observation period, and nothing will disturb you by default without your consent.
 
 ---
 
-## 📼 Day Replay（可回放的一天）— 默认关闭
+## 🛡️ Budget Guardian — on by default
 
-一天结束后，你往往想不起来「今天 Lumina 到底帮我做了什么」。Day Replay 把分散在各处的记录聚合成一条时间线：
+Lumina periodically calls the LLM in the background (proactive chatter, team social, rituals), and the bill quietly adds up. Budget Guardian folds all of this into one ledger:
 
-- 聚合当天的**账本、命令审计、任务看板、雇工执行记录**；
-- 在面板里回看：做了什么、改了哪些文件、几轮对话、委托了几次、花了多少 token；
-- 支持导出 **Markdown / 纯文本**，方便存档或发给别人看。
+- **Unified accounting**: every LLM call is accounted for at the call layer, preferring the real usage returned by the model;
+  when usage is unavailable, estimates are **explicitly labeled "estimated"** — an estimate is never disguised as a measured value.
+- **Configurable price table**: built-in provider pricing for DeepSeek / SiliconFlow / Qwen / OpenAI, adjustable in settings.
+- **Daily budget**: supports ¥/day tiers and custom amounts, auto-resetting at midnight.
+- **Three tiers of tightening only**:
+  - **80%**: gentle reminder; the desktop pet switches to a "tightening the purse strings" behavior;
+  - **95%**: automatically degrades to a cheaper model and pauses non-essential background calls;
+  - **100%**: only conversations you initiate are kept; every background self-call stops.
 
-它只读已有记录、不新增后台调用，开启后不会额外烧钱。
-
----
-
-## 📊 情绪 × 效率看板 — 默认关闭
-
-Lumina 的情绪会真实收紧她手里的工具权限（情绪门控）。这个看板反过来观察：**情绪到底有没有让她干活更靠谱？**
-
-- 在委托执行、工具执行的瞬间快照当时的情绪三维与执行结果，分桶统计趋势；
-- 支持 **CSV / JSON** 导出，方便你自己画图验证。
-
-两个我们坚持的诚实设计：
-
-1. **A/B 对照开关**：一旦打开「对照组」，UI 会明确提示——对照组会**关闭情绪门控这一收紧机制**。这是对照实验的要求，不是 bug。
-2. **样本门槛**：每桶样本不足 30 条时，面板直接显示「数据不足，不构成结论」，而不是硬画一条看起来像样的趋势线。
+**The design principle is "tighten, never loosen"** — the budget mechanism can never exceed the cap you set, and it will never let things through just because "today feels generous". Every step leaves an audit causal chain you can review in the ledger.
 
 ---
 
-## 🌙 仪式感闭环 — 默认关闭
+## 📼 Day Replay — off by default
 
-把「睡前复盘」和「晨间简报」做成两个定时仪式：
+At the end of a day, you often can't remember "what did Lumina actually do for me today?" Day Replay aggregates records scattered across the app into a single timeline:
 
-- **睡前复盘**（默认 23:00）：聚合当天 Day Replay → LLM 生成口播 → TTS 朗读 + 桌宠配合动作；
-- **晨间简报**（默认 8:00）：聚合天气、日历、待办与未完成事项，做一次轻量开场。
+- Aggregates the day's **ledger, command audit, task board, and hiring execution records**;
+- Review them in a panel: what was done, which files were changed, how many conversation turns, how many delegations, how many tokens were spent;
+- Supports exporting **Markdown / plain text** for archiving or sharing.
 
-降级链是诚实的：**没装 TTS 时退化为文字气泡；没配 LLM 时走模板文案，并标注「来源: llm / template」**——绝不假装那段话是大模型写的。预算超限时仪式自动暂停，不会顶着预算硬跑。
-
----
-
-## ⚖️ 决策三栏 — 默认关闭
-
-遇到「这个该怎么做」的纠结事，输入 `/decide`（或说「帮我决定…」）：
-
-- **执行者视角**：列这条路的利与弊；
-- **审查员视角**：挑这条路的风险与反对意见；
-- **Lumina 最终建议**：三栏卡片并排呈现，由 Lumina 给出口径统一的结论。
-
-你永远只跟 Lumina 一个入口对话——后台的分工在界面上不外露。
+It only reads existing records and adds no background calls, so turning it on costs nothing extra.
 
 ---
 
-## 🤝 交班模式 — 默认关闭
+## 📊 Emotion × Productivity Dashboard — off by default
 
-人不在电脑前时，想把「现在进行到哪了」交接给另一台设备看。交班模式的做法是：
+Lumina's emotion genuinely tightens the tool permissions in her hands (emotion gating). This dashboard watches the other way around: **does emotion actually make her work more reliable?**
 
-- **交班卡片**：聚合 Day Replay 摘要、待审批事项、待办、三个 Agent 的当前状态，带时间戳与过期时间（TTL）；
-- **本地加密导出**：口令经 scrypt / pbkdf2 派生密钥 + AES-256-GCM 加密，文件后缀 `.lumina-handover`；
-- **手机查看**：二维码指向**局域网 URL**，手机打开 `/m` 的交班视图后，**口令只在手机浏览器页面端输入解密**，不会发给电脑；
-- **批准 / 拒绝**：直接复用现有审批接口，快照过期自动失效。
+- Snapshots the emotion vector and execution result at the moment of delegation and tool execution, then buckets them and charts trends;
+- Supports **CSV / JSON** export so you can plot and verify it yourself.
 
-安全边界请务必遵守：**仅在局域网内使用，不要把端口暴露到公网**。详见仓库根目录 `SECURITY.md` 的交班安全模型一节。
+Two honest design choices we insist on:
+
+1. **A/B control toggle**: once you turn on the "control group", the UI warns you explicitly — the control group **disables the emotion-gating tightening mechanism**. That's what a controlled experiment requires, not a bug.
+2. **Sample threshold**: when a bucket has fewer than 30 samples, the panel shows "not enough data to draw a conclusion" instead of forcing a plausible-looking trend line.
 
 ---
 
-## 另：命令护栏已默认生效
+## 🌙 Ritual Loop — off by default
 
-不需要打开任何开关：REJECT 层 6 条危险命令（递归删根、格式化、关机重启、删注册表、下载即管道执行、fork 炸弹）**默认开启、命中即拦截**；APPROVAL 层 8 条（写注册表、关防火墙、写系统目录、提权、数据外发等）走 `security.commandApproval` 灰度开关，**默认关闭**观察误报，确认后再转正。
+Turns "bedtime review" and "morning briefing" into two scheduled rituals:
+
+- **Bedtime review** (default 23:00): aggregates the day's Day Replay → the LLM generates a script → TTS reads it aloud with matching pet animations;
+- **Morning briefing** (default 8:00): aggregates weather, calendar, todos, and unfinished items for a lightweight opening.
+
+The degradation chain is honest: **without TTS it falls back to a text bubble; without an LLM it uses template copy labeled "source: llm / template"** — it will never pretend that paragraph was written by a large model. When the budget is exceeded, rituals pause automatically instead of running at a loss.
+
+---
+
+## ⚖️ Three-Column Decision — off by default
+
+When you're torn about "how should I handle this?", type `/decide` (or say "help me decide…"):
+
+- **Executor's view**: lists the pros and cons of this path;
+- **Reviewer's view**: picks at the risks and counterarguments;
+- **Lumina's final recommendation**: three cards side by side, with Lumina giving one consistent conclusion.
+
+You always talk to Lumina through a single entry point — the division of labor behind the scenes is not exposed in the UI.
+
+---
+
+## 🤝 Handover Mode — off by default
+
+When you're away from the computer, you may want to hand "where things stand right now" to another device. Handover mode does it like this:
+
+- **Handover card**: aggregates a Day Replay summary, pending approvals, todos, and the current state of the three Agents, with a timestamp and TTL;
+- **Local encrypted export**: the passphrase derives keys via scrypt / pbkdf2 and encrypts with AES-256-GCM; the file extension is `.lumina-handover`;
+- **View on your phone**: a QR code points to a **LAN URL**; after the phone opens the `/m` handover view, **the passphrase is entered and decrypted only on the phone's browser page** — it is never sent to the computer;
+- **Approve / reject**: reuses the existing approval API; snapshots expire automatically.
+
+Please respect the security boundary: **use it only on the LAN; never expose the port to the public internet.** See the "handover security model" section of `SECURITY.md` in the repo root.
+
+---
+
+## Also: command guardrails are already on by default
+
+No toggle needed: the REJECT layer's 6 dangerous commands (recursive root delete, format, shutdown/reboot, registry deletion, download-and-pipe-execute, fork bomb) are **on by default and blocked the moment they match**; the APPROVAL layer's 8 commands (write registry, disable firewall, write to system directories, privilege escalation, data exfiltration, etc.) go through the `security.commandApproval` gradual rollout switch, which is **off by default** while we observe false positives, before graduating to permanent.

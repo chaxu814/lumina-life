@@ -3,17 +3,17 @@ layout: home
 
 hero:
   name: LuminaLife
-  text: 有身体的团队 Agent · 多模态 · 全栈
-  tagline: 常驻桌面的三 Agent 团队（Lumina / Yak / 热茶）——拟人形象 + 真实执行 + 安全审批，让 LLM 在桌面上「活」过来并且真的干活。
+  text: A team of Agents with a body · Multimodal · Full-stack
+  tagline: A three-Agent team that lives on your desktop (Lumina / Yak / Recha) — anthropomorphic avatar, real execution, and safety approval — bringing the LLM to life on your desktop and making it actually get work done.
   image:
     src: /logo.png
     alt: LuminaLife
   actions:
     - theme: brand
-      text: 快速上手
+      text: Quick Start
       link: /FAQ
     - theme: alt
-      text: 故障排除
+      text: Troubleshooting
       link: /TROUBLESHOOTING
     - theme: alt
       text: GitHub
@@ -21,82 +21,82 @@ hero:
 
 features:
   - icon: 🖥️
-    title: Electron 桌面
-    details: 基于 Electron 40 构建，Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta，Linux 为 roadmap。托盘常驻。
+    title: Electron Desktop
+    details: Built on Electron 40. Windows 10/11 x64 is the **only platform verified on real hardware**; macOS is marked beta and Linux is on the roadmap. It stays resident in the system tray.
   - icon: 👥
-    title: 多 Agent 团队
-    details: Lumina（老板）+ Yak（代码工程师）+ 热茶（审查员）。流水线委派、三视角对抗式评审、动态雇实习生、无依赖任务并行。
+    title: Multi-Agent Team
+    details: Lumina (the boss) + Yak (code engineer) + Recha (reviewer). Pipeline delegation, three-perspective adversarial review, dynamic intern hiring, and parallel execution of independent tasks.
   - icon: 😊
-    title: 情感系统
-    details: 5 维情绪 + 心情/精力/亲密度连续值，带惯性、随机漂移与昼夜节律。亲密度由真实委派事件驱动并持久化。
+    title: Emotion System
+    details: 5-dimensional emotion plus continuous mood, energy, and intimacy values, with inertia, random drift, and a circadian rhythm. Intimacy is driven by real delegation events and persisted to disk.
   - icon: 🎭
-    title: 桌宠五形态
-    details: Live2D / VRM / PNGTuber / MMD / 猫咪。表情实时由模型输出驱动，并可绑定**真实 Agent 执行状态**。
+    title: Five Desktop Pet Forms
+    details: Live2D / VRM / PNGTuber / MMD / cat. Facial expressions are driven in real time by model output and can be bound to **real Agent execution state**.
   - icon: 🧠
-    title: 真实记忆
-    details: 三层记忆（事实/反思/人格）+ BM25 与 TF-IDF 经 RRF 融合的零依赖混合召回，含**防幻觉固化**的来源置信度机制。
+    title: Real Memory
+    details: Three-layer memory (facts / reflections / persona) plus a zero-dependency hybrid recall that fuses BM25 and TF-IDF via RRF, with a source-confidence mechanism that **prevents hallucination hardening**.
   - icon: 🛠️
-    title: 139 个工具
-    details: 三档模式按需加载，支持 MCP 扩展与技能商店。
+    title: 139 Tools
+    details: Three tiers loaded on demand, with MCP extension support and a skill store.
   - icon: 🛡️
-    title: 智能沙箱
-    details: 双层安全审查（消息/参数级 + 命令级 32 条规则）、审批流、权限白名单、隐私遮罩。
+    title: Smart Sandbox
+    details: Two-layer security review (message/parameter level + 32 command-level rules), approval flows, permission whitelists, and privacy masking.
   - icon: 🎤
-    title: 语音交互
-    details: 麦克风录音 + Whisper ONNX 本地识别 + 多 provider TTS 输出。
+    title: Voice Interaction
+    details: Microphone recording + local Whisper ONNX recognition + multi-provider TTS output.
   - icon: 🔄
-    title: MCP 集成
-    details: 支持通过 MCP 协议扩展工具，接入外部 Agent 服务。
+    title: MCP Integration
+    details: Extend tools through the MCP protocol and connect external Agent services.
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 lumina-life/
-├── electron/                  # 主进程 —— Agent 引擎
-│   ├── main.ts                # 入口（窗口、IPC、tray）
-│   ├── agentRunner.ts         # Agent 主循环（ReAct）
-│   ├── delegationManager.ts   # 委派编排 + 自动验证修复闭环
-│   ├── tools/                 # 139 个工具（registry + impl/）
-│   ├── team/                  # 团队：动态雇工 / 对抗评审 / 自主性 / 教学
-│   ├── orchestration/         # 任务看板 / 阶段门控 / 路由 / 并行引擎
-│   ├── memory/                # 三层记忆 + 混合召回 + 防幻觉
-│   ├── proactive/             # 主动发言门控（打扰预算）
-│   ├── pet/                   # 桌宠：五形态 + 精灵表 + 状态桥接
-│   ├── security/              # 双层安全审查
-│   └── core/platform/         # Windows / macOS / Linux 适配层
-├── src/                       # 渲染进程（React 19 + Zustand）
-├── tests/                     # 310 文件 / 4632 用例（Vitest）
-├── agents/                    # 三个 Agent 的配置（工具白/黑名单）
-├── skills/                    # 技能目录
-├── docs/                      # 文档站（VitePress）
+├── electron/                  # Main process — the Agent engine
+│   ├── main.ts                # Entry point (windows, IPC, tray)
+│   ├── agentRunner.ts         # Agent main loop (ReAct)
+│   ├── delegationManager.ts    # Delegation orchestration + auto-verify/fix loop
+│   ├── tools/                  # 139 tools (registry + impl/)
+│   ├── team/                  # Team: dynamic hiring / adversarial review / autonomy / teaching
+│   ├── orchestration/          # Task board / phase gating / routing / parallel engine
+│   ├── memory/                 # Three-layer memory + hybrid recall + anti-hallucination
+│   ├── proactive/              # Proactive-speech gating (interruption budget)
+│   ├── pet/                    # Desktop pet: five forms + sprite sheets + state bridge
+│   ├── security/               # Two-layer security review
+│   └── core/platform/          # Windows / macOS / Linux adaptation layer
+├── src/                       # Renderer process (React 19 + Zustand)
+├── tests/                     # 310 files / 4632 cases (Vitest)
+├── agents/                    # Config for the three Agents (tool allow/deny lists)
+├── skills/                    # Skill directory
+├── docs/                      # Documentation site (VitePress)
 └── package.json
 ```
 
-## 功能一览
+## Feature Overview
 
-| 模块 | 状态 | 说明 |
+| Module | Status | Notes |
 |------|------|------|
-| 基础对话 | ✅ | 多 provider LLM（LM Studio / Ollama / 云端 API），流式输出 |
-| 三 Agent 团队 | ✅ | 流水线委派 + 三视角对抗评审 + 动态雇工 + 无依赖任务并行 |
-| 桌宠五形态 | ✅ | Live2D / VRM / PNGTuber / MMD / 猫咪 |
-| 桌宠绑定 Agent 状态 | ✅ | 写代码敲键盘、审查皱眉、失败捂脸；零 LLM 开销 |
-| 精灵表 UGC | ✅ | 8×9 规格 + AI 生成提示词 + 导入校验器 |
-| 长期记忆 | ✅ | 三层 + BM25/TF-IDF RRF 混合召回 + 防幻觉固化 + 证据链 |
-| 主动发言 | ✅ | 门控 + 配额 + 退避 + 夜间勿扰 + 精力兜底 |
-| Computer Use | ✅ | 截图 / OCR / 键鼠 / UIA 元素树 / 隐私遮罩 |
-| 安全沙箱 | ✅ | 双层审查（26 条命令规则）+ 审批流 + 权限白名单 |
-| 工具系统 | ✅ | 139 个工具，三档模式按需加载 + MCP + 技能商店 |
-| 桌面自动化 | ✅ | 跨平台适配层（**仅 Windows 实机验证**） |
-| 游戏陪伴 | ⚠️ 可选扩展 | Minecraft / Factorio，需额外安装插件 |
-| 语音输入输出 | ✅ | Whisper ONNX 本地识别 + 多 provider TTS |
-| REST API / CLI | ✅ | 10+ 端点 + `lumina` 命令行 |
-| 团队社交 | ✅ | 群聊 + Moments 朋友圈 + 早安仪式 |
-| 定时任务 | ✅ | Cron 风格调度 |
-| macOS 桌面操控 | ⚠️ beta | 代码已适配，**从未在真机验证** |
-| Linux | 🔜 | Roadmap（Wayland 禁止全局键鼠注入） |
-| 应用内本地推理 | 🔜 | 当前需外挂 LM Studio |
+| Basic chat | ✅ | Multi-provider LLM (LM Studio / Ollama / cloud APIs), streaming output |
+| Three-Agent team | ✅ | Pipeline delegation + three-perspective adversarial review + dynamic hiring + parallel independent tasks |
+| Five desktop pet forms | ✅ | Live2D / VRM / PNGTuber / MMD / cat |
+| Pet bound to Agent state | ✅ | Types while coding, frowns while reviewing, covers its face on failure; zero LLM overhead |
+| Sprite sheet UGC | ✅ | 8×9 spec + AI-generated prompts + import validator |
+| Long-term memory | ✅ | Three layers + BM25/TF-IDF RRF hybrid recall + anti-hallucination hardening + evidence chain |
+| Proactive speech | ✅ | Gating + quota + backoff + do-not-disturb at night + energy floor |
+| Computer Use | ✅ | Screenshot / OCR / mouse & keyboard / UIA element tree / privacy masking |
+| Security sandbox | ✅ | Two-layer review (26 command rules) + approval flow + permission whitelist |
+| Tool system | ✅ | 139 tools, three tiers loaded on demand + MCP + skill store |
+| Desktop automation | ✅ | Cross-platform adaptation layer (**verified on Windows only**) |
+| Game companion | ⚠️ Optional extension | Minecraft / Factorio, requires extra plugins |
+| Voice input & output | ✅ | Local Whisper ONNX recognition + multi-provider TTS |
+| REST API / CLI | ✅ | 10+ endpoints + the `lumina` command line |
+| Team social | ✅ | Group chat + Moments feed + morning rituals |
+| Scheduled tasks | ✅ | Cron-style scheduling |
+| macOS desktop control | ⚠️ beta | Code is adapted, **never verified on real hardware** |
+| Linux | 🔜 | Roadmap (Wayland forbids global mouse/keyboard injection) |
+| In-app local inference | 🔜 | Currently requires an external LM Studio |
 
 ---
 
-> 有问题？先看 [FAQ](/FAQ) 和 [故障排除](/TROUBLESHOOTING)。
+> Questions? Start with the [FAQ](/FAQ) and [Troubleshooting](/TROUBLESHOOTING).

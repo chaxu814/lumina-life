@@ -1,101 +1,104 @@
 # Lumina Life · Roadmap
 
-> 这份路线图的目标是**诚实**：写清楚现在做不到什么、下一步打算做什么。
-> 欢迎认领其中任何一项，或提 PR 把你自己的方向加进来（见 [CONTRIBUTING.md](https://github.com/chaxu814/lumina-life/blob/master/CONTRIBUTING.md)）。
+> The goal of this roadmap is to be **honest**: it spells out what we can't do yet and what we plan to do next.
+> Contributions are welcome — pick off any item, or open a PR to add your own direction (see [CONTRIBUTING.md](https://github.com/chaxu814/lumina-life/blob/master/CONTRIBUTING.md)).
 
-**当前版本**：v0.1.0-preview ｜ **实测验证平台**：Windows 10/11 x64
-
----
-
-## 🚦 公开前必须完成（v0.1.0 发布门禁）
-
-- [x] 原生模块 ABI 与 Electron 对齐（`better-sqlite3` rebuild + CI 门禁）
-- [x] 文档数字与代码对齐（工具数以注册表实测为准，README 不写死）
-- [x] 自动验证-修复闭环收敛为单一实现（消除双份逻辑）
-- [x] 路由仲裁接线到真实调用方（歧义任务才调 LLM，1.2s 硬超时）
-- [x] 死代码清理（并行引擎接入阶段门控；亲密度语气接入真实评审提示词）
-- [x] 诚实能力矩阵写进 README（能做什么 / 尽力 / 做不到）
-
-## v0.1.0 · 首个公开版本
-
-- [ ] Windows 安装包签名（减少 SmartScreen 拦截）
-- [ ] 录制发布演示视频 / GIF（桌宠品类靠视觉传播，纯文字 README 起量慢）
-- [ ] 新手模式：一键体检 + 配置向导（当前需要用户自己装 LM Studio 或填 API Key，门槛偏高）
-
-## v0.2.0 · 桌宠 UGC
-
-- [ ] **8 列 × 9 行精灵表规格**（采用业界成熟的桌面宠物动作表规格：
-      待机/跑动/挥手/跳跃/失败/等待/工作/视线各一组动画，左跑由水平镜像自动补出）
-- [ ] 本地图集导入工具链：单张静态图 / AI 生成动作表 / 已有图集 三条路径
-- [ ] 导入校验器：尺寸、像素总量、文件体积、**白底图直接拒绝**
-- [ ] 全部本地处理，不上传、不消耗模型额度
-
-## v0.3.0 · 桌宠 = Agent 运行状态的可视化
-
-> 这是我们想越过的一条线：很多同类桌宠只停留在「状态提示」——不能替你批准权限，
-> 也不能在悬浮窗里直接提问。
-
-- [ ] 表情与动作绑定**真实执行状态**（而非随机情绪动画）
-      - 写代码时：敲键盘动作 + 专注表情
-      - 审查时：皱眉、放大镜
-      - 验证失败时：捂脸 / 叹气
-      - 等待结果时：来回踱步
-- [ ] 任务三态可视化（工作中 / 等待你处理 / 需要关注），与 `taskBoard` 状态打通
-- [ ] 「她今天为什么话少」可解释面板：把情绪 → 行为阈值 → 实际决策链路展示出来
-
-## v0.4.0 · 跨平台（长期短板）
-
-> **诚实说明**：目前只有 Windows 经过实机验证。macOS 代码已写完但**从未在真机跑过**，
-> Linux 还是 roadmap。这是桌宠品类的硬伤，也是我们最需要社区帮助的部分。
-
-- [ ] **macOS 实机验证**：坐标换算（Retina 2×）、辅助功能/屏幕录制授权流程、AppleScript 实际行为
-- [ ] macOS 签名与公证
-- [ ] Linux：Wayland 下键鼠注入被合成器禁止，需要替代方案（uinput / XWayland）
-- [ ] 跨端记忆同步（当前 `electron/sync` 存在但未产品化）
-
-## v1.0 · 生态
-
-- [ ] IM 渠道**端到端真机验证**（接线已完成：7 个适配器经 `await import()` 动态装载并被打包器内联；缺的是各渠道凭据的实跑验证与使用引导。业界成熟实现已覆盖 20+ 渠道）
-- [ ] 技能市场生态（已有安装/卸载/升级，需要创作者激励）
-- [ ] 本地推理内置（WebGPU 应用内推理路径）
+**Current version**: v0.1.0-preview ｜ **Verified platforms**: Windows 10/11 x64
 
 ---
 
-## 💡 未来创意（计划中 / 未实现，仅记录方向）
+## 🚦 Must-Complete Before Public Release (v0.1.0 Release Gate)
 
-> 以下两条是方向性创意，**尚未排期、未实现**，只记录我们想做的事，不构成承诺。
+- [x] Native module ABI aligned with Electron (`better-sqlite3` rebuild + CI gate)
+- [x] Docs numbers aligned with code (tool counts taken from the live registry, not hardcoded in README)
+- [x] Auto verify-fix loop converged to a single implementation (eliminated duplicated logic)
+- [x] Routing arbitration wired to real callers (ambiguous tasks call the LLM with a 1.2s hard timeout)
+- [x] Dead code cleanup (parallel engine hooked into phase gates; intimacy tone wired to the real review prompt)
+- [x] Honest capability matrix written into the README (what it does / does its best / can't do)
 
-- **成本可观测的演示录制**：做发布演示视频与新手引导时，同步录制「这一步实际花了多少 token」——让持续成本从黑盒变成看得见的数字。
-- **技能 / 人格外观的市场生态**：让第三方创作者可以上架技能包与桌宠外观，形成社区供给，而不是只有内置内容。
+## v0.1.0 · First Public Release
+
+- [ ] Sign the Windows installer (reduce SmartScreen warnings)
+- [ ] Record release demo video / GIF (the desktop pet category spreads visually; a text-only README grows slowly)
+- [ ] Onboarding mode: one-click health check + config wizard (right now users must install LM Studio or fill in an API key themselves, which is a high barrier)
+
+## v0.2.0 · Desktop Pet UGC
+
+- [ ] **8-column × 9-row sprite sheet spec** (using the well-established desktop pet action sheet format:
+      idle/run/wave/jump/fail/wait/work/gaze, one animation set each; run-left is auto-derived by horizontal flip)
+- [ ] Local atlas import toolchain: three paths — single static image / AI-generated action sheet / existing atlas
+- [ ] Import validator: dimensions, total pixel count, file size; **reject white-background images outright**
+- [ ] Fully local processing — no uploads, no model quota consumption
+
+## v0.3.0 · Desktop Pet = Visualization of Agent Runtime State
+
+> This is the line we want to cross: many comparable desktop pets stop at "status notification" —
+> they can't approve permissions for you, and you can't ask them questions directly in the floating window.
+
+- [ ] Expressions and animations bound to **real execution state** (not random emotion animations)
+      - When writing code: typing animation + focused expression
+      - When reviewing: frowning, magnifying glass
+      - When verification fails: facepalm / sigh
+      - When waiting for results: pacing back and forth
+- [ ] Three-state task visualization (working / waiting on you / needs attention), wired to `taskBoard` state
+- [ ] "Why is she quiet today?" explainability panel: show the emotion → behavior threshold → actual decision chain
+
+## v0.4.0 · Cross-Platform (Long-Standing Gap)
+
+> **Honest note**: only Windows has been verified on real hardware so far. The macOS code is written but
+> **has never been run on a real Mac**, and Linux is still on the roadmap. This is a hard weakness for the
+> desktop pet category and the area where we most need community help.
+
+- [ ] **macOS on-device verification**: coordinate mapping (Retina 2×), accessibility / screen recording permission flow, AppleScript real behavior
+- [ ] macOS code signing and notarization
+- [ ] Linux: Wayland blocks input injection by the compositor; need an alternative (uinput / XWayland)
+- [ ] Cross-device memory sync (the current `electron/sync` exists but isn't productized)
+
+## v1.0 · Ecosystem
+
+- [ ] **End-to-end on-device verification** of IM channels (wiring is done: 7 adapters loaded dynamically via `await import()` and inlined by the bundler; what's missing is live credential testing per channel and usage guidance. Mature implementations in the industry already cover 20+ channels)
+- [ ] Skill marketplace ecosystem (install/uninstall/upgrade exist; creator incentives needed)
+- [ ] Built-in local inference (WebGPU in-app inference path)
 
 ---
 
-## 🐛 已知问题与缺口（欢迎认领）
+## 💡 Future Ideas (Planned / Not Implemented, Direction Only)
 
-| 领域 | 现状 | 难度 |
-|------|------|------|
-| macOS 桌面操控 | 代码已适配，**零实机验证** | 中（需要 Mac） |
-| Linux 支持 | Wayland 键鼠注入被禁 | 高 |
-| 打包体积 | 安装包 ~157MB（含 Live2D 运行时与本地模型） | 中 |
-| 空载内存 | ~775MB / 5 进程 | 中 |
-| 上手门槛 | 需自备 LLM（LM Studio 或 API Key） | 中（对应 v0.1.0 新手模式） |
-| 本地推理 | 需外挂 LM Studio，应用内未内置 | 高 |
-| 社区 | 巴士系数 = 1，急需第二位维护者 | — |
+> The two items below are directional ideas. **Not scheduled, not implemented** — they record what we want
+> to build, not a commitment.
+
+- **Cost-observable demo recording**: when recording release demos and onboarding guides, simultaneously capture "how many tokens this step actually cost" — turning ongoing cost from a black box into a visible number.
+- **Marketplace ecosystem for skills / persona appearances**: let third-party creators list skill packs and desktop pet skins, building community supply instead of shipping only built-in content.
 
 ---
 
-## 🛠 环境变量调优项
+## 🐛 Known Issues and Gaps (Help Wanted)
 
-| 变量 | 作用 | 默认 |
-|------|------|------|
-| `LUMINA_MAX_CONCURRENT` | 后台自主任务最大并发（1~8） | 2 |
-| `LUMINA_LLM_TIMEOUT` | LLM 请求 HTTP 超时（秒，0=用模型推荐值） | 按模型 |
-| `LUMINA_API_ENABLED` / `LUMINA_API_PORT` | 开启 REST API | 关 / 3456 |
-| `DO_NOT_TRACK` | 关闭匿名遥测 | 遥测关闭 |
-
-> 并发默认设为 2 是**刻意保守**：桌宠常驻桌面，夜间自己跑一堆任务会烧 token、耗电，
-> 用户会直接卸载。做多项目的专业用户可通过 `LUMINA_MAX_CONCURRENT` 调高。
+| Area | Current State | Difficulty |
+|------|---------------|------------|
+| macOS desktop control | Code adapted, **zero on-device verification** | Medium (needs a Mac) |
+| Linux support | Wayland input injection blocked | Hard |
+| Installer size | ~157MB (includes Live2D runtime and local models) | Medium |
+| Idle memory | ~775MB / 5 processes | Medium |
+| Onboarding barrier | Must bring your own LLM (LM Studio or API key) | Medium (addressed in v0.1.0 onboarding mode) |
+| Local inference | Requires external LM Studio; not built into the app | Hard |
+| Community | Bus factor = 1; urgently need a second maintainer | — |
 
 ---
 
-*路线图随实际情况更新。最后更新：2026-10-14*
+## 🛠 Environment Variable Tunables
+
+| Variable | Effect | Default |
+|----------|--------|---------|
+| `LUMINA_MAX_CONCURRENT` | Max concurrent background autonomous tasks (1~8) | 2 |
+| `LUMINA_LLM_TIMEOUT` | LLM request HTTP timeout (seconds, 0 = use model recommendation) | per model |
+| `LUMINA_API_ENABLED` / `LUMINA_API_PORT` | Enable the REST API | off / 3456 |
+| `DO_NOT_TRACK` | Disable anonymous telemetry | telemetry off |
+
+> The default concurrency of 2 is **deliberately conservative**: the desktop pet lives on your desktop,
+> and if it runs a pile of tasks by itself at night it burns tokens and battery, and users will
+> uninstall it. Power users running multiple projects can raise it via `LUMINA_MAX_CONCURRENT`.
+
+---
+
+*Roadmap is updated as reality evolves. Last updated: 2026-10-14*

@@ -1,88 +1,88 @@
-# 🖥️ Lumina Life REST API 文档
+# 🖥️ Lumina Life REST API Reference
 
-> 版本：1.0.0 · 更新：2026-07-28  
-> 基础 URL：`http://localhost:3456/api`
+> Version: 1.0.0 · Updated: 2026-07-28
+> Base URL: `http://localhost:3456/api`
 
-Lumina Life 提供完整的 REST API，无需启动 GUI 即可与 Agent 交互、检索记忆、管理工具。
-
----
-
-## 目录
-
-- [启用 API](#启用-api)
-- [认证](#认证)
-- [CORS 与安全注意事项](#cors-与安全注意事项)
-- [端点一览](#端点一览)
-- [端点详情](#端点详情)
-  - [健康检查](#1-健康检查)
-  - [发送聊天消息](#2-发送聊天消息)
-  - [流式聊天](#3-流式聊天)
-  - [获取聊天历史](#4-获取聊天历史)
-  - [清空聊天历史](#5-清空聊天历史)
-  - [执行工具](#6-执行工具)
-  - [列出工具](#7-列出工具)
-  - [Agent 管理](#8-agent-管理)
-  - [记忆检索](#9-记忆检索)
-  - [记忆写入](#10-记忆写入)
-  - [技能管理](#11-技能管理)
-  - [系统诊断](#12-系统诊断)
-  - [配置读写](#13-配置读写)
-  - [定时任务管理](#14-定时任务管理)
-  - [情绪状态](#15-情绪状态)
-  - [安全审批](#16-安全审批)
-- [错误处理](#错误处理)
-- [调用示例](#调用示例)
-- [CLI 快捷命令](#cli-快捷命令)
+Lumina Life ships with a full REST API so you can talk to Agents, search memory, and manage tools without launching the GUI.
 
 ---
 
-## 启用 API
+## Table of Contents
 
-### 启动方式
+- [Enable the API](#enable-the-api)
+- [Authentication](#authentication)
+- [CORS and Security](#cors-and-security)
+- [Endpoints Overview](#endpoints-overview)
+- [Endpoint Details](#endpoint-details)
+  - [Health Check](#1-health-check)
+  - [Send a Chat Message](#2-send-a-chat-message)
+  - [Streaming Chat](#3-streaming-chat)
+  - [Get Chat History](#4-get-chat-history)
+  - [Clear Chat History](#5-clear-chat-history)
+  - [Execute a Tool](#6-execute-a-tool)
+  - [List Tools](#7-list-tools)
+  - [Agent Management](#8-agent-management)
+  - [Memory Search](#9-memory-search)
+  - [Write to Memory](#10-write-to-memory)
+  - [Skill Management](#11-skill-management)
+  - [System Diagnostics](#12-system-diagnostics)
+  - [Read and Write Config](#13-read-and-write-config)
+  - [Cron Job Management](#14-cron-job-management)
+  - [Emotion State](#15-emotion-state)
+  - [Security Approval](#16-security-approval)
+- [Error Handling](#error-handling)
+- [Examples](#examples)
+- [CLI Shortcuts](#cli-shortcuts)
+
+---
+
+## Enable the API
+
+### How to start
 
 ```bash
-# 方式一：CLI 模式启动
+# Option 1: start in CLI mode
 lumina api
 
-# 方式二：环境变量
+# Option 2: environment variables
 cross-env LUMINA_API_ENABLED=1 LUMINA_API_PORT=3456 npx electron .
 
-# 方式三：npm script
+# Option 3: npm script
 npm run api
 ```
 
-启动后终端显示：
+On startup the terminal prints:
 ```
-[Lumina API] 服务已启动 → http://localhost:3456/api
-[Lumina API] 文档 → http://localhost:3456/api/docs
+[Lumina API] Service started → http://localhost:3456/api
+[Lumina API] Docs → http://localhost:3456/api/docs
 ```
 
 ---
 
-## 认证
+## Authentication
 
-API 默认绑定回环地址 `127.0.0.1`，**仅本机进程可访问**，默认不启用鉴权。
-一旦你把监听地址改为 `0.0.0.0` 或暴露到局域网 / 公网，**务必同时设置 Access Token**。
+The API binds to the loopback address `127.0.0.1` by default, so **only local processes can reach it**, and auth is off by default.
+Once you change the listen address to `0.0.0.0` or expose the API to a LAN / public network, **always set an Access Token at the same time**.
 
-### 设置 Access Token
+### Set an Access Token
 
-在 `.env` 中配置 `LUMINA_API_KEY`（建议随机长字符串）：
+Set `LUMINA_API_KEY` in `.env` (use a long random string):
 
 ```bash
 LUMINA_API_KEY=your-random-secret-token
 ```
 
-启动后日志会显示 `🔑 API Key 认证已启用`。之后所有请求都必须携带凭证，否则返回 `401`：
+On startup the log shows `🔑 API key authentication enabled`. After that, every request must carry the credential, or you get `401`:
 
 ```http
-# 方式一：X-API-Key 请求头
+# Option 1: X-API-Key header
 X-API-Key: your-random-secret-token
 
-# 方式二：Bearer Token
+# Option 2: Bearer token
 Authorization: Bearer your-random-secret-token
 ```
 
-### 用 curl 携带 Token
+### Send the token with curl
 
 ```bash
 curl http://localhost:3456/api/health -H "X-API-Key: your-random-secret-token"
@@ -90,85 +90,85 @@ curl http://localhost:3456/api/health -H "X-API-Key: your-random-secret-token"
 
 ---
 
-## CORS 与安全注意事项
+## CORS and Security
 
-### 默认仅本机可达
+### Localhost only by default
 
-- 服务默认监听 `127.0.0.1`（可由 `LUMINA_API_HOST` 调整），**局域网与公网均无法直接访问**。
-- CORS 白名单默认只放行本机来源：
-  `http://127.0.0.1:<port>` 与 `http://localhost:<port>`。
-- **无 Origin 的请求**（`curl`、命令行脚本、桌面客户端）不受 CORS 限制，照常放行——这是有意设计，方便本机自动化调用。
+- The service listens on `127.0.0.1` by default (configurable via `LUMINA_API_HOST`); **neither LAN nor public networks can reach it directly**.
+- The CORS allowlist only permits local origins:
+  `http://127.0.0.1:<port>` and `http://localhost:<port>`.
+- **Requests with no Origin** (`curl`, CLI scripts, desktop clients) are not subject to CORS and pass through — this is intentional so local automation works smoothly.
 
-### 浏览器跨域行为
+### Browser Cross-Origin Behavior
 
-| 请求来源 | 响应中的 `Access-Control-Allow-Origin` | 浏览器结果 |
-|----------|----------------------------------------|------------|
-| `http://localhost:3456`（白名单内） | 回显 `http://localhost:3456`（+ `Vary: Origin`） | ✅ 放行 |
-| `http://localhost:5173`（未配置的本地前端） | 不返回该头 | ❌ 被拦截 |
-| `http://evil.example.com`（外部网站） | 不返回该头 | ❌ 被拦截 |
-| 无 Origin（curl / CLI） | 不设置该头 | ✅ 不受 CORS 约束 |
+| Request Origin | `Access-Control-Allow-Origin` in response | Browser result |
+|----------------|------------------------------------------|----------------|
+| `http://localhost:3456` (allowlisted) | Echoes back `http://localhost:3456` (+ `Vary: Origin`) | ✅ allowed |
+| `http://localhost:5173` (unconfigured local frontend) | Header omitted | ❌ blocked |
+| `http://evil.example.com` (external site) | Header omitted | ❌ blocked |
+| No Origin (curl / CLI) | Header not set | ✅ not subject to CORS |
 
-如需让你自己的本地前端（如 Vite 的 `http://localhost:5173`）调用 API，在 `.env` 中把它的 Origin 加入白名单：
+To let your own local frontend (e.g. Vite's `http://localhost:5173`) call the API, add its origin to the allowlist in `.env`:
 
 ```bash
 LUMINA_API_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:3456
 ```
 
-设为 `LUMINA_API_ALLOWED_ORIGINS=*` 可放开所有来源——**仅在你完全信任所在网络时使用**。
+Setting `LUMINA_API_ALLOWED_ORIGINS=*` opens it up to every origin — **only do this on a network you fully trust**.
 
-### ⚠️ 暴露到局域网 / 公网的风险
+### ⚠️ Risk of exposing to LAN / public network
 
-将 `LUMINA_API_HOST` 改为 `0.0.0.0` 后，任何能访问到该端口的人都可以：
-- 让你的 Agent 执行工具、读写记忆与配置；
-- 触发定时任务、调用 LLM（产生费用）。
+After changing `LUMINA_API_HOST` to `0.0.0.0`, anyone who can reach that port can:
+- make your Agents execute tools, read and write memory and config;
+- trigger cron jobs and call the LLM (incurring cost).
 
-因此：
-1. **必须**设置强随机的 `LUMINA_API_KEY`；
-2. 优先用反向代理 + HTTPS，而不是直接裸奔；
-3. 如非必要，不要在 `LUMINA_API_ALLOWED_ORIGINS` 使用 `*`；
-4. 用完即关（`LUMINA_API_ENABLED=0`）。
-
----
-
-## 端点一览
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/health` | 健康检查 |
-| `POST` | `/api/chat` | 发送消息（同步） |
-| `POST` | `/api/chat/stream` | 流式聊天（SSE） |
-| `GET` | `/api/chat/history` | 获取聊天历史 |
-| `DELETE` | `/api/chat/history` | 清空聊天历史 |
-| `POST` | `/api/tools/execute` | 执行工具 |
-| `GET` | `/api/tools` | 列出已注册工具 |
-| `GET` | `/api/agents` | 列出所有 Agent |
-| `GET` | `/api/agents/:id` | 获取 Agent 详情 |
-| `POST` | `/api/memory/search` | 检索记忆 |
-| `POST` | `/api/memory/save` | 写入记忆 |
-| `GET` | `/api/skills` | 列出技能 |
-| `POST` | `/api/skills/install` | 安装技能 |
-| `POST` | `/api/skills/uninstall` | 卸载技能 |
-| `GET` | `/api/doctor` | 系统诊断 |
-| `GET` | `/api/config` | 读取配置 |
-| `PUT` | `/api/config` | 更新配置 |
-| `GET` | `/api/cron` | 列出定时任务 |
-| `POST` | `/api/cron` | 创建定时任务 |
-| `DELETE` | `/api/cron/:id` | 删除定时任务 |
-| `GET` | `/api/emotion` | 查看当前情绪状态 |
-| `GET` | `/api/approval/pending` | 待审批列表 |
-| `POST` | `/api/approval/respond` | 响应审批 |
+Therefore:
+1. **Always** set a strong random `LUMINA_API_KEY`;
+2. Prefer a reverse proxy + HTTPS over exposing it directly;
+3. Don't use `*` in `LUMINA_API_ALLOWED_ORIGINS` unless necessary;
+4. Turn it off when done (`LUMINA_API_ENABLED=0`).
 
 ---
 
-## 端点详情
+## Endpoints Overview
 
-### 1. 健康检查
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/chat` | Send a message (synchronous) |
+| `POST` | `/api/chat/stream` | Streaming chat (SSE) |
+| `GET` | `/api/chat/history` | Get chat history |
+| `DELETE` | `/api/chat/history` | Clear chat history |
+| `POST` | `/api/tools/execute` | Execute a tool |
+| `GET` | `/api/tools` | List registered tools |
+| `GET` | `/api/agents` | List all Agents |
+| `GET` | `/api/agents/:id` | Get Agent details |
+| `POST` | `/api/memory/search` | Search memory |
+| `POST` | `/api/memory/save` | Write to memory |
+| `GET` | `/api/skills` | List skills |
+| `POST` | `/api/skills/install` | Install a skill |
+| `POST` | `/api/skills/uninstall` | Uninstall a skill |
+| `GET` | `/api/doctor` | System diagnostics |
+| `GET` | `/api/config` | Read config |
+| `PUT` | `/api/config` | Update config |
+| `GET` | `/api/cron` | List cron jobs |
+| `POST` | `/api/cron` | Create a cron job |
+| `DELETE` | `/api/cron/:id` | Delete a cron job |
+| `GET` | `/api/emotion` | Current emotion state |
+| `GET` | `/api/approval/pending` | Pending approvals |
+| `POST` | `/api/approval/respond` | Respond to an approval |
+
+---
+
+## Endpoint Details
+
+### 1. Health Check
 
 ```
 GET /api/health
 ```
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
@@ -181,32 +181,32 @@ GET /api/health
 }
 ```
 
-### 2. 发送聊天消息
+### 2. Send a Chat Message
 
 ```
 POST /api/chat
 Content-Type: application/json
 
 {
-  "message": "你好 Lumina",
+  "message": "Hello Lumina",
   "agent_id": "lumina",
   "session_id": "optional-session-id"
 }
 ```
 
-**参数说明：**
+**Parameters:**
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `message` | `string` | ✅ | — | 用户消息内容 |
-| `agent_id` | `string` | ❌ | `"lumina"` | 目标 Agent ID |
-| `session_id` | `string` | ❌ | 自动生成 | 会话 ID，续接上下文 |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `message` | `string` | ✅ | — | User message content |
+| `agent_id` | `string` | ❌ | `"lumina"` | Target Agent ID |
+| `session_id` | `string` | ❌ | auto-generated | Session ID to continue context |
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
-  "reply": "你好呀！今天有什么想聊的吗？😊",
+  "reply": "Hi there! Anything you'd like to chat about today? 😊",
   "agent_id": "lumina",
   "session_id": "sess_abc123",
   "emotion": "happy",
@@ -214,49 +214,49 @@ Content-Type: application/json
 }
 ```
 
-### 3. 流式聊天
+### 3. Streaming Chat
 
 ```
 POST /api/chat/stream
 Content-Type: application/json
 
 {
-  "message": "给我讲个故事",
+  "message": "Tell me a story",
   "agent_id": "lumina"
 }
 ```
 
-**响应：** Server-Sent Events（SSE）
+**Response:** Server-Sent Events (SSE)
 
 ```
 event: token
-data: {"token": "从前", "done": false}
+data: {"token": "Once", "done": false}
 
 event: token
-data: {"token": "有", "done": false}
+data: {"token": "upon", "done": false}
 
 event: token
-data: {"token": "一座", "done": false}
+data: {"token": "a time", "done": false}
 
 event: done
-data: {"reply": "从前有一座山……", "agent_id": "lumina", "session_id": "sess_abc", "emotion": "thinking"}
+data: {"reply": "Once upon a time there was a mountain...", "agent_id": "lumina", "session_id": "sess_abc", "emotion": "thinking"}
 ```
 
-### 4. 获取聊天历史
+### 4. Get Chat History
 
 ```
 GET /api/chat/history?session_id=sess_abc123&limit=20&before=msg_xxx
 ```
 
-**参数说明：**
+**Parameters:**
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `session_id` | `string` | ❌ | 当前会话 | 会话 ID |
-| `limit` | `number` | ❌ | `20` | 返回消息数上限 |
-| `before` | `string` | ❌ | — | 分页游标（消息 ID） |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `session_id` | `string` | ❌ | current session | Session ID |
+| `limit` | `number` | ❌ | `20` | Max number of messages to return |
+| `before` | `string` | ❌ | — | Pagination cursor (message ID) |
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
@@ -264,13 +264,13 @@ GET /api/chat/history?session_id=sess_abc123&limit=20&before=msg_xxx
     {
       "id": "msg_001",
       "role": "user",
-      "content": "你好",
+      "content": "Hello",
       "timestamp": "2026-07-28T10:00:00Z"
     },
     {
       "id": "msg_002",
       "role": "assistant",
-      "content": "你好呀！",
+      "content": "Hi there!",
       "emotion": "happy",
       "timestamp": "2026-07-28T10:00:01Z"
     }
@@ -279,13 +279,13 @@ GET /api/chat/history?session_id=sess_abc123&limit=20&before=msg_xxx
 }
 ```
 
-### 5. 清空聊天历史
+### 5. Clear Chat History
 
 ```
 DELETE /api/chat/history?session_id=sess_abc123
 ```
 
-**响应：**
+**Response:**
 
 ```json
 {
@@ -294,7 +294,7 @@ DELETE /api/chat/history?session_id=sess_abc123
 }
 ```
 
-### 6. 执行工具
+### 6. Execute a Tool
 
 ```
 POST /api/tools/execute
@@ -303,12 +303,12 @@ Content-Type: application/json
 {
   "tool": "web_search",
   "params": {
-    "query": "今日新闻"
+    "query": "today's news"
   }
 }
 ```
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
@@ -322,21 +322,21 @@ Content-Type: application/json
 }
 ```
 
-### 7. 列出工具
+### 7. List Tools
 
 ```
 GET /api/tools
 ```
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
   "tools": [
     {
       "name": "web_search",
-      "description": "搜索引擎查询",
-      "category": "网络",
+      "description": "Search engine query",
+      "category": "Web",
       "parameters": {
         "query": { "type": "string", "required": true }
       }
@@ -346,7 +346,7 @@ GET /api/tools
 }
 ```
 
-### 8. Agent 管理
+### 8. Agent Management
 
 ```
 GET /api/agents
@@ -365,7 +365,7 @@ GET /api/agents
     },
     {
       "id": "recha",
-      "name": "热茶 🍵",
+      "name": "Recha 🍵",
       "role": "Developer Agent",
       "status": "online",
       "emotion": "calm",
@@ -392,7 +392,7 @@ GET /api/agents/:id
   "id": "lumina",
   "name": "Lumina 🐱",
   "role": "Boss Agent",
-  "personality": "温柔细腻的猫娘主理人",
+  "personality": "Warm, thoughtful catgirl lead",
   "status": "online",
   "emotion": {
     "valence": 0.85,
@@ -411,27 +411,27 @@ GET /api/agents/:id
 }
 ```
 
-### 9. 记忆检索
+### 9. Memory Search
 
 ```
 POST /api/memory/search
 Content-Type: application/json
 
 {
-  "query": "上次聊的旅行计划",
+  "query": "the travel plan we discussed last time",
   "k": 5,
   "agent_id": "lumina"
 }
 ```
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
   "results": [
     {
       "id": "mem_001",
-      "content": "用户说想去日本看樱花",
+      "content": "User wants to go to Japan to see cherry blossoms",
       "score": 0.92,
       "timestamp": "2026-07-25T14:30:00Z",
       "source": "chat_history"
@@ -440,21 +440,21 @@ Content-Type: application/json
 }
 ```
 
-### 10. 记忆写入
+### 10. Write to Memory
 
 ```
 POST /api/memory/save
 Content-Type: application/json
 
 {
-  "content": "用户喜欢猫，养了一只布偶",
+  "content": "User likes cats and owns a Ragdoll",
   "agent_id": "lumina",
   "importance": 0.7,
-  "tags": ["偏好", "宠物"]
+  "tags": ["preference", "pet"]
 }
 ```
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
@@ -463,7 +463,7 @@ Content-Type: application/json
 }
 ```
 
-### 11. 技能管理
+### 11. Skill Management
 
 ```
 GET /api/skills
@@ -476,7 +476,7 @@ GET /api/skills
       "name": "web_search",
       "version": "1.0.0",
       "enabled": true,
-      "description": "联网搜索"
+      "description": "Web search"
     }
   ],
   "total": 12
@@ -502,13 +502,13 @@ Content-Type: application/json
 }
 ```
 
-### 12. 系统诊断
+### 12. System Diagnostics
 
 ```
 GET /api/doctor
 ```
 
-**响应示例：**
+**Response example:**
 
 ```json
 {
@@ -524,7 +524,7 @@ GET /api/doctor
 }
 ```
 
-### 13. 配置读写
+### 13. Read and Write Config
 
 ```
 GET /api/config
@@ -541,7 +541,7 @@ GET /api/config
     "port": 3456,
     "enabled": true
   },
-  "language": "zh-CN",
+  "language": "en-US",
   "theme": "light"
 }
 ```
@@ -557,9 +557,9 @@ Content-Type: application/json
 }
 ```
 
-**注意：** 只传递要更新的字段，不会覆盖未提供的字段。
+**Note:** Only send the fields you want to update; omitted fields are left untouched.
 
-### 14. 定时任务管理
+### 14. Cron Job Management
 
 ```
 GET /api/cron
@@ -570,7 +570,7 @@ GET /api/cron
   "jobs": [
     {
       "id": "cron_001",
-      "name": "早安报道",
+      "name": "Morning check-in",
       "schedule": "0 8 * * *",
       "agent_id": "lumina",
       "enabled": true,
@@ -585,10 +585,10 @@ POST /api/cron
 Content-Type: application/json
 
 {
-  "name": "每日总结",
+  "name": "Daily summary",
   "schedule": "0 22 * * *",
   "agent_id": "lumina",
-  "prompt": "总结今天的工作"
+  "prompt": "Summarize today's work"
 }
 ```
 
@@ -596,7 +596,7 @@ Content-Type: application/json
 DELETE /api/cron/:id
 ```
 
-### 15. 情绪状态
+### 15. Emotion State
 
 ```
 GET /api/emotion
@@ -617,7 +617,7 @@ GET /api/emotion
 }
 ```
 
-### 16. 安全审批
+### 16. Security Approval
 
 ```
 GET /api/approval/pending
@@ -649,53 +649,53 @@ Content-Type: application/json
 
 ---
 
-## 错误处理
+## Error Handling
 
-所有端点统一错误格式：
+All endpoints return a unified error format:
 
 ```json
 {
   "error": {
     "code": "INVALID_PARAMS",
-    "message": "缺少必填参数: message",
+    "message": "Missing required parameter: message",
     "details": {}
   },
   "status": 400
 }
 ```
 
-**常见错误码：**
+**Common error codes:**
 
-| HTTP 状态码 | error.code | 说明 |
-|-------------|------------|------|
-| 400 | `INVALID_PARAMS` | 参数校验失败 |
-| 401 | `UNAUTHORIZED` | API Key 无效 |
-| 404 | `NOT_FOUND` | 资源不存在 |
-| 429 | `RATE_LIMITED` | 请求过频 |
-| 500 | `INTERNAL_ERROR` | 服务器内部错误 |
-| 503 | `LLM_UNAVAILABLE` | LLM 服务不可达 |
+| HTTP Status | error.code | Description |
+|-------------|------------|-------------|
+| 400 | `INVALID_PARAMS` | Parameter validation failed |
+| 401 | `UNAUTHORIZED` | Invalid API key |
+| 404 | `NOT_FOUND` | Resource not found |
+| 429 | `RATE_LIMITED` | Too many requests |
+| 500 | `INTERNAL_ERROR` | Internal server error |
+| 503 | `LLM_UNAVAILABLE` | LLM service unreachable |
 
 ---
 
-## 调用示例
+## Examples
 
 ### curl
 
 ```bash
-# 健康检查
+# Health check
 curl http://localhost:3456/api/health
 
-# 聊天
+# Chat
 curl -X POST http://localhost:3456/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"message":"你好","agent_id":"lumina"}'
+  -d '{"message":"Hello","agent_id":"lumina"}'
 
-# 检索记忆
+# Search memory
 curl -X POST http://localhost:3456/api/memory/search \
   -H "Content-Type: application/json" \
-  -d '{"query":"旅行计划","k":3}'
+  -d '{"query":"travel plan","k":3}'
 
-# 系统诊断
+# System diagnostics
 curl http://localhost:3456/api/doctor
 ```
 
@@ -706,20 +706,20 @@ import requests
 
 BASE = "http://localhost:3456/api"
 
-# 健康检查
+# Health check
 print(requests.get(f"{BASE}/health").json())
 
-# 聊天
+# Chat
 resp = requests.post(f"{BASE}/chat", json={
-    "message": "今天心情怎么样？",
+    "message": "How are you feeling today?",
     "agent_id": "lumina"
 })
 print(resp.json()["reply"])
 
-# 流式聊天
+# Streaming chat
 import json
 resp = requests.post(f"{BASE}/chat/stream", json={
-    "message": "讲个故事",
+    "message": "Tell me a story",
 }, stream=True)
 for line in resp.iter_lines():
     if line.startswith(b"data: "):
@@ -733,11 +733,11 @@ for line in resp.iter_lines():
 ```typescript
 const API = "http://localhost:3456/api";
 
-// 聊天
+// Chat
 const reply = await fetch(`${API}/chat`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ message: "你好", agent_id: "lumina" }),
+  body: JSON.stringify({ message: "Hello", agent_id: "lumina" }),
 }).then(r => r.json());
 
 console.log(reply.reply);
@@ -745,19 +745,19 @@ console.log(reply.reply);
 
 ---
 
-## CLI 快捷命令
+## CLI Shortcuts
 
-常用操作的 CLI 等效命令：
+Equivalent CLI commands for common operations:
 
-| 操作 | CLI | API |
-|------|-----|-----|
-| 聊天 | `lumina chat "你好"` | `POST /api/chat` |
-| 系统诊断 | `lumina doctor` | `GET /api/doctor` |
-| 列出工具 | `lumina tool list` | `GET /api/tools` |
-| Agent 状态 | `lumina agent status` | `GET /api/agents` |
-| 搜索记忆 | `lumina memory search "关键词"` | `POST /api/memory/search` |
-| 列出技能 | `lumina skill list` | `GET /api/skills` |
+| Operation | CLI | API |
+|-----------|-----|-----|
+| Chat | `lumina chat "Hello"` | `POST /api/chat` |
+| System diagnostics | `lumina doctor` | `GET /api/doctor` |
+| List tools | `lumina tool list` | `GET /api/tools` |
+| Agent status | `lumina agent status` | `GET /api/agents` |
+| Search memory | `lumina memory search "keywords"` | `POST /api/memory/search` |
+| List skills | `lumina skill list` | `GET /api/skills` |
 
 ---
 
-> 有问题或建议？欢迎提交 [GitHub Issue](https://github.com/chaxu814/lumina-life/issues)。
+> Questions or suggestions? Open a [GitHub Issue](https://github.com/chaxu814/lumina-life/issues).

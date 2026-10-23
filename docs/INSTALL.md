@@ -1,114 +1,114 @@
-# Lumina 安装指南（跨平台）
+# Lumina Installation Guide (Cross-Platform)
 
-> 支持 Windows 10/11 (x64)、macOS 12+ (Intel/Apple Silicon)、Linux (x64, x11)。
-> 三种安装方式任选其一：下载现成安装包（推荐普通用户）或从源码运行（开发者）。
-
----
-
-## 通用要求
-
-- **Node.js 18+**（推荐 20 或 22 LTS）——仅源码安装需要。
-- **Python 3.10+**（可选）——仅本机编译原生模块时需要；下载现成安装包不需要。
-- 首次使用 Computer Use（桌面操控/看屏点鼠标）需要 VLM 配置，详见 README。
+> Supports Windows 10/11 (x64), macOS 12+ (Intel/Apple Silicon), and Linux (x64, X11).
+> Pick one of the install paths below: download a prebuilt installer (recommended for most users) or run from source (for developers).
 
 ---
 
-## ⚡ 3 分钟上手（按你的系统选一条）
+## General Requirements
 
-| 系统 | 安装后要做的唯一一件事 | Computer Use 开箱？ |
+- **Node.js 18+** (20 or 22 LTS recommended) — only needed for source installs.
+- **Python 3.10+** (optional) — only needed when compiling native modules locally; not needed for prebuilt installers.
+- Using Computer Use (desktop control / looking at the screen and clicking the mouse) for the first time requires a VLM configuration; see the README.
+
+---
+
+## ⚡ Up and Running in 3 Minutes (pick the row for your OS)
+
+| OS | The only thing to do after install | Computer Use out of the box? |
 |------|------------------------|---------------------|
-| **Windows 10/11** | 装完即用，无需任何授权 | ✅ 开箱即用 |
-| **macOS** | 装完后去「系统设置 → 隐私与安全性」勾 **辅助功能** + **屏幕录制**，重启 App | ⚠️ 授权后可用 |
-| **Linux** | 登录用 **X11 会话**，`sudo apt install xdotool`（截屏工具一般已带） | ⚠️ X11 可用；Wayland 不能移动/点击 |
+| **Windows 10/11** | Works right after install, no authorization needed | ✅ Out of the box |
+| **macOS** | After install, open **System Settings → Privacy & Security** and enable **Accessibility** + **Screen Recording**, then restart the app | ⚠️ Works after authorization |
+| **Linux** | Log in with an **X11 session**, and `sudo apt install xdotool` (screenshot tools are usually bundled) | ⚠️ Works on X11; cannot move/click on Wayland |
 
-> 下面是分平台的详细步骤。
+> Detailed per-platform steps follow below.
 
 ---
 
 ## Windows
 
-### 方式一：下载安装包（推荐）
-1. 从 GitHub Releases 下载 `Lumina-Life-Setup-<version>-win-x64.exe`。
-2. 双击运行，可自定义安装目录，勾选桌面/开始菜单快捷方式。
-3. 首次启动如出现 SmartScreen 提示，点「更多信息 → 仍要运行」（当前未做代码签名，属正常）。
+### Option 1: Download the installer (recommended)
+1. Download `Lumina-Life-Setup-<version>-win-x64.exe` from GitHub Releases.
+2. Double-click to run; you can choose the install directory and create desktop / Start menu shortcuts.
+3. If SmartScreen pops up on first launch, click "More info → Run anyway" (the app is not code-signed yet, which is expected).
 
-### 方式二：开发者模式
+### Option 2: Developer mode
 ```powershell
 git clone <repo>
 cd "Lumina AI"
-npm install        # 会自动把 better-sqlite3 对齐到 Electron ABI
-npm run dev        # 启动开发版
+npm install        # automatically aligns better-sqlite3 to the Electron ABI
+npm run dev        # launches the dev build
 ```
-> 若 `npm install` 在 better-sqlite3 处报 node-gyp 错误，见 docs/TROUBLESHOOTING.md §16。
+> If `npm install` fails with a node-gyp error on better-sqlite3, see docs/TROUBLESHOOTING.md §16.
 
-> 🇨🇳 **国内网络提示**：`npm install` 会从 GitHub 下载 Electron 二进制，网络受限时
-> 会报 TLS / 证书类错误。先设镜像再装：
+> 🇨🇳 **Note for networks in China**: `npm install` downloads the Electron binary from GitHub,
+> and restricted networks often fail with TLS / certificate errors. Set the mirror first:
 > ```powershell
 > $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'
 > npm install
 > ```
 
-Windows 上 Computer Use（鼠标/键盘/截屏/UIA 元素树）开箱即用，无需额外授权。
+On Windows, Computer Use (mouse / keyboard / screenshots / UIA element tree) works out of the box with no extra authorization.
 
 ---
 
 ## macOS
 
-### 方式一：下载安装包（推荐）
-1. 从 Releases 下载 `.dmg`（Intel 选 x64，Apple Silicon 选 arm64）。
-2. 把 Lumina Life 拖进「应用程序」。
-3. **首次打开：** 因为未公证，**不要双击**——右键点 App →「打开」→ 确认。之后可正常双击。
-4. **授权（Computer Use 必需）：** 打开「系统设置 → 隐私与安全性」：
-   - **辅助功能**（Accessibility）：勾选 Lumina Life（用于控制鼠标/键盘）。
-   - **屏幕录制**（Screen Recording）：勾选 Lumina Life（用于截屏/看屏）。
-   - 授权后需完全退出并重启 App 才生效。
+### Option 1: Download the installer (recommended)
+1. Download the `.dmg` from Releases (x64 for Intel, arm64 for Apple Silicon).
+2. Drag Lumina Life into Applications.
+3. **First launch:** because the app is not notarized, **do not double-click** — right-click the app → "Open" → confirm. After that you can double-click normally.
+4. **Authorization (required for Computer Use):** open **System Settings → Privacy & Security**:
+   - **Accessibility**: enable Lumina Life (needed to control the mouse/keyboard).
+   - **Screen Recording**: enable Lumina Life (needed to take screenshots / look at the screen).
+   - After authorizing, fully quit and restart the app for it to take effect.
 
-### 方式二：开发者模式
+### Option 2: Developer mode
 ```bash
 git clone <repo> && cd lumina-life
 npm install
 npm run dev
 ```
-首次桌面操控会弹窗请求上述两项权限。
+The first time desktop control is used, the app will pop up and request the two permissions above.
 
-> 长按/拖拽如偶发失败，可 `brew install cliclick` 提升可靠性（可选）。
-> macOS 没有 Windows 那样的 UIA 元素树，Computer Use 以「截屏 + 坐标」为主。
+> If long-press / drag occasionally fails, `brew install cliclick` can improve reliability (optional).
+> macOS has no UIA element tree like Windows; Computer Use works mainly through "screenshot + coordinates".
 
 ---
 
 ## Linux
 
-### 方式一：下载安装包（推荐）
-1. 从 Releases 下载 `.AppImage` 或 `.deb`。
-2. AppImage：`chmod +x Lumina-Life-*.AppImage && ./Lumina-Life-*.AppImage`
-3. deb：`sudo apt install ./Lumina-Life-*.deb`
+### Option 1: Download the installer (recommended)
+1. Download the `.AppImage` or `.deb` from Releases.
+2. AppImage: `chmod +x Lumina-Life-*.AppImage && ./Lumina-Life-*.AppImage`
+3. deb: `sudo apt install ./Lumina-Life-*.deb`
 
-### 方式二：开发者模式
+### Option 2: Developer mode
 ```bash
 git clone <repo> && cd lumina-life
-sudo apt install build-essential python3   # 编译原生模块
+sudo apt install build-essential python3   # to compile native modules
 npm install
 npm run dev
 ```
 
-### Computer Use 依赖（X11 会话）
-- 全局鼠标/键盘注入需要 **xdotool**：
+### Computer Use dependencies (X11 session)
+- Global mouse/keyboard injection requires **xdotool**:
   ```bash
   sudo apt install xdotool        # Debian/Ubuntu
   sudo dnf install xdotool        # Fedora
   ```
-- 截屏会自动按顺序尝试 `gnome-screenshot → scrot → import(ImageMagick)`，发行版一般已带其一。
-- 可选增强：`sudo apt install cliclick` 不适用 Linux；长按时长/拖拽由 xdotool 直接完成。
+- Screenshots are tried in order: `gnome-screenshot → scrot → import (ImageMagick)`; distros usually ship one of them.
+- Optional enhancement: `sudo apt install cliclick` does not apply on Linux; long-press duration and drag are handled directly by xdotool.
 
-### Wayland 用户注意
-- Wayland 出于安全模型**禁止任意应用全局注入鼠标/键盘**，Lumina 会自动禁用桌面操控并提示。
-- 如确需 Computer Use，请在登录界面的齿轮处选择 **「Ubuntu on Xorg」/ X11 会话**后重新登录。
-- Wayland 下截屏仍可用（走 `grim`，需 `sudo apt install grim`；GNOME 可用 `gnome-screenshot`），只是不能移动/点击。
-- 实在要留在 Wayland，可评估 **ydotool**（通过 `/dev/uinput` 注入，需把用户加入 input 组），但兼容性因合成器而异，非官方支持路径。
+### Notes for Wayland users
+- Wayland's security model **forbids arbitrary apps from injecting mouse/keyboard events globally**, so Lumina automatically disables desktop control and tells you why.
+- If you really need Computer Use, log out and choose **"Ubuntu on Xorg" / an X11 session** from the gear icon on the login screen.
+- Under Wayland, screenshots still work (via `grim`, `sudo apt install grim`; GNOME can use `gnome-screenshot`) — you just can't move/click.
+- If you must stay on Wayland, you can evaluate **ydotool** (injects via `/dev/uinput`, requires adding your user to the input group), but compatibility varies by compositor and it is not an officially supported path.
 
 ---
 
-## 常见问题
+## FAQ
 
-- 原生模块编译失败 → 见 [TROUBLESHOOTING.md §16](TROUBLESHOOTING.md)。
-- 各平台 Computer Use 实际能力差异 → 见 [cross-platform-status.md](cross-platform-status.md)。
+- Native module compilation failed → see [TROUBLESHOOTING.md §16](TROUBLESHOOTING.md).
+- Real-world Computer Use capabilities across platforms → see [cross-platform-status.md](cross-platform-status.md).
