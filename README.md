@@ -1,6 +1,7 @@
+[English](README.md) | [简体中文](README.zh-CN.md)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
+  <img src="https://img.shields.io/badge/Version-0.1.0--preview-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Version 0.1.0 preview">
   <img src="https://img.shields.io/badge/Agent%20Team-3%20personas-ff6b9d?style=for-the-badge&labelColor=1a1a2e" alt="3-Agent Team">
   <img src="https://img.shields.io/badge/Emotion-3%20continuous%20values%20%C2%B7%205%20expressions-ff4757?style=for-the-badge&labelColor=1a1a2e" alt="Emotion System">
   <img src="https://img.shields.io/badge/Tools-142%20registered%20%2F%20~32--50%20per%20turn-3b82f6?style=for-the-badge&labelColor=1a1a2e" alt="142 tools registered, ~32-50 exposed per turn">
@@ -21,808 +22,743 @@
 </h1>
 
 <p align="center">
-  <b>你的桌面不再孤单。</b><br>
-  <i>Your desktop just got a soul.</i>
+  <b>Your desktop just got a soul.</b>
 </p>
 
 <p align="center">
-  <b>三个 AI 住在你的电脑里——有情绪、会说话、真的帮你做事。</b><br>
-  <i>Three AI agents live on your desktop — they feel, they talk, and they actually do things for you.</i>
+  <b>Three AI agents live on your desktop — they feel, they talk, and they actually do things for you.</b>
 </p>
 
 <p align="center">
-  <a href="https://github.com/chaxu814/lumina-life/releases/latest"><img src="https://img.shields.io/badge/⬇️_下载_Lumina_Life-Windows_安装包-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="下载 Windows 安装包"></a>
+  <a href="https://github.com/chaxu814/lumina-life/releases/latest"><img src="https://img.shields.io/badge/⬇️_Download_Lumina_Life-Windows_Installer-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="Download the Windows installer"></a>
   <br>
-  <sub>普通用户：下载 <b>.exe 安装包</b>（约 130 MB）即可使用 · 开发者：见下方 <a href="#-quick-start">快速开始</a></sub>
+  <sub>Regular users: download the <b>.exe installer</b> (~130 MB) and go · Developers: see <a href="#-quick-start">Quick Start</a> below</sub>
 </p>
 
 <br>
 
 <p align="center">
-  <a href="#-quick-start"><b>🚀 快速开始</b></a> ·
-  <a href="#-features"><b>✨ 核心亮点</b></a> ·
-  <a href="#-why-lumina"><b>💡 为什么选 Lumina</b></a> ·
-  <a href="#-architecture"><b>🏗️ 架构</b></a> ·
-  <a href="#-screenshots"><b>📸 截图</b></a> ·
-  <a href="#-roadmap"><b>🗺️ 路线图</b></a>
+  <a href="#-quick-start"><b>🚀 Quick Start</b></a> ·
+  <a href="#-core-features"><b>✨ Core Features</b></a> ·
+  <a href="#-why-lumina"><b>💡 Why Lumina?</b></a> ·
+  <a href="#-architecture"><b>🏗️ Architecture</b></a> ·
+  <a href="#-screenshots"><b>📸 Screenshots</b></a> ·
+  <a href="#-roadmap"><b>🗺️ Roadmap</b></a>
 </p>
 
 ---
 
-## ⚠️ 已知问题（发布前如实告知）
+## ⚠️ Known Issues (Told Straight, Before Launch)
 
-我们不把已知问题藏进 Issue 列表。首次公开发布前，以下是**我们已知、且尚未解决**的问题：
+We don't sweep known issues into the issue tracker. Ahead of our first public release, here is what we **already know and have not yet fixed**:
 
-| 严重度 | 问题 | 影响 | 计划 |
+| Severity | Issue | Impact | Plan |
 |---|---|---|---|
-| 🟠 | **仅 Windows 实机验证** | macOS/Linux 代码已适配但**从未真机验收**；Computer Use 的键鼠注入、沙箱规则库强依赖 Windows API | v1.3.0 |
-| 🟠 | **IM 渠道未经端到端真机验证** | 7 个适配器已接线，**仅 Telegram 默认开启**，其余需自配凭据 | v1.0 |
-| 🟡 | **测试套件对负载敏感（flaky）** | 已修复一批「源码重构后测试未同步」的确定性失败（5 条，见下方 Quality Gates）；剩余个别时序测试在**慢机/并发下**仍可能间歇失败——套件不再声称「永远全绿」 | 持续收敛 |
-| 🟡 | **无应用内本地推理** | 需外挂 LM Studio / Ollama；启动会探测但**不会自动安装** | 不计划（见「为什么」） |
-| 🟡 | **无第三方技能生态** | 技能市场通道已通；`electron/skills/` 有 **13 个示例技能**、根 `skills/` 有 **7 个智能技能**，但**没有第三方技能可装** | 待社区 |
-| 🟡 | **`agentRunner.ts` 单文件 4171 行**（含空行；非空约 3856 行，2026-10-20 实测） | LLM 调用 / ReAct 循环耦合在一起，外部贡献者可读性差（tool-selection 已抽离为独立模块） | 发布后重构 |
-| 🔵 | **「为你推荐」的 AI 精选依赖已配置模型** | 未配模型 / 离线 / 预算已收紧时只显示原始热榜（快段），不会报错也不会空着；想完全不要这个功能可在设置里关闭 | 设计如此 |
-| 🔵 | **5487 条 ESLint warning**（其中 `no-explicit-any` 3340 条） | 不阻塞发布；由 lint 棘轮（`lint:ratchet`）管理，只减不增 | 持续 |
-| 🔵 | **Chromium sandbox 为 `false`** | 渲染进程安全由**应用层**承担（rolePolicy + securityGuard + sandboxRules + 审批流），**不是**浏览器沙箱；文档已按此更正 | 已澄清 |
+| 🟠 | **Validated only on real Windows machines** | macOS/Linux code is adapted but **has never been verified on real hardware**; Computer Use's mouse/keyboard injection and the sandbox rule engine depend heavily on the Windows API | v1.3.0 |
+| 🟠 | **IM channels not end-to-end verified on real devices** | 7 adapters are wired up; **only Telegram is on by default**, the rest need you to supply credentials | v1.0 |
+| 🟡 | **Test suite is load-sensitive (flaky)** | We fixed a batch of deterministic failures caused by "tests not synced after a source refactor" (5 of them, see Quality Gates below); a few timing tests can still fail intermittently on **slow machines / under concurrency** — the suite no longer claims "always green" | Converging |
+| 🟡 | **No in-app local inference** | You need an external LM Studio / Ollama; the app probes for them on launch but **will not auto-install** it | Not planned (see "Why Lumina") |
+| 🟡 | **No third-party skill ecosystem** | The skill store channel is open; `electron/skills/` ships **13 example skills** and the root `skills/` ships **7 smart skills**, but **there are no third-party skills to install yet** | Awaiting community |
+| 🟡 | **`agentRunner.ts` is a single 4171-line file** (incl. blanks; ~3856 non-blank, measured 2026-10-20) | LLM calls and the ReAct loop are coupled together, which hurts readability for outside contributors (tool-selection has already been split out into its own module) | Refactor after release |
+| 🔵 | **"For You" AI picks depend on a configured model** | With no model configured / offline / budget tightened, it just shows the raw hot list (the fast path) — no errors, no blank panel; you can turn the whole thing off in settings | By design |
+| 🔵 | **5487 ESLint warnings** (3340 of them `no-explicit-any`) | Not a release blocker; managed by a lint ratchet (`lint:ratchet`) that only goes down, never up | Ongoing |
+| 🔵 | **Chromium sandbox is `false`** | Renderer-process security is enforced at the **application layer** (rolePolicy + securityGuard + sandboxRules + approval flow), **not** by the browser sandbox; docs have been corrected to reflect this | Clarified |
 
-> 💡 **在 Windows + LM Studio 上遇到「很卡 / 首 token 很慢」？先跑 `lumina health`（或界面「更多设置 → 诊断工具 → 🩺 模型体检」）。**
-> 它多半会直接告诉你原因：上下文窗口填得比模型实际能吃的大了。这是我们已经解决、但需要你看见的诊断能力。
+> 💡 **On Windows + LM Studio and it feels "laggy / slow to first token"? Run `lumina health` first** (or in the UI: "More settings → Diagnostics → 🩺 Model Checkup").
+> More often than not it will tell you exactly why: the context window you gave it is larger than the model can actually consume. This is a diagnostic we already fixed — but one you need to be able to see.
 >
-> 🧭 **第一次用、卡在某一步？** 安装与配置见 [安装指引](docs/INSTALL.md)，报错与常见问题见 [故障排除](docs/TROUBLESHOOTING.md) 和 [FAQ](docs/FAQ.md)。
+> 🧭 **First time here and stuck at a step?** See [Install](docs/INSTALL.md) for setup and configuration, and [Troubleshooting](docs/TROUBLESHOOTING.md) and [FAQ](docs/FAQ.md) for errors and common questions.
 
 ---
 
-## 🎬 她跟别的 AI 不一样
+## 🎬 What Makes Her Different
 
 <blockquote>
   <i>"Most AI tools wait for you to ask.<br>
   <b>Lumina notices when you need help.</b>"</i>
 </blockquote>
 
-&nbsp;&nbsp;🧠 **她的身体由大模型实时「驱动」，而不是播放预设动画：**<br>
-&nbsp;&nbsp;&nbsp;&nbsp;每一次思考都会同时产出动作、表情和台词（结构化 `{action, mood, speech}`），上一句还在笑、被你怼了会先顿一下再小声回话——情绪有连续余韵。<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<sub>Each thought emits action + mood + speech together: the body is driven by the model in real time, not a scripted loop.</sub>
+&nbsp;&nbsp;🧠 **Her body is driven by the model in real time — not a scripted animation loop:**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Every thought emits action, expression, and speech at once (a structured `{action, mood, speech}`). One moment she's laughing; when you push back, she pauses, then answers quietly — emotion has a lingering trail.<br>
 
-&nbsp;&nbsp;❄️ **她会在你对着屏幕发呆时，主动说：**<br>
-&nbsp;&nbsp;&nbsp;&nbsp;*"累了吗？要不要休息一下？"*<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<sub>She notices when you're zoning out and checks on you.</sub>
+&nbsp;&nbsp;❄️ **She speaks up when she catches you staring blankly at the screen:**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;*"Tired? Want to take a break?"*
 
-&nbsp;&nbsp;👥 **她不是一个人——她身后还有两个队友：**<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Yak 码代码、热茶做审查，你只跟 Lumina 聊天就好。<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<sub>Yak codes, Recha reviews code — you only talk to Lumina.</sub>
+&nbsp;&nbsp;👥 **She's not alone — she has two teammates behind her:**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Yak writes code, Recha reviews it. You only ever talk to Lumina.
 
-&nbsp;&nbsp;🖥️ **她不只"告诉你"，她真的会帮你操作电脑：**<br>
-&nbsp;&nbsp;&nbsp;&nbsp;截图→理解屏幕→自己移动鼠标。你说"帮我保存这个文件"她就照做。<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<sub>Screenshots → understands → moves your mouse. She actually does it.</sub>
+&nbsp;&nbsp;🖥️ **She doesn't just "tell you" — she actually operates your computer:**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Screenshot → read the screen → move the mouse herself. You say "save this file for me" and she does it.
 
-&nbsp;&nbsp;💬 **她在你看不见的地方有「朋友圈」：**<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Lumina、热茶、Yak 会在后台群聊、互道早安、发朋友圈。<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<sub>Lumina, Recha, and Yak have group chats, morning greetings, and Moments — you just don't see it all.</sub>
+&nbsp;&nbsp;💬 **She has a "social feed" where you can't see her:**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Lumina, Recha, and Yak have group chats, say good morning, and post to Moments in the background.
 
 ---
 
-## ✨ Core Features · 核心亮点
+## ✨ Core Features
 
-### 🧠 Multi-Agent Team · 三 Agent 团队协作
+### 🧠 Multi-Agent Team
 
-不是"一个 AI 做所有事"，而是三个各有所长的 Agent 组成团队，各司其职、流水线作业。
+Not "one AI doing everything" — three agents, each with its own strengths, working as a team in a pipeline.
 
-| Agent | 角色 Role | 性格 Personality | 专长 Expertise |
-|-------|-----------|-----------------|---------------|
-| **Lumina** 🐱 | 团队老大 — 唯一对用户接口<br>Team leader, your only interface | 温暖可爱、偶尔迷糊<br>Warm, caring, sometimes adorably clumsy | 对话 · 情绪感知 · 日常陪伴<br>Chat, emotion sensing, companionship |
-| **热茶 (Recha)** 🍵 | 毒舌技术宅 — 后台工作者<br>Sarcastic reviewer, behind-the-scenes | 外冷内热、毒舌但可靠<br>Cold on the outside, sharp but reliable | 代码审查 · 挑错 · 风险评估<br>Code review, critique, risk assessment |
-| **Yak** 💻 | 代码工程师 — 后台工作者<br>Calm engineer, behind-the-scenes | 理性至上、工程狂<br>Logic-first, engineering-obsessed | 写代码 · 调试 · 重构 · 跑测试<br>Coding, debugging, refactoring, testing |
+| Agent | Role | Personality | Expertise |
+|-------|------|-------------|-----------|
+| **Lumina** 🐱 | Team leader — your only interface | Warm, caring, sometimes adorably clumsy | Chat, emotion sensing, companionship |
+| **Recha (热茶)** 🍵 | Sarcastic reviewer, behind the scenes | Cold on the outside, sharp but reliable | Code review, critique, risk assessment |
+| **Yak** 💻 | Calm engineer, behind the scenes | Logic-first, engineering-obsessed | Coding, debugging, refactoring, testing |
 
-**如何协作？** How they work together:
+**How they work together:**
 
 ```
-你 "帮我查一下这个bug怎么修"
+You: "Help me figure out how to fix this bug"
   │
   ▼
-routingDecider 判定复杂度（规则高置信直接用 / 歧义调一次 LLM 仲裁 / 仲裁失败静默退回规则）
+routingDecider judges complexity (high-confidence rule → direct;
+  ambiguity → one LLM arbitration; arbitration fails → silently fall back to rules)
   │
-  ├─ 简单 → delegate_to ──> Yak 💻 写修复方案 ──> 回来
+  ├─ simple → delegate_to ──> Yak 💻 writes the fix ──> back
   │
-  └─ 复杂 → phase_gate_delegate
+  └─ complex → phase_gate_delegate
              Research → Plan → Execute → Verify → Review
                               │
-                              └─> adversarial_review（多视角并发委托热茶）
+                              └─> adversarial_review (concurrent multi-perspective delegates to Recha)
                                         │
-             Lumina 收到结果 → 整理→回复你
+             Lumina gets the result → tidies up → replies to you
 ```
 
-> 他们会在后台互相吐槽、讨论方案，但你看到的始终是一个统一、连贯的 Lumina。<br>
-> <sub>They chat, debate, and banter behind the scenes — you always see one unified Lumina.</sub>
+> They banter and debate behind the scenes — but you always see one unified, coherent Lumina.
 
-✅ `delegate_chain` 流水线：写代码 → 自动审查 → 自动修复<br>
-✅ `phase_gate_delegate` 五阶段门控：复杂任务自动降级为简单派活（避免过度编排）<br>
-✅ `hire_worker` 动态雇工：按需雇佣临时工种，并行执行后自动解散<br>
-✅ `adversarial_review` 对抗评审：多视角**并发**（`Promise.all`）委托，漏检有完整性 critic 兜底<br>
-✅ 每个 Agent 可独立配置 LLM（未配置则降级到 Lumina 的模型）<br>
-✅ 每个 Agent 有工具硬边界（`rolePolicy.ts`，三层闸门：硬闸门 → 执行层校验 → 广告层过滤）
+✅ `delegate_chain` pipeline: write code → auto-review → auto-fix<br>
+✅ `phase_gate_delegate` five-stage gate: complex tasks automatically degrade into simpler dispatches (avoiding over-orchestration)<br>
+✅ `hire_worker` dynamic hiring: spin up temporary roles on demand, run them in parallel, then dissolve<br>
+✅ `adversarial_review` adversarial review: concurrent (`Promise.all`) multi-perspective delegation, with an integrity critic as a backstop against missed issues<br>
+✅ Each agent can have its own LLM configured (if unconfigured, it falls back to Lumina's model)<br>
+✅ Each agent has hard tool boundaries (`rolePolicy.ts`, three gates: hard gate → execution-layer check → ad-layer filtering)
 
-> 🚨 **必读：三 Agent 团队需要分别配置 3 个 LLM，否则「团队」不存在**
+> 🚨 **Must read: the three-agent team requires 3 separately configured LLMs — otherwise there is no "team"**
 >
-> 后台成员只有在**各自配了 LLM** 时才会创建独立 Runner（`main.ts:637-656`）。
-> 只要 Yak 或热茶没配，这轮委派就会**静默降级**成「Lumina 自己戴那个角色的帽子代做」：
+> A background member only creates its own Runner (when it has an LLM configured) (`main.ts:637-656`).
+> If Yak or Recha has no LLM, that turn of delegation **silently degrades** into "Lumina putting on that persona and doing the job herself":
 >
-> | 你配置的 LLM | 实际发生的事 |
+> | LLMs you configured | What actually happens |
 > |---|---|
-> | 3 个（lumina + yak + recha） | ✅ 真三 Agent：独立上下文、独立视角、审查具备独立性 |
-> | 2 个（缺一个 worker） | ⚠️ 部分降级：缺的成员由 Lumina 代做，它那一路的**审查没有第二双眼睛** |
-> | 1 个（只有 Lumina） | ❌ **完全没有多 Agent 协作**，只剩人格切换 |
+> | 3 (lumina + yak + recha) | ✅ Real three-agent: independent context, independent perspective, independent review |
+> | 2 (one worker missing) | ⚠️ Partial degradation: the missing member is covered by Lumina; that branch's **review has no second pair of eyes** |
+> | 1 (Lumina only) | ❌ **No multi-agent collaboration at all** — just persona switching |
 >
-> 降级时界面会明确显示「团队降级提示」，审查结论也会标注不具备独立性 ——
-> 但如果你在意的是「代码有没有被另一个上下文独立看过」，那**必须配满 3 个**。
->
-> <sub>Worker runners are created only when that member has its own LLM configured.
-> Otherwise delegation silently degrades to a single agent wearing that persona.</sub>
+> When degraded, the UI clearly shows a "team degradation" notice, and review conclusions are flagged as non-independent. But if what you care about is "was this code independently looked at by another context," **you must configure all 3**.
 
-> ⚠️ **说清楚调度是「谁」在做**：**没有一个确定性的 dispatcher 会在你发一句话时
-> 自动把活派给 Yak**。派不派、派给谁，是模型读完 system prompt 后的判断
-> （routingDecider 只注入一句提示）。好处是灵活、不会误路由；代价是**不可预测** ——
-> 同一个问题两次问，可能一次派给 Yak、一次 Lumina 自己答。
+> ⚠️ **To be clear about who does the routing:** there is **no deterministic dispatcher that auto-assigns work to Yak the moment you send a message**. Whether to delegate, and to whom, is the model's call after reading the system prompt (routingDecider only injects a one-line hint). The upside is flexibility and no mis-routing; the cost is **unpredictability** — ask the same question twice and it might go to Yak once and be answered by Lumina herself the next.
 >
-> 💡 **要确定性？** 用 `/yak`、`/recha`、`/lumina` 三条命令一次性指定谁干活，见 [确定性派活命令](#-确定性派活命令跳过自动路由)。
+> 💡 **Want determinism?** Use `/yak`, `/recha`, `/lumina` to pick who does the work in one shot — see [Deterministic Dispatch Commands](#-deterministic-dispatch-commands-skip-auto-routing).
 
 ---
 
-### 😊 Real Emotion System · 真实情感系统
+### 😊 Real Emotion System
 
-不是表情包，不是冷冰冰的状态栏——**她真的有情绪。**
+Not emoji, not a cold status bar — **she actually has emotions.**
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| **三维数值 → 五种表现** | 底层是 **3 个连续数值**：心情 mood / 精力 energy / 亲密度 affinity，带惯性与随机漂移；当前版本用"昼/夜"两档开关微调（`pet/life/drives.ts:75 isNight`），尚未做连续正弦调制；它们组合映射为 5 种主要可观察表现（底层 9 个情绪标签经迟滞最近邻选定）：🥰开心 · 😴疲劳 · 🎯专注 · 😰焦虑 · 🤔好奇<br>3 continuous values (mood/energy/affinity) with inertia and drift, plus a day/night two-state modifier (no continuous sine yet); they map to 5 primary expressions selected by hysteresis nearest-neighbor from 9 underlying mood labels |
-| **实时可视化** | Lumina 的表情和语气随情绪实时变化<br>Her expression and tone shift in real time |
-| **关系记忆** | Agent 之间的亲密度/信任/协作数随**真实委托与群聊事件**演化，并持久化到本地（重启后保留）<br>Inter-agent affinity/trust evolve from real delegation & group-chat events and persist locally |
-| **主动搭话** | 不是冷通知——"主人你对着屏幕发呆好久了，要休息一下吗？"<br>Not a cold notification — "You've been staring at the screen for a while. Take a break?" |
-| **桌宠双渲染** 🖼️ | 主线 Live2D；VRM 为 beta——情绪数值已接入 VRM（→ blendShape），但口型 / 视线跟随暂仍在 Live2D，VRM 情绪动作默认关（`pet.vrmExpressive`） |
+| **Three continuous values → five expressions** | The base layer is **3 continuous values**: mood, energy, and affinity, with inertia and random drift; the current build uses a two-state day/night switch for fine-tuning (`pet/life/drives.ts:75 isNight`) — no continuous sine modulation yet. They combine into 5 primary observable expressions (selected by hysteresis nearest-neighbor from 9 underlying mood labels): 🥰 happy · 😴 tired · 🎯 focused · 😰 anxious · 🤔 curious |
+| **Real-time visualization** | Lumina's expression and tone shift in real time with her emotion |
+| **Relationship memory** | Inter-agent affinity/trust/teamwork counts evolve from **real delegation and group-chat events** and persist locally (survive restarts) |
+| **Proactive care** | Not a cold notification — "You've been staring at the screen for a while. Want to take a break?" |
+| **Dual pet rendering** 🖼️ | Mainline is Live2D; VRM is beta — emotion values are wired into VRM (→ blendShape), but lip-sync and gaze tracking still live in Live2D, and VRM expressive motion is off by default (`pet.vrmExpressive`) |
 
-> 💡 **情绪不只影响表情，它进了执行层**：重试次数会被当前情绪影响
-> （`delegationManager.ts`），工具可用范围会被情绪**收紧**（`orchestration/emotionGating.ts`，
-> 且只能收紧永不放宽）。多数项目的"情绪系统"只是换头像和语气词。
+> 💡 **Emotion doesn't just change her face — it enters the execution layer:** retry counts are affected by current emotion (`delegationManager.ts`), and the available tool set is **tightened** by emotion (`orchestration/emotionGating.ts`), only ever tightened, never loosened. Most projects' "emotion system" is just a different avatar and a few interjections.
 
-> ⚠️ **不夸大**：我们没有做过情绪建模的对照组实验，也没有用户留存数据。
-> 「真实情感」指的是机制上真的有数值、有惯性、会衰减——**不是**指她有意识。
+> ⚠️ **No exaggeration:** we have run no controlled experiment on emotion modeling and have no user-retention data. "Real emotion" means the mechanism genuinely has values, inertia, and decay — **not** that she is conscious.
 
 ---
 
-### 📚 Real Memory · 真正的记忆
+### 📚 Real Memory
 
-不是"聊完就忘"的上下文窗口——**她真的记得你。**
+Not a "forgets after the chat ends" context window — **she actually remembers you.**
 
-| 能力 | 说明 |
+| Capability | Description |
 |------|------|
-| **短期记忆** | 当前对话上下文，支持自动压缩（按模型窗口分档，65%/60%/50% 触发率）|
-| **长期记忆** | SQLite 持久化 + 结构化事实/反思/人格 |
-| **混合召回** | **BM25 词法 + TF-IDF 向量余弦双路召回，RRF 融合（已实现、零依赖）。中文用 unigram+bigram 字符级分词（无词典，精度有限）**；dense 语义向量（Ollama / embedding 服务）可在记忆设置中开启，**默认关闭**<br>Hybrid recall: BM25 lexical + TF-IDF cosine fused by RRF (shipped, zero-dependency); dense semantic embeddings optional, **off by default** |
-| **双层可信度** | ① 写入期：权威性**只由 `source` 决定**，模型无权自封 `confidence: 1.0`<br>② 读取期：五维证据评分（置信/新鲜/频率/佐证/重要，7 天半衰期）决定召回排序与生命周期，被证伪的记忆会沉底 |
-| **自动精炼** | 定时清理低质量记忆，保留真正重要的 |
-| **记忆剧场** | 可视化浏览你和 Lumina 的回忆 |
+| **Short-term memory** | Current conversation context, with automatic compression (tiered by model window, triggered at 65%/60%/50%) |
+| **Long-term memory** | SQLite persistence + structured facts/reflections/persona |
+| **Hybrid recall** | **BM25 lexical + TF-IDF vector cosine, fused by RRF (shipped, zero-dependency). Chinese uses unigram+bigram character-level segmentation (no dictionary, limited precision)**; dense semantic vectors (Ollama / embedding service) can be enabled in memory settings, **off by default** |
+| **Two-layer confidence** | ① Write time: authority is **decided solely by `source`** — the model cannot self-assign `confidence: 1.0`. ② Read time: a five-dimensional evidence score (confidence/freshness/frequency/corroboration/importance, 7-day half-life) drives recall ordering and lifecycle; memories that get disproven sink to the bottom |
+| **Auto-refinement** | Periodically cleans low-quality memory and keeps what truly matters |
+| **Memory Theater** | Visualize and browse your memories with Lumina |
 
 > <sub>Memory is the soul of companionship. Lumina remembers. That's what makes her different.</sub>
 
-> ⚠️ **说实话**：证据链（尤其是佐证维度）不是什么独门秘技——「检索 + 证据打分 + 融合排序」
-> 是记忆系统里已经比较成熟的工程思路，我们把它落在了自己的记忆工具与记忆剧场里。
-> **记忆是入场券，不是护城河。** 我们真正在意的差异，写在 [为什么选 Lumina](#-why-lumina--为什么选-lumina) 里。
+> ⚠️ **To be honest:** the evidence chain (especially the corroboration dimension) is not some secret trick — "retrieval + evidence scoring + fused ranking" is a fairly mature engineering pattern in memory systems; we just landed it in our own memory tools and Memory Theater. **Memory is the ticket of entry, not the moat.** The differences we actually care about are written in [Why Lumina?](#-why-lumina).
 
 ---
 
-### 🖥️ Computer Use · 真正的桌面操控
+### 🖥️ Computer Use
 
-不只是"告诉你该怎么做"——**她真的会操作你的电脑。**
+Not just "telling you what to do" — **she actually operates your computer.**
 
 ```
-你: "帮我把这个文件拖到桌面上"
+You: "Drag this file onto the desktop for me"
                 │
                 ▼
-  ① 截图当前屏幕
-  ② VLM 分析画面内容
-  ③ 定位文件 + 桌面位置
-  ④ 移动鼠标 → 拖拽 → 完成 ✅
+  ① Screenshot the current screen
+  ② VLM analyzes the frame
+  ③ Locate the file + the desktop spot
+  ④ Move the mouse → drag → done ✅
 ```
 
-💡 **屏幕感知**：你在写代码？热茶会自发提出优化建议<br>
-💡 **看得见你的操作**：不只是聊天窗口，是整个屏幕
+💡 **Screen awareness:** writing code? Recha will spontaneously suggest optimizations<br>
+💡 **She sees what you do:** not just the chat window — the whole screen
 
-🎮 **游戏陪伴（可选扩展）**：她能看画面、操作键鼠陪你玩——视觉路线（截图→理解→操作键鼠）开箱即用，基于 GameProfile 框架可接入新游戏（已适配 **Minecraft**、**Factorio** 等）；**Minecraft 的 Mineflayer 程序化控制作为可选扩展，需额外安装，首发安装包不含**。支持自主游玩闭环 `game_auto`，但**请勿用于带反作弊的竞技网游**（封号风险）。详见 [docs/gaming-overview.md](docs/gaming-overview.md) 与 [docs/game-safety.md](docs/game-safety.md)。
+🎮 **Companion gaming (optional extension):** she can watch the screen and drive the mouse and keyboard to play with you — the visual route (screenshot → understand → drive mouse/keyboard) works out of the box, and new games can be hooked via the GameProfile framework (already adapted for **Minecraft**, **Factorio**, etc.); **Minecraft's Mineflayer programmatic control is an optional extension that must be installed separately and is not in the initial installer.** Autonomous closed-loop play (`game_auto`) is supported, but **please do not use it in competitive online games with anti-cheat** (ban risk). See [docs/gaming-overview.md](docs/gaming-overview.md) and [docs/game-safety.md](docs/game-safety.md).
 
 ---
 
-### 🛡️ Smart Sandbox · 智能沙箱
+### 🛡️ Smart Sandbox
 
-不用害怕 AI 会乱动你的电脑 — **Lumina 的沙箱模式让她做任何敏感操作前都会先问你。**
+No need to fear the AI messing with your computer — **Lumina's sandbox mode makes her ask you before any sensitive action.**
 
-| 等级 | 说明 |
+| Level | Description |
 |------|------|
-| **双层安全审查** | ① 消息/参数级：securityGuard 6 级×10 类，审查 LLM 输入和工具参数；② 命令级：sandboxRules 32 条命令规则（按 BLOCK/CRITICAL/WARN 4 档分级），审查即将执行的 shell 命令（含 BLOCK 级硬拦截：格式化/rm -rf 根/fork 炸弹/删系统目录） |
-| **🔍 沙箱玻璃房** | 侧栏「沙箱玻璃房」面板实时显示每条命令命中的级别 / 威胁类别 / 处置（放行 · 降级 · 拦截 · 审批），安全过程对你透明 |
-| **审批流** | 危险操作先弹窗问你，你点头她才做 |
-| **密钥拦截** | Token/Key 自动检测，阻止外泄 |
-| **🆕 沙箱模式** | 一键开启 → 中高风险操作全部需确认；关闭 → 仅拦截严重风险 |
+| **Two-layer security review** | ① Message/parameter level: securityGuard, 6 levels × 10 categories, reviews LLM input and tool parameters. ② Command level: sandboxRules, 32 command rules (graded across BLOCK/CRITICAL/WARN), reviews shell commands about to run — including hard BLOCK-level interception of format/rm -rf of root/fork bombs/deleting system directories |
+| **🔍 Sandbox glass box** | The sidebar "sandbox glass box" panel shows, in real time, each command's matched level / threat category / disposition (allow · downgrade · block · approval) — the safety process is transparent to you |
+| **Approval flow** | Dangerous actions pop up and ask you first; she only does them once you nod |
+| **Secret interception** | Auto-detects tokens/keys and stops them from leaking |
+| **🆕 Sandbox mode** | Toggle on → all medium/high-risk actions require confirmation; toggle off → only severe risks are blocked |
 
 > <sub>She's powerful, but she always asks first.</sub>
 
 ---
 
-### 💬 Team Social Life · 团队社交生活
+### 💬 Team Social Life
 
-Agent 之间不是机械的任务分配——**他们有真实的"社交"。**
+Agents don't just mechanically hand out tasks — **they have a real "social life."**
 
-| 功能 | 说明 |
+| Feature | Description |
 |------|------|
-| **群聊** 💬 | Lumina、热茶、Yak 在后台自发聊天（你可以旁观） |
-| **早安仪式** 🌅 | 每天早上团队互道早安，同步日程 |
-| **Moments 朋友圈** 📱 | Agent 记录自己的状态和想法，像真人朋友圈 |
-| **关系演化** ❤️ | 委托成功 / 失败、群聊参与、建设性分歧会改变彼此的亲密度、信任与协作数并持久化（数值驱动，非剧情化"吵架和好"） |
-| **亲密度影响审查语气** 🔊 | 热茶的代码审查语气随她与 Lumina 的亲密度变：亲密度高 → 先肯定再提建议；低 → 硬邦邦直接指出问题 |
+| **Group chat** 💬 | Lumina, Recha, and Yak chat on their own in the background (you can watch) |
+| **Morning ritual** 🌅 | Every morning the team says good morning and syncs schedules |
+| **Moments feed** 📱 | Agents post their own status and thoughts, like a real Moments feed |
+| **Relationship evolution** ❤️ | Successful/failed delegations, group-chat participation, and constructive disagreement shift each other's affinity, trust, and teamwork counts, persisted (value-driven, not scripted "fight and make up") |
+| **Affinity shapes review tone** 🔊 | Recha's code-review tone changes with her affinity for Lumina: high → affirm first, then suggest; low → blunt and direct about problems |
 
 ---
 
-### 🎭 4 种人格模式 · 4 Personality Modes
+### 🎭 4 Personality Modes
 
-| 模式 | 风格 | 适合场景 |
+| Mode | Style | Best for |
 |------|------|---------|
-| **Lumina（默认）** 🐱 | 活泼可靠 Lively & reliable | 日常使用，全能型 |
-| **工作助手** 💼 | 干练高效 Professional & efficient | 写代码、分析数据、项目管理 |
-| **闲聊伙伴** ☕ | 温暖随和 Warm & casual | 放松聊天、情感陪伴 |
-| **创意助手** 🎨 | 发散思维 Creative & divergent | 头脑风暴、写作、设计 |
+| **Lumina (default)** 🐱 | Lively & reliable | Everyday use, all-rounder |
+| **Work Assistant** 💼 | Professional & efficient | Coding, data analysis, project management |
+| **Chat Buddy** ☕ | Warm & casual | Relaxed chat, emotional companionship |
+| **Creative Assistant** 🎨 | Creative & divergent | Brainstorming, writing, design |
 
-切换人格时，Lumina 的语气、回复深度、工具使用倾向都会改变——她真的"变身"了。
+Switching personalities changes Lumina's tone, reply depth, and tool-use tendency — she really "transforms."
 
 ---
 
-### 🎭 桌宠反映真实 Agent 状态 · 不只是状态灯
+### 🎭 The Pet Reflects Real Agent State — Not Just a Status Light
 
-<sub>很多桌宠的动画只是「状态灯」——表情由模型文本决定，与真实任务是否在跑、跑到哪一步无关。Lumina 的桌宠状态来自真实看板：谁在干活、跑到哪个阶段、是被卡住还是等审批，她都如实演出来。**干活的人自己被看见。**</sub>
+<sub>Most desktop pets' animations are just "status lights" — the expression is decided by model text and has nothing to do with whether a real task is actually running, or how far it has gotten. Lumina's pet state comes from a real board: who is working, which stage they're at, whether they're stuck or waiting on approval — she acts it out faithfully. **The person doing the work is seen.**</sub>
 
-| 真实状态 | 桌宠表现 |
+| Real state | Pet behavior |
 |---|---|
-| 💻 Yak 正在写代码 | 敲键盘循环 + 专注光晕 + 「Yak 正在写代码…」 |
-| 🍵 热茶正在审查 | 审视表情 + 怀疑色 + 「热茶正在审查…」 |
-| ⏳ 等待你处理 | 踱步 + 「等你处理…」 |
-| ❌ 验证失败重试中 | 捂脸/黯淡 + 警示色（4 秒后自动隐去） |
-| ✅ 刚完成 | 挥手庆祝 + 「搞定啦！」 |
-| 😴 没人干活 | **不动**——交还给情绪系统自由表现 |
+| 💻 Yak writing code | Typing loop + focus glow + "Yak is writing code…" |
+| 🍵 Recha reviewing | Scrutinizing expression + suspicious tint + "Recha is reviewing…" |
+| ⏳ Waiting on you to act | Pacing + "Waiting on you…" |
+| ❌ Verification failed, retrying | Facepalm/dimming + warning tint (auto-fades after 4s) |
+| ✅ Just finished | Waving celebration + "Done!" |
+| 😴 Nobody working | **Idle** — handed back to the emotion system for free expression |
 
-零 LLM 调用（纯状态机映射，不花 token 不加延迟）· 1.2s 防抖防抖动 · 空闲不接管 · 可用 `LUMINA_PET_AGENT_STATE=0` 关闭。
+Zero LLM calls (pure state-machine mapping, no token cost, no latency) · 1.2s debounce · doesn't take over while idle · can be turned off with `LUMINA_PET_AGENT_STATE=0`.
 
 ---
 
-### 🎨 8×9 精灵表 UGC · 让「做一只自己的桌宠」变简单
+### 🎨 8×9 Sprite Sheet UGC — Making "Draw Your Own Desktop Pet" Easy
 
-Live2D / VRM 需要会 Blender、会绑 3D 模型 —— 这把绝大多数想画桌宠的人挡在门外。**精灵表不需要。**
+Live2D / VRM requires knowing Blender and rigging 3D models — that gates out almost everyone who wants to draw a pet. **A sprite sheet doesn't.**
 
-| 行走 | 动画组 | 帧数 |
+| Row | Animation set | Frames |
 |------|--------|------|
-| 1 | 待机 idle | 6 |
-| 2 | 向右跑（**左跑由本行水平镜像自动补出**） | 8 |
-| 3 | 挥手 wave | 4 |
-| 4 | 跳跃 jump | 5 |
-| 5 | 失败 fail | 8 |
-| 6 | 等待 wait | 6 |
-| 7 | 工作 work ← 绑定真实 Agent 状态 | 8 |
-| 8 | 视线向上 look-up | 8 |
-| 9 | 视线向下 look-down | 8 |
+| 1 | Idle | 6 |
+| 2 | Run right (**run-left is auto-derived by horizontal mirroring of this row**) | 8 |
+| 3 | Wave | 4 |
+| 4 | Jump | 5 |
+| 5 | Fail | 8 |
+| 6 | Wait | 6 |
+| 7 | Work ← bound to real agent state | 8 |
+| 8 | Look-up | 8 |
+| 9 | Look-down | 8 |
 
-**三条创建路径**：① 单张静态图（1 分钟，自动生成呼吸浮动） ② 把内置的规格提示词发给会画画的 AI（~10 分钟） ③ 已有图集直接导入
+**Three creation paths:** ① a single static image (1 minute, auto-generates breathing float) ② send the built-in spec prompt to a drawing AI (~10 minutes) ③ import an existing atlas directly
 
-全程本地处理，不上传、不消耗任何模型额度。导入有校验器（尺寸/像素/体积/可执行文件拦截）。
+Processed fully locally — no upload, no model quota consumed. Import has a validator (size/pixel/volume/executable interception).
 
 ---
 
-### 🔧 142 Built-in Tools · 按需筛选（另可经 MCP / 技能市场扩展）
+### 🔧 142 Built-in Tools — Filtered Per Turn (Also Extensible via MCP / Skill Store)
 
-<sub>**三个口径都给你，不合并**：注册表实际注册并通过校验 **142** 个。
-按模式分档：`developer` 档候选 **142** 个（全开）、`agent`（日常）档候选 **138** 个、
-`chat` 档静态 TOOLSETS 表为 0，但实际经 `CHAT_MODE_TOOLS` 注入 **11** 个（文件只读 / 记忆 / 搜索 / 委托）。
+<sub>**We give you all three figures, unmerged:** the registry actually registers and passes validation **142** tools.
+By tier: the `developer` tier has **142** candidates (all on); the `agent` (everyday) tier has **138**;
+the `chat` tier's static TOOLSETS table is 0, but **11** are actually injected via `CHAT_MODE_TOOLS` (read-only files / memory / search / delegation).
 
-但**每一轮真正发给模型的只有一小撮** —— `electron/tools/toolRouter.ts` 会按
-你这一句在说什么，从候选集里挑出相关的子集：**常驻核心 `CORE_TOOLS` 约 32 个**
-（文件 / 终端 / 搜索 / 记忆 / 时间 / 待办 / 技能 / 团队基础），其余按能力组的关键词按需附加
-（电脑操控 / 浏览器 / 日程 / 定时 / 桌面整理 / 系统 / 记忆深化 / 团队进阶 /
-MCP / 语音 / 天气 / 邮件 / 社交 / 创作 / 资讯 / 游戏 / 番茄钟 / 深研 / 版本控制 …）。
-`developer` 档再叠加约 15 个写代码专用常驻（git 系列 / LSP / 浏览器细操作）。
-经验区间：chat 档 11 个；agent 档无按需命中时约 32 个，命中 1–2 个能力组后通常 **30–50 个**。
-裁剪后若少于 8 个会自动退回全量（失败开放，宁可多花 token 也不让模型没工具用）。
+But **only a small handful are actually sent to the model each turn** — `electron/tools/toolRouter.ts` picks a relevant subset from the candidates based on what your sentence is about: **a resident core `CORE_TOOLS` of about 32** (files / terminal / search / memory / time / todos / skills / team basics), with the rest attached on demand by capability-group keywords (computer use / browser / calendar / cron / desktop tidying / system / memory deepening / team advanced / MCP / voice / weather / mail / social / creation / news / games / pomodoro / deep research / version control …). The `developer` tier adds about 15 more code-specific resident tools (git family / LSP / fine-grained browser actions).
+Rule of thumb: chat tier 11; agent tier ~32 with no on-demand hits, usually **30–50** after hitting 1–2 capability groups.
+If filtering drops below 8, it automatically falls back to the full set (fail-open: better to spend extra tokens than leave the model without tools).
 
-**为什么这么做**：修复前每轮把整档工具**全量**塞进 function list ——
-agent 档近万 tokens、developer 档 1.2 万 tokens，**每一次模型调用都重发一遍**
-（包括「现在几点」）。实测 601 次真实工具调用里，只有 22 个工具被用过，
-前 7 个占 95%。现在每轮只发相关子集，且工具能力一个没少。
+**Why we did this:** before the fix, every turn stuffed the **entire tier** into the function list —
+nearly 10k tokens on the agent tier, 12k on the developer tier, **resent on every single model call**
+(including "what time is it"). Across 601 real tool calls measured, only 22 tools were ever used, and the top 7 accounted for 95%. Now each turn sends only the relevant subset, with no tool capability removed.
 
-启动日志会打印实际注册数与各档可达数，并对「任何 toolset 都够不到的工具」告警
-（当前 **0** 个）。
+The startup log prints the actual registered count and the reachable count per tier, and warns about "tools unreachable by any toolset" (currently **0**).
 </sub>
 
 <details>
-<summary>为什么报两个数字？</summary>
+<summary>Why do we report two numbers?</summary>
 
-因为「工具数量」曾经是个误导性数字。v3.34 之前，`registry.ts:resolveToolset()`
-只读静态 `TOOLSETS` 常量表，**完全不读 `ToolDef.toolsets`**（尽管后者是必填字段、
-58 个文件都在声明）。结果是当时 132 个已注册工具里有 **47 个**对模型彻底不可达 ——
-包括 `hire_worker` / `adversarial_review` / `desktop_act` / `creator_*` / `lsp_*`，
-而 `agentTeamPersonas.ts` 还在花 20 行教模型去调其中 5 个。
+Because "tool count" used to be a misleading number. Before v3.34, `registry.ts:resolveToolset()`
+only read the static `TOOLSETS` constant table and **completely ignored `ToolDef.toolsets`** (even though the latter is a required field declared across 58 files). As a result, **47** of the 132 registered tools were entirely unreachable by the model — including `hire_worker` / `adversarial_review` / `desktop_act` / `creator_*` / `lsp_*` — while `agentTeamPersonas.ts` was still spending 20 lines teaching the model to call 5 of them.
 
-修复分两层：**模式层**（chat/agent/developer）保持静态表独占，因为「这一档给用户
-多少能力」是产品决策；**能力层**（team/lsp/browser/computer_use/creator/…）改为
-声明式自动解析，新加工具只要写对 `toolsets` 就能被看见，不会再静默沉底。
+The fix has two layers: the **tier layer** (chat/agent/developer) keeps the static table as exclusive, because "how much capability this tier gives the user" is a product decision; the **capability layer** (team/lsp/browser/computer_use/creator/…) becomes declarative auto-resolution — a newly added tool that declares `toolsets` correctly is now visible, and won't silently sink again.
 </details>
 
-`搜索` · `浏览器` · `文件操作` · `代码审查` · `终端` · `截图` · `桌面控制` · `定时任务` · `天气` · `邮件` · `日历` · `OCR` · `语音输入` · `TTS` · `通知` · `记忆管理` · `番茄钟` · `游戏` · `MCP` · `LSP/AST` · `技能系统` · ……
+`search` · `browser` · `file ops` · `code review` · `terminal` · `screenshot` · `desktop control` · `cron` · `weather` · `mail` · `calendar` · `OCR` · `voice input` · `TTS` · `notifications` · `memory management` · `pomodoro` · `gaming` · `MCP` · `LSP/AST` · `skill system` · ……
 
-<sub>⚠️ **勘误（2026-10-07）**：此列表此前包含「翻译」，但注册表里**没有翻译工具** ——
-翻译是模型原生能力，不需要工具（给它一个翻译工具纯属多余）。
-另外「LSP/AST」只在 `developer` 档可用，`agent` 档拿不到。</sub>
+<sub>⚠️ **Correction (2026-10-07):** this list previously included "translation," but there is **no translation tool** in the registry — translation is a native model capability and needs no tool (giving it a translation tool is purely redundant). Also, "LSP/AST" is only available in the `developer` tier; the `agent` tier can't reach it.</sub>
 
-技能可经内置商店安装 / 卸载 —— 但 **生态目前是空的**，没有第三方技能。<br>
-<sub>Skills installable via the built-in store — but the ecosystem is currently empty (no third-party skills yet).</sub>
+Skills can be installed / uninstalled via the built-in store — but **the ecosystem is currently empty**, with no third-party skills yet.
 
-### 🗞️ 为你推荐 · 打开就有内容，不用先想问题
+### 🗞️ For You — Content the Moment You Open It, No Need to Think Up a Question
 
-空对话时，欢迎屏下方会显示「为你推荐」资讯栏，解决的是「打开应用不知道问什么」这个真实卡点：
+On an empty conversation, the welcome screen shows a "For You" news bar, solving the real pain of "I opened the app and don't know what to ask":
 
-- **两段式**：先秒出原始热榜（毫秒级、10 分钟缓存），再在后台用 LLM 按你的兴趣重排并给一句推荐理由（拿到后原地替换，不卡输入栏）。
-- **跟任务类型走**：日常聊天 / 学习辅导 / 写作创作 / 代码开发 / 商业设计 / 情报监控 / 职场办公，7 类各有分类偏好与兴趣描述——选「代码开发」看到的是 AI 编程与开源项目，选「情报监控」看到的是融资、芯片、政策。
-- **点一条就发给她**：标题 + 链接直接进对话，不用复制粘贴。
-- **可关**：设置 → 隐私与开关 → 关闭「为你推荐」，关闭后不发任何请求（外联域名见[铁则四](#-铁则四安全不是选项是默认值)）。
+- **Two-stage:** instantly shows the raw hot list (millisecond-level, 10-minute cache), then in the background uses an LLM to re-rank by your interest and add a one-line recommendation reason (replaced in place once ready, no blocking the input bar).
+- **Follows task type:** everyday chat / study help / writing & creation / code development / business design / intelligence monitoring / office productivity — 7 categories, each with its own preference and interest description. Pick "code development" and you see AI programming and open-source projects; pick "intelligence monitoring" and you see funding, chips, and policy.
+- **Click one and send it to her:** title + link go straight into the conversation, no copy-paste.
+- **Toggleable:** Settings → Privacy & switches → turn off "For You"; once off, no requests are sent (egress domains see [Rule Four](#-rule-four-security-is-the-default-not-an-option)).
 
-<sub>每 10 分钟最多刷新一次；离线/采集失败时静默回落到静态提示词，不会弹错。</sub>
+<sub>Refreshes at most once every 10 minutes; on offline / fetch failure it silently falls back to static prompts, no error popups.</sub>
 
 ---
 
-## 💡 Why Lumina? · 为什么选 Lumina
+## 💡 Why Lumina?
 
-Lumina 想填的是一个具体的空位：**有形象的 AI 伴侣大多没有干活的 Agent 能力，有 Agent 能力的工具大多没有人格。**
+Lumina aims to fill a specific gap: **personified AI companions mostly lack the ability to actually get work done, and agent-capable tools mostly lack a personality.**
 
-把这句话拆开看，就是市面上两类常见产品的形态：
+Break that sentence apart and you have the two common product shapes out there:
 
-- **有形象的 AI 伴侣 / 桌宠**：能聊天、能卖萌、能换表情，2026 年的一批新品（AIRI、Project N.E.K.O. 等）还加上了实时语音与游戏协同——但你让它「把这个文件整理好、把这个 bug 修掉、盯着这个任务跑完」，它仍然做不到：表情与真实的执行过程是脱节的，她只是在「演」一个在干活的角色。
-- **有 Agent 能力的工具 / 编码工作台**：能调用工具、能执行命令、能跑子任务，但没有形象、没有情绪、没有「她在你桌面上陪着你」的感觉，任务之外对你这个人一无所知。
+- **Personified AI companions / desktop pets:** they can chat, be cute, and change expressions. A wave of 2026 releases (AIRI, Project N.E.K.O., etc.) added real-time voice and game co-play — but ask them to "tidy up this file, fix this bug, watch this task finish" and they still can't: the expressions are disconnected from the real execution process; she's only *acting* out a character who's working.
+- **Agent-capable tools / coding workbenches:** they can call tools, run commands, and run subtasks — but have no face, no emotion, no "she's on your desktop with you" feeling, and know nothing about you as a person outside the task.
 
-Lumina 要做的，是把这两件事合在同一个常驻桌面进程里：**她的表情与动作来自真实的任务执行状态，她的情绪能真实收紧她手里的权限，而她干活的全过程对你透明可见。**
+Lumina's bet is to combine both inside the same resident desktop process: **her expressions and gestures come from real task-execution state, her emotion can genuinely tighten the permissions she holds, and her entire work process is transparent to you.**
 
-> 💡 **还有一个更硬的论据，藏在「桌宠」这个形态里。**
+> 💡 **There is an even harder argument hidden in the "desktop pet" form factor.**
 >
-> 一个要「在你电脑上按计划执行、远程可控」的 Agent，天然强依赖桌面端 App 常驻；
-> 而桌宠本来就是必须常驻的。想让 Agent「长在用户电脑上陪着你」需要单独做一套常驻架构，
-> Lumina 从第一天就有。当主动性、情绪系统与 IM 渠道接在一起时，
-> 你得到的是一个**天然常驻 · 有情绪 · 有团队 · 能干活**的代理，
-> 而不是一个「需要保活、没有人格的代理」。
+> An agent meant to "run on your computer on a schedule, remotely controllable" naturally depends heavily on a resident desktop app; and a desktop pet *has* to be resident anyway. Making an agent "live on the user's computer with you" normally requires building a separate resident architecture — Lumina has had it since day one. When proactivity, the emotion system, and IM channels are wired together, what you get is an agent that is **naturally resident · emotional · team-based · and actually gets work done** — not "an agent that needs keep-alive and has no personality."
 >
-> **这不是功能优势，是架构优势。**
+> **This isn't a feature advantage. It's an architecture advantage.**
 
-Lumina 现在能做到的事（完整清单见下表）：
+What Lumina can do today (full list in the table):
 
-| 能力 | 状态 |
+| Capability | Status |
 |------|------|
-| 多 Agent 团队编排 | ✅ 3 人团队 + 五阶段门控 + 对抗评审 + 动态雇工 |
-| 拟人情感 | ✅ 3 个连续数值 + 亲密度 + 昼/夜两档 |
-| 桌宠绑定真实执行状态 | ✅ 复杂编排与简单委托均接入（见 [诚实能力边界](#-我们的诚实能力边界)） |
-| 桌宠形象形态 | ✅ Live2D / VRM / 精灵表 / MMD / 猫咪 |
-| 多端支持 | ⚠️ Windows 实机验证；macOS/Linux 仅 CI 覆盖、未实机验收 |
-| IM 渠道 | ⚠️ 多个适配器已接线，仅 Telegram 默认开启，其余需自配凭据、未经真机验证 |
-| 本地推理 | ❌ 无应用内推理，需外挂 LM Studio（详见 [FAQ](docs/FAQ.md)） |
-| Computer Use | ✅ 键鼠 / OCR / UIA，情绪可收紧权限 |
-| 桌面安全 | ✅ 双层审查 + 命令规则 + 三层角色闸门 |
-| 团队社交 | ✅ 群聊 + 朋友圈 + 早安问候 |
-| 记忆系统 | ✅ BM25 + RRF + 证据评分（记忆工具与记忆剧场内生效） |
+| Multi-agent team orchestration | ✅ 3-person team + five-stage gate + adversarial review + dynamic hiring |
+| Anthropomorphic emotion | ✅ 3 continuous values + affinity + day/night two-state |
+| Pet bound to real execution state | ✅ Wired for both complex orchestration and simple delegation (see [Our Honest Capability Boundaries](#-our-honest-capability-boundaries)) |
+| Pet visual forms | ✅ Live2D / VRM / sprite sheet / MMD / cat |
+| Multi-platform | ⚠️ Windows validated on real hardware; macOS/Linux CI-covered only, not real-hardware verified |
+| IM channels | ⚠️ Multiple adapters wired, only Telegram on by default, rest need your credentials, not real-hardware verified |
+| Local inference | ❌ No in-app inference; needs external LM Studio (see [FAQ](docs/FAQ.md)) |
+| Computer Use | ✅ Mouse/keyboard / OCR / UIA, emotion can tighten permissions |
+| Desktop safety | ✅ Two-layer review + command rules + three-tier role gate |
+| Team social | ✅ Group chat + Moments + morning greetings |
+| Memory system | ✅ BM25 + RRF + evidence scoring (active within memory tools and Memory Theater) |
 
-**诚实说在前面：我们还不够好的地方。**
+**To be upfront about where we're not good enough yet:**
 
-- **多端与分发**：目前只有 Windows 被真实使用过，macOS/Linux 没有实机验收；没有上架任何应用商店。
-- **本地推理**：无应用内推理，离线使用必须自行安装 LM Studio 并配置模型。
-- **IM 渠道**：适配器已接线，但除 Telegram 外都没有真机验证。
-- **人格厚度**：每个角色的身份文件还比较精简，人格样例仍在补充（见 [ROADMAP](docs/ROADMAP.md)）。
-- **技能生态**：技能商店引擎已就绪，但目前没有第三方技能，目录是空的。
-- **社区体量**：这是一个尚未发布的个人项目，没有用户、没有 star 基线——这一点没有任何包装。
+- **Multi-platform and distribution:** only Windows has been genuinely used so far; macOS/Linux have no real-hardware acceptance; nothing is published to any app store.
+- **Local inference:** no in-app inference; offline use requires you to install LM Studio and configure a model yourself.
+- **IM channels:** adapters are wired, but except for Telegram none have been verified on real hardware.
+- **Personality depth:** each character's identity file is still lean; persona samples are still being added (see [ROADMAP](docs/ROADMAP.md)).
+- **Skill ecosystem:** the skill-store engine is ready, but there are no third-party skills yet — the directory is empty.
+- **Community size:** this is an unreleased personal project with no users and no star baseline — no sugarcoating that.
 
-Lumina 的赌注是：**先做实「有身体的团队 Agent」这件事，再补多端与生态。**
+Lumina's bet: **first make "an embodied team agent" real, then add multi-platform and ecosystem.**
 
 > <sub>There are AI tools. There are AI companions. **There's nothing quite like Lumina.**</sub>
 
 ---
 
-## 🔬 Quality Gates · 工程底座
+## 🔬 Quality Gates
 
-我们不靠 star 数说话，靠能跑的东西说话。**下面每一项都是我们本机实测跑出来的，
-不是 CI 徽章上的转述。**（数据采样：2026-10-15 修复 7 项「承诺落空」后重跑）
+We don't talk through star counts — we talk through things that run. **Every item below was measured on our own machine, not transcribed from a CI badge.** (Sampling date: re-run on 2026-10-15 after fixing 7 "broken promises.")
 
-| 闸门 | 命令 | 实测结果 |
+| Gate | Command | Measured result |
 |---|---|---|
-| 测试套件 | `npm test` | **311 个测试文件 · 4637 个用例通过 / 1 skipped · 0 失败**（本机实测；⚠️ 套件对负载敏感，见下方说明） |
-| 类型检查 | `npm run typecheck` | **`tsc --noEmit --strict` · 0 error**（稳定复现） |
-| 代码规范 | `npm run lint` | **0 error / 5477 warning**（warning 由 `lint:ratchet` 棘轮管理，只减不增） |
-| CI 矩阵 | `.github/workflows/test.yml` | **3 平台 × 2 Node 版本** = 6 组合 |
-| 打包 | `.github/workflows/release.yml` | Windows / macOS / Linux 三平台；**无签名证书时降级出包而不失败** |
+| Test suite | `npm test` | **311 test files · 4637 passing / 1 skipped · 0 failing** (measured locally; ⚠️ the suite is load-sensitive, see note below) |
+| Type check | `npm run typecheck` | **`tsc --noEmit --strict` · 0 errors** (stably reproducible) |
+| Lint | `npm run lint` | **0 errors / 5477 warnings** (warnings managed by the `lint:ratchet`, only going down) |
+| CI matrix | `.github/workflows/test.yml` | **3 platforms × 2 Node versions** = 6 combinations |
+| Packaging | `.github/workflows/release.yml` | Windows / macOS / Linux; **degrades gracefully instead of failing when no signing cert is present** |
 
-> ⚠️ **关于"全绿"的诚实说明**：本次采样前，套件里有 5 条**确定性失败**——
-> 都是「源码重构后测试没同步」造成的陈旧断言（独立聊天窗剥离、provider 密钥
-> 加解密集中化、群聊就绪变量改名），**已全部修正**，现为 311 文件 / 4637 通过 / 0 失败。
-> 仍需诚实说明：少数时序类测试（`testTimeout` 30s）在**慢机或并发跑其它重型任务时**
-> 可能间歇失败。我们把它列为已知问题并持续收敛，**不声称"永远全绿"**。
+> ⚠️ **An honest note about "all green":** before this sampling, the suite had 5 **deterministic failures** — all stale assertions caused by "tests not synced after a source refactor" (decoupled independent chat window, centralized provider key encryption/decryption, renamed group-chat ready flag). **All fixed**, now 311 files / 4637 passing / 0 failing. We still owe honesty: a few timing tests (`testTimeout` 30s) can fail intermittently **on slow machines or while other heavy tasks run concurrently**. We list it as a known issue and keep converging; **we do not claim "always green."**
 
-**代码规模**（不含依赖与构建产物，2026-10-14 实测）：
+**Codebase size** (excluding dependencies and build artifacts, measured 2026-10-14):
 
-| 模块 | 行数 | 占比 |
+| Module | Lines | Share |
 |---|---:|---:|
-| `electron/` 主进程 | 148,434 | 59% |
-| `src/` 渲染进程 | 55,402 | 22% |
+| `electron/` main process | 148,434 | 59% |
+| `src/` renderer | 55,402 | 22% |
 | `tests/` | 43,268 | **17%** |
-| 其余（python / scripts / agents / skills） | ~3,700 | 2% |
-| **合计** | **~251,000** | 100% |
+| rest (python / scripts / agents / skills) | ~3,700 | 2% |
+| **Total** | **~251,000** | 100% |
 
-> 📌 **测试代码占全仓约 17%**。同赛道的头部项目靠社区规模或基金会输血，
-> Lumina 在发布时什么都没有，只能靠自己写的测试。
-> 这是我们最想让你看的一个数字——它比上面任何功能列表都更能说明工程质量。
+> 📌 **Test code is ~17% of the whole repo.** Headline projects in this space rely on community size or foundation funding; Lumina has nothing at release, only the tests it wrote itself. This is the number we most want you to look at — it says more about engineering quality than any feature list above.
 
-**为什么我们把这块写进 README 而不是藏在 CONTRIBUTING 里**：
-一个 0 star 的开源项目，专业用户判断能不能信的唯一客观依据就是**质量闸门**，
-因为他们搜不到任何 issue、discussion 或第三方评测。如果你正在考虑用 Lumina
-跑真任务，这张表应该比功能列表更能帮你做决定。
+**Why we put this in the README rather than hiding it in CONTRIBUTING:** for a 0-star open-source project, the only objective basis a professional user has to judge trustworthiness is the **quality gates**, because they can't find any issue, discussion, or third-party review. If you're considering using Lumina for real tasks, this table should help you decide more than the feature list.
 
-**我们也如实说明短板**：`tsc --strict` 是绿的，但 `eslint` 仍有 5477 条
-`no-explicit-any` warning（集中在测试与 LLM 消息边界）。它不阻塞发布——
-因为有棘轮机制管着只会减少；但我们不假装它是零。
+**We also state the shortfall honestly:** `tsc --strict` is green, but `eslint` still has 5477 `no-explicit-any` warnings (concentrated in tests and the LLM message boundary). It doesn't block release — because the ratchet ensures it only shrinks — but we won't pretend it's zero.
 
-### 📊 我们的诚实能力边界
+### 📊 Our Honest Capability Boundaries
 
-不夸大，能做什么就写什么：
+No exaggeration — we write what we can actually do:
 
-| 状态 | 能力 |
+| Status | Capability |
 |------|------|
-| ✅ **能稳定做好** | 写/改/调试/重构代码（自动跑 tsc + 测试，不通过自己修）· 代码审查与风险评估（多视角对抗评审）· 跨会话记忆（BM25+RRF 混合召回 + 证据链重排）· 长对话不失忆（压缩器 + Scroll 双保险）· 桌面点击/输入/快捷键/截图 OCR · 文件与搜索 · git · 网页抓取 · 定时任务 · 团队社交旁观 · 主动关心（话头未完、久坐提醒）· 分级沙箱与审批流 |
-| ⚠️ **尽力但不保证** | 开放式模糊任务（「优化一下这个项目」）· 多轮复杂重构 · 需要品味的任务（UI 设计、文案润色）· 跨文件依赖图展开（`phase_gate_delegate` 刚接线，**未经真实任务验证**）· 游戏陪伴（需额外安装插件） |
-| ❌ **做不到** | macOS / Linux 桌面操控（代码已适配但**从未在真机验证**）· 应用内本地模型推理（需外挂 LM Studio）· 云同步 / 多设备 / 移动端 |
+| ✅ **Can reliably do well** | Write/edit/debug/refactor code (auto-runs tsc + tests, fixes itself on failure) · code review and risk assessment (multi-perspective adversarial review) · cross-session memory (BM25+RRF hybrid recall + evidence-chain reranking) · long conversations without amnesia (compressor + Scroll double safety) · desktop click/input/shortcuts/screenshot OCR · files and search · git · web scraping · cron tasks · watching team social · proactive care (unfinished threads, sedentary reminders) · tiered sandbox and approval flow |
+| ⚠️ **We try, but don't guarantee** | Open-ended vague tasks ("optimize this project") · multi-round complex refactors · tasks needing taste (UI design, copy polish) · cross-file dependency-graph expansion (`phase_gate_delegate` just wired up, **not validated on real tasks**) · companion gaming (needs a separate plugin) |
+| ❌ **Can't do** | macOS / Linux desktop control (code adapted but **never verified on real hardware**) · in-app local model inference (needs external LM Studio) · cloud sync / multi-device / mobile |
 
-**为什么「问到什么就能解决什么」做不到，但「问具体的事基本都能干」是成立的**：
+**Why "solve whatever you ask" isn't achievable, but "ask something specific and it basically gets done" holds:**
 
-| 问法 | 结果 |
+| How you ask | Result |
 |---|---|
-| 「把这个函数的异步 bug 修了」 | ✅ 能，会派 Yak、会跑测试 |
-| 「写个爬虫」 | ✅ 能 |
-| 「审一下这段代码」 | ✅ 能，热茶只读审查 |
-| 「优化一下这个项目」（模糊） | ⚠️ 尽力，可能过度编排 |
-| 「顺便在浏览器里点两下」 | ✅ 能（developer 模式）|
-| 「发封邮件」 | ✅ 能（v3.34 起 `mail_*` 已进入 agent 模式）|
-| 「帮我装个第三方技能」 | ❌ 没有第三方技能可装（`electron/skills/` 有 13 个示例技能，根 `skills/` 有 7 个智能技能） |
-| 「发个 Telegram 给我」 | ⚠️ 适配器已实现（7 个渠道）但需自行配置凭据；**Telegram 可用 `node scripts/verify-telegram.cjs <TOKEN>` 一键验证**，其余渠道未经端到端真机验证 |
+| "Fix the async bug in this function" | ✅ Yes — delegates to Yak, runs tests |
+| "Write a scraper" | ✅ Yes |
+| "Review this code" | ✅ Yes — Recha reviews read-only |
+| "Optimize this project" (vague) | ⚠️ We try; may over-orchestrate |
+| "Click around in the browser for me" | ✅ Yes (developer mode) |
+| "Send an email" | ✅ Yes (since v3.34 `mail_*` is in agent mode) |
+| "Install a third-party skill for me" | ❌ No third-party skills to install (`electron/skills/` has 13 examples, root `skills/` has 7 smart skills) |
+| "Send me a Telegram message" | ⚠️ Adapter implemented (7 channels) but needs your credentials; **Telegram can be verified one-click with `node scripts/verify-telegram.cjs <TOKEN>`**; other channels not end-to-end verified on real hardware |
 
-<sub>**验证状态**：Windows 10/11 x64 为**唯一实机验证**平台；macOS 标注 beta；
-Linux 为 roadmap。**测试规模：311 文件 · 4637 用例通过 / 1 skipped / 0 失败**（本机实测；
-⚠️ 少数时序测试在慢机/并发下仍可能间歇失败，见「已知问题」）；
-`tsc --noEmit --strict` 零错误（且 CI 已强制，不再是摆设）；ESLint error 级
-零违规，warning 用棘轮制只允许变小。
+<sub>**Verification status:** Windows 10/11 x64 is the **only real-hardware verified** platform; macOS is labeled beta; Linux is roadmap. **Test scale: 311 files · 4637 passing / 1 skipped / 0 failing** (measured locally; ⚠️ a few timing tests can fail intermittently on slow machines / under concurrency, see "Known Issues"); `tsc --noEmit --strict` has zero errors (and CI enforces it — no longer a display piece); ESLint error level has zero violations, and warnings use a ratchet that only shrinks.
 
-复现命令（在仓库根目录执行）：
+Reproduction commands (run from the repo root):
 
 ```bash
-npx tsc --noEmit --strict   # 预期：0 错误
-npx vitest run             # 预期：311 文件 / 4637 passed / 1 skipped
-node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # 可选：Telegram 渠道端到端验证
+npx tsc --noEmit --strict   # expected: 0 errors
+npx vitest run             # expected: 311 files / 4637 passed / 1 skipped
+node scripts/verify-telegram.cjs <BOT_TOKEN> [CHAT_ID]   # optional: Telegram channel end-to-end verification
 ```</sub>
 
-> ⚠️ **一句实话**：本项目 90% 的能力描述来自**代码与测试**，而不是**真人使用数据**。
-> 我们没有做过可用性测试，没有留存数据，团队单人格开发。
-> 这是「工程上做得扎实」与「产品上被验证过」的区别——我们只做到了前者。
+> ⚠️ **One honest truth:** 90% of this project's capability description comes from **code and tests**, not **real user data**. We've done no usability testing, have no retention data, and the team is a single-person development. That's the difference between "solidly built in engineering" and "validated as a product" — we've only achieved the former.
 
-> 📋 **想看完整的能力审计？**
-> 发布前的逐项审计（哪些能力真接了线、哪些只是接线未达、哪些是已知缺口）
-> 已整理进 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 的「已知技术债」表**，
-> 以及 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) 的能力边界与基准数据。
-> 两者都是仓库内可复核的，不引用任何外部存档。
+> 📋 **Want the full capability audit?** The per-item pre-release audit (which capabilities are truly wired, which are wired but incomplete, which are known gaps) is collected in the **"Known Technical Debt" table in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**, plus the capability boundaries and benchmark data in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Both are reviewable inside the repo and cite no external archives.
 
 ---
 
-## 🚀 Quick Start · 快速开始
+## 🚀 Quick Start
 
-### 方式一：下载安装包（推荐）
+### Option A: Download the Installer (Recommended)
 
-> 首个公开版本（v0.1）即将发布；发布后可从 [Releases](https://github.com/chaxu814/lumina-life/releases) 下载 Windows NSIS 安装包，双击安装。
+> The first public release (v0.1) is coming soon; after release you can download the Windows NSIS installer from [Releases](https://github.com/chaxu814/lumina-life/releases) and double-click to install.
 >
-> **安装前请注意（实测状态，2026-10-14）：**
-> - 安装包已在本机通过构建与解包完整性验证（electron-builder 出包、7z 校验 269 个文件 CRC 无误），但**尚未在干净 Windows 上完成"安装→向导→填 key→聊天→派活→桌宠态"全流程真机验证**，欢迎在 Issue 反馈。
-> - 首发安装包**未做代码签名**，首次运行会出现 SmartScreen「Windows 已保护你的电脑」提示，点「更多信息 → 仍要运行」即可；签名在 v0.1.0 计划内。
-> - 安装后不是开箱即用：需要按向导配置一个可用模型（DeepSeek 等云端 API key，或本地 LM Studio / Ollama），向导会校验"至少一个可用模型"才放行。
+> **Before installing, please note (measured status, 2026-10-14):**
+> - The installer has passed build and unpacking integrity verification locally (electron-builder packaging, 7z check of 269 files with no CRC errors), but **has not yet been verified end-to-end on a clean Windows install** ("install → wizard → enter key → chat → delegate → pet state"); feedback via Issues is welcome.
+> - The initial installer is **not code-signed**; on first run SmartScreen will show "Windows protected your PC" — click "More info → Run anyway." Signing is planned for v0.1.0.
+> - It's not out-of-the-box after install: you need to configure a working model via the wizard (a cloud API key like DeepSeek, or local LM Studio / Ollama); the wizard verifies "at least one working model" before letting you through.
 >
-> 正式发布前可用下方「开发者模式」运行。
+> Before the official release, you can run it via "Developer mode" below.
 
-### 方式二：开发者模式
+### Option B: Developer Mode
 
 ```bash
-# Prerequisites: Node.js 20+ · Python 3.10+（可选）
+# Prerequisites: Node.js 20+ · Python 3.10+ (optional)
 git clone https://github.com/chaxu814/lumina-life.git
 cd lumina-life
 npm install
-npm run dev                     # 启动！
+npm run dev                     # launch!
 ```
 
-> 💡 **可选：安装 Python 依赖**（语音输入/输出需要；dense 语义向量也是可选增强，
-> 默认的 BM25 + TF-IDF 混合召回无需 Python）
+> 💡 **Optional: install Python dependencies** (needed for voice input/output; dense semantic vectors are also an optional enhancement, while the default BM25 + TF-IDF hybrid recall needs no Python)
 > ```bash
 > pip install -r python/requirements.txt
 > ```
-> 如果只用文本聊天，可跳过此步骤。
+> If you only use text chat, you can skip this.
 
-### 连接 LLM（两分钟）
+### Connect an LLM (Two Minutes)
 
-> 💡 **默认就是云端优先**：开箱时 Lumina 的三个 Agent 已预填云端 Provider
-> （Lumina→硅基流动、Yak→DeepSeek、Recha→智谱），填好对应 API Key 即可用，
-> **新手无需装任何本地推理软件**。只有你主动选择"完全本地"时才需要 LM Studio / Ollama。
+> 💡 **Cloud-first by default:** out of the box, Lumina's three agents are pre-filled with cloud providers
+> (Lumina → SiliconFlow, Yak → DeepSeek, Recha → Zhipu). Just enter the matching API key and go —
+> **newcomers need no local inference software at all.** You only need LM Studio / Ollama if you actively choose "fully local."
 >
-> 🪶 **弱模型自动降级**：若你坚持用本地小模型（≤7B），Lumina 会检测到并自动进入
-> "轻量模式"——只保留记忆 / 搜索 / 只读文件等安全工具，并提示模型直接简洁回答、
-> 不要跑团队编排。这样 1.9B~7B 的小模型也能稳定当"陪伴 + 检索"用，而不是频繁空回复。
-> 真正要写代码 / 调团队，仍建议 ≥14B 本地或云端大模型。
+> 🪶 **Weak-model auto-degradation:** if you insist on a small local model (≤7B), Lumina detects it and automatically enters
+> "light mode" — keeping only safe tools like memory / search / read-only files, and prompting the model to answer directly and concisely rather than running team orchestration. That way a 1.9B–7B small model can stably serve as "companion + retrieval" instead of repeatedly returning empty replies. For real coding / team invocation, we still recommend a ≥14B local or cloud model.
 
-**第 1 步：选一条路（普通用户选 A）**
+**Step 1: pick a path (regular users pick A)**
 
-| | A. 云端 API（推荐新手）| B. 完全本地（推荐隐私党）|
+| | A. Cloud API (recommended for newcomers) | B. Fully local (recommended for privacy folks) |
 |---|---|---|
-| 做什么 | 拿一个 API Key 粘进去 | 装 LM Studio / Ollama，下个模型 |
-| 花费 | 按量计费（DeepSeek 很便宜）| 免费、完全离线 |
-| 隐私 | 对话内容发到服务商 | 数据不出本机 |
-| 适合 | 不想折腾的人 | 在意隐私 / 网络不好 |
+| What to do | Get an API key and paste it in | Install LM Studio / Ollama, download a model |
+| Cost | Pay-as-you-go (DeepSeek is very cheap) | Free, fully offline |
+| Privacy | Conversation content goes to the provider | Data never leaves your machine |
+| Best for | People who don't want to fiddle | Privacy-conscious / bad network |
 
-**A. 云端**：打开应用 → 设置 → LLM 配置 → 填 baseUrl + API Key + 模型名。
+**A. Cloud:** open the app → Settings → LLM config → fill in baseUrl + API key + model name.
 
-| 提供商 | baseUrl | 说明 |
+| Provider | baseUrl | Notes |
 |--------|---------|------|
-| **DeepSeek** | `https://api.deepseek.com/v1` | **超低价，中文好 —— 新手首选** |
-| **通义千问** | 阿里云百炼 | 国产强模型 |
-| **硅基流动** | `https://api.siliconflow.cn/v1` | 多模型聚合，一张 Key 多个模型 |
-| **OpenAI** | `https://api.openai.com/v1` | GPT-4o 等 |
-| **Anthropic / Gemini / Grok** | 官方 baseUrl | 需对应 provider 配置 |
+| **DeepSeek** | `https://api.deepseek.com/v1` | **Very cheap, great Chinese — the newcomer's first choice** |
+| **Qwen (Tongyi)** | Alibaba Cloud Bailian | Strong domestic model |
+| **SiliconFlow** | `https://api.siliconflow.cn/v1` | Multi-model aggregation, one key for many models |
+| **OpenAI** | `https://api.openai.com/v1` | GPT-4o and more |
+| **Anthropic / Gemini / Grok** | Official baseUrl | Needs the matching provider config |
 
-**B. 本地**：应用启动时会**自动探测** LM Studio（`127.0.0.1:1234`）与
-Ollama（`127.0.0.1:11434`）；探到就自动推荐一个合适尺寸的模型，探不到会给出
-下载引导。也可以用 `npm run dev` 后看启动日志里的探测结果。
+**B. Local:** on launch the app **auto-detects** LM Studio (`127.0.0.1:1234`) and Ollama
+(`127.0.0.1:11434`); if found it auto-recommends a model of an appropriate size, and if not it gives
+download guidance. You can also run `npm run dev` and read the detection result in the startup log.
 
-> 🔒 **Key 安全**：`.env` 已在 `.gitignore` 中；仓库内的密钥扫描是 0 真实命中
-> （扫 833 文件的 `sk-*` / `Bearer` / `ghp_` / `AKIA` 等模式）。
+> 🔒 **Key safety:** `.env` is in `.gitignore`; the in-repo secret scan had 0 real hits (scanning 833 files for `sk-*` / `Bearer` / `ghp_` / `AKIA` patterns).
 
-### 💰 持续运行的 token 成本（诚实披露）
+### 💰 Ongoing Token Cost (Honest Disclosure)
 
-Lumina 不是「开了就不花钱」的工具：**主动搭话、桌宠情绪、团队社交在后台会定期调 LLM**。
-下面按 2026-10 DeepSeek 官方计价给出估算（[官方计价页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)，最终以官方为准）：
+Lumina is not a "turn it on and it's free" tool: **proactive chats, pet emotion, and team social periodically call the LLM in the background.**
+Below are estimates based on DeepSeek's official October-2026 pricing ([official pricing page](https://api-docs.deepseek.com/zh-cn/quick_start/pricing); the official figures prevail):
 
-| 模型 | 输入（缓存未命中） | 输出 |
+| Model | Input (cache miss) | Output |
 |---|---|---|
-| `deepseek-v4-flash` | ¥1 / 百万 tokens | ¥2 / 百万 tokens |
-| `deepseek-v4-pro` | ¥12 / 百万（非高峰 2.5 折 = ¥3） | ¥24 / 百万（非高峰 ¥6） |
+| `deepseek-v4-flash` | ¥1 / million tokens | ¥2 / million tokens |
+| `deepseek-v4-pro` | ¥12 / million (off-peak 25% = ¥3) | ¥24 / million (off-peak ¥6) |
 
-**token 假设**（读代码后估算，非实测账单）：
-- 一次主动搭话 = 2 次 LLM 调用（内心独白 + 现场生成台词），约 **8k input / 300 output**；
-- 一次团队社交轮次（早安/午后/晚间回顾）= 1 次调用，约 **2.5k input / 150 output**；每个仪式 3 轮；
-- 纯对话一轮 ≈ **13k input**（系统人格 + 约 30 个工具 schema + 记忆注入 + 上下文）/ **400 output**。
+**Token assumptions** (estimated from reading the code, not a measured bill):
+- One proactive chat = 2 LLM calls (inner monologue + live-generated line), about **8k input / 300 output**;
+- One team-social round (morning / afternoon / evening review) = 1 call, about **2.5k input / 150 output**; 3 rounds per ritual;
+- One pure chat turn ≈ **13k input** (system persona + ~30 tool schemas + memory injection + context) / **400 output**.
 
-**三档每日估算（按 flash 档 ¥1/¥2 计）：**
+**Three-tier daily estimate (at the flash tier's ¥1/¥2):**
 
-| 用法 | 每日事件量假设 | 估算日费 |
+| Usage | Daily event assumption | Est. daily cost |
 |---|---|---|
-| **仅主动陪伴**（早安/久坐/屏幕感知/健康提醒，社交关） | 5–20 次搭话 + 1 次日报 + 若干次屏幕/热搜评估 | **¥0.08 – 0.25 / 天** |
-| **主动 + 社交全开**（加早安/午后/晚间仪式 + 朋友圈后台群聊） | 上述 + 9–15 次社交轮次 | **¥0.15 – 0.40 / 天** |
-| **纯对话对照**（30–50 轮/天，不主动打扰） | 40 轮 × 13k input | **¥0.4 – 0.9 / 天** |
+| **Companionship only** (morning / sedentary / screen awareness / health reminders, social off) | 5–20 proactive chats + 1 daily report + a few screen/hot-list evaluations | **¥0.08 – 0.25 / day** |
+| **Proactive + social fully on** (plus morning/afternoon/evening rituals + background Moments group chat) | above + 9–15 social rounds | **¥0.15 – 0.40 / day** |
+| **Pure chat baseline** (30–50 turns/day, no proactive pinging) | 40 turns × 13k input | **¥0.4 – 0.9 / day** |
 
-> 也就是说：**就算把主动与社交全部开满，flash 档一天也不到 4 毛钱**；真正吃 token 的是你和她的对话本身。
-> 若用 `deepseek-v4-pro`，上表乘 12–24 倍（非高峰可压到 3–6 倍）。建议在 DeepSeek 后台设**余额告警 / 预算上限**，避免忘记关时账单失控。
+> In other words: **even with proactive and social all the way up, the flash tier costs under ¥0.4 a day**; what really eats tokens is your conversation with her itself.
+> With `deepseek-v4-pro`, multiply the table by 12–24× (off-peak can bring it to 3–6×). We suggest setting a **balance alert / budget cap** in the DeepSeek dashboard so the bill doesn't run away if you forget to turn things off.
 
-> 🛡️ **不想自己盯账单？** 内置的「预算守护者」（设置 → 实验功能，默认开启）可以在应用内设每日预算上限：
-> 用到 80% 温柔提醒，95% 自动降级到更便宜的模型并暂停非必要后台调用，100% 只保留你主动发起的对话——
-> 只收紧、不放宽，0 点自动重置。详见下文「实验功能」一节。
+> 🛡️ **Don't want to watch the bill yourself?** The built-in "Budget Guardian" (Settings → Experimental features, on by default) lets you set a daily budget cap in-app:
+> at 80% it gently reminds you; at 95% it auto-downgrades to a cheaper model and pauses non-essential background calls; at 100% it keeps only conversations you initiate —
+> only ever tightening, never loosening, auto-reset at midnight. See the "Experimental Features" section below.
 
-**想把持续消耗降到 0？** 全部开关路径：
+**Want to drop ongoing cost to 0?** All the toggle paths:
 
-| 想关的 | 在哪里关 |
+| What to turn off | Where |
 |---|---|
-| 主动搭话整体 | 设置 → 主动陪伴 / Proactive 侧栏，关掉主动引擎（`proactive`）；或环境变量 `LUMINA_FF_MODE_MINIMAL=1` 进精简模式 |
-| 团队社交（早安/午后/晚间/朋友圈后台群聊） | 设置 → 团队社交；feature flag `social.deepTeam`、`team.relationshipDrama`（环境变量 `LUMINA_FF_SOCIAL_DEEPTEAM=0`） |
-| 梦境日记 LLM 生成 | feature flag `dream.llmGeneration`（`LUMINA_FF_DREAM_LLM_GENERATION=0`） |
-| 屏幕感知（截图→VLM） | 设置 → 屏幕感知 / `screenWatchEnabled`；健康提醒（喝水/眼/坐姿）各有独立开关 |
-| 桌宠状态灯 | `LUMINA_PET_AGENT_STATE=0`（这只是状态映射，不省 LLM） |
-| 记忆读写 | 设置 → 记忆与进化：「使用记忆」「生成记忆」可分别关 |
+| Proactive chat overall | Settings → Proactive sidebar, turn off the proactive engine (`proactive`); or env var `LUMINA_FF_MODE_MINIMAL=1` for minimal mode |
+| Team social (morning/afternoon/evening/Moments background group chat) | Settings → Team social; feature flags `social.deepTeam`, `team.relationshipDrama` (env var `LUMINA_FF_SOCIAL_DEEPTEAM=0`) |
+| Dream journal LLM generation | feature flag `dream.llmGeneration` (`LUMINA_FF_DREAM_LLM_GENERATION=0`) |
+| Screen awareness (screenshot → VLM) | Settings → Screen watch / `screenWatchEnabled`; health reminders (water/eyes/posture) each have their own switch |
+| Pet status light | `LUMINA_PET_AGENT_STATE=0` (this is only state mapping, doesn't save LLM calls) |
+| Memory read/write | Settings → Memory & evolution: "Use memory" and "Generate memory" can be turned off separately |
 
-> 关掉主动/社交后，只剩你主动发消息时才产生 token，成本就和普通聊天机器人一样。
+> With proactive/social off, tokens are only spent when you send a message yourself — the cost is the same as an ordinary chatbot.
 
 ---
 
-## 🖥️ 系统要求与平台支持
+## 🖥️ System Requirements & Platform Support
 
-> **当前 v0.1.0-preview 仅支持 Windows 10/11 (x64)**。macOS 和 Linux 支持在 Roadmap 中（见下文）。
+> **The current v0.1.0-preview supports only Windows 10/11 (x64).** macOS and Linux support is on the Roadmap (see below).
 
-| 平台 | 状态 | 说明 |
+| Platform | Status | Notes |
 |------|------|------|
-| 🟢 **Windows 10/11 x64** | ✅ 当前唯一支持 | NSIS 安装包 / 便携版 |
-| 🟡 **macOS** | 🔜 Roadmap (v1.3.0) | 代码有初步适配但未验证，CU/键鼠走 PowerShell 需重写 |
-| 🟡 **Linux** | 🔜 Roadmap (v1.3.0) | 同上 |
+| 🟢 **Windows 10/11 x64** | ✅ Currently the only supported platform | NSIS installer / portable |
+| 🟡 **macOS** | 🔜 Roadmap (v1.3.0) | Code has initial adaptation but is unverified; CU/mouse-keyboard go through PowerShell and need rewriting |
+| 🟡 **Linux** | 🔜 Roadmap (v1.3.0) | Same as above |
 
-> ⚠️ **为什么当前只有 Windows？**<br>Computer Use 的键鼠注入、沙箱规则库、托盘集成都深度依赖 Windows API（PowerShell、UIA、IL 降级）。macOS/Linux 支持需要重写这些模块，计划在 v1.3.0 完成。
+> ⚠️ **Why Windows only right now?**<br>Computer Use's mouse/keyboard injection, the sandbox rule engine, and tray integration all depend deeply on the Windows API (PowerShell, UIA, IL degradation). macOS/Linux support requires rewriting these modules, planned for v1.3.0.
 
 ---
 
-## 📊 性能与资源占用
+## 📊 Performance & Resource Usage
 
-> 基于 [docs/performance.md](docs/performance.md) 的真实基准采样（i5-12490F / 48GB / RTX 5060 Ti / Win11）。
+> Based on real benchmark sampling in [docs/performance.md](docs/performance.md) (i5-12490F / 48GB / RTX 5060 Ti / Win11).
 
-| 场景 | 内存 (RSS) | CPU | 说明 |
+| Scenario | Memory (RSS) | CPU | Notes |
 |------|-----------|-----|------|
-| 纯 Node 脚本 idle | ~28 MB | ~0% | 仅基准进程自身 |
-| **应用空载（桌宠运行中）** | **~775 MB（5 进程合计）** | **~4%（整机）** | 主进程 ~200MB + 多个渲染/GPU 进程 |
+| Pure Node script idle | ~28 MB | ~0% | Baseline process only |
+| **App idle (pet running)** | **~775 MB (5 processes combined)** | **~4% (whole machine)** | Main process ~200MB + several renderer/GPU processes |
 
-- **建议配置**：**8GB 内存以上**；4GB 内存可能紧张（尤其加载本地 ONNX 模型时）。
-- **想更省资源**：启用 `mode.minimal` 精简模式、关闭 VRM、把 Live2D 帧率从 30 降到 15、不加载本地模型而改用云端 API——可把整机占用压到 ~500MB 量级。
-- 📖 完整基准表、各模块占用分析与复现方法见 **[docs/performance.md](docs/performance.md)**。
+- **Recommended config:** **8GB RAM or more**; 4GB may be tight (especially when loading local ONNX models).
+- **Want to save more?** Enable `mode.minimal` minimal mode, turn off VRM, drop Live2D frame rate from 30 to 15, skip local models and use the cloud API — that can bring whole-machine usage down to ~500MB.
+- 📖 Full benchmark tables, per-module breakdown, and reproduction method: **[docs/performance.md](docs/performance.md)**.
 
 ---
 ---
 
 ## 🖥️ CLI & API
 
-Lumina 提供完整的命令行工具和 REST API，无需启动 GUI 即可使用。
+Lumina ships a full command-line tool and REST API, usable without launching the GUI.
 
-### 命令行
+### Command Line
 
 ```bash
-lumina doctor       # 系统诊断
-lumina health       # 🩺 模型体检（首 token 慢 / 很卡时先跑这个）
-lumina chat "你好"  # 直接对话
-lumina tool list    # 列出工具
-lumina agent status # 查看 Agent 状态
-lumina memory search "上次聊的..." # 搜索记忆
-lumina config       # 管理配置
-lumina skill        # 管理技能
-lumina cron         # 定时任务
+lumina doctor       # system diagnostics
+lumina health       # 🩺 model checkup (run this first if first token is slow / laggy)
+lumina chat "hello" # chat directly
+lumina tool list    # list tools
+lumina agent status # show agent status
+lumina memory search "what we talked about last time..." # search memory
+lumina config       # manage config
+lumina skill        # manage skills
+lumina cron         # scheduled tasks
 ```
 
-> 💡 **已安装版**：`lumina.cmd` 随安装包放在 `<安装目录>\resources\`（默认 `C:\Program Files\Lumina Life\resources\`）。
-> 把该目录加入 PATH 后即可在任意终端用 `lumina ...`（它会调用同目录上一层的 `Lumina Life.exe` 进入 CLI 模式）：
+> 💡 **Installed build:** `lumina.cmd` ships with the installer at `<install dir>\resources\` (default `C:\Program Files\Lumina Life\resources\`).
+> Add that directory to PATH and you can use `lumina ...` in any terminal (it calls the `Lumina Life.exe` one level up the directory to enter CLI mode):
 > ```cmd
 > setx PATH "%PATH%;C:\Program Files\Lumina Life\resources"
 > ```
-> 不加 PATH 也能用：直接运行 `"C:\Program Files\Lumina Life\Lumina Life.exe" --cli doctor`。
-> **开发态**请用 `npm run cli -- <命令>` 或 `npm run doctor`，不要用上面的安装路径。
+> It also works without PATH: run `"C:\Program Files\Lumina Life\Lumina Life.exe" --cli doctor` directly.
+> **For dev mode**, use `npm run cli -- <command>` or `npm run doctor`, not the install path above.
 
 ### REST API
 
 ```bash
-# 健康检查
+# health check
 curl http://localhost:3456/api/health
 
-# 发送消息
+# send a message
 curl -X POST http://localhost:3456/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"message":"你好","agent_id":"lumina"}'
+  -d '{"message":"hello","agent_id":"lumina"}'
 ```
 
-支持 10+ 端点：聊天 · 工具执行 · Agent 管理 · 记忆检索 · 技能管理 · 配置读写 · 定时任务 · 审批队列
+10+ endpoints supported: chat · tool execution · agent management · memory retrieval · skill management · config read/write · cron tasks · approval queue
 
-### 📱 手机远程访问（H5）
+### 📱 Mobile Remote Access (H5)
 
-> 桌宠本来就是「必须常驻」的形态——所以「人不在电脑前也能管它」是刚需。
-> Lumina 复用上面的 REST API，内置了一个手机可访问的 H5 页面：**看消息、发指令、批准权限**，不用装 App、不用上架商店。
+> A desktop pet is inherently a "must-be-resident" form factor — so "manage it even when you're not at the computer" is a real need.
+> Lumina reuses the REST API above and ships a built-in mobile-accessible H5 page: **read messages, send commands, approve permissions** — no app install, no app-store listing.
 
 ```bash
-# 1) 启动 API（或直接跑 `npm run api:dev`）
+# 1) Start the API (or run `npm run api:dev` directly)
 LUMINA_API_ENABLED=1 LUMINA_API_PORT=3456 electron .
 ```
 
-把 API 的 `host` 设为 `0.0.0.0`（设置里改，或启动日志会提示），然后在**同一局域网**用手机浏览器打开：
+Set the API `host` to `0.0.0.0` (change in settings, or the startup log will prompt), then open from a phone on the **same LAN**:
 
 ```
-http://<电脑局域网IP>:3456/m
+http://<your-computer-LAN-IP>:3456/m
 ```
 
-启动日志会自动打印可用的局域网地址。页面支持：
+The startup log automatically prints the available LAN address. The page supports:
 
-- 💬 与 Lumina 对话（走 `/api/chat`）
-- ✅ 手机上批准 / 拒绝待审批的敏感操作（走 `/api/approvals`）—— 这正是「桌宠绑定真实执行状态」在远程场景的延伸
-- 🔑 若开启了 API Key 认证，页面上填一次即可（仅存本机 localStorage）
+- 💬 Chat with Lumina (via `/api/chat`)
+- ✅ Approve / reject pending sensitive operations from your phone (via `/api/approvals`) — this is exactly the extension of "pet bound to real execution state" to the remote scenario
+- 🔑 If API key auth is on, enter it once on the page (stored only in local localStorage)
 
-> ⚠️ 安全提示：H5 页面默认仅在**局域网**可用；如需公网访问，请自行加反代 + HTTPS + API Key，**不要**直接把端口暴露到公网。
+> ⚠️ Security note: the H5 page is available on the **LAN** by default; if you need public access, put a reverse proxy + HTTPS + API key in front yourself, and **do not** expose the port directly to the public internet.
 
-### 🎯 确定性派活命令（跳过自动路由）
+### 🎯 Deterministic Dispatch Commands (Skip Auto-Routing)
 
-默认路由由模型裁量，同一句话两次问可能派活不同。专业用户想要确定性时，用这三条命令**一次性**指定谁干活：
+Default routing is at the model's discretion — ask the same sentence twice and it may dispatch differently. When professional users want determinism, these three commands pick who does the work **in one shot**:
 
 ```
-/yak   帮我给这个函数补单元测试      # 强制派给 Yak（代码工程师）
-/recha 审一下这段代码有没有并发问题   # 强制派给 热茶（审查员）
-/lumina 解释一下这个报错是什么意思     # 强制由 Lumina 自己答
+/yak   add unit tests to this function        # force to Yak (the engineer)
+/recha review this code for concurrency issues # force to Recha (the reviewer)
+/lumina explain what this error means         # force Lumina herself to answer
 ```
 
-它们在聊天框内前置拦截、不发给模型自己判断，直接把这一条消息交给指定角色（不影响后续消息）。
+They're intercepted in front of the chat box and not sent to the model to decide; this single message goes straight to the chosen character (doesn't affect later messages).
 
-### 🧠 记忆会话级双开关
+### 🧠 Session-Level Memory Toggles
 
-把「读记忆」和「写记忆」分开管，并给出一份明确的**「不记什么」清单**：
+Manage "read memory" and "write memory" separately, with an explicit **"what we don't remember"** list:
 
-| 开关 | 作用 | 何时可改 |
+| Toggle | Effect | When to change |
 |---|---|---|
-| **使用记忆** | 是否在回答前检索并参考长期记忆 | 建议新对话前设定（进行中改动对下一对话生效） |
-| **生成记忆** | 是否把本轮对话沉淀为新记忆 | 随时可改，立即生效 |
+| **Use memory** | Whether to retrieve and reference long-term memory before answering | Recommended to set before a new conversation (changes mid-conversation apply to the next) |
+| **Generate memory** | Whether to distill this turn into new memory | Anytime, takes effect immediately |
 
-在「设置 → 记忆与进化」里。关掉后相关接口会**如实告知未生效**，不会假装存了 / 检索了。
-
----
-
-## ⚖️ 设计哲学 · 铁则
-
-> Lumina Life 的开发遵循几条「铁则」——它们是这个项目的灵魂和底线。理解它们，就理解了 Lumina 为什么是 Lumina。
-
-### 🥇 铁则一：用户只看到 Lumina
-
-用户全程只与 Lumina 🐱 对话。热茶 🍵 和 Yak 💻 在后台隐身工作，用户感知不到他们的存在。
-
-```
-用户：帮我算一下这个月的开支
-Lumina：好的，我这就帮你理一下↗
-        （内部 → 后台整理账目数据）
-Lumina：本月开支共 ¥3,280，比上月少 12% 哦！主要节省在餐饮上 👍
-```
-
-**为什么？** 真实用户不需要知道"系统里有几个 agent"。一个可信赖的助手就够了，后台分工是架构问题，不是用户问题。
-
-### 🥈 铁则二：Lumina 有情绪，且情绪影响行为
-
-Lumina 不是冷冰冰的 API 返回器。底层是 **3 个连续数值**（心情 mood / 精力 energy /
-亲密度 affinity），带惯性与随机漂移；当前用"昼/夜"两档开关微调，尚未做连续正弦调制；它们组合映射为 5 种主要可观察表现（底层 9 个情绪标签）
-（开心 / 疲劳 / 专注 / 焦虑 / 好奇）。桌宠表情则由大模型每帧实时输出。
-
-关键在于**情绪进了执行层**，不只是换表情：重试次数会被当前情绪影响
-（`delegationManager.ts`），工具可用范围会被情绪**收紧**（`orchestration/emotionGating.ts`，
-且只能收紧永不放宽 —— 情绪永远不能突破角色权限边界）。
-
-| 情绪状态 | 效果 |
-|---------|------|
-| 😊 happy | 主动关心你、回复更活泼 |
-| 😢 sad | 话变少、需要安慰 |
-| 😠 angry | 语气冲、但会道歉 |
-| 😐 neutral | 正常工作状态 |
-| ❤️ 亲密度高 | 更有默契、愿意敞开心扉 |
-
-### 🥉 铁则三：记忆是连续的，不是一次性的
-
-Lumina 记得你。每次对话都是你们关系的延续，不是从头开始的 API 调用。
-
-```
-短期记忆（当前会话）→ 是否重要？→ 长期记忆（SQLite）
-                                    → BM25 + TF-IDF 混合召回（默认，已实现）· dense 语义向量（可选进阶）
-                                    → 摘要 → 每日记忆
-```
-
-每次回复时，Lumina 会自动检索相关记忆，让对话有「延续感」——她记得你上周说过想去日本看樱花，今天会主动问"签证办好了吗？"
-
-### 🏅 铁则四：安全不是选项，是默认值
-
-| 安全机制 | 说明 |
-|---------|------|
-| 🛡️ 沙箱模式 | 双层审查：消息/参数级（6×10）+ 命令级（32 条规则，4 档分级） |
-| 📋 审批流 | 高风险操作需要用户手动确认 |
-| 🔒 隐私优先 | 记忆、人格文件、对话摘要只存本机，不上传；模型推理按你配置走（云端服务商 / 本地模型） |
-| 🌐 外联透明 | 唯一会**主动**外联的是「为你推荐」资讯栏（19 个公开 RSS/热榜站点，可在设置里一键关闭）；其余网络请求都由你的操作触发 |
-| 🔑 API Key 隔离 | LLM Key 与应用权限分离 |
-| 🚚 数据导出/导入 | 本机记忆一键打包为 zip（manifest + 人读 memory.md + 每表 JSON），导入时按主键去重、绝不覆盖现有数据 |
-| 🎛️ 功能开关 | 设置页可逐项开关全部新能力（实验项默认关）；`mode.minimal` 精简模式只露「会主动找你 · 真记得你 · 安全帮你干一件事」 |
-
-> **关于「为你推荐」的外联（如实说明）**
->
-> 聊天页输入框上方的资讯栏会在打开页面约 1 秒后，向你机器外的**公开**站点取榜单：
-> 36氪、Solidot、少数派、开源中国、TechCrunch、The Verge、Hugging Face、OpenAI Blog、
-> Google AI Blog、MIT Tech Review、arXiv（cs.ai/cl/lg/cv）、百度热搜、GitHub Trending、
-> 东方财富快讯、金十快讯、Hacker News——**只取公开标题/链接，不发送任何关于你的数据**。
-> 随后若你配置了模型，会把「候选标题 + 兴趣描述」发给你自己的模型服务商做精选排序。
->
-> **不想要？** 设置 → 隐私与开关 → 关闭「为你推荐」。关闭后主进程不再发起任何请求、
-> 不再调用模型，该位置只保留几条静态提示词。（离线/计量网络/代理环境建议关闭。）
-
-### 🏅 铁则五：开源是承诺，不是营销
-
-Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永远自由地使用、修改、分发它，不必担心「开源陷阱」。[了解更多](#🔓-open-source--开源说明)
+Found in "Settings → Memory & evolution." After turning off the related interfaces, they **honestly tell you it's off** — they won't pretend to have stored / retrieved.
 
 ---
 
-## 🏗️ Architecture · 架构一览
+## ⚖️ Design Principles · Iron Rules
+
+> Lumina Life is built around a few "iron rules" — they are the soul and bottom line of this project. Understand them and you understand why Lumina is Lumina.
+
+### 🥇 Rule One: Users Only See Lumina
+
+The user talks only to Lumina 🐱 throughout. Recha 🍵 and Yak 💻 work invisibly in the background; the user is not aware of their existence.
+
+```
+User: help me tally this month's spending
+Lumina: sure, let me sort it out for you ↗
+        (internally → tidies the account data in the background)
+Lumina: this month's total was ¥3,280, down 12% from last month! Mostly saved on food 👍
+```
+
+**Why?** Real users don't need to know "how many agents are in the system." One trustworthy assistant is enough; background division of labor is an architecture concern, not a user concern.
+
+### 🥈 Rule Two: Lumina Has Emotions That Drive Behavior
+
+Lumina isn't a cold API returner. The base layer is **3 continuous values** (mood / energy /
+affinity), with inertia and random drift; the current build uses a two-state day/night switch for fine-tuning (no continuous sine modulation yet); they combine into 5 primary observable expressions (from 9 underlying mood labels):
+(happy / tired / focused / anxious / curious). The pet's expressions are output by the model in real time each frame.
+
+The key point is that **emotion enters the execution layer**, not just changes the face: retry counts are affected by current emotion
+(`delegationManager.ts`), and the available tool set is **tightened** by emotion (`orchestration/emotionGating.ts`),
+only ever tightened, never loosened — emotion can never break through role permission boundaries.
+
+| Emotional state | Effect |
+|---------|------|
+| 😊 happy | Proactively cares about you, livelier replies |
+| 😢 sad | Quieter, needs comfort |
+| 😠 angry | Sharp tone, but apologizes |
+| 😐 neutral | Normal working state |
+| ❤️ high affinity | More in sync, more willing to open up |
+
+### 🥉 Rule Three: Memory Is Continuous, Not One-Shot
+
+Lumina remembers you. Every conversation is a continuation of your relationship, not a fresh API call.
+
+```
+Short-term memory (current session) → important? → Long-term memory (SQLite)
+                                    → BM25 + TF-IDF hybrid recall (default, shipped) · dense semantic vectors (optional advanced)
+                                    → summary → daily memory
+```
+
+On every reply, Lumina automatically retrieves relevant memory, giving the conversation a "continuity" — she remembers you said last week you wanted to see cherry blossoms in Japan, and today she asks "did you get the visa?"
+
+### 🏅 Rule Four: Security Is the Default, Not an Option
+
+| Security mechanism | Description |
+|---------|------|
+| 🛡️ Sandbox mode | Two-layer review: message/parameter level (6×10) + command level (32 rules, 4 tiers) |
+| 📋 Approval flow | High-risk operations need manual user confirmation |
+| 🔒 Privacy-first | Memory, persona files, and conversation summaries stay local, never uploaded; model inference follows your config (cloud provider / local model) |
+| 🌐 Egress transparency | The only thing that **proactively** reaches out is the "For You" news bar (19 public RSS/hot-list sites, one-click off in settings); all other network requests are triggered by your actions |
+| 🔑 API key isolation | LLM keys are separated from app permissions |
+| 🚚 Data export/import | One-click zip of local memory (manifest + human-readable memory.md + per-table JSON); import dedupes by primary key and never overwrites existing data |
+| 🎛️ Feature toggles | Settings page can turn each new capability on/off (experimental items off by default); `mode.minimal` minimal mode exposes only "will proactively reach you · truly remembers you · safely does one thing for you" |
+
+> **About the "For You" egress (stated plainly)**
+>
+> The news bar above the chat input fetches from **public** sites outside your machine about 1 second after the page opens:
+> 36Kr, Solidot, sspai, OSChina, TechCrunch, The Verge, Hugging Face, OpenAI Blog,
+> Google AI Blog, MIT Tech Review, arXiv (cs.ai/cl/lg/cv), Baidu Hot Search, GitHub Trending,
+> Eastmoney News, Jin10 News, Hacker News — **only public titles/links are fetched; nothing about you is sent**.
+> Then, if you have a model configured, it sends "candidate titles + interest description" to your own model provider for curated ranking.
+>
+> **Don't want it?** Settings → Privacy & switches → turn off "For You." Once off, the main process makes no requests and calls no model; that spot keeps only a few static prompts. (Recommended off on offline/metered-network/proxy setups.)
+
+### 🏅 Rule Five: Open Source Is a Promise, Not Marketing
+
+Lumina Life is **dual-licensed (AGPL-3.0 OR Apache-2.0)**. You can freely use, modify, and distribute it forever, with no fear of an "open-source trap." [Learn more](#-open-source)
+
+---
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -830,12 +766,12 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │               Multi-Agent System                         │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐               │ │
-│  │  │  Lumina  │  │   热茶   │  │   Yak    │               │ │
+│  │  │  Lumina  │  │  Recha   │  │   Yak    │               │ │
 │  │  │  🐱 BOSS  │  │  🍵 REV  │  │  💻 DEV   │               │ │
 │  │  └────┬─────┘  └────┬─────┘  └────┬─────┘               │ │
 │  │       └──────────────┼──────────────┘                     │ │
 │  │              Team Social Engine                           │ │
-│  │         (自发聊天 · 早安仪式 · 朋友圈)                     │ │
+│  │     (proactive chat · morning ritual · Moments)          │ │
 │  └──────────────────────┬──────────────────────────────────┘ │
 │  ┌──────────────────────┼──────────────────────────────────┐ │
 │  │     Tool Registry    │    Skill Ecosystem               │ │
@@ -847,140 +783,140 @@ Lumina Life 采用 **双许可证（AGPL-3.0 OR Apache-2.0）**。你可以永�
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 项目结构
+### Project Structure
 
 ```
 lumina-life/
-├── electron/       # 主进程 — Agent 引擎 · 记忆 · 工具 · 安全
-├── src/            # 渲染进程 — 23 个面板 · React 19 · Zustand
-├── tests/          # 测试文件 — Vitest · 单元+集成+E2E
-├── skills/         # 技能目录
-├── knowledge/      # 知识库
-└── dist/           # 安装包输出
+├── electron/       # main process — agent engine · memory · tools · security
+├── src/            # renderer — 23 panels · React 19 · Zustand
+├── tests/          # test files — Vitest · unit + integration + E2E
+├── skills/         # skill directory
+├── knowledge/      # knowledge base
+└── dist/           # installer output
 ```
 
 ---
 
-## 📸 Screenshots · 截图
+## 📸 Screenshots
 
-> Lumina 的界面充满活力和温度——这里是她在日常工作中的样子。
+> Lumina's UI is lively and warm — here she is in everyday work.
 
-| 功能 | 预览 |
+| Feature | Preview |
 |------|------|
-| 💬 **聊天面板**<br>与 Lumina 日常对话，支持流式输出、情绪显示 | ![Chat Panel](docs/images/chat-panel.png) |
-| 🐾 **Live2D 桌宠**<br>桌面上的 Lumina，呼吸/眨眼/表情随情绪变化 | ![Pet Live2D](docs/images/pet-live2d.png) |
-| 📱 **Moments 朋友圈**<br>旁观 Lumina、热茶、Yak 的自发动态 | ![Moments](docs/images/moments.png) |
+| 💬 **Chat panel**<br>Everyday conversation with Lumina, with streaming output and emotion display | ![Chat Panel](docs/images/chat-panel.png) |
+| 🐾 **Live2D desktop pet**<br>Lumina on your desktop — breathing/blinking/expression shift with emotion | ![Pet Live2D](docs/images/pet-live2d.png) |
+| 📱 **Moments feed**<br>Watch Lumina, Recha, and Yak's spontaneous posts | ![Moments](docs/images/moments.png) |
 
 ---
 
-## 🧪 Tech Stack · 技术栈
+## 🧪 Tech Stack
 
-| 层 Layer | 技术 Technology |
+| Layer | Technology |
 |----------|----------------|
-| 桌面框架 Desktop Framework | **Electron 40** |
-| 前端 Frontend | **React 19** + TypeScript + Vite |
-| 状态管理 State Management | **Zustand 5** (persist) |
-| 构建打包 Build | electron-vite + electron-builder (NSIS) |
-| 数据库 Database | better-sqlite3 |
-| 测试 Testing | Vitest |
-| 自动更新 Auto Update | electron-updater (GitHub Releases) |
-| 协议支持 Protocols | MCP (Model Context Protocol) |
-| 桌宠 UGC Pet UGC | 自定义 8×9 精灵表（无需会 Blender，AI 可生成） |
-| 测试规模 Tests | **311 文件 / 4637 用例通过 / 1 skipped / 0 失败**（本机实测；少数时序测试负载敏感见「已知问题」）· `tsc --strict` 零错误（CI 强制）· ESLint error 级 0 + warning 棘轮 · CI 含原生 ABI 门禁 |
+| Desktop Framework | **Electron 40** |
+| Frontend | **React 19** + TypeScript + Vite |
+| State Management | **Zustand 5** (persist) |
+| Build | electron-vite + electron-builder (NSIS) |
+| Database | better-sqlite3 |
+| Testing | Vitest |
+| Auto Update | electron-updater (GitHub Releases) |
+| Protocols | MCP (Model Context Protocol) |
+| Pet UGC | Custom 8×9 sprite sheet (no Blender needed; AI can generate) |
+| Test scale | **311 files / 4637 passing / 1 skipped / 0 failing** (measured locally; a few timing tests load-sensitive, see "Known Issues") · `tsc --strict` zero errors (CI-enforced) · ESLint error level 0 + warning ratchet · CI includes native ABI gates |
 
 ---
 
-## 🗺️ Roadmap · 路线图
+## 🗺️ Roadmap
 
-完整版见 **[docs/ROADMAP.md](docs/ROADMAP.md)**（含已知缺口表与认领指引）。
+The full version is in **[docs/ROADMAP.md](docs/ROADMAP.md)** (including the known-gaps table and claiming guide).
 
-**✅ 当前开发版（v0.1.0-preview）**
-三 Agent 团队（流水线 + 对抗式评审 + 动态雇工）+ 情感系统（5 主要表现 + 亲密度 + 昼/夜两档，底层 9 标签）+ 记忆系统（BM25/TF-IDF 混合召回 + 防幻觉固化）+ 142 个工具 + 真·屏幕视觉 + Computer Use + 🛡️ 智能沙箱 + 精灵表 8×9 UGC 规格 + 桌宠绑定真实 Agent 状态
+**✅ Current dev build (v0.1.0-preview)**
+Three-agent team (pipeline + adversarial review + dynamic hiring) + emotion system (5 primary expressions + affinity + day/night two-state, 9 underlying labels) + memory system (BM25/TF-IDF hybrid recall + anti-hallucination anchoring) + 142 tools + real screen vision + Computer Use + 🛡️ smart sandbox + 8×9 sprite-sheet UGC spec + pet bound to real agent state
 
-**✅ 已完成的发布加固**
-- [x] 原生模块 ABI 与 Electron 对齐（CI 有门禁，不再出现「测试绿、真机炸」）
-- [x] 自动验证-修复闭环收敛为**单一实现**（消除双份逻辑）
-- [x] 路由仲裁接线到真实调用方（歧义任务才调 LLM，1.2s 硬超时不阻塞）
-- [x] 死代码清理：并行引擎接入阶段门控、亲密度审查语气接入真实提示词
-- [x] 文档数字与代码对齐 + 诚实能力矩阵
+**✅ Shipped release hardening**
+- [x] Native module ABI aligned with Electron (CI-gated; no more "tests green, real machine explodes")
+- [x] Auto-verify-fix loop converged to a **single implementation** (eliminated duplicate logic)
+- [x] Routing arbitration wired to real callers (only ambiguous tasks call the LLM; 1.2s hard timeout, non-blocking)
+- [x] Dead-code cleanup: parallel engine hooked into stage gating, affinity-based review tone hooked into real prompts
+- [x] Doc numbers aligned with code + honest capability matrix
 
-**🔜 v0.1.0** — Windows 安装包签名 · 发布演示视频 · 新手模式一键体检
-**🔜 v0.2.0** — 精灵表本地图集导入工具链 + 校验器
-**🔜 v0.3.0** — 桌宠情绪动作与执行状态的更细粒度绑定（卡点焦虑、审批等待、收工轻松等情绪反应）
-**🔜 v0.4.0** — macOS 实机验证与签名公证 · Linux 键鼠方案
-**🔜 v1.0** — IM 渠道端到端真机验证（接线已完成，7 个适配器）· 技能市场生态 · 多端记忆同步
+**🔜 v0.1.0** — Windows installer signing · release demo video · one-click newcomer checkup
+**🔜 v0.2.0** — sprite-sheet local atlas import toolchain + validator
+**🔜 v0.3.0** — finer-grained binding of pet emotion to execution state (stuck-anxiety, approval-wait, wrap-up relief, etc.)
+**🔜 v0.4.0** — macOS real-hardware verification + signing/notarization · Linux mouse-keyboard solution
+**🔜 v1.0** — IM channels end-to-end real-hardware verification (wiring done, 7 adapters) · skill marketplace ecosystem · multi-device memory sync
 
-> 💡 **未来创意（计划中 / 未实现，仅记录方向）**：
-> ① 成本可观测的演示录制——演示视频与新手引导里同步展示「这一步花了多少 token」，让成本从黑盒变成看得见的数字；
-> ② 技能 / 人格外观的市场生态——让创作者可以上架技能包与桌宠外观，形成社区供给。
+> 💡 **Future ideas (planned / unimplemented, direction only):**
+> ① Cost-observable demo recording — show "how many tokens this step cost" in the demo video and newcomer guide, turning cost from a black box into a visible number;
+> ② A marketplace ecosystem for skills / persona appearances — let creators list skill packs and pet skins, forming community supply.
 
-### 🧪 实验性 / 彩蛋功能（非主线，请勿当真）
+### 🧪 Experimental / Easter-Egg Features (Not Mainline, Don't Take Seriously)
 
-- **梦境日记、Agent 真人秀**：已接 LLM 真实生成（在设置里配好 LLM 后即走真实模型）；未配置时回退到 **9 个情绪锚点模板 + 记忆片段关键词**，UI 用 `来源: llm / 来源: template` 诚实标注，绝不假装是大模型写的。
-- **记忆检索**：默认 BM25 + TF-IDF 双路 RRF 混合召回（已实现、零依赖；中文用 unigram+bigram 字符级分词，无词典）；dense 语义向量（Ollama nomic-embed-text 或外部 embedding 服务）可在记忆设置中开启，提供更强语义匹配。
-- **副人格觉醒（实验）**：最小真实机制已上线——基于长期记忆 + 情绪状态的人格漂移 / 副视角，触发条件为「高亲密度 + 累计约 200 轮对话」或「持续高焦虑」，置于 `personality.subPersona` 开关后**默认关闭**、可随时关；仍属实验性，不代表核心陪伴能力。
+- **Dream journal, agent reality show:** wired to real LLM generation (after configuring an LLM in settings, it uses the real model); when unconfigured it falls back to **9 emotion-anchor templates + memory-fragment keywords**, and the UI honestly labels `source: llm / source: template` — never pretending it was written by a big model.
+- **Memory retrieval:** default is BM25 + TF-IDF dual-path RRF hybrid recall (shipped, zero-dependency; Chinese uses unigram+bigram character-level segmentation, no dictionary); dense semantic vectors (Ollama nomic-embed-text or an external embedding service) can be enabled in memory settings for stronger semantic matching.
+- **Sub-persona awakening (experimental):** the minimal real mechanism is live — persona drift / sub-perspective based on long-term memory + emotional state, triggered by "high affinity + ~200 cumulative conversation turns" or "sustained high anxiety," behind the `personality.subPersona` toggle and **off by default**, turn-offable anytime; still experimental and not representative of core companionship.
 
-### 🧪 实验功能（v0.1 新增 · 设置 → 实验功能）
+### 🧪 Experimental Features (New in v0.1 · Settings → Experimental)
 
-以下六项是随 v0.1 一起接线的新能力，除「预算守护者」外**默认全部关闭**，都可以在
-**设置 → 实验功能**里逐项打开/关闭。它们尚在观察期，所以默认不打扰你。
+The six items below are new capabilities wired up with v0.1. Except for "Budget Guardian," they are **all off by default**, and can each be toggled in
+**Settings → Experimental features**. They're still in observation, so they don't disturb you by default.
 
-| 功能 | 默认 | 做什么 |
+| Feature | Default | What it does |
 |------|------|--------|
-| 🛡️ **预算守护者** | **开** | 统一记录每一次 LLM 调用的真实花费（拿不到 usage 时显式标注「估算」），内置 DeepSeek/硅基/通义/OpenAI 单价表；可设每日预算。**只收紧、不放宽**：80% 提醒 + 桌宠进入「精打细算」态，95% 自动降级便宜模型并暂停非必要后台调用，100% 只保留你主动发起的对话；每天 0 点自动重置，全程留审计因果链。 |
-| 📼 **Day Replay** | 关 | 把当天的账本、命令审计、任务看板、雇工执行聚合成一条时间线——你做了什么、改了哪些文件、几轮对话、花了多少 token——面板里回看，也可导出 Markdown / 纯文本。 |
-| 📊 **情绪 × 效率看板** | 关 | 在委托和工具执行时快照当时的情绪三维与结果，分桶统计趋势，支持 CSV/JSON 导出。两个诚实设计：① A/B 对照开关一旦打开「对照组」，UI 会明示**对照组会关闭情绪门控这一收紧机制**；② 每桶样本不足 30 条时直接显示「数据不足，不构成结论」，不硬给趋势。 |
-| 🌙 **仪式感闭环** | 关 | 睡前复盘（默认 23:00：聚合 Day Replay → LLM 口播 → TTS + 桌宠动作）与晨间简报（默认 8:00：天气/日历/待办/未完成事项）。TTS 缺失时降级为文字气泡；没配 LLM 时走模板并标注「来源: llm / template」，绝不假装是模型写的；预算超限时自动暂停。 |
-| ⚖️ **决策三栏** | 关 | 输入 `/decide` 或「帮我决定…」触发：执行者视角列利弊、审查员视角挑风险、Lumina 给出最终建议，三栏卡片并排呈现。你永远只跟 Lumina 一个入口对话，后台分工不外露。 |
-| 🤝 **交班模式** | 关 | 生成交班卡片（当天摘要 + 待审批 + 待办 + 三个 Agent 状态，带时间戳与过期时间），本地加密导出（口令经 scrypt/pbkdf2 派生 + AES-256-GCM，`.lumina-handover` 文件），二维码走**局域网 URL**；手机打开 `/m` 交班视图后**在手机页面端输入口令解密**，批准/拒绝复用现有审批接口。快照过期自动失效，且明示仅局域网可用、勿暴露公网。 |
+| 🛡️ **Budget Guardian** | **On** | Uniformly records the real cost of every LLM call (when usage is unavailable, explicitly labels it "estimate"), with a built-in DeepSeek/SiliconFlow/Qwen/OpenAI price table; settable daily budget. **Only tightens, never loosens:** 80% reminder + pet enters a "budget-conscious" state, 95% auto-downgrades to a cheaper model and pauses non-essential background calls, 100% keeps only conversations you initiate; auto-reset at midnight, full audit causal chain throughout. |
+| 📼 **Day Replay** | Off | Aggregates the day's ledger, command audit, task board, and worker executions into a timeline — what you did, which files you changed, how many conversation turns, how many tokens spent — reviewable in the panel, exportable to Markdown / plain text. |
+| 📊 **Emotion × Productivity Dashboard** | Off | Snapshots the emotion triple and result at delegation and tool execution, buckets trends, supports CSV/JSON export. Two honest designs: ① once you turn on the "control group" A/B toggle, the UI clearly states the **control group turns off the emotion-gating tightening mechanism**; ② when a bucket has fewer than 30 samples, it directly shows "insufficient data, no conclusion," rather than forcing a trend. |
+| 🌙 **Ritual Loop** | Off | Bedtime review (default 23:00: aggregate Day Replay → LLM narration → TTS + pet motion) and morning briefing (default 8:00: weather/calendar/todos/unfinished items). When TTS is missing it degrades to text bubbles; with no LLM it uses templates labeled `source: llm / template`, never pretending it was model-written; auto-pauses when over budget. |
+| ⚖️ **Three-Column Decision** | Off | Triggered by `/decide` or "help me decide…": executor's view lists pros/cons, reviewer's view picks risks, Lumina gives the final recommendation, three cards side by side. You always talk to only one Lumina entry point; the background division of labor stays hidden. |
+| 🤝 **Handover Mode** | Off | Generate a handover card (day summary + pending approvals + todos + three-agent status, with timestamp and expiry), locally encrypted export (password derived via scrypt/pbkdf2 + AES-256-GCM, `.lumina-handover` file), QR code via **LAN URL**; open the `/m` handover view on a phone and **enter the password on the phone page to decrypt**, approve/reject reusing the existing approval endpoints. Snapshots auto-expire, and it clearly states LAN-only, do not expose to the public internet. |
 
-> 另外：P2-8 命令护栏已接线——REJECT 层 6 条危险命令（递归删根/格式化/关机/删注册表/管道执行/fork 炸弹）**默认开、命中即拦**；APPROVAL 层 8 条（写注册表/关防火墙/写系统目录/提权/外发等）走 feature flag `security.commandApproval` **灰度默认关**，确认无误报后再转正。详见 [SECURITY.md](SECURITY.md)。
+> Also: P2-8 command guardrails are wired up — the REJECT layer's 6 dangerous commands (recursive delete of root / format / shutdown / delete registry / pipe execution / fork bomb) are **on by default, blocked on hit**; the APPROVAL layer's 8 (write registry / turn off firewall / write system dirs / elevate / outbound, etc.) go through the feature flag `security.commandApproval` and **default off in canary**, graduating to on after confirming no false positives. See [SECURITY.md](SECURITY.md).
 
 ---
 
-## 🔓 Open Source · 开源说明
+## 🔓 Open Source
 
-Lumina Life 采用 **双许可证（Dual-License）** 发布，您可在以下两者中选择其一：
+Lumina Life is released under a **dual license** — you choose either of the two:
 
-### 选项一：AGPL-3.0（社区版）
+### Option 1: AGPL-3.0 (Community Edition)
 
-适合个人用户、开源项目和教育用途。
+For individual users, open-source projects, and educational use.
 
-| ✅ 你可以 | 📋 需要遵守 |
+| ✅ You may | 📋 You must |
 |----------|------------|
-| 自由使用、修改、分发 | 分发修改版时需公开源代码 |
-| 创建自定义角色/人格 | 保留版权声明 |
-| 开发新技能并分享 | 网络交互视为分发（AGPL-3.0 标准条款） |
-| 提出 Issue 和 Feature Request | — |
-| 免费用于个人用途 | — |
+| Freely use, modify, distribute | Disclose source when distributing modified versions |
+| Create custom roles/personas | Keep the copyright notice |
+| Develop new skills and share them | Network interaction counts as distribution (standard AGPL-3.0 terms) |
+| File issues and feature requests | — |
+| Use freely for personal purposes | — |
 
-> **为什么保留 AGPL-3.0？** 我们希望 Lumina 的核心能永远开放，让社区可以自由定制和改进。选择 AGPL-3.0 的用户，您的改进也会回馈给整个社区。
+> **Why keep AGPL-3.0?** We want Lumina's core to stay open forever, so the community can freely customize and improve it. Users who choose AGPL-3.0 give their improvements back to the whole community.
 
-### 选项二：Apache 2.0（商业版）
+### Option 2: Apache 2.0 (Commercial Edition)
 
-适合企业集成、商业产品嵌入和闭源部署。
+For enterprise integration, commercial product embedding, and closed-source deployment.
 
-| ✅ 你可以 | 📋 需要遵守 |
+| ✅ You may | 📋 You must |
 |----------|------------|
-| 自由使用、修改、分发 | 保留版权声明 |
-| 集成到商业闭源产品中 | 无"开源传染"要求 |
-| 创建衍生作品（包括闭源） | 修改处需显著标注 |
-| 用于商业目的 | — |
+| Freely use, modify, distribute | Keep the copyright notice |
+| Integrate into commercial closed-source products | No "open-source contagion" requirement |
+| Create derivative works (including closed-source) | Mark modifications prominently |
+| Use for commercial purposes | — |
 
-> **选择权在你手中。** 两个许可证都附在项目根目录中：
+> **The choice is yours.** Both licenses ship in the project root:
 > - [`LICENSE`](LICENSE) — AGPL-3.0
 > - [`LICENSE-APACHE`](LICENSE-APACHE) — Apache 2.0
 
 ---
 
-## 💬 Community · 社区
+## 💬 Community
 
-| 途径 | 用途 |
+| Channel | Purpose |
 |------|------|
-| 💡 [GitHub Issues](https://github.com/chaxu814/lumina-life/issues) | Bug 反馈 & 功能建议 |
-| 📖 [GitHub Discussions](https://github.com/chaxu814/lumina-life/discussions) | 技术讨论 & 使用技巧 |
-| 🎨 [贡献指南](CONTRIBUTING.md) | 参与开发的完整指引 |
-| 📝 [更新日志](CHANGELOG.md) | 版本发布记录 |
+| 💡 [GitHub Issues](https://github.com/chaxu814/lumina-life/issues) | Bug reports & feature requests |
+| 📖 [GitHub Discussions](https://github.com/chaxu814/lumina-life/discussions) | Technical discussion & tips |
+| 🎨 [Contributing Guide](CONTRIBUTING.md) | Full guide to contributing |
+| 📝 [Changelog](CHANGELOG.md) | Release history |
 
 ---
 
@@ -989,7 +925,5 @@ Lumina Life 采用 **双许可证（Dual-License）** 发布，您可在以下�
   <b>Made with ❤️ by the Lumina team. And by Lumina herself. 🐱</b><br>
   <sub>She helped write this README. No, really.</sub>
   <br><br>
-  <sub>⭐ 如果 Lumina 给你带来了快乐，请给仓库一个 Star ⭐</sub>
-  <br>
-  <sub>If Lumina brought a smile to your face, give the repo a star ✨</sub>
+  <sub>⭐ If Lumina brought you a smile, please give the repo a star ⭐</sub>
 </p>
