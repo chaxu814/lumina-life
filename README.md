@@ -30,6 +30,12 @@
   <i>Three AI agents live on your desktop — they feel, they talk, and they actually do things for you.</i>
 </p>
 
+<p align="center">
+  <a href="https://github.com/chaxu814/lumina-life/releases/latest"><img src="https://img.shields.io/badge/⬇️_下载_Lumina_Life-Windows_安装包-ec4899?style=for-the-badge&labelColor=1a1a2e" alt="下载 Windows 安装包"></a>
+  <br>
+  <sub>普通用户：下载 <b>.exe 安装包</b>（约 130 MB）即可使用 · 开发者：见下方 <a href="#-quick-start">快速开始</a></sub>
+</p>
+
 <br>
 
 <p align="center">
