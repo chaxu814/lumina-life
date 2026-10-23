@@ -45,14 +45,14 @@ describe('agentCompactor', () => {
       makeMsg({ role: 'assistant', content: '好的，已更新。' }),
       makeMsg({
         role: 'user',
-        content: '再检查一下 C:\\Users\\13510\\notes.txt',
+        content: '再检查一下 C:\\Users\\testuser\\notes.txt',
       }),
       makeMsg({ role: 'assistant', content: '已处理。' }),
     ]
     const summary = buildStructuredSummary([msgs[0]], msgs.slice(1), null)
     expect(summary).toContain('对话摘要')
     expect(summary).toContain('J:\\LuminaLife2.0\\docs\\plan.md')
-    expect(summary).toContain('C:\\Users\\13510\\notes.txt')
+    expect(summary).toContain('C:\\Users\\testuser\\notes.txt')
     expect(summary).toContain('决定')
   })
 

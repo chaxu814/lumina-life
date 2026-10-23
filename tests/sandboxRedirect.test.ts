@@ -35,7 +35,7 @@ describe('沙箱写入重定向 · 路径映射', () => {
   it('Windows 盘符路径：盘符与后续路径之间必须有分隔符', () => {
     // 旧实现少了这个 '/'，于是 D:\lumina-quality\x.py → Dlumina-quality/x.py
     expect(toRelative('D:\\lumina-quality\\fib.py')).toBe('D/lumina-quality/fib.py')
-    expect(toRelative('C:\\Users\\13510\\test.txt')).toBe('C/Users/13510/test.txt')
+    expect(toRelative('C:\\Users\\testuser\\test.txt')).toBe('C/Users/testuser/test.txt')
   })
 
   it('不会出现「盘符 + 字母」粘在一起的情况（旧 bug 的特征）', () => {
