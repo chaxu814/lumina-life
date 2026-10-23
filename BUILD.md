@@ -1,5 +1,23 @@
 # Lumina Life — 构建与开发指南
 
+## English Summary
+
+Lumina Life requires **Node.js ≥ 20** (see `engines.node` in `package.json`, which requires `>=20.0.0`; CI tests on Node 20 and 22) and npm ≥ 10.
+
+Quick start:
+
+```bash
+npm install        # install dependencies
+npm run dev        # development mode (electron-vite build + Vite React HMR)
+npm run build      # production build, output to out/
+npm run pack:win   # package the Windows NSIS installer into dist/
+npm test           # run unit tests
+```
+
+On Windows, double-click **`setup.bat`** to auto-detect Node.js, prepend it to PATH, and verify that dependencies are installed. The full Chinese guide continues below.
+
+---
+
 ## 环境要求
 
 | 组件 | 版本要求 | 说明 |

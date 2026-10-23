@@ -1,5 +1,7 @@
 # 贡献者公约 · 行为准则
 
+> **English summary.** This project follows the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). We as contributors and maintainers pledge to make participation in our community a harassment-free experience for everyone — regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation. We pledge to use welcoming and inclusive language, respect differing viewpoints and experiences, accept constructive criticism gracefully, focus on what is best for the community, and show empathy toward other members. Unacceptable behavior includes sexualized language or imagery, unwelcome sexual attention or advances, trolling or insulting/derogatory comments, personal or political attacks, public or private harassment, publishing others' private information without explicit permission, and other conduct reasonably considered inappropriate in a professional setting. Project maintainers are responsible for clarifying standards and may remove, edit, or reject contributions that violate this Code of Conduct. To report an incident, contact the project team at **[contact email to be filled in]**; all reports will be reviewed and treated confidentially. The full Chinese text follows.
+
 ## 我们的承诺
 
 为了营造一个开放、友好的社区环境，我们作为贡献者和维护者承诺：无论年龄、体型、身体健全与否、民族、性别认同与表达、经验水平、国籍、个人形象、种族、宗教或性取向与身份，参与我们的项目和社区的每个人都享有不受骚扰的体验。
