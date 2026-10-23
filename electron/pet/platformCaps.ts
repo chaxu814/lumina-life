@@ -59,6 +59,14 @@ export function resolvePlatformCaps(env: PlatformEnv): PlatformCaps {
   }
 
   if (platform === 'win32') {
+    // 允许用 LUMINA_DISABLE_TRANSPARENCY=1 在 Windows 上也关闭透明（排查 DComp 空白时用）
+    if (disableTrans) {
+      return {
+        ...base, transparent: false, setShape: false,
+        backgroundColor: SOLID_PANEL_BG, label: 'Windows',
+        note: '已关闭透明（LUMINA_DISABLE_TRANSPARENCY=1），桌宠以面板模式显示',
+      }
+    }
     return { ...base, setShape: true, label: 'Windows' }
   }
 

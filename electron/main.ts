@@ -578,6 +578,12 @@ if (!gotTheLock) {
 // ==================??// 应用生命周期
 // ==================??
 app.whenReady().then(async () => {
+  // 子系统启动统一包一层：任一子系统初始化抛错都不允许中断整个启动序列
+  // （否则排在后面的桌宠等模块会因前面一个模块（如原生模块 ABI 不匹配）
+  // 同步抛错而永远不注册 IPC，表现为「开关打不开」）。
+  const safeInit = (label: string, fn: () => unknown): void => {
+    try { fn() } catch (e) { console.warn(`[main] ${label} init 失败:`, e instanceof Error ? e.message : String(e)) }
+  }
   // ── 🔔 Windows 通知权限（尽早声明） ─────────────────
   try {
     const anyNotify = Notification as any
@@ -919,10 +925,10 @@ const socialLlmCall = async (
   initNewsDigestScheduler()
 
   // 3.7 🌸 v2.10: Agent 朋友圈初始化
-  initMomentsStore()
+  safeInit('moments', initMomentsStore)
 
   // 3.8 🧠 v3.9: 知识库初始化
-  initKnowledgeBase()
+  safeInit('knowledge', initKnowledgeBase)
 
   // 3.9 🖥️ v3.10: 桌面操控引擎初始化
   try {
@@ -939,8 +945,10 @@ const socialLlmCall = async (
   }
 
   // 3.10 📦 v3.10: Skill 市场初始??+ 安装内置 skill
-  const skillMarket = initSkillMarket()
-  skillMarket.installBundledSkills()
+  safeInit('skill market', () => {
+    const skillMarket = initSkillMarket()
+    skillMarket.installBundledSkills()
+  })
 
   // 3.11 📝 v3.11: Git Agent 初始?
 try {
@@ -963,8 +971,10 @@ try {
   } catch { /* */ }
 
   // 3.14 ☁️ v3.11: 云同步初始化
-  const cloudSync = initCloudSync()
-  cloudSync.init().catch(() => {})  // 异步初始??
+  safeInit('cloud sync', () => {
+    const cloudSync = initCloudSync()
+    cloudSync.init().catch(() => {})  // 异步初始??
+  })
   // ── 💻 v4.0 Plan C: 桌宠模块（独立进程）─────────────
   try {
     petModule = petWindowNs

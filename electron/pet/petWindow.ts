@@ -1489,6 +1489,7 @@ export function createPetWindow(mainWin?: BrowserWindow | null): BrowserWindow |
 
   restartAttempts = 0
   console.log('[PetWindow] 🐱 桌宠 v2.0 已创建')
+  if (process.env.LUMINA_PET_DEVTOOLS === '1') { petWindow.webContents.openDevTools({ mode: 'detach' }) }
   return petWindow
 }
 
@@ -1739,6 +1740,18 @@ export function registerPetIpc(): void {
         }
       }, 300)
     }
+  })
+  // pet-cat.html 等用 ipc.invoke 上报（invoke 需要 handle，不能复用上面的 on）
+  ipcMain.handle('pet:startup-progress', (_e, data: { progress: number; stage: string }) => {
+    broadcastPetProgress(data.progress, data.stage)
+    if (data.progress >= 100) {
+      setTimeout(() => {
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) { w.webContents.send('pet:state', true) }
+        }
+      }, 300)
+    }
+    return { ok: true }
   })
 
   // ── 聊天同步：pet / 独立聊天窗 ↔ 主窗口 Lumina Agent ──────────────

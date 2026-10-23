@@ -28,6 +28,13 @@ function copyPetAssets() {
         if (existsSync(resolve(srcDir, 'pet-chat.html'))) {
           copyFileSync(resolve(srcDir, 'pet-chat.html'), resolve(destDir, 'pet-chat.html'))
         }
+        // 其余渲染形态页（程序化小猫 / MMD / PNGTuber）：漏拷会导致对应模型
+        // 找不到渲染页而回退，Cat 这种内置保底形象会因此白屏。
+        for (const page of ['pet-cat.html', 'pet-mmd.html', 'pet-pngtuber.html']) {
+          if (existsSync(resolve(srcDir, page))) {
+            copyFileSync(resolve(srcDir, page), resolve(destDir, page))
+          }
+        }
         if (existsSync(resolve(srcDir, 'assets'))) {
           // Mao 等 Live2D Cubism 示例模型受 SDK 再分发条款约束，不得随安装包分发
           // （modelLibrary 已将内置保底形象切换为零素材的程序化小猫 Cat）。
